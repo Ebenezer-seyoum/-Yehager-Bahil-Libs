@@ -1,0 +1,27 @@
+{
+  "name": "ExchangeRate",
+  "type": "object",
+  "properties": {
+    "currency_pair": {
+      "type": "string",
+      "title": "Currency Pair",
+      "default": "USD_ETB"
+    },
+    "rate": {
+      "type": "number",
+      "title": "ETB per 1 USD"
+    },
+    "source": {
+      "type": "string",
+      "title": "Source"
+    },
+    "last_updated": {
+      "type": "string",
+      "title": "Last Updated"
+    }
+  },
+  "required": [
+    "currency_pair",
+    "rate"
+  ]
+}

@@ -1,0 +1,57 @@
+{
+  "name": "SystemAlert",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string",
+      "title": "Title"
+    },
+    "message": {
+      "type": "string",
+      "title": "Message"
+    },
+    "type": {
+      "type": "string",
+      "title": "Alert Type",
+      "enum": [
+        "low_stock",
+        "failed_payment",
+        "shipping_delay",
+        "system_error",
+        "new_order",
+        "order_cancelled"
+      ],
+      "default": "system_error"
+    },
+    "severity": {
+      "type": "string",
+      "title": "Severity",
+      "enum": [
+        "info",
+        "warning",
+        "error",
+        "critical"
+      ],
+      "default": "warning"
+    },
+    "entity_id": {
+      "type": "string",
+      "title": "Related Entity ID"
+    },
+    "is_resolved": {
+      "type": "boolean",
+      "title": "Resolved",
+      "default": false
+    },
+    "resolved_by": {
+      "type": "string",
+      "title": "Resolved By"
+    }
+  },
+  "required": [
+    "title",
+    "message",
+    "type",
+    "severity"
+  ]
+}

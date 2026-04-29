@@ -1,0 +1,53 @@
+{
+  "name": "EventParticipant",
+  "type": "object",
+  "properties": {
+    "event_id": {
+      "type": "string",
+      "title": "Event ID"
+    },
+    "event_name": {
+      "type": "string",
+      "title": "Event Name"
+    },
+    "participant_email": {
+      "type": "string",
+      "title": "Participant Email"
+    },
+    "participant_name": {
+      "type": "string",
+      "title": "Participant Name"
+    },
+    "order_id": {
+      "type": "string",
+      "title": "Order ID"
+    },
+    "order_status": {
+      "type": "string",
+      "title": "Order Status",
+      "enum": [
+        "browsing",
+        "added_to_cart",
+        "ordered",
+        "tailoring",
+        "shipped",
+        "delivered"
+      ],
+      "default": "browsing"
+    },
+    "payment_status": {
+      "type": "string",
+      "title": "Payment Status",
+      "enum": [
+        "unpaid",
+        "paid"
+      ],
+      "default": "unpaid"
+    }
+  },
+  "required": [
+    "event_id",
+    "participant_email",
+    "participant_name"
+  ]
+}

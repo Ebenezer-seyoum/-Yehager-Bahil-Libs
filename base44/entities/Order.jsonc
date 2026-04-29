@@ -1,0 +1,211 @@
+{
+  "name": "Order",
+  "type": "object",
+  "properties": {
+    "order_number": {
+      "type": "string",
+      "title": "Order Number"
+    },
+    "user_email": {
+      "type": "string",
+      "title": "User Email"
+    },
+    "customer_name": {
+      "type": "string",
+      "title": "Customer Name"
+    },
+    "items": {
+      "type": "array",
+      "title": "Items",
+      "items": {
+        "type": "object"
+      }
+    },
+    "total": {
+      "type": "number",
+      "title": "Total (USD)"
+    },
+    "shipping_cost": {
+      "type": "number",
+      "title": "Shipping & Handling (USD)",
+      "default": 0
+    },
+    "status": {
+      "type": "string",
+      "title": "Status",
+      "enum": [
+        "pending",
+        "tailoring",
+        "quality_check",
+        "shipped",
+        "delivered",
+        "ready_for_pickup",
+        "picked_up"
+      ],
+      "default": "pending"
+    },
+    "payment_status": {
+      "type": "string",
+      "title": "Payment Status",
+      "enum": [
+        "pending",
+        "paid",
+        "failed",
+        "refunded",
+        "awaiting_verification"
+      ],
+      "default": "pending"
+    },
+    "payment_method": {
+      "type": "string",
+      "title": "Payment Method",
+      "enum": [
+        "stripe_usd",
+        "etb_bank_transfer"
+      ],
+      "default": "stripe_usd"
+    },
+    "payment_currency": {
+      "type": "string",
+      "title": "Payment Currency",
+      "enum": [
+        "USD",
+        "ETB"
+      ],
+      "default": "USD"
+    },
+    "total_etb": {
+      "type": "number",
+      "title": "Total Paid (ETB)"
+    },
+    "etb_exchange_rate": {
+      "type": "number",
+      "title": "ETB Rate at Order Time"
+    },
+    "payment_proof_url": {
+      "type": "string",
+      "title": "Payment Proof Screenshot URL"
+    },
+    "payment_proof_uploaded_at": {
+      "type": "string",
+      "title": "Payment Proof Uploaded At"
+    },
+    "fulfillment_type": {
+      "type": "string",
+      "title": "Fulfillment Type",
+      "enum": [
+        "mail",
+        "pickup"
+      ],
+      "default": "mail"
+    },
+    "carrier": {
+      "type": "string",
+      "title": "Carrier / Shipping Method",
+      "enum": [
+        "DHL",
+        "UPS",
+        "Ethiopian Mail Service",
+        "pickup"
+      ]
+    },
+    "pickup_location": {
+      "type": "string",
+      "title": "Pickup Location",
+      "enum": [
+        "Dember Building \u2013 3rd Floor, Store #369",
+        "Zefmesh Building \u2013 7th Floor, Suite #717"
+      ]
+    },
+    "pickup_person_name": {
+      "type": "string",
+      "title": "Pickup Person Name"
+    },
+    "pickup_person_phone": {
+      "type": "string",
+      "title": "Pickup Person Phone"
+    },
+    "pickup_id_url": {
+      "type": "string",
+      "title": "Customer ID Document URL"
+    },
+    "pickup_id_uploaded_at": {
+      "type": "string",
+      "title": "ID Uploaded At"
+    },
+    "pickup_signed_doc_url": {
+      "type": "string",
+      "title": "Signed Pickup Document URL"
+    },
+    "pickup_signed_doc_uploaded_at": {
+      "type": "string",
+      "title": "Signed Doc Uploaded At"
+    },
+    "pickup_proof_url": {
+      "type": "string",
+      "title": "Pickup Proof Document URL (legacy)"
+    },
+    "pickup_proof_uploaded_at": {
+      "type": "string",
+      "title": "Proof Uploaded At"
+    },
+    "pickup_completed_at": {
+      "type": "string",
+      "title": "Picked Up At"
+    },
+    "shipping_document_url": {
+      "type": "string",
+      "title": "Shipping Document URL (legacy)"
+    },
+    "shipping_doc_uploaded_at": {
+      "type": "string",
+      "title": "Shipping Doc Uploaded At (legacy)"
+    },
+    "shipping_documents": {
+      "type": "array",
+      "title": "Shipping / Mailing Documents",
+      "items": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "uploaded_at": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "event_id": {
+      "type": "string",
+      "title": "Event ID"
+    },
+    "event_name": {
+      "type": "string",
+      "title": "Event Name"
+    },
+    "shipping_address": {
+      "type": "object",
+      "title": "Shipping Address"
+    },
+    "use_event_owner_address": {
+      "type": "boolean",
+      "title": "Ship to Event Owner",
+      "default": false
+    },
+    "measurement_id": {
+      "type": "string",
+      "title": "Measurement ID"
+    }
+  },
+  "required": [
+    "order_number",
+    "user_email",
+    "customer_name",
+    "items",
+    "total"
+  ]
+}

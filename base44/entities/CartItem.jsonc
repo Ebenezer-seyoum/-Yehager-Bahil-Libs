@@ -1,0 +1,53 @@
+{
+  "name": "CartItem",
+  "type": "object",
+  "properties": {
+    "user_email": {
+      "type": "string",
+      "title": "User Email"
+    },
+    "product_id": {
+      "type": "string",
+      "title": "Product ID"
+    },
+    "product_name": {
+      "type": "string",
+      "title": "Product Name"
+    },
+    "product_image": {
+      "type": "string",
+      "title": "Product Image"
+    },
+    "price": {
+      "type": "number",
+      "title": "Price"
+    },
+    "quantity": {
+      "type": "number",
+      "title": "Quantity",
+      "default": 1
+    },
+    "measurement_id": {
+      "type": "string",
+      "title": "Locked Measurement ID"
+    },
+    "measurement_snapshot": {
+      "type": "object",
+      "title": "Measurement Snapshot"
+    },
+    "event_id": {
+      "type": "string",
+      "title": "Event ID"
+    },
+    "event_name": {
+      "type": "string",
+      "title": "Event Name"
+    }
+  },
+  "required": [
+    "user_email",
+    "product_id",
+    "product_name",
+    "price"
+  ]
+}

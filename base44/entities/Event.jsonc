@@ -1,0 +1,54 @@
+{
+  "name": "Event",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "title": "Event Name"
+    },
+    "owner_email": {
+      "type": "string",
+      "title": "Owner Email"
+    },
+    "owner_name": {
+      "type": "string",
+      "title": "Owner Name"
+    },
+    "product_id": {
+      "type": "string",
+      "title": "Featured Product ID"
+    },
+    "product_name": {
+      "type": "string",
+      "title": "Featured Product Name"
+    },
+    "event_code": {
+      "type": "string",
+      "title": "Event Code"
+    },
+    "shipping_address": {
+      "type": "object",
+      "title": "Default Shipping Address"
+    },
+    "event_date": {
+      "type": "string",
+      "title": "Event Date",
+      "format": "date"
+    },
+    "message": {
+      "type": "string",
+      "title": "Welcome Message"
+    },
+    "is_active": {
+      "type": "boolean",
+      "title": "Active",
+      "default": true
+    }
+  },
+  "required": [
+    "name",
+    "owner_email",
+    "owner_name",
+    "event_code"
+  ]
+}
