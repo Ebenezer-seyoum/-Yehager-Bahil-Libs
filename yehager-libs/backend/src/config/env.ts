@@ -1,0 +1,23 @@
+import { config } from "dotenv";
+import { z } from "zod";
+
+config();
+
+const envSchema = z.object({
+  NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
+  PORT: z.coerce.number().int().positive().default(8787),
+  LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace"]).default("info"),
+  DATABASE_URL: z.url(),
+  NEXTAUTH_URL: z.url(),
+  NEXTAUTH_SECRET: z.string().min(16),
+  AUTH_SHARED_JWT_ISSUER: z.string().min(1).default("yehager-web"),
+  AUTH_SHARED_JWT_AUDIENCE: z.string().min(1).default("yehager-api"),
+  CLOUDINARY_CLOUD_NAME: z.string().min(1),
+  CLOUDINARY_API_KEY: z.string().min(1),
+  CLOUDINARY_API_SECRET: z.string().min(1),
+  STRIPE_SECRET_KEY: z.string().min(1),
+  STRIPE_WEBHOOK_SECRET: z.string().min(1),
+  FRONTEND_APP_URL: z.url().default("http://localhost:3000"),
+});
+
+export const env = envSchema.parse(process.env);
