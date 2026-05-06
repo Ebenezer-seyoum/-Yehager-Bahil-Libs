@@ -5,6 +5,7 @@ import {
   listCartItemsByUserEmail,
   updateCartItemQuantity,
 } from "../repositories/cart-repository.js";
+import { getMeasurementForUser } from "../repositories/measurements-repository.js";
 import { getActiveProductById } from "../repositories/products-repository.js";
 import { getUserByEmail } from "../repositories/users-repository.js";
 
@@ -33,11 +34,23 @@ export async function addItemToCart(payload: {
   }
 
   const product = await getActiveProductById(payload.productId);
-  if (!product || !product.isActive) {
+  if (!product) {
     throw new HTTPException(404, { message: "Product not found" });
   }
 
   const user = await getUserByEmail(payload.userEmail);
+
+  if (payload.measurementId) {
+    const measurement = await getMeasurementForUser({
+      id: payload.measurementId,
+      userEmail: payload.userEmail,
+      userId: user?.id,
+    });
+    if (!measurement) {
+      throw new HTTPException(400, { message: "Measurement not found or does not belong to this account" });
+    }
+  }
+
   const item = await createCartItem({
     userId: user?.id,
     userEmail: payload.userEmail,

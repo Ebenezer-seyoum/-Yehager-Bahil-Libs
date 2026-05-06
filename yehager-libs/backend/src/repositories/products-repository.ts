@@ -1,10 +1,10 @@
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { db } from "../lib/db/drizzle.js";
 import { products } from "../lib/db/schema.js";
 
 export async function getActiveProductById(productId: string) {
   return db.query.products.findFirst({
-    where: eq(products.id, productId),
+    where: and(eq(products.id, productId), eq(products.isActive, true)),
   });
 }
 

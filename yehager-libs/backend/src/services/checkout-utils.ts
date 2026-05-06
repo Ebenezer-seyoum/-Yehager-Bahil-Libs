@@ -58,3 +58,18 @@ export function generateOrderNumber(date = new Date(), randomPart = Math.floor(1
   const dd = String(date.getUTCDate()).padStart(2, "0");
   return `YH-${yyyy}${mm}${dd}-${randomPart}`;
 }
+
+/** Converts USD basket total to ETB using stored USD→ETB multiplier (same semantics as Base44 open.er-api). */
+export function computeEtbTotals(totalUsd: number, usdToEtbRate: number) {
+  if (!Number.isFinite(totalUsd) || totalUsd < 0) {
+    throw new RangeError("totalUsd must be a finite non-negative number");
+  }
+  if (!Number.isFinite(usdToEtbRate) || usdToEtbRate <= 0) {
+    throw new RangeError("usdToEtbRate must be a finite positive number");
+  }
+  const totalEtb = totalUsd * usdToEtbRate;
+  return {
+    totalEtb: numberToMoney(totalEtb),
+    etbExchangeRate: usdToEtbRate.toFixed(4),
+  };
+}

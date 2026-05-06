@@ -1,5 +1,8 @@
+import "server-only";
+
 import { SignJWT } from "jose";
-import { auth } from "next-auth";
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/auth-options";
 
 function requiredEnv(name: string) {
   const value = process.env[name];
@@ -9,8 +12,9 @@ function requiredEnv(name: string) {
   return value;
 }
 
+/** Server-only: mints a short-lived JWT for the Hono API. Do not import from client components. */
 export async function mintBackendAccessToken() {
-  const session = await auth();
+  const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     throw new Error("No authenticated user found");
   }

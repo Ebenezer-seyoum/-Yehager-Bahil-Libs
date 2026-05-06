@@ -1,3 +1,5 @@
+import "server-only";
+
 import { mintBackendAccessToken } from "./backend-token";
 
 type RequestOptions = {

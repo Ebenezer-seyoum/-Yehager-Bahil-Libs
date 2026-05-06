@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildCheckoutLines,
+  computeEtbTotals,
   computeTotals,
   generateOrderNumber,
   moneyToNumber,
@@ -43,5 +44,11 @@ describe("checkout utils", () => {
   it("generates order numbers with expected prefix", () => {
     const value = generateOrderNumber(new Date("2026-05-01T00:00:00Z"), 1234);
     expect(value).toBe("YH-20260501-1234");
+  });
+
+  it("computes ETB totals from USD total and USD→ETB rate", () => {
+    const out = computeEtbTotals(100, 150.25);
+    expect(out.totalEtb).toBe("15025.00");
+    expect(out.etbExchangeRate).toBe("150.2500");
   });
 });

@@ -8,6 +8,7 @@ import {
   getOrderDetailsForCurrentUser,
   getOrdersForAdmin,
   getOrdersForCurrentUser,
+  updateOrderAdminState,
 } from "../../services/orders-service.js";
 import type { AppBindings } from "../../types/hono.js";
 
@@ -21,6 +22,11 @@ const checkoutIntentSchema = z.object({
   paymentCurrency: z.enum(["USD", "ETB"]).optional(),
   shippingAddress: z.record(z.string(), z.unknown()).optional(),
   useEventOwnerAddress: z.boolean().optional(),
+});
+const adminUpdateSchema = z.object({
+  status: z.enum(["pending", "processing", "fulfilled", "delivered", "cancelled"]).optional(),
+  paymentStatus: z.enum(["pending", "paid", "failed", "refunded", "unpaid"]).optional(),
+  fulfillmentType: z.enum(["mail", "pickup"]).optional(),
 });
 
 export const ordersRouter = new Hono<AppBindings>();
@@ -63,5 +69,19 @@ ordersRouter.get("/", requireAuth, requireRole("admin"), zValidator("query", que
 ordersRouter.get("/:orderId", requireAuth, requireRole("admin"), async (c) => {
   const orderId = c.req.param("orderId");
   const data = await getOrderDetailsForAdmin(orderId);
+  return c.json({ data });
+});
+
+ordersRouter.patch("/:orderId/admin-state", requireAuth, requireRole("admin"), zValidator("json", adminUpdateSchema), async (c) => {
+  const authUser = c.get("authUser");
+  const orderId = c.req.param("orderId");
+  const body = c.req.valid("json");
+  const data = await updateOrderAdminState({
+    orderId,
+    performedBy: authUser?.email,
+    status: body.status,
+    paymentStatus: body.paymentStatus,
+    fulfillmentType: body.fulfillmentType,
+  });
   return c.json({ data });
 });

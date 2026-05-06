@@ -10,7 +10,28 @@ import {
   listOrdersByUserEmail,
 } from "../repositories/orders-repository.js";
 import { getUserByEmail } from "../repositories/users-repository.js";
-import { buildCheckoutLines, computeTotals, generateOrderNumber, numberToMoney } from "./checkout-utils.js";
+import { getUsdEtbRate } from "../repositories/exchange-rates-repository.js";
+import {
+  buildCheckoutLines,
+  computeEtbTotals,
+  computeTotals,
+  generateOrderNumber,
+  moneyToNumber,
+  numberToMoney,
+} from "./checkout-utils.js";
+
+const ORDER_STATUS_VALUES = ["pending", "processing", "fulfilled", "delivered", "cancelled"] as const;
+const PAYMENT_STATUS_VALUES = ["pending", "paid", "failed", "refunded", "unpaid"] as const;
+type OrderStatus = (typeof ORDER_STATUS_VALUES)[number];
+type PaymentStatus = (typeof PAYMENT_STATUS_VALUES)[number];
+
+function isOrderStatus(value: string): value is OrderStatus {
+  return (ORDER_STATUS_VALUES as readonly string[]).includes(value);
+}
+
+function isPaymentStatus(value: string): value is PaymentStatus {
+  return (PAYMENT_STATUS_VALUES as readonly string[]).includes(value);
+}
 
 export async function getOrdersForCurrentUser(userEmail?: string, limit = 50) {
   if (!userEmail) {
@@ -42,6 +63,69 @@ export async function getOrderDetailsForAdmin(orderId: string) {
   return order;
 }
 
+export async function updateOrderAdminState(payload: {
+  orderId: string;
+  performedBy?: string;
+  status?: OrderStatus;
+  paymentStatus?: PaymentStatus;
+  fulfillmentType?: "mail" | "pickup";
+}) {
+  const order = await getOrderById(payload.orderId);
+  if (!order) {
+    throw new HTTPException(404, { message: "Order not found" });
+  }
+  if (!payload.status && !payload.paymentStatus && !payload.fulfillmentType) {
+    throw new HTTPException(400, { message: "At least one field must be updated" });
+  }
+  if (payload.status && !isOrderStatus(payload.status)) {
+    throw new HTTPException(400, { message: `Invalid order status: ${payload.status}` });
+  }
+  if (payload.paymentStatus && !isPaymentStatus(payload.paymentStatus)) {
+    throw new HTTPException(400, { message: `Invalid payment status: ${payload.paymentStatus}` });
+  }
+
+  const nextStatus = payload.status ?? order.status;
+  const nextPayment = payload.paymentStatus ?? order.paymentStatus;
+  if ((nextStatus === "fulfilled" || nextStatus === "delivered") && nextPayment !== "paid") {
+    throw new HTTPException(400, { message: "Order must be paid before marking as fulfilled or delivered" });
+  }
+
+  const [updated] = await db
+    .update(orders)
+    .set({
+      status: payload.status ?? undefined,
+      paymentStatus: payload.paymentStatus ?? undefined,
+      fulfillmentType: payload.fulfillmentType ?? undefined,
+      updatedAt: new Date(),
+    })
+    .where(eq(orders.id, payload.orderId))
+    .returning();
+
+  await db.insert(auditLogs).values({
+    action: "order_admin_state_updated",
+    category: "order",
+    severity: "info",
+    entityType: "order",
+    entityId: payload.orderId,
+    performedBy: payload.performedBy ?? "admin",
+    details: "Admin updated order state",
+    metadata: {
+      previous: {
+        status: order.status,
+        payment_status: order.paymentStatus,
+        fulfillment_type: order.fulfillmentType,
+      },
+      current: {
+        status: updated.status,
+        payment_status: updated.paymentStatus,
+        fulfillment_type: updated.fulfillmentType,
+      },
+    },
+  });
+
+  return updated;
+}
+
 export async function createCheckoutIntent(payload: {
   userEmail?: string;
   cartItemIds: string[];
@@ -57,6 +141,19 @@ export async function createCheckoutIntent(payload: {
   }
   if (!payload.cartItemIds.length) {
     throw new HTTPException(400, { message: "At least one cart item is required" });
+  }
+
+  const paymentMethod = payload.paymentMethod ?? "stripe_usd";
+  const paymentCurrency = payload.paymentCurrency ?? "USD";
+
+  if (paymentCurrency === "ETB" && paymentMethod !== "etb_bank_transfer") {
+    throw new HTTPException(400, { message: "ETB orders must use etb_bank_transfer" });
+  }
+  if (paymentMethod === "etb_bank_transfer" && paymentCurrency !== "ETB") {
+    throw new HTTPException(400, { message: "Bank transfer orders must use ETB currency" });
+  }
+  if (paymentMethod === "stripe_usd" && paymentCurrency !== "USD") {
+    throw new HTTPException(400, { message: "Stripe checkout orders must use USD" });
   }
 
   return db.transaction(async (tx) => {
@@ -92,6 +189,19 @@ export async function createCheckoutIntent(payload: {
     const lines = buildCheckoutLines(lineInputs);
     const totals = computeTotals(lines, 0);
 
+    let totalEtb: string | undefined;
+    let etbExchangeRate: string | undefined;
+    if (paymentCurrency === "ETB") {
+      const rateRow = await getUsdEtbRate(tx);
+      if (!rateRow) {
+        throw new HTTPException(503, { message: "USD→ETB exchange rate is not configured" });
+      }
+      const rateNum = moneyToNumber(rateRow.rate);
+      const etb = computeEtbTotals(totals.totalUsd, rateNum);
+      totalEtb = etb.totalEtb;
+      etbExchangeRate = etb.etbExchangeRate;
+    }
+
     const user = await getUserByEmail(userEmail);
     const customerName = user?.name ?? userEmail.split("@")[0];
     const orderNumber = generateOrderNumber();
@@ -114,10 +224,12 @@ export async function createCheckoutIntent(payload: {
         })),
         totalUsd: numberToMoney(totals.totalUsd),
         shippingCostUsd: numberToMoney(totals.shippingCostUsd),
+        totalEtb,
+        etbExchangeRate,
         status: "pending",
         paymentStatus: "pending",
-        paymentMethod: payload.paymentMethod ?? "stripe_usd",
-        paymentCurrency: payload.paymentCurrency ?? "USD",
+        paymentMethod,
+        paymentCurrency,
         fulfillmentType: payload.fulfillmentType ?? "mail",
         shippingAddress: payload.shippingAddress,
         useEventOwnerAddress: Boolean(payload.useEventOwnerAddress),
@@ -136,6 +248,9 @@ export async function createCheckoutIntent(payload: {
         order_number: order.orderNumber,
         cart_item_ids: payload.cartItemIds,
         total_usd: totals.totalUsd,
+        total_etb: totalEtb,
+        etb_exchange_rate: etbExchangeRate,
+        payment_currency: paymentCurrency,
       },
     });
 

@@ -1,9 +1,39 @@
-import type { NextAuthConfig } from "next-auth";
+import type { NextAuthOptions } from "next-auth";
+import CredentialsProvider from "next-auth/providers/credentials";
 
 export const authConfig = {
   providers: [
-    // Add your providers here, e.g. Google, Credentials, etc.
+    CredentialsProvider({
+      name: "Email/Password",
+      credentials: {
+        email: { label: "Email", type: "email" },
+        password: { label: "Password", type: "password" },
+        role: { label: "Role", type: "text" },
+      },
+      async authorize(credentials) {
+        const configuredEmail = process.env.AUTH_DEMO_EMAIL;
+        const configuredPassword = process.env.AUTH_DEMO_PASSWORD;
+
+        if (!configuredEmail || !configuredPassword) {
+          throw new Error("AUTH_DEMO_EMAIL and AUTH_DEMO_PASSWORD must be configured");
+        }
+
+        if (credentials?.email !== configuredEmail || credentials?.password !== configuredPassword) {
+          return null;
+        }
+
+        return {
+          id: configuredEmail,
+          email: configuredEmail,
+          name: "Yehager User",
+          role: credentials?.role === "admin" ? "admin" : "customer",
+        };
+      },
+    }),
   ],
+  pages: {
+    signIn: "/signin",
+  },
   session: {
     strategy: "jwt",
   },
@@ -24,4 +54,4 @@ export const authConfig = {
       return session;
     },
   },
-} satisfies NextAuthConfig;
+} satisfies NextAuthOptions;
