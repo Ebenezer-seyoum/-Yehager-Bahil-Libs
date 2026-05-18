@@ -76,6 +76,7 @@ export function AdminProductManager({ initialProducts }: { initialProducts: Prod
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [editingProductId, setEditingProductId] = useState<string | null>(null);
 
   const subsections = TAXONOMY[draft.region] ?? [];
   const previewImages = parseImages(draft.imagesText);
@@ -222,14 +223,69 @@ export function AdminProductManager({ initialProducts }: { initialProducts: Prod
     }
   }
 
+  function beginEdit(product: Product) {
+    setEditingProductId(product.id);
+    setDraft({
+      name: product.name ?? "",
+      description: product.description ?? "",
+      region: product.region,
+      subcategory: product.subcategory ?? "",
+      category: product.category ?? "",
+      priceUsd: String(product.priceUsd ?? ""),
+      groomPriceUsd: String(product.groomPriceUsd ?? ""),
+      gender: product.gender ?? "female",
+      fabricType: product.fabricType ?? "",
+      embroideryStyle: product.embroideryStyle ?? "",
+      tailoringDays: String(product.tailoringDays ?? 30),
+      imagesText: (product.images ?? []).join("\n"),
+      isActive: Boolean(product.isActive),
+      isFeatured: Boolean(product.isFeatured),
+    });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  async function saveEditedProduct() {
+    if (!editingProductId) return;
+    const existing = products.find((product) => product.id === editingProductId);
+    if (!existing) return;
+
+    setBusy("edit");
+    setError(null);
+    try {
+      const response = await fetch(`/api/backend/admin/products/${editingProductId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...draft,
+          priceUsd: Number(draft.priceUsd),
+          groomPriceUsd: draft.groomPriceUsd ? Number(draft.groomPriceUsd) : null,
+          tailoringDays: Number(draft.tailoringDays),
+          images: previewImages,
+        }),
+      });
+      if (!response.ok) throw new Error("Could not update product");
+      const payload = (await response.json()) as { data?: Product };
+      if (payload.data) {
+        setProducts((current) => current.map((product) => (product.id === editingProductId ? payload.data! : product)));
+        setEditingProductId(null);
+        setDraft(emptyDraft);
+        setPreviewOpen(false);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not update product");
+    } finally {
+      setBusy(null);
+    }
+  }
+
   return (
     <div className="space-y-6">
       {error ? <div className="rounded-xl border border-destructive/40 bg-card p-4 text-sm text-destructive">{error}</div> : null}
 
       <div className="grid gap-6 xl:grid-cols-[0.85fr_1.15fr]">
         <section className="rounded-2xl border border-border bg-card p-5">
-          <p className="text-xs uppercase tracking-widest text-primary">Add Product</p>
-          <h2 className="mt-2 text-xl font-semibold">Create catalog item</h2>
+          <p className="text-xs uppercase tracking-widest text-primary">{editingProductId ? "Edit Product" : "Add Product"}</p>
+          <h2 className="mt-2 text-xl font-semibold">{editingProductId ? "Update catalog item" : "Create catalog item"}</h2>
           <div className="mt-5 space-y-4">
             <input
               value={draft.name}
@@ -397,8 +453,20 @@ export function AdminProductManager({ initialProducts }: { initialProducts: Prod
               onClick={() => setPreviewOpen(true)}
               className="w-full rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground"
             >
-              Preview product
+              {editingProductId ? "Preview changes" : "Preview product"}
             </button>
+            {editingProductId ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingProductId(null);
+                  setDraft(emptyDraft);
+                }}
+                className="w-full rounded-xl border border-border px-4 py-3 text-sm font-semibold"
+              >
+                Cancel edit
+              </button>
+            ) : null}
           </div>
         </section>
 
@@ -462,6 +530,14 @@ export function AdminProductManager({ initialProducts }: { initialProducts: Prod
                       <button
                         type="button"
                         disabled={busy === product.id}
+                        onClick={() => beginEdit(product)}
+                        className="rounded-lg border border-border px-3 py-1.5 text-xs"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        disabled={busy === product.id}
                         onClick={() => void archiveProduct(product)}
                         className="rounded-lg border border-destructive/40 px-3 py-1.5 text-xs text-destructive"
                       >
@@ -511,11 +587,17 @@ export function AdminProductManager({ initialProducts }: { initialProducts: Prod
                 </div>
                 <button
                   type="button"
-                  disabled={busy === "create"}
-                  onClick={() => void createProduct()}
+                  disabled={busy === "create" || busy === "edit"}
+                  onClick={() => void (editingProductId ? saveEditedProduct() : createProduct())}
                   className="w-full rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground disabled:opacity-60"
                 >
-                  {busy === "create" ? "Creating..." : "Submit product"}
+                  {editingProductId
+                    ? busy === "edit"
+                      ? "Saving..."
+                      : "Save changes"
+                    : busy === "create"
+                      ? "Creating..."
+                      : "Submit product"}
                 </button>
               </div>
             </div>
