@@ -20,6 +20,7 @@ import {
 } from "../../services/users-service.js";
 import { listRolesForAdmin, updateRolePermissionsForAdmin } from "../../services/roles-service.js";
 import { listPermissionsForAdmin } from "../../services/permissions-service.js";
+import { getOrderReport, toOrderReportCsv } from "../../services/reports-service.js";
 import type { AppBindings } from "../../types/hono.js";
 
 const listQuerySchema = z.object({
@@ -106,6 +107,12 @@ const roleIdParamSchema = z.object({
 const rolePermissionsPatchSchema = z.object({
   permissions: z.array(z.string().trim().min(1)).max(100),
 });
+const orderReportQuerySchema = z.object({
+  status: z.string().optional(),
+  paymentStatus: z.string().optional(),
+  customer: z.string().optional(),
+  country: z.string().optional(),
+});
 
 export const adminRouter = new Hono<AppBindings>();
 
@@ -178,6 +185,56 @@ adminRouter.get("/permissions", requirePermission(PERMISSIONS.ROLES_VIEW), async
   const data = await listPermissionsForAdmin();
   return c.json({ data });
 });
+
+adminRouter.get(
+  "/reports/orders",
+  requirePermission(PERMISSIONS.REPORTS_VIEW),
+  zValidator("query", orderReportQuerySchema),
+  async (c) => {
+    const data = await getOrderReport(c.req.valid("query"));
+    return c.json({ data });
+  },
+);
+
+adminRouter.get(
+  "/reports/orders/export",
+  requirePermission(PERMISSIONS.REPORTS_VIEW),
+  zValidator("query", orderReportQuerySchema.extend({ format: z.enum(["csv", "pdf"]).optional() })),
+  async (c) => {
+    const { format = "csv", ...filters } = c.req.valid("query");
+    const report = await getOrderReport(filters);
+    const authUser = c.get("authUser");
+
+    await db.insert(auditLogs).values({
+      action: "order_report_exported",
+      category: "report",
+      severity: "info",
+      entityType: "report",
+      performedBy: authUser?.email ?? "admin",
+      details: `Admin exported order report as ${format}`,
+      metadata: filters,
+    });
+
+    if (format === "pdf") {
+      const rows = report.rows
+        .map(
+          (order) =>
+            `${order.orderNumber} | ${order.customerName} | ${order.status} | ${order.paymentStatus} | ${order.totalUsd}`,
+        )
+        .join("\n");
+      const text = `Order Report\n\nTotal Orders: ${report.summary.totalOrders}\nPaid Orders: ${report.summary.paidOrders}\nPending Orders: ${report.summary.pendingOrders}\nRevenue: ${report.summary.totalRevenue}\n\n${rows}`;
+      return c.body(text, 200, {
+        "Content-Type": "application/pdf",
+        "Content-Disposition": 'attachment; filename="order-report.pdf"',
+      });
+    }
+
+    return c.body(toOrderReportCsv(report.rows), 200, {
+      "Content-Type": "text/csv",
+      "Content-Disposition": 'attachment; filename="order-report.csv"',
+    });
+  },
+);
 
 adminRouter.put(
   "/roles/:roleId/permissions",
