@@ -1,13 +1,16 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import { zValidator } from "@hono/zod-validator";
-import { requireAuth, requireRole } from "../../middleware/auth.js";
+import { requireAuth } from "../../middleware/auth.js";
+import { requirePermission } from "../../middleware/permissions.js";
+import { PERMISSIONS } from "../../lib/auth/permissions.js";
 import {
   createCheckoutIntent,
   getOrderDetailsForAdmin,
   getOrderDetailsForCurrentUser,
   getOrdersForAdmin,
   getOrdersForCurrentUser,
+  submitEtbPaymentProof,
   updateOrderAdminState,
 } from "../../services/orders-service.js";
 import type { AppBindings } from "../../types/hono.js";
@@ -22,9 +25,29 @@ const checkoutIntentSchema = z.object({
   paymentCurrency: z.enum(["USD", "ETB"]).optional(),
   shippingAddress: z.record(z.string(), z.unknown()).optional(),
   useEventOwnerAddress: z.boolean().optional(),
+  carrier: z.string().optional(),
+  pickupLocation: z.string().optional(),
+  pickupPersonName: z.string().optional(),
+  pickupPersonPhone: z.string().optional(),
+});
+const etbProofSchema = z.object({
+  paymentProofUrl: z.string().url(),
 });
 const adminUpdateSchema = z.object({
-  status: z.enum(["pending", "processing", "fulfilled", "delivered", "cancelled"]).optional(),
+  status: z
+    .enum([
+      "pending",
+      "processing",
+      "fulfilled",
+      "tailoring",
+      "quality_check",
+      "shipped",
+      "delivered",
+      "ready_for_pickup",
+      "picked_up",
+      "cancelled",
+    ])
+    .optional(),
   paymentStatus: z.enum(["pending", "paid", "failed", "refunded", "unpaid"]).optional(),
   fulfillmentType: z.enum(["mail", "pickup"]).optional(),
 });
@@ -56,23 +79,39 @@ ordersRouter.post("/checkout-intent", requireAuth, zValidator("json", checkoutIn
     paymentCurrency: body.paymentCurrency,
     shippingAddress: body.shippingAddress,
     useEventOwnerAddress: body.useEventOwnerAddress,
+    carrier: body.carrier,
+    pickupLocation: body.pickupLocation,
+    pickupPersonName: body.pickupPersonName,
+    pickupPersonPhone: body.pickupPersonPhone,
   });
   return c.json({ data }, 201);
 });
 
-ordersRouter.get("/", requireAuth, requireRole("admin"), zValidator("query", querySchema), async (c) => {
+ordersRouter.post("/me/:orderId/etb-proof", requireAuth, zValidator("json", etbProofSchema), async (c) => {
+  const authUser = c.get("authUser");
+  const orderId = c.req.param("orderId");
+  const body = c.req.valid("json");
+  const data = await submitEtbPaymentProof({
+    orderId,
+    userEmail: authUser?.email,
+    paymentProofUrl: body.paymentProofUrl,
+  });
+  return c.json({ data });
+});
+
+ordersRouter.get("/", requireAuth, requirePermission(PERMISSIONS.ORDERS_VIEW), zValidator("query", querySchema), async (c) => {
   const { limit } = c.req.valid("query");
   const data = await getOrdersForAdmin(limit ?? 100);
   return c.json({ data });
 });
 
-ordersRouter.get("/:orderId", requireAuth, requireRole("admin"), async (c) => {
+ordersRouter.get("/:orderId", requireAuth, requirePermission(PERMISSIONS.ORDERS_VIEW), async (c) => {
   const orderId = c.req.param("orderId");
   const data = await getOrderDetailsForAdmin(orderId);
   return c.json({ data });
 });
 
-ordersRouter.patch("/:orderId/admin-state", requireAuth, requireRole("admin"), zValidator("json", adminUpdateSchema), async (c) => {
+ordersRouter.patch("/:orderId/admin-state", requireAuth, requirePermission(PERMISSIONS.ORDERS_EDIT), zValidator("json", adminUpdateSchema), async (c) => {
   const authUser = c.get("authUser");
   const orderId = c.req.param("orderId");
   const body = c.req.valid("json");

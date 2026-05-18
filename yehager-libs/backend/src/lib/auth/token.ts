@@ -1,10 +1,11 @@
 import { jwtVerify } from "jose";
 import { env } from "../../config/env.js";
+import { isUserRole, type UserRole } from "./roles.js";
 
 export type AuthUser = {
   sub: string;
   email?: string;
-  role?: string;
+  role?: UserRole;
 };
 
 const secret = new TextEncoder().encode(env.NEXTAUTH_SECRET);
@@ -18,6 +19,6 @@ export async function verifyAccessToken(token: string): Promise<AuthUser> {
   return {
     sub: String(payload.sub ?? ""),
     email: payload.email ? String(payload.email) : undefined,
-    role: payload.role ? String(payload.role) : undefined,
+    role: isUserRole(payload.role) ? payload.role : undefined,
   };
 }

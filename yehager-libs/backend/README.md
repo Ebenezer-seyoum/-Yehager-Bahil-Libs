@@ -30,6 +30,7 @@ This folder contains the Wave 1 backend foundation for the migration:
 - Added Cloudinary signed upload helper.
 - Added repository/service layers for users and cart.
 - Added staged-sync scaffold script (`src/scripts/sync-base44.ts`).
+- Added explicit SQL migration runner for the checked-in `migrations/*.sql` files.
 
 ## Setup
 
@@ -48,6 +49,18 @@ npm install
 npm run dev
 ```
 
+4. Apply checked-in SQL migrations:
+
+```bash
+npm run db:migrate
+```
+
+5. Bootstrap the first admin account:
+
+```bash
+ADMIN_EMAIL=owner@example.com ADMIN_PASSWORD=change-me-now ADMIN_NAME="Owner" npm run auth:create-admin
+```
+
 ## Auth.js integration contract (separate frontend service)
 
 Because frontend and backend are separate services, the Next.js/Auth.js service should mint a short-lived JWT for backend calls with:
@@ -62,6 +75,8 @@ The backend validates this token in `requireAuth` middleware.
 ### Expected API routes (current)
 
 - `GET /health`
+- `POST /api/v1/auth/register`
+- `POST /api/v1/auth/login`
 - `GET /api/v1/auth/session`
 - `GET /api/v1/users/me`
 - `POST /api/v1/users/me/sync`
@@ -73,11 +88,14 @@ The backend validates this token in `requireAuth` middleware.
 - `GET /api/v1/orders/me`
 - `GET /api/v1/orders/me/:orderId`
 - `POST /api/v1/orders/checkout-intent`
-- `GET /api/v1/orders` (admin)
-- `GET /api/v1/orders/:orderId` (admin)
+- `GET /api/v1/orders` (admin or employee)
+- `GET /api/v1/orders/:orderId` (admin or employee)
 - `POST /api/v1/payments/stripe/checkout-session`
 - `POST /api/v1/payments/stripe/webhook`
 - `POST /api/v1/uploads/sign` (admin role)
+- `GET /api/v1/admin/users` (admin)
+- `POST /api/v1/admin/users/employees` (admin)
+- `PATCH /api/v1/admin/users/:userId/role` (admin)
 
 ### Example Auth.js JWT callback shape (frontend service)
 

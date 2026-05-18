@@ -4,12 +4,24 @@ import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/auth-options";
 import { apiRequest } from "@/lib/api-client";
+import { AdminOrderDocuments } from "@/components/admin-order-documents";
 
 function prettyJson(value) {
   return JSON.stringify(value ?? {}, null, 2);
 }
 
-const ORDER_STATUS_OPTIONS = ["pending", "processing", "fulfilled", "delivered", "cancelled"];
+const ORDER_STATUS_OPTIONS = [
+  "pending",
+  "processing",
+  "fulfilled",
+  "tailoring",
+  "quality_check",
+  "shipped",
+  "delivered",
+  "ready_for_pickup",
+  "picked_up",
+  "cancelled",
+];
 const PAYMENT_STATUS_OPTIONS = ["pending", "paid", "failed", "refunded", "unpaid"];
 
 export default async function AdminOrderDetailPage({ params, searchParams }) {
@@ -157,6 +169,20 @@ export default async function AdminOrderDetailPage({ params, searchParams }) {
       <div className="rounded-xl border border-border bg-card p-5">
         <h2 className="font-heading text-xl font-semibold">Shipping / Fulfillment</h2>
         <pre className="mt-3 overflow-auto rounded-md bg-secondary/40 p-3 text-xs">{prettyJson(order.shippingAddress)}</pre>
+      </div>
+
+      <div className="rounded-xl border border-border bg-card p-5">
+        <h2 className="font-heading text-xl font-semibold">Documents</h2>
+        <p className="mt-1 text-sm text-muted-foreground">Upload pickup evidence or attach shipping paperwork directly to this order.</p>
+        <div className="mt-4">
+          <AdminOrderDocuments
+            orderId={order.id}
+            pickupIdUrl={order.pickupIdUrl}
+            pickupSignedDocUrl={order.pickupSignedDocUrl}
+            pickupProofUrl={order.pickupProofUrl}
+            shippingDocuments={order.shippingDocuments}
+          />
+        </div>
       </div>
     </div>
   );

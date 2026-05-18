@@ -52,6 +52,23 @@ export function computeTotals(lines: CheckoutLine[], shippingCostUsd = 0) {
   };
 }
 
+/**
+ * Mirrors the legacy Base44 EMS policy:
+ * - 1 item in a package => $45
+ * - 2-5 items in a package => $100
+ * - Packages repeat every 5 items
+ */
+export function computeEmsShipping(itemCount: number) {
+  if (!Number.isFinite(itemCount) || itemCount <= 0) return 0;
+  const normalizedCount = Math.floor(itemCount);
+  const fullPacks = Math.floor(normalizedCount / 5);
+  const remainder = normalizedCount % 5;
+  let cost = fullPacks * 100;
+  if (remainder === 1) cost += 45;
+  else if (remainder > 1) cost += 100;
+  return cost;
+}
+
 export function generateOrderNumber(date = new Date(), randomPart = Math.floor(1000 + Math.random() * 9000)) {
   const yyyy = date.getUTCFullYear();
   const mm = String(date.getUTCMonth() + 1).padStart(2, "0");

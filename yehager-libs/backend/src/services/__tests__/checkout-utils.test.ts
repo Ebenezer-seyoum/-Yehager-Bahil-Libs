@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildCheckoutLines,
+  computeEmsShipping,
   computeEtbTotals,
   computeTotals,
   generateOrderNumber,
@@ -50,5 +51,13 @@ describe("checkout utils", () => {
     const out = computeEtbTotals(100, 150.25);
     expect(out.totalEtb).toBe("15025.00");
     expect(out.etbExchangeRate).toBe("150.2500");
+  });
+
+  it("computes legacy EMS shipping by package size", () => {
+    expect(computeEmsShipping(0)).toBe(0);
+    expect(computeEmsShipping(1)).toBe(45);
+    expect(computeEmsShipping(2)).toBe(100);
+    expect(computeEmsShipping(5)).toBe(100);
+    expect(computeEmsShipping(6)).toBe(145);
   });
 });

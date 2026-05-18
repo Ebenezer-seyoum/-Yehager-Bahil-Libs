@@ -1,18 +1,20 @@
 import { HTTPException } from "hono/http-exception";
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "../lib/db/drizzle.js";
-import { auditLogs, orders, products } from "../lib/db/schema.js";
-import { listCartItemsByIdsForUser } from "../repositories/cart-repository.js";
+import { auditLogs, eventParticipants, events, orders, products, systemAlerts } from "../lib/db/schema.js";
+import { deleteCartItemsByIdsForUser, listCartItemsByIdsForUser } from "../repositories/cart-repository.js";
 import {
   getOrderById,
   getOrderByIdForUser,
   listAllOrders,
   listOrdersByUserEmail,
+  markEtbPaymentProof,
 } from "../repositories/orders-repository.js";
 import { getUserByEmail } from "../repositories/users-repository.js";
 import { getUsdEtbRate } from "../repositories/exchange-rates-repository.js";
 import {
   buildCheckoutLines,
+  computeEmsShipping,
   computeEtbTotals,
   computeTotals,
   generateOrderNumber,
@@ -20,7 +22,18 @@ import {
   numberToMoney,
 } from "./checkout-utils.js";
 
-const ORDER_STATUS_VALUES = ["pending", "processing", "fulfilled", "delivered", "cancelled"] as const;
+const ORDER_STATUS_VALUES = [
+  "pending",
+  "processing",
+  "fulfilled",
+  "tailoring",
+  "quality_check",
+  "shipped",
+  "delivered",
+  "ready_for_pickup",
+  "picked_up",
+  "cancelled",
+] as const;
 const PAYMENT_STATUS_VALUES = ["pending", "paid", "failed", "refunded", "unpaid"] as const;
 type OrderStatus = (typeof ORDER_STATUS_VALUES)[number];
 type PaymentStatus = (typeof PAYMENT_STATUS_VALUES)[number];
@@ -86,8 +99,11 @@ export async function updateOrderAdminState(payload: {
 
   const nextStatus = payload.status ?? order.status;
   const nextPayment = payload.paymentStatus ?? order.paymentStatus;
-  if ((nextStatus === "fulfilled" || nextStatus === "delivered") && nextPayment !== "paid") {
-    throw new HTTPException(400, { message: "Order must be paid before marking as fulfilled or delivered" });
+  if (
+    ["fulfilled", "shipped", "delivered", "ready_for_pickup", "picked_up"].includes(nextStatus) &&
+    nextPayment !== "paid"
+  ) {
+    throw new HTTPException(400, { message: "Order must be paid before moving into fulfillment-complete states" });
   }
 
   const [updated] = await db
@@ -134,6 +150,10 @@ export async function createCheckoutIntent(payload: {
   paymentCurrency?: "USD" | "ETB";
   shippingAddress?: Record<string, unknown>;
   useEventOwnerAddress?: boolean;
+  carrier?: string;
+  pickupLocation?: string;
+  pickupPersonName?: string;
+  pickupPersonPhone?: string;
 }) {
   const userEmail = payload.userEmail;
   if (!userEmail) {
@@ -173,6 +193,13 @@ export async function createCheckoutIntent(payload: {
       : [];
 
     const productPriceMap = new Map(dbProducts.map((p) => [p.id, p.priceUsd]));
+    const eventIds = [...new Set(cartRows.map((row) => row.eventId).filter((id): id is string => Boolean(id)))];
+    const primaryEventId = eventIds.length === 1 ? eventIds[0] : undefined;
+    const primaryEvent = primaryEventId
+      ? await tx.query.events.findFirst({
+          where: eq(events.id, primaryEventId),
+        })
+      : undefined;
 
     const lineInputs = cartRows.map((row) => {
       const trustedUnitPriceUsd = row.productId ? productPriceMap.get(row.productId) ?? row.priceUsd : row.priceUsd;
@@ -187,7 +214,12 @@ export async function createCheckoutIntent(payload: {
     });
 
     const lines = buildCheckoutLines(lineInputs);
-    const totals = computeTotals(lines, 0);
+    const totalItems = lines.reduce((sum, line) => sum + line.quantity, 0);
+    const fulfillmentType = payload.fulfillmentType ?? "mail";
+    const carrier = fulfillmentType === "pickup" ? "pickup" : payload.carrier ?? "Ethiopian Mail Service";
+    const shippingCostUsd =
+      fulfillmentType === "mail" && carrier === "Ethiopian Mail Service" ? computeEmsShipping(totalItems) : 0;
+    const totals = computeTotals(lines, shippingCostUsd);
 
     let totalEtb: string | undefined;
     let etbExchangeRate: string | undefined;
@@ -205,6 +237,11 @@ export async function createCheckoutIntent(payload: {
     const user = await getUserByEmail(userEmail);
     const customerName = user?.name ?? userEmail.split("@")[0];
     const orderNumber = generateOrderNumber();
+
+    const shippingAddress =
+      payload.useEventOwnerAddress && primaryEvent?.shippingAddress
+        ? primaryEvent.shippingAddress
+        : payload.shippingAddress;
 
     const [order] = await tx
       .insert(orders)
@@ -230,9 +267,15 @@ export async function createCheckoutIntent(payload: {
         paymentStatus: "pending",
         paymentMethod,
         paymentCurrency,
-        fulfillmentType: payload.fulfillmentType ?? "mail",
-        shippingAddress: payload.shippingAddress,
+        fulfillmentType,
+        carrier,
+        pickupLocation: fulfillmentType === "pickup" ? payload.pickupLocation : undefined,
+        pickupPersonName: fulfillmentType === "pickup" ? payload.pickupPersonName : undefined,
+        pickupPersonPhone: fulfillmentType === "pickup" ? payload.pickupPersonPhone : undefined,
+        shippingAddress,
         useEventOwnerAddress: Boolean(payload.useEventOwnerAddress),
+        eventId: primaryEventId,
+        eventName: primaryEvent?.name,
       })
       .returning();
 
@@ -260,4 +303,76 @@ export async function createCheckoutIntent(payload: {
       lines,
     };
   });
+}
+
+export async function submitEtbPaymentProof(payload: {
+  orderId: string;
+  userEmail?: string;
+  paymentProofUrl: string;
+}) {
+  if (!payload.userEmail) {
+    throw new HTTPException(400, { message: "Authenticated token must include email" });
+  }
+
+  const order = await getOrderByIdForUser({ orderId: payload.orderId, userEmail: payload.userEmail });
+  if (!order) {
+    throw new HTTPException(404, { message: "Order not found" });
+  }
+  if (order.paymentMethod !== "etb_bank_transfer" || order.paymentCurrency !== "ETB") {
+    throw new HTTPException(400, { message: "Order is not an ETB bank-transfer order" });
+  }
+  if (order.paymentStatus !== "pending") {
+    throw new HTTPException(400, { message: "Payment proof can only be submitted for pending ETB orders" });
+  }
+
+  const updated = await markEtbPaymentProof({
+    orderId: payload.orderId,
+    userEmail: payload.userEmail,
+    paymentProofUrl: payload.paymentProofUrl,
+  });
+  if (!updated) {
+    throw new HTTPException(404, { message: "Order not found" });
+  }
+
+  const cartItemIds = Array.isArray(order.items)
+    ? order.items
+        .map((item) => (typeof item === "object" && item ? (item as Record<string, unknown>).cart_item_id : undefined))
+        .filter((id): id is string => typeof id === "string")
+    : [];
+  await deleteCartItemsByIdsForUser({ ids: cartItemIds, userEmail: payload.userEmail });
+
+  await db.insert(auditLogs).values({
+    action: "etb_payment_proof_submitted",
+    category: "payment",
+    severity: "info",
+    entityType: "order",
+    entityId: updated.id,
+    performedBy: payload.userEmail,
+    details: `ETB payment proof submitted for order ${updated.orderNumber}`,
+    metadata: {
+      payment_proof_url: payload.paymentProofUrl,
+    },
+  });
+
+  await db.insert(systemAlerts).values({
+    title: `ETB payment proof submitted for #${updated.orderNumber}`,
+    message: `Payment proof uploaded by ${updated.userEmail}; awaiting verification.`,
+    type: "payment_review",
+    severity: "info",
+    entityId: updated.id,
+  });
+
+  if (updated.eventId) {
+    await db
+      .update(eventParticipants)
+      .set({
+        orderId: updated.id,
+        orderStatus: "ordered",
+        paymentStatus: "awaiting_verification",
+        updatedAt: new Date(),
+      })
+      .where(and(eq(eventParticipants.eventId, updated.eventId), eq(eventParticipants.participantEmail, updated.userEmail)));
+  }
+
+  return updated;
 }

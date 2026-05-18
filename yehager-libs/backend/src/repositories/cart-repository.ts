@@ -18,6 +18,7 @@ export async function createCartItem(payload: {
   priceUsd: string;
   quantity: number;
   measurementId?: string;
+  measurementSnapshot?: Record<string, unknown>;
   eventId?: string;
   eventName?: string;
 }) {
@@ -32,6 +33,7 @@ export async function createCartItem(payload: {
       priceUsd: payload.priceUsd,
       quantity: payload.quantity,
       measurementId: payload.measurementId,
+      measurementSnapshot: payload.measurementSnapshot,
       eventId: payload.eventId,
       eventName: payload.eventName,
     })
@@ -69,4 +71,15 @@ export async function deleteCartItemById(params: { id: string; userEmail: string
     .where(and(eq(cartItems.id, params.id), eq(cartItems.userEmail, params.userEmail)))
     .returning({ id: cartItems.id });
   return row;
+}
+
+export async function deleteCartItemsByIdsForUser(params: { ids: string[]; userEmail: string }) {
+  if (!params.ids.length) {
+    return [];
+  }
+
+  return db
+    .delete(cartItems)
+    .where(and(inArray(cartItems.id, params.ids), eq(cartItems.userEmail, params.userEmail)))
+    .returning({ id: cartItems.id });
 }

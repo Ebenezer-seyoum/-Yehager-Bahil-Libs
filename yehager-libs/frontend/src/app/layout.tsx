@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { Cormorant_Garamond, Inter } from "next/font/google";
 import { Providers } from "@/components/providers";
-import { SiteShell } from "@/components/site-shell";
+import { AppFrame } from "@/components/app-frame";
+import { AuthenticatedGate } from "@/components/authenticated-gate";
 import "./globals.css";
 
 const cormorant = Cormorant_Garamond({
@@ -53,7 +54,9 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col">
         <Providers>
-          <SiteShell>{children}</SiteShell>
+          <AuthenticatedGate>
+            <AppFrame>{children}</AppFrame>
+          </AuthenticatedGate>
         </Providers>
       </body>
     </html>

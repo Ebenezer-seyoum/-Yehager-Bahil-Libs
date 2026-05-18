@@ -9,6 +9,7 @@
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "allowSyntheticDefaultImports": true,
+    "rootDir": "src",
     "outDir": "dist",
     "types": ["node"]
   },

@@ -16,6 +16,7 @@ const addItemSchema = z.object({
   measurementId: z.string().uuid().optional(),
   eventId: z.string().uuid().optional(),
   eventName: z.string().optional(),
+  roleLabel: z.string().optional(),
 });
 
 const patchQuantitySchema = z.object({
@@ -40,6 +41,7 @@ cartRouter.post("/", requireAuth, zValidator("json", addItemSchema), async (c) =
     measurementId: body.measurementId,
     eventId: body.eventId,
     eventName: body.eventName,
+    roleLabel: body.roleLabel,
   });
   return c.json({ data: item }, 201);
 });

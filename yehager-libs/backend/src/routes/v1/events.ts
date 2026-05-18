@@ -5,7 +5,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
 import { requireAuth } from "../../middleware/auth.js";
 import { db } from "../../lib/db/drizzle.js";
-import { events, eventParticipants } from "../../lib/db/schema.js";
+import { events, eventParticipants, familyGroups, familyMembers, orders } from "../../lib/db/schema.js";
 import type { AppBindings } from "../../types/hono.js";
 
 const listSchema = z.object({
@@ -32,13 +32,7 @@ const createEventSchema = z.object({
 export const eventsRouter = new Hono<AppBindings>();
 
 eventsRouter.get("/", zValidator("query", listSchema), async (c) => {
-  const { limit, mine } = c.req.valid("query");
-  if (mine) {
-    const authHeader = c.req.header("authorization");
-    if (!authHeader) {
-      throw new HTTPException(401, { message: "Unauthorized" });
-    }
-  }
+  const { limit } = c.req.valid("query");
 
   const rows = await db.query.events.findMany({
     where: eq(events.isActive, true),
@@ -46,6 +40,20 @@ eventsRouter.get("/", zValidator("query", listSchema), async (c) => {
     limit: limit ?? 80,
   });
 
+  return c.json({ data: rows });
+});
+
+eventsRouter.get("/mine", requireAuth, zValidator("query", listSchema), async (c) => {
+  const authUser = c.get("authUser");
+  const { limit } = c.req.valid("query");
+  if (!authUser?.email) {
+    throw new HTTPException(401, { message: "Unauthorized" });
+  }
+  const rows = await db.query.events.findMany({
+    where: and(eq(events.isActive, true), eq(events.ownerEmail, authUser.email)),
+    orderBy: [desc(events.createdAt)],
+    limit: limit ?? 80,
+  });
   return c.json({ data: rows });
 });
 
@@ -126,4 +134,35 @@ eventsRouter.get("/:eventId/participants", requireAuth, zValidator("param", idPa
     orderBy: [desc(eventParticipants.createdAt)],
   });
   return c.json({ data: rows });
+});
+
+eventsRouter.get("/:eventId/dashboard", requireAuth, zValidator("param", idParamSchema), async (c) => {
+  const { eventId } = c.req.valid("param");
+  const [participants, groups, members, eventOrders] = await Promise.all([
+    db.query.eventParticipants.findMany({
+      where: eq(eventParticipants.eventId, eventId),
+      orderBy: [desc(eventParticipants.createdAt)],
+    }),
+    db.query.familyGroups.findMany({
+      where: eq(familyGroups.eventId, eventId),
+      orderBy: [desc(familyGroups.createdAt)],
+    }),
+    db.query.familyMembers.findMany({
+      where: eq(familyMembers.eventId, eventId),
+      orderBy: [desc(familyMembers.createdAt)],
+    }),
+    db.query.orders.findMany({
+      where: eq(orders.eventId, eventId),
+      orderBy: [desc(orders.createdAt)],
+    }),
+  ]);
+
+  return c.json({
+    data: {
+      participants,
+      familyGroups: groups,
+      familyMembers: members,
+      orders: eventOrders,
+    },
+  });
 });

@@ -44,6 +44,18 @@ export default async function FamilyGroupPage({ params }) {
     revalidatePath(`/family-group/${groupId}`);
   }
 
+  async function renameGroup(formData) {
+    "use server";
+    await ensureBackendUserSynced();
+    const groupName = String(formData.get("groupName") ?? "").trim();
+    if (!groupName) return;
+    await apiRequest(`/api/v1/family-groups/${groupId}`, {
+      method: "PATCH",
+      body: { groupName },
+    });
+    revalidatePath(`/family-group/${groupId}`);
+  }
+
   async function removeMember(formData) {
     "use server";
     await ensureBackendUserSynced();
@@ -124,6 +136,7 @@ export default async function FamilyGroupPage({ params }) {
     return !hasProduct || !hasRequiredMeasurements;
   });
   const canAddAllToCart = members.length > 0 && notReadyMembers.length === 0;
+  const readyMembers = members.length - notReadyMembers.length;
 
   return (
     <div className="mx-auto w-full max-w-3xl space-y-6 px-4 py-10 sm:px-6 lg:px-8">
@@ -131,6 +144,38 @@ export default async function FamilyGroupPage({ params }) {
         <p className="text-xs uppercase tracking-[0.3em] text-primary">Family Group</p>
         <h1 className="mt-2 font-heading text-4xl font-bold">{group?.groupName}</h1>
         <p className="mt-2 text-sm text-background/70">Event: {group?.eventName}</p>
+        <form action={renameGroup} className="mt-4 flex flex-col gap-2 sm:flex-row">
+          <input
+            name="groupName"
+            defaultValue={group?.groupName ?? ""}
+            className="h-10 flex-1 rounded-md border border-white/20 bg-white/10 px-3 text-sm text-white placeholder:text-white/50"
+          />
+          <button type="submit" className="rounded-md bg-white/10 px-4 py-2 text-sm hover:bg-white/20">
+            Rename Group
+          </button>
+        </form>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div className="rounded-xl border border-border bg-card p-4">
+          <p className="text-xs uppercase tracking-widest text-primary">Members</p>
+          <p className="mt-2 font-heading text-3xl font-bold">{members.length}</p>
+        </div>
+        <div className="rounded-xl border border-border bg-card p-4">
+          <p className="text-xs uppercase tracking-widest text-primary">Ready</p>
+          <p className="mt-2 font-heading text-3xl font-bold">{readyMembers}</p>
+        </div>
+        <div className="rounded-xl border border-border bg-card p-4">
+          <p className="text-xs uppercase tracking-widest text-primary">Needs work</p>
+          <p className="mt-2 font-heading text-3xl font-bold">{notReadyMembers.length}</p>
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
+        <p className="text-sm font-semibold">Ordering for the whole family?</p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Add each person, assign a product, and complete the required measurements. When everyone is ready, add the whole family to cart in one step.
+        </p>
       </div>
 
       <div className="rounded-xl border border-border bg-card p-5">
@@ -162,6 +207,14 @@ export default async function FamilyGroupPage({ params }) {
                   <p className="text-xs text-muted-foreground">
                     {m.relation ?? "Member"} · {m.gender}
                   </p>
+                  <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
+                    <span className={`rounded-full px-2 py-0.5 ${m.productId ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"}`}>
+                      {m.productId ? "Product selected" : "Missing product"}
+                    </span>
+                    <span className={`rounded-full px-2 py-0.5 ${REQUIRED_MEASUREMENT_FIELDS.every((field) => m.measurements?.[field] !== null && m.measurements?.[field] !== undefined && String(m.measurements?.[field]).trim() !== "") ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"}`}>
+                      {REQUIRED_MEASUREMENT_FIELDS.every((field) => m.measurements?.[field] !== null && m.measurements?.[field] !== undefined && String(m.measurements?.[field]).trim() !== "") ? "Measurements ready" : "Measurements incomplete"}
+                    </span>
+                  </div>
                   <form action={updateMemberDetails} className="mt-3 grid gap-2 sm:grid-cols-3">
                     <input type="hidden" name="memberId" value={m.id} />
                     <input

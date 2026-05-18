@@ -1,7 +1,8 @@
 import Stripe from "stripe";
 import { HTTPException } from "hono/http-exception";
 import { db } from "../lib/db/drizzle.js";
-import { auditLogs, systemAlerts } from "../lib/db/schema.js";
+import { and, eq } from "drizzle-orm";
+import { auditLogs, eventParticipants, systemAlerts } from "../lib/db/schema.js";
 import { env } from "../config/env.js";
 import { getOrderById, getOrderByIdForUser, updateOrderPaymentState } from "../repositories/orders-repository.js";
 import {
@@ -9,6 +10,7 @@ import {
   markStripeSessionOnOrder,
   recordWebhookEventIfNew,
 } from "../repositories/payments-repository.js";
+import { deleteCartItemsByIdsForUser } from "../repositories/cart-repository.js";
 import { canTransitionPaymentStatus, deriveOrderStatusOnPayment } from "./order-state-machine.js";
 
 const stripe = new Stripe(env.STRIPE_SECRET_KEY);
@@ -165,6 +167,27 @@ export async function processStripeWebhook(payload: { body: string; signature?: 
           severity: "info",
           entityId: order.id,
         });
+
+        const cartItemIds = Array.isArray(order.items)
+          ? order.items
+              .map((item) => (typeof item === "object" && item ? (item as Record<string, unknown>).cart_item_id : undefined))
+              .filter((id): id is string => typeof id === "string")
+          : [];
+        await deleteCartItemsByIdsForUser({ ids: cartItemIds, userEmail: order.userEmail });
+
+        if (order.eventId) {
+          await db
+            .update(eventParticipants)
+            .set({
+              orderId: order.id,
+              orderStatus: "ordered",
+              paymentStatus: "paid",
+              updatedAt: new Date(),
+            })
+            .where(
+              and(eq(eventParticipants.eventId, order.eventId), eq(eventParticipants.participantEmail, order.userEmail)),
+            );
+        }
       }
     }
   }

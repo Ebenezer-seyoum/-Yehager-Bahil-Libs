@@ -12,6 +12,9 @@ This checklist starts Phase 7 and is used before production cutover.
     - set `$env:NEXTAUTH_SECRET`, `$env:AUTH_SHARED_JWT_ISSUER`, `$env:AUTH_SHARED_JWT_AUDIENCE` so the script can mint an admin smoke token.
 - Customer auth: sign in/out and protected page redirects.
 - Catalog flow: browse products, open product page, add to cart.
+- Shared shell flow:
+  - switch languages from desktop and mobile navigation
+  - verify PWA install prompt behavior on one supported Android/Chrome device and iOS manual-install instructions
 - Checkout flow:
   - Stripe USD intent/session path.
   - ETB bank-transfer intent path.

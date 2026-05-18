@@ -45,3 +45,21 @@ export async function updateOrderPaymentState(params: {
     .returning();
   return row;
 }
+
+export async function markEtbPaymentProof(params: {
+  orderId: string;
+  userEmail: string;
+  paymentProofUrl: string;
+}) {
+  const [row] = await db
+    .update(orders)
+    .set({
+      paymentProofUrl: params.paymentProofUrl,
+      paymentProofUploadedAt: new Date(),
+      paymentStatus: "awaiting_verification",
+      updatedAt: new Date(),
+    })
+    .where(and(eq(orders.id, params.orderId), eq(orders.userEmail, params.userEmail)))
+    .returning();
+  return row;
+}

@@ -15,7 +15,6 @@ export const uploadsRouter = new Hono<AppBindings>();
 uploadsRouter.post(
   "/sign",
   requireAuth,
-  requireRole("admin"),
   zValidator("json", uploadSignatureSchema),
   async (c) => {
     const payload = c.req.valid("json");

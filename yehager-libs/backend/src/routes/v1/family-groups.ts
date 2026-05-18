@@ -16,6 +16,9 @@ const createGroupSchema = z.object({
 const groupIdParam = z.object({
   groupId: z.string().uuid(),
 });
+const updateGroupSchema = z.object({
+  groupName: z.string().min(1).max(160),
+});
 
 const createMemberSchema = z.object({
   name: z.string().min(1).max(160),
@@ -91,6 +94,27 @@ familyGroupsRouter.get("/:groupId", requireAuth, zValidator("param", groupIdPara
   });
 
   return c.json({ data: { group, members } });
+});
+
+familyGroupsRouter.patch("/:groupId", requireAuth, zValidator("param", groupIdParam), zValidator("json", updateGroupSchema), async (c) => {
+  const authUser = c.get("authUser");
+  const { groupId } = c.req.valid("param");
+  const body = c.req.valid("json");
+
+  const [row] = await db
+    .update(familyGroups)
+    .set({
+      groupName: body.groupName,
+      updatedAt: new Date(),
+    })
+    .where(and(eq(familyGroups.id, groupId), eq(familyGroups.leadEmail, authUser?.email ?? "")))
+    .returning();
+
+  if (!row) {
+    throw new HTTPException(404, { message: "Family group not found" });
+  }
+
+  return c.json({ data: row });
 });
 
 familyGroupsRouter.post("/:groupId/members", requireAuth, zValidator("param", groupIdParam), zValidator("json", createMemberSchema), async (c) => {

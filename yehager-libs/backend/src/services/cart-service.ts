@@ -24,6 +24,7 @@ export async function addItemToCart(payload: {
   measurementId?: string;
   eventId?: string;
   eventName?: string;
+  roleLabel?: string;
 }) {
   if (!payload.userEmail) {
     throw new HTTPException(400, { message: "Authenticated token must include email" });
@@ -39,13 +40,22 @@ export async function addItemToCart(payload: {
   }
 
   const user = await getUserByEmail(payload.userEmail);
+  const selectedRole = payload.roleLabel
+    ? product.familyRoles?.find((role) => role.label === payload.roleLabel)
+    : undefined;
+  if (payload.roleLabel && !selectedRole) {
+    throw new HTTPException(400, { message: "Selected product role is not available" });
+  }
 
-  if (payload.measurementId) {
-    const measurement = await getMeasurementForUser({
+  const measurement = payload.measurementId
+    ? await getMeasurementForUser({
       id: payload.measurementId,
       userEmail: payload.userEmail,
       userId: user?.id,
-    });
+    })
+    : undefined;
+
+  if (payload.measurementId) {
     if (!measurement) {
       throw new HTTPException(400, { message: "Measurement not found or does not belong to this account" });
     }
@@ -55,11 +65,21 @@ export async function addItemToCart(payload: {
     userId: user?.id,
     userEmail: payload.userEmail,
     productId: product.id,
-    productName: product.name,
+    productName: selectedRole ? `${product.name} — ${selectedRole.label}` : product.name,
     productImage: product.images?.[0],
-    priceUsd: product.priceUsd,
+    priceUsd: selectedRole ? selectedRole.price.toFixed(2) : product.priceUsd,
     quantity: payload.quantity,
     measurementId: payload.measurementId,
+    measurementSnapshot: measurement
+      ? {
+          chest: measurement.chest,
+          waist: measurement.waist,
+          hips: measurement.hips,
+          shoulderWidth: measurement.shoulderWidth,
+          armLength: measurement.armLength,
+          torsoLength: measurement.torsoLength,
+        }
+      : undefined,
     eventId: payload.eventId,
     eventName: payload.eventName,
   });
