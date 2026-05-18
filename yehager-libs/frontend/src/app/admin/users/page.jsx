@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/auth-options";
 import { apiRequest } from "@/lib/api-client";
 import { can } from "@/lib/permissions";
+import { EmployeePermissionsPanel } from "@/components/employee-permissions-panel";
 
 const ROLE_OPTIONS = ["customer", "employee", "admin"];
 const STATUS_OPTIONS = ["active", "inactive", "suspended"];
@@ -137,11 +138,17 @@ export default async function AdminUsersPage({ searchParams }) {
   }
 
   let users = [];
+  let permissions = [];
   try {
-    const response = await apiRequest("/api/v1/admin/users?limit=200");
+    const [response, permissionsResponse] = await Promise.all([
+      apiRequest("/api/v1/admin/users?limit=200"),
+      apiRequest("/api/v1/admin/permissions"),
+    ]);
     users = Array.isArray(response?.data) ? response.data : [];
+    permissions = Array.isArray(permissionsResponse?.data) ? permissionsResponse.data : [];
   } catch {
     users = [];
+    permissions = [];
   }
 
   const employees = users.filter((user) => user.role === "employee");
@@ -177,8 +184,24 @@ export default async function AdminUsersPage({ searchParams }) {
       {query.deleted === "1" ? <div className="rounded-xl border border-border bg-card p-4 text-sm text-primary">User deleted.</div> : null}
       {query.error ? <div className="rounded-xl border border-destructive/40 bg-card p-4 text-sm text-destructive">Could not complete that employee action.</div> : null}
 
+      <div className="flex flex-wrap gap-2">
+        {[
+          ["create", "Create"],
+          ["update", "Update"],
+          ["delete", "Delete"],
+          ["block", "Block"],
+          ["permissions", "Permissions"],
+        ].map(([key, label]) => (
+          <a key={key} href={`/admin/users?tab=${key}`} className={`rounded-xl px-4 py-2 text-sm ${query.tab === key || (!query.tab && key === "create") ? "bg-primary text-primary-foreground" : "border border-border"}`}>
+            {label}
+          </a>
+        ))}
+      </div>
+
+      {query.tab === "permissions" ? <EmployeePermissionsPanel employees={employees} permissions={permissions} /> : null}
+
       <div className="grid gap-6 xl:grid-cols-[0.75fr_1.25fr]">
-        <section className="rounded-2xl border border-border bg-card p-5">
+        {(query.tab === "create" || !query.tab) ? <section className="rounded-2xl border border-border bg-card p-5">
           <p className="text-xs uppercase tracking-widest text-primary">Create Employee</p>
           <h2 className="mt-2 text-xl font-semibold">New staff account</h2>
           <form action={createEmployee} className="mt-5 space-y-4">
@@ -198,9 +221,9 @@ export default async function AdminUsersPage({ searchParams }) {
               Create employee
             </button>
           </form>
-        </section>
+        </section> : null}
 
-        <section className="space-y-4">
+        {query.tab !== "permissions" ? <section className="space-y-4">
           {users.length === 0 ? (
             <div className="rounded-2xl border border-border bg-card p-5 text-sm text-muted-foreground">No users found.</div>
           ) : (
@@ -221,7 +244,7 @@ export default async function AdminUsersPage({ searchParams }) {
                   </div>
                 </div>
 
-                <div className="mt-5 grid gap-4 lg:grid-cols-2">
+                {query.tab === "update" || (!query.tab && false) ? <div className="mt-5 grid gap-4 lg:grid-cols-2">
                   <form action={updateProfile} className="rounded-2xl border border-border bg-background/50 p-4">
                     <input type="hidden" name="userId" value={user.id} />
                     <p className="text-sm font-semibold">Profile</p>
@@ -259,9 +282,27 @@ export default async function AdminUsersPage({ searchParams }) {
                       <button disabled={!canEdit} className="mt-3 rounded-xl bg-secondary px-3 py-2 text-sm font-medium disabled:opacity-50">Save status</button>
                     </form>
                   </div>
-                </div>
+                </div> : null}
 
-                <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_auto]">
+                {query.tab === "block" ? <div className="mt-4 grid gap-4">
+                  <form action={updateStatus} className="rounded-2xl border border-border bg-background/50 p-4">
+                    <input type="hidden" name="userId" value={user.id} />
+                    <p className="text-sm font-semibold">Block / status</p>
+                    <select name="status" defaultValue={user.status} className="mt-3 h-10 w-full rounded-xl border border-input bg-background px-3 text-sm">
+                      {STATUS_OPTIONS.map((status) => <option key={status}>{status}</option>)}
+                    </select>
+                    <button className="mt-3 rounded-xl bg-secondary px-3 py-2 text-sm">Save status</button>
+                  </form>
+                </div> : null}
+
+                {query.tab === "delete" ? <div className="mt-4 flex justify-end">
+                  <form action={deleteUser}>
+                    <input type="hidden" name="userId" value={user.id} />
+                    <button className="rounded-xl border border-destructive/50 px-4 py-2 text-sm text-destructive">Delete user</button>
+                  </form>
+                </div> : null}
+
+                {query.tab === "update" ? <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_auto]">
                   <form action={resetPassword} className="rounded-2xl border border-border bg-background/50 p-4">
                     <input type="hidden" name="userId" value={user.id} />
                     <p className="text-sm font-semibold">Reset password</p>
@@ -277,11 +318,11 @@ export default async function AdminUsersPage({ searchParams }) {
                       Delete user
                     </button>
                   </form>
-                </div>
+                </div> : null}
               </article>
             ))
           )}
-        </section>
+        </section> : null}
       </div>
     </div>
   );

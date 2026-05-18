@@ -11,6 +11,7 @@ import { USER_ROLES } from "../../lib/auth/roles.js";
 import { PERMISSIONS } from "../../lib/auth/permissions.js";
 import {
   createEmployeeForAdmin,
+  createCustomerForAdmin,
   deleteUserForAdmin,
   listUsersForAdmin,
   resetUserPasswordForAdmin,
@@ -19,7 +20,7 @@ import {
   updateUserStatusForAdmin,
 } from "../../services/users-service.js";
 import { listRolesForAdmin, updateRolePermissionsForAdmin } from "../../services/roles-service.js";
-import { listPermissionsForAdmin } from "../../services/permissions-service.js";
+import { getEffectivePermissionsForUser, listPermissionsForAdmin, updateUserPermissionsForAdmin } from "../../services/permissions-service.js";
 import { getOrderReport, toOrderReportCsv } from "../../services/reports-service.js";
 import type { AppBindings } from "../../types/hono.js";
 
@@ -274,6 +275,15 @@ adminRouter.post("/users/employees", requirePermission(PERMISSIONS.EMPLOYEES_CRE
   return c.json({ data }, 201);
 });
 
+adminRouter.post("/users/customers", requirePermission(PERMISSIONS.EMPLOYEES_CREATE), zValidator("json", createEmployeeSchema), async (c) => {
+  const authUser = c.get("authUser");
+  const data = await createCustomerForAdmin({
+    ...c.req.valid("json"),
+    performedBy: authUser?.email,
+  });
+  return c.json({ data }, 201);
+});
+
 adminRouter.patch(
   "/users/:userId/role",
   requirePermission(PERMISSIONS.EMPLOYEES_ASSIGN),
@@ -287,6 +297,35 @@ adminRouter.patch(
       userId,
       role,
       performedBy: authUser?.email,
+    });
+    return c.json({ data });
+  },
+);
+
+adminRouter.get("/users/:userId/permissions", requirePermission(PERMISSIONS.EMPLOYEES_VIEW), zValidator("param", userParamSchema), async (c) => {
+  const { userId } = c.req.valid("param");
+  return c.json({ data: await getEffectivePermissionsForUser(userId) });
+});
+
+adminRouter.put(
+  "/users/:userId/permissions",
+  requirePermission(PERMISSIONS.EMPLOYEES_ASSIGN),
+  zValidator("param", userParamSchema),
+  zValidator("json", rolePermissionsPatchSchema),
+  async (c) => {
+    const authUser = c.get("authUser");
+    const { userId } = c.req.valid("param");
+    const { permissions: permissionKeys } = c.req.valid("json");
+    const data = await updateUserPermissionsForAdmin(userId, permissionKeys);
+    await db.insert(auditLogs).values({
+      action: "user_permissions_updated",
+      category: "admin",
+      severity: "info",
+      entityType: "user",
+      entityId: userId,
+      performedBy: authUser?.email ?? "admin",
+      details: "Admin updated user permissions",
+      metadata: { permissions: permissionKeys },
     });
     return c.json({ data });
   },

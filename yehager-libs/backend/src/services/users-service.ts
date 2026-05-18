@@ -189,6 +189,42 @@ export async function createEmployeeForAdmin(payload: {
   return toPublicUser(user);
 }
 
+export async function createCustomerForAdmin(payload: {
+  email: string;
+  name: string;
+  password: string;
+  performedBy?: string;
+}) {
+  const email = normalizeEmail(payload.email);
+  const existing = await getUserByEmail(email);
+  if (existing) {
+    throw new HTTPException(409, { message: "An account with this email already exists" });
+  }
+
+  const user = await createUser({
+    email,
+    name: payload.name.trim(),
+    passwordHash: await hashPassword(payload.password),
+    role: "customer",
+  });
+  if (!user) {
+    throw new HTTPException(409, { message: "An account with this email already exists" });
+  }
+  await ensureSystemRoleAssignment(user.id, user.role);
+
+  await db.insert(auditLogs).values({
+    action: "customer_account_created",
+    category: "admin",
+    severity: "info",
+    entityType: "user",
+    entityId: user.id,
+    performedBy: payload.performedBy ?? "admin",
+    details: "Admin created customer account",
+    metadata: { email: user.email, role: user.role },
+  });
+  return toPublicUser(user);
+}
+
 export async function updateRoleForAdmin(payload: {
   userId: string;
   role: UserRole;

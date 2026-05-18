@@ -88,6 +88,20 @@ export const userRoles = pgTable(
   (table) => [uniqueIndex("user_roles_unique").on(table.userId, table.roleId)],
 );
 
+export const userPermissions = pgTable(
+  "user_permissions",
+  {
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    permissionId: uuid("permission_id")
+      .notNull()
+      .references(() => permissions.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [uniqueIndex("user_permissions_unique").on(table.userId, table.permissionId)],
+);
+
 export const sessions = pgTable(
   "sessions",
   {
