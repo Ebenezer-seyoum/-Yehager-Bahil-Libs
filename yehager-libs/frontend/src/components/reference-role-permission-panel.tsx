@@ -240,13 +240,13 @@ export function ReferenceRolePermissionPanel({
       ) : (
         <section className="overflow-hidden rounded-2xl border border-border bg-card">
           <div className="border-b border-border p-5">
-            <h2 className="text-xl font-semibold">User Types</h2>
-            <p className="mt-1 text-sm text-muted-foreground">Manage available user types.</p>
+            <h2 className="text-xl font-semibold">Roles</h2>
+            <p className="mt-1 text-sm text-muted-foreground">Manage available Roles.</p>
           </div>
           <div className="flex flex-col gap-3 border-b border-border p-5 sm:flex-row sm:items-center sm:justify-between">
             <input value={roleFilter} onChange={(event) => setRoleFilter(event.target.value)} placeholder="Filter user types..." className="h-11 w-full rounded-xl border border-input bg-background px-4 text-sm sm:max-w-md" />
             <button type="button" onClick={() => setCreateOpen(true)} className="rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground">
-              + Add New User Type
+              + Add New Roles
             </button>
           </div>
           <div className="overflow-x-auto">

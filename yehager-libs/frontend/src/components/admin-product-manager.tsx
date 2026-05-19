@@ -44,6 +44,11 @@ type Notice = {
   message: string;
 } | null;
 
+type CatalogSection = {
+  name: string;
+  subsections: string[];
+};
+
 const emptyDraft = {
   name: "",
   description: "",
@@ -83,6 +88,9 @@ function formatCurrency(value: string | number | null | undefined) {
 
 export function AdminProductManager({ initialProducts }: { initialProducts: Product[] }) {
   const [products, setProducts] = useState(initialProducts);
+  const [catalogSections, setCatalogSections] = useState<CatalogSection[]>(
+    REGIONS.map((region) => ({ name: region, subsections: TAXONOMY[region] ?? [] })),
+  );
   const [draft, setDraft] = useState(emptyDraft);
   const [search, setSearch] = useState("");
   const [regionFilter, setRegionFilter] = useState("all");
@@ -102,9 +110,14 @@ export function AdminProductManager({ initialProducts }: { initialProducts: Prod
   const [statusFilter, setStatusFilter] = useState("all");
   const [minPrice, setMinPrice] = useState("");
   const [maxPrice, setMaxPrice] = useState("");
+  const [sectionModal, setSectionModal] = useState<"add" | "edit" | null>(null);
+  const [sectionDraft, setSectionDraft] = useState({ originalName: "", name: "", subsectionsText: "" });
 
-  const subsections = TAXONOMY[draft.region] ?? [];
-  const filterSubsections = regionFilter === "all" ? Array.from(new Set(REGIONS.flatMap((region) => TAXONOMY[region] ?? []))) : TAXONOMY[regionFilter] ?? [];
+  const sectionNames = catalogSections.map((section) => section.name);
+  const taxonomyState = Object.fromEntries(catalogSections.map((section) => [section.name, section.subsections])) as Record<string, string[]>;
+  const subsections = taxonomyState[draft.region] ?? [];
+  const filterSubsections =
+    regionFilter === "all" ? Array.from(new Set(catalogSections.flatMap((section) => section.subsections))) : taxonomyState[regionFilter] ?? [];
   const previewImages = parseImages(draft.imagesText);
 
   const filteredProducts = useMemo(() => {
@@ -132,10 +145,87 @@ export function AdminProductManager({ initialProducts }: { initialProducts: Prod
   const activeCount = products.filter((product) => product.isActive).length;
   const inactiveCount = products.length - activeCount;
 
+  const sectionSummaries = catalogSections.map((section) => {
+    const sectionProducts = products.filter((product) => product.region === section.name);
+    return {
+      ...section,
+      count: sectionProducts.length,
+      active: sectionProducts.filter((product) => product.isActive).length,
+      featured: sectionProducts.filter((product) => product.isFeatured).length,
+    };
+  });
+
   function formatEtb(value: string | number | null | undefined) {
     const amount = Number(value) * 156.16;
     if (!Number.isFinite(amount)) return "0 ETB";
     return `${Math.round(amount).toLocaleString()} ETB`;
+  }
+
+  function openAddSection() {
+    setSectionDraft({ originalName: "", name: "", subsectionsText: "" });
+    setSectionModal("add");
+  }
+
+  function openEditSection(section: CatalogSection) {
+    setSectionDraft({
+      originalName: section.name,
+      name: section.name,
+      subsectionsText: section.subsections.join(", "),
+    });
+    setSectionModal("edit");
+  }
+
+  function saveSection() {
+    const name = sectionDraft.name.trim();
+    const subsections = sectionDraft.subsectionsText
+      .split(/\r?\n|,/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+
+    if (!name) {
+      setNotice({ type: "error", message: "Please enter a section name." });
+      return;
+    }
+
+    const duplicate = catalogSections.some(
+      (section) => section.name.toLowerCase() === name.toLowerCase() && section.name !== sectionDraft.originalName,
+    );
+    if (duplicate) {
+      setNotice({ type: "error", message: "A section with this name already exists." });
+      return;
+    }
+
+    if (sectionModal === "edit") {
+      setCatalogSections((current) =>
+        current.map((section) => (section.name === sectionDraft.originalName ? { name, subsections } : section)),
+      );
+      setProducts((current) =>
+        current.map((product) => (product.region === sectionDraft.originalName ? { ...product, region: name } : product)),
+      );
+      setRegionFilter((current) => (current === sectionDraft.originalName ? name : current));
+      setDraft((current) => ({
+        ...current,
+        region: current.region === sectionDraft.originalName ? name : current.region,
+        subcategory: subsections.includes(current.subcategory) ? current.subcategory : subsections[0] ?? "",
+      }));
+      setNotice({ type: "success", message: "Catalog section updated successfully." });
+    } else {
+      setCatalogSections((current) => [...current, { name, subsections }]);
+      setNotice({ type: "success", message: "Catalog section added successfully." });
+    }
+
+    setSectionModal(null);
+  }
+
+  function deleteSection(section: CatalogSection) {
+    const productCount = products.filter((product) => product.region === section.name).length;
+    if (productCount > 0) {
+      setNotice({ type: "error", message: `Move or delete ${productCount} product(s) before deleting ${section.name}.` });
+      return;
+    }
+    setCatalogSections((current) => current.filter((item) => item.name !== section.name));
+    setRegionFilter((current) => (current === section.name ? "all" : current));
+    setNotice({ type: "success", message: "Catalog section deleted successfully." });
   }
 
   async function createProduct() {
@@ -443,6 +533,75 @@ export function AdminProductManager({ initialProducts }: { initialProducts: Prod
       <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
+            <p className="text-xs font-bold uppercase tracking-widest text-emerald-700">Catalog Sections</p>
+            <h2 className="mt-1 text-2xl font-extrabold text-slate-950">Manage product sections</h2>
+            <p className="mt-1 text-sm font-medium text-slate-500">Add, edit, delete, or open products inside each section.</p>
+          </div>
+          <button
+            type="button"
+            onClick={openAddSection}
+            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-700 px-5 py-3 text-sm font-extrabold text-white shadow-sm hover:bg-emerald-800"
+          >
+            <span className="text-lg">+</span> Add Section
+          </button>
+        </div>
+
+        <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          {sectionSummaries.map((section) => (
+            <article
+              key={section.name}
+              className={`rounded-3xl border p-4 shadow-sm transition hover:border-blue-200 hover:bg-blue-50 ${
+                regionFilter === section.name ? "border-emerald-300 bg-emerald-50" : "border-slate-200 bg-white"
+              }`}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-lg font-extrabold text-slate-950">{section.name}</h3>
+                  <p className="mt-1 text-sm font-medium text-slate-500">{section.subsections.length} subsection(s)</p>
+                </div>
+                <span className="rounded-2xl bg-slate-900 px-3 py-1 text-xs font-extrabold text-white">{section.count}</span>
+              </div>
+              <div className="mt-4 grid grid-cols-2 gap-2 text-xs font-bold">
+                <span className="rounded-xl bg-emerald-50 px-3 py-2 text-emerald-700">{section.active} active</span>
+                <span className="rounded-xl bg-amber-50 px-3 py-2 text-amber-700">{section.featured} featured</span>
+              </div>
+              <p className="mt-3 line-clamp-2 text-xs font-medium text-slate-500">
+                {section.subsections.length ? section.subsections.join(", ") : "No subsections"}
+              </p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRegionFilter(section.name);
+                    setSubsectionFilter("all");
+                  }}
+                  className="rounded-xl bg-slate-800 px-3 py-2 text-xs font-bold text-white"
+                >
+                  View inside
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openEditSection(section)}
+                  className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50"
+                >
+                  Edit
+                </button>
+                <button
+                  type="button"
+                  onClick={() => deleteSection(section)}
+                  className="rounded-xl bg-red-600 px-3 py-2 text-xs font-bold text-white hover:bg-red-700"
+                >
+                  Delete
+                </button>
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
             <p className="text-xs font-bold uppercase tracking-widest text-emerald-700">Product Catalog</p>
             <h2 className="mt-1 text-2xl font-extrabold text-slate-950">Listed Products</h2>
             <p className="mt-1 text-sm font-medium text-slate-500">
@@ -479,7 +638,7 @@ export function AdminProductManager({ initialProducts }: { initialProducts: Prod
             className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-900"
           >
             <option value="all">All sections</option>
-            {REGIONS.map((region) => (
+            {sectionNames.map((region) => (
               <option key={region}>{region}</option>
             ))}
           </select>
@@ -652,8 +811,8 @@ export function AdminProductManager({ initialProducts }: { initialProducts: Prod
               <input value={draft.name} onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))} placeholder="Product name" className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 font-semibold text-slate-900" />
               <textarea value={draft.description} onChange={(event) => setDraft((current) => ({ ...current, description: event.target.value }))} placeholder="Product details / description" className="min-h-24 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 font-medium text-slate-900" />
               <div className="grid gap-3 sm:grid-cols-2">
-                <select value={draft.region} onChange={(event) => setDraft((current) => ({ ...current, region: event.target.value, subcategory: TAXONOMY[event.target.value]?.[0] ?? "" }))} className="h-11 rounded-xl border border-slate-200 bg-white px-3 font-semibold text-slate-900">
-                  {REGIONS.map((region) => <option key={region}>{region}</option>)}
+                <select value={draft.region} onChange={(event) => setDraft((current) => ({ ...current, region: event.target.value, subcategory: taxonomyState[event.target.value]?.[0] ?? "" }))} className="h-11 rounded-xl border border-slate-200 bg-white px-3 font-semibold text-slate-900">
+                  {sectionNames.map((region) => <option key={region}>{region}</option>)}
                 </select>
                 <select value={draft.subcategory} onChange={(event) => setDraft((current) => ({ ...current, subcategory: event.target.value }))} className="h-11 rounded-xl border border-slate-200 bg-white px-3 font-semibold text-slate-900">
                   <option value="">No subsection</option>

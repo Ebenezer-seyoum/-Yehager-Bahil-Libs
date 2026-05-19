@@ -13,7 +13,10 @@ export const adminNavigation = [
   },
   {
     label: "Catalog",
-    items: [{ href: "/admin/inventory", label: "Products", icon: "products", permission: "products.view" }],
+    items: [
+      { href: "/admin/inventory", label: "Products", icon: "products", permission: "products.view" },
+      { href: "/admin/sections", label: "Sections", icon: "sections", permission: "products.view" },
+    ],
   },
   {
     label: "Operations",

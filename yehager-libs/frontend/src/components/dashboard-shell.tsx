@@ -12,6 +12,7 @@ import {
   ChevronDown,
   ChevronRight,
   ClipboardList,
+  FolderTree,
   LayoutDashboard,
   Menu,
   ScrollText,
@@ -29,6 +30,7 @@ type NavigationIcon =
   | "users"
   | "customers"
   | "products"
+  | "sections"
   | "orders"
   | "exchange"
   | "alerts"
@@ -54,6 +56,7 @@ const icons = {
   users: UsersRound,
   customers: UserRound,
   products: Boxes,
+  sections: FolderTree,
   orders: ClipboardList,
   exchange: ArrowLeftRight,
   alerts: BellRing,
