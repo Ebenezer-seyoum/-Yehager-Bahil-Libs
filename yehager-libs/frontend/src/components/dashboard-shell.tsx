@@ -73,7 +73,7 @@ export function DashboardShell({
   children: React.ReactNode;
   navigation: readonly NavigationGroup[];
   title: string;
-  subtitle: string;
+  subtitle?: string;
   variant: "admin" | "employee";
 }) {
   const pathname = usePathname();
@@ -93,6 +93,7 @@ export function DashboardShell({
           .filter((group) => group.items.length > 0);
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
   const profileHref = variant === "admin" ? "/admin/settings" : "/employee/settings";
+  const adminTopBar = variant === "admin";
   const initials =
     session?.user?.name
       ?.split(" ")
@@ -143,8 +144,8 @@ export function DashboardShell({
             className="h-11 w-11 rounded-full object-cover"
           />
           <div>
-            <p className="text-sm font-semibold">Yehager Bahil Libs</p>
-            <p className="text-xs text-muted-foreground">{variant === "admin" ? "Admin Console" : "Employee Console"}</p>
+            <p className="text-[15px] font-bold tracking-tight text-white">Yehager Bahil Libs</p>
+            <p className="text-xs font-medium text-sidebar-foreground/65">{variant === "admin" ? "Admin Console" : "Employee Console"}</p>
           </div>
         </Link>
       </div>
@@ -160,13 +161,17 @@ export function DashboardShell({
                   [group.label]: !current[group.label],
                 }))
               }
-              className="flex w-full items-center justify-between px-3 pb-2 text-left text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground transition hover:text-sidebar-foreground"
+              className={
+                variant === "admin" && group.label === "Users"
+                  ? "mb-2 flex w-full items-center justify-between rounded-xl bg-sidebar-accent px-3 py-2.5 text-left text-xs font-bold uppercase tracking-[0.2em] text-white transition hover:bg-sidebar-accent/90"
+                  : "flex w-full items-center justify-between px-3 pb-2 text-left text-xs font-bold uppercase tracking-[0.2em] text-sidebar-foreground/65 transition hover:text-sidebar-foreground"
+              }
             >
               <span>{group.label}</span>
               {collapsedGroups[group.label] ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
             </button>
             {!collapsedGroups[group.label] ? (
-              <div className="space-y-1">
+              <div className={variant === "admin" && group.label === "Users" ? "ml-3 space-y-1 border-l border-sidebar-border pl-3" : "space-y-1"}>
                 {group.items.map((item) => {
                   const Icon = icons[item.icon];
                   const active = pathname === item.href || (item.href !== "/admin" && item.href !== "/employee" && pathname.startsWith(item.href));
@@ -177,8 +182,8 @@ export function DashboardShell({
                       onClick={() => setMobileOpen(false)}
                       className={
                         active
-                          ? "flex items-center gap-3 rounded-xl bg-sidebar-primary px-3 py-2.5 text-sm font-semibold text-sidebar-primary-foreground"
-                          : "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-sidebar-foreground/80 transition hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                          ? "flex items-center gap-3 rounded-xl bg-sidebar-primary px-3 py-2.5 text-[15px] font-bold text-sidebar-primary-foreground shadow-sm"
+                          : "flex items-center gap-3 rounded-xl px-3 py-2.5 text-[15px] font-semibold text-sidebar-foreground/88 transition hover:bg-sidebar-accent hover:text-white"
                       }
                     >
                       <Icon className="h-4 w-4" />
@@ -202,7 +207,7 @@ export function DashboardShell({
   );
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="dashboard-theme min-h-screen bg-background text-foreground">
       <div className="hidden lg:fixed lg:inset-y-0 lg:flex lg:w-72 lg:flex-col">{sidebar}</div>
 
       {mobileOpen ? (
@@ -213,23 +218,54 @@ export function DashboardShell({
       ) : null}
 
       <div className="lg:pl-72">
-        <header className="sticky top-0 z-30 border-b border-border bg-background/90 backdrop-blur">
-          <div className="flex h-20 items-center gap-4 px-4 sm:px-6 lg:px-8">
-            <button type="button" className="rounded-xl border border-border p-2 lg:hidden" onClick={() => setMobileOpen(true)}>
+        <header
+          className={
+            adminTopBar
+              ? "sticky top-0 z-30 border-b border-sidebar-border bg-sidebar text-sidebar-foreground shadow-[0_14px_32px_rgba(0,0,0,0.28)]"
+              : "sticky top-0 z-30 border-b border-border bg-background/90 backdrop-blur"
+          }
+        >
+          <div className="flex min-h-20 flex-wrap items-center gap-3 px-4 py-3 sm:gap-4 sm:px-6 lg:h-20 lg:flex-nowrap lg:px-8 lg:py-0">
+            <button
+              type="button"
+              className={adminTopBar ? "rounded-xl border border-white/10 bg-sidebar-accent/80 p-2 lg:hidden" : "rounded-xl border border-border p-2 lg:hidden"}
+              onClick={() => setMobileOpen(true)}
+            >
               <Menu className="h-5 w-5" />
             </button>
 
             <div className="min-w-0 flex-1">
-              <p className="text-xs uppercase tracking-[0.2em] text-primary">{variant}</p>
-              <h1 className="truncate text-lg font-semibold">{title}</h1>
+              <p
+                className={
+                  adminTopBar
+                    ? "text-[11px] font-semibold uppercase tracking-[0.28em] text-sidebar-primary"
+                    : "text-xs uppercase tracking-[0.2em] text-primary"
+                }
+              >
+                {variant}
+              </p>
+              <h1 className={adminTopBar ? "truncate text-lg font-bold tracking-tight text-white sm:text-xl" : "truncate text-lg font-semibold"}>{title}</h1>
             </div>
 
-            <div className="hidden w-full max-w-sm items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm text-muted-foreground md:flex">
-              <Search className="h-4 w-4" />
+            <div
+              className={
+                adminTopBar
+                  ? "order-3 hidden w-full items-center gap-2 rounded-2xl border border-white/10 bg-sidebar-accent/80 px-4 py-2.5 text-sm text-sidebar-foreground/75 shadow-inner shadow-black/20 md:flex lg:order-none lg:max-w-sm"
+                  : "hidden w-full max-w-sm items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm text-muted-foreground md:flex"
+              }
+            >
+              <Search className={adminTopBar ? "h-4 w-4 text-sidebar-primary" : "h-4 w-4"} />
               Search anything...
             </div>
 
-            <button type="button" className="relative rounded-xl border border-border p-2.5">
+            <button
+              type="button"
+              className={
+                adminTopBar
+                  ? "relative rounded-2xl border border-white/10 bg-sidebar-accent/80 p-2.5 shadow-inner shadow-black/20 transition hover:bg-sidebar-accent"
+                  : "relative rounded-xl border border-border p-2.5"
+              }
+            >
               <Bell className="h-4 w-4" />
               <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-primary" />
             </button>
@@ -238,32 +274,60 @@ export function DashboardShell({
               <button
                 type="button"
                 onClick={() => setProfileOpen((value) => !value)}
-                className="flex items-center gap-2 rounded-xl border border-border px-2 py-1.5"
+                className={
+                adminTopBar
+                  ? "flex items-center gap-2 rounded-2xl border border-white/10 bg-sidebar-accent/80 px-1.5 py-1.5 shadow-inner shadow-black/20 transition hover:bg-sidebar-accent sm:px-2"
+                  : "flex items-center gap-2 rounded-xl border border-border px-2 py-1.5"
+                }
               >
-                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-muted text-xs font-semibold">
+                <span
+                  className={
+                    adminTopBar
+                      ? "flex h-9 w-9 items-center justify-center rounded-full bg-sidebar-primary text-xs font-bold text-sidebar-primary-foreground"
+                      : "flex h-9 w-9 items-center justify-center rounded-full bg-muted text-xs font-semibold"
+                  }
+                >
                   {initials}
                 </span>
-                <span className="hidden max-w-[120px] truncate text-sm sm:block">{session?.user?.name ?? "Account"}</span>
-                <ChevronDown className="hidden h-4 w-4 text-muted-foreground sm:block" />
+                <span className={adminTopBar ? "hidden max-w-[120px] truncate text-sm font-medium text-white sm:block" : "hidden max-w-[120px] truncate text-sm sm:block"}>
+                  {session?.user?.name ?? "Account"}
+                </span>
+                <ChevronDown className={adminTopBar ? "hidden h-4 w-4 text-sidebar-foreground/60 sm:block" : "hidden h-4 w-4 text-muted-foreground sm:block"} />
               </button>
               {profileOpen ? (
-                <div className="absolute right-0 top-full z-40 mt-2 w-60 rounded-2xl border border-border bg-popover p-2 shadow-2xl">
+                <div
+                  className={
+                    adminTopBar
+                      ? "absolute right-0 top-full z-40 mt-2 w-60 rounded-2xl border border-sidebar-border bg-sidebar p-2 text-sidebar-foreground shadow-2xl"
+                      : "absolute right-0 top-full z-40 mt-2 w-60 rounded-2xl border border-border bg-popover p-2 text-popover-foreground shadow-2xl"
+                  }
+                >
                   <div className="px-3 py-2">
                     <p className="text-sm font-medium">{session?.user?.name ?? "Account"}</p>
-                    <p className="truncate text-xs text-muted-foreground">{session?.user?.email}</p>
+                    <p className={adminTopBar ? "truncate text-xs text-sidebar-foreground/65" : "truncate text-xs text-muted-foreground"}>
+                      {session?.user?.email}
+                    </p>
                   </div>
-                  <div className="my-1 h-px bg-border" />
+                  <div className={adminTopBar ? "my-1 h-px bg-sidebar-border" : "my-1 h-px bg-border"} />
                   <Link
                     href={profileHref}
                     onClick={() => setProfileOpen(false)}
-                    className="block rounded-xl px-3 py-2 text-sm transition hover:bg-secondary"
+                    className={
+                      adminTopBar
+                        ? "block rounded-xl px-3 py-2 text-sm transition hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                        : "block rounded-xl px-3 py-2 text-sm transition hover:bg-secondary"
+                    }
                   >
                     Profile settings
                   </Link>
                   <button
                     type="button"
                     onClick={() => signOut({ callbackUrl: "/" })}
-                    className="block w-full rounded-xl px-3 py-2 text-left text-sm transition hover:bg-secondary"
+                    className={
+                      adminTopBar
+                        ? "block w-full rounded-xl px-3 py-2 text-left text-sm transition hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                        : "block w-full rounded-xl px-3 py-2 text-left text-sm transition hover:bg-secondary"
+                    }
                   >
                     Sign out
                   </button>
@@ -273,10 +337,12 @@ export function DashboardShell({
           </div>
         </header>
 
-        <main className="px-4 py-6 sm:px-6 lg:px-8">
-          <div className="mb-6 rounded-2xl border border-border bg-card/70 p-5">
-            <p className="text-sm text-muted-foreground">{subtitle}</p>
-          </div>
+        <main className="px-4 py-5 sm:px-6 sm:py-6 lg:px-8">
+          {subtitle ? (
+            <div className="mb-6 rounded-2xl border border-border bg-card p-5 shadow-sm">
+              <p className="text-sm text-muted-foreground">{subtitle}</p>
+            </div>
+          ) : null}
           {children}
         </main>
       </div>

@@ -55,7 +55,7 @@ export function AdminRevenueCharts({ orders }: { orders: Order[] }) {
 
   return (
     <div className="grid gap-6 lg:grid-cols-2">
-      <div className="rounded-xl border border-border bg-card p-5">
+      <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
         <h2 className="font-heading text-xl font-semibold">Revenue</h2>
         <p className="mt-1 text-sm text-muted-foreground">Paid order value over the last 14 days.</p>
         <div className="mt-4 h-56">
@@ -71,7 +71,7 @@ export function AdminRevenueCharts({ orders }: { orders: Order[] }) {
         </div>
       </div>
 
-      <div className="rounded-xl border border-border bg-card p-5">
+      <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
         <h2 className="font-heading text-xl font-semibold">Orders</h2>
         <p className="mt-1 text-sm text-muted-foreground">Daily order volume over the last 14 days.</p>
         <div className="mt-4 h-56">

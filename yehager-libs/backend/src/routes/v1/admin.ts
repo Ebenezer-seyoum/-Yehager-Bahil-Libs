@@ -19,7 +19,7 @@ import {
   updateRoleForAdmin,
   updateUserStatusForAdmin,
 } from "../../services/users-service.js";
-import { listRolesForAdmin, updateRolePermissionsForAdmin } from "../../services/roles-service.js";
+import { createRoleForAdmin, listRolesForAdmin, updateRolePermissionsForAdmin } from "../../services/roles-service.js";
 import { getEffectivePermissionsForUser, listPermissionsForAdmin, updateUserPermissionsForAdmin } from "../../services/permissions-service.js";
 import { getOrderReport, toOrderReportCsv } from "../../services/reports-service.js";
 import type { AppBindings } from "../../types/hono.js";
@@ -85,6 +85,12 @@ const createEmployeeSchema = z.object({
   name: z.string().trim().min(1).max(255),
   email: z.string().trim().email().max(320),
   password: z.string().min(8).max(128),
+  roleId: z.string().uuid().optional(),
+  status: z.enum(["active", "inactive", "suspended"]).optional(),
+});
+const createRoleSchema = z.object({
+  name: z.string().trim().min(1).max(255),
+  description: z.string().trim().max(500).optional(),
 });
 const userParamSchema = z.object({
   userId: z.string().uuid(),
@@ -181,6 +187,39 @@ adminRouter.get("/roles", requirePermission(PERMISSIONS.ROLES_VIEW), async (c) =
   const data = await listRolesForAdmin();
   return c.json({ data });
 });
+
+adminRouter.post(
+  "/roles",
+  requirePermission(PERMISSIONS.ROLES_CREATE),
+  zValidator("json", createRoleSchema),
+  async (c) => {
+    const authUser = c.get("authUser");
+    const payload = c.req.valid("json");
+    const key = payload.name
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "");
+    const data = await createRoleForAdmin({
+      key,
+      name: payload.name,
+      description: payload.description,
+    });
+
+    await db.insert(auditLogs).values({
+      action: "role_created",
+      category: "admin",
+      severity: "info",
+      entityType: "role",
+      entityId: data.id,
+      performedBy: authUser?.email ?? "admin",
+      details: "Admin created custom role",
+      metadata: { key: data.key, name: data.name },
+    });
+
+    return c.json({ data }, 201);
+  },
+);
 
 adminRouter.get("/permissions", requirePermission(PERMISSIONS.ROLES_VIEW), async (c) => {
   const data = await listPermissionsForAdmin();

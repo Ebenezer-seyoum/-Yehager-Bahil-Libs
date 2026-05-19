@@ -46,6 +46,7 @@ export async function createUser(payload: {
   name?: string;
   passwordHash: string;
   role: UserRole;
+  status?: "active" | "inactive" | "suspended";
 }) {
   const [row] = await db
     .insert(users)
@@ -54,6 +55,7 @@ export async function createUser(payload: {
       name: payload.name ?? null,
       passwordHash: payload.passwordHash,
       role: payload.role,
+      status: payload.status ?? "active",
     })
     .onConflictDoNothing()
     .returning();

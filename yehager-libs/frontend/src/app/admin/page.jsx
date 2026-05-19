@@ -4,16 +4,7 @@ import { authOptions } from "@/auth-options";
 import { apiRequest } from "@/lib/api-client";
 import { AdminWorkflowPipeline } from "@/components/admin-workflow-pipeline";
 import { AdminRevenueCharts } from "@/components/admin-revenue-charts";
-
-function formatCurrency(value) {
-  const n = Number(value);
-  if (!Number.isFinite(n)) return "$0.00";
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 2,
-  }).format(n);
-}
+import { AdminOverviewCards } from "@/components/admin-overview-cards";
 
 export default async function AdminPage() {
   const session = await getServerSession(authOptions);
@@ -42,14 +33,6 @@ export default async function AdminPage() {
     users = [];
   }
 
-  const paidOrders = orders.filter((order) => order.paymentStatus === "paid");
-  const totalRevenue = paidOrders.reduce((sum, order) => sum + Number(order.totalUsd ?? 0), 0);
-  const pendingOrders = orders.filter((order) => order.status === "pending").length;
-  const activeAlerts = alerts.filter((alert) => !alert.isResolved).length;
-  const activeProducts = products.filter((product) => product.isActive).length;
-  const customers = users.filter((user) => user.role === "customer").length;
-  const employees = users.filter((user) => user.role === "employee").length;
-
   return (
     <div className="mx-auto w-full max-w-6xl space-y-6">
       <div>
@@ -58,23 +41,7 @@ export default async function AdminPage() {
         <p className="mt-1 text-sm text-muted-foreground">Top-level performance, risk, and operating health.</p>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {[
-          ["Total revenue", formatCurrency(totalRevenue)],
-          ["Total orders", orders.length],
-          ["Customers", customers],
-          ["Employees", employees],
-          ["Active products", activeProducts],
-          ["Pending orders", pendingOrders],
-          ["Paid orders", paidOrders.length],
-          ["Active alerts", activeAlerts],
-        ].map(([label, value]) => (
-          <div key={label} className="rounded-2xl border border-border bg-card p-4">
-            <p className="text-2xl font-semibold">{value}</p>
-            <p className="mt-1 text-xs text-muted-foreground">{label}</p>
-          </div>
-        ))}
-      </div>
+      <AdminOverviewCards orders={orders} alerts={alerts} products={products} users={users} />
 
       <AdminRevenueCharts orders={orders} />
       <AdminWorkflowPipeline orders={orders} />

@@ -9,6 +9,26 @@ export async function findRoleByKey(key: string) {
   });
 }
 
+export async function createRole(payload: { key: string; name: string; description?: string | null }) {
+  const [created] = await db
+    .insert(roles)
+    .values({
+      key: payload.key,
+      name: payload.name,
+      description: payload.description ?? null,
+      isSystem: false,
+    })
+    .returning();
+  return created;
+}
+
+export async function assignRoleToUser(userId: string, roleId: string) {
+  await db
+    .insert(userRoles)
+    .values({ userId, roleId })
+    .onConflictDoNothing();
+}
+
 export async function assignSystemRoleToUser(userId: string, role: UserRole) {
   const systemRole = await findRoleByKey(role);
   if (!systemRole) return;

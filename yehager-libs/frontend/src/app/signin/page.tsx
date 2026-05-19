@@ -1,10 +1,28 @@
 "use client";
 
 import Link from "next/link";
-import { getSession, signIn } from "next-auth/react";
+import { getProviders, getSession, signIn } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { getPostLoginRedirect } from "@/lib/auth-redirect";
+
+type Feedback = {
+  type: "success" | "error";
+  message: string;
+} | null;
+
+const authErrorMessages: Record<string, string> = {
+  AccessDenied: "Google sign-in was cancelled or denied.",
+  CredentialsSignin: "Invalid email or password.",
+  OAuthAccountNotLinked: "Please sign in with the same method you used before.",
+  OAuthCallback: "Google sign-in could not be completed. Please try again.",
+  OAuthSignin: "Google sign-in could not be started. Please try again.",
+};
+
+function getAuthErrorMessage(error: string | null) {
+  if (!error) return null;
+  return authErrorMessages[error] ?? "Sign-in failed. Please try again.";
+}
 
 function GoogleMark() {
   return (
@@ -35,47 +53,151 @@ function LockIcon() {
   );
 }
 
+function FeedbackBanner({ feedback }: { feedback: Feedback }) {
+  if (!feedback) return null;
+
+  return (
+    <div
+      aria-live="polite"
+      className={`mt-6 rounded-[16px] border px-4 py-3 text-center text-sm font-medium ${
+        feedback.type === "success"
+          ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+          : "border-rose-200 bg-rose-50 text-rose-700"
+      }`}
+    >
+      {feedback.message}
+    </div>
+  );
+}
+
 function SignInForm() {
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get("callbackUrl") ?? "/";
-  const [email, setEmail] = useState("");
+  const initialFeedback = (() => {
+    if (searchParams.get("registered") === "1") {
+      return {
+        type: "success" as const,
+        message: "Account created successfully. Sign in to continue.",
+      };
+    }
+
+    const authError = getAuthErrorMessage(searchParams.get("error"));
+    return authError
+      ? {
+          type: "error" as const,
+          message: authError,
+        }
+      : null;
+  })();
+  const [email, setEmail] = useState(searchParams.get("email") ?? "");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
+  const [feedback, setFeedback] = useState<Feedback>(initialFeedback);
   const [submitting, setSubmitting] = useState(false);
+  const [googleSubmitting, setGoogleSubmitting] = useState(false);
+  const [googleAvailable, setGoogleAvailable] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function loadProviders() {
+      const providers = await getProviders();
+      if (mounted) {
+        setGoogleAvailable(Boolean(providers?.google));
+      }
+    }
+
+    void loadProviders();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setError("");
-    setSubmitting(true);
+    setFeedback(null);
 
-    const result = await signIn("credentials", {
-      email,
-      password,
-      callbackUrl,
-      redirect: false,
-    });
-
-    if (!result || result.error) {
-      setError("Invalid credentials");
-      setSubmitting(false);
+    if (!email.trim()) {
+      setFeedback({
+        type: "error",
+        message: "Please insert email.",
+      });
       return;
     }
 
-    const session = await getSession();
-    window.location.href = getPostLoginRedirect(session?.user?.role, callbackUrl);
+    if (!password) {
+      setFeedback({
+        type: "error",
+        message: "Please insert password.",
+      });
+      return;
+    }
+
+    setSubmitting(true);
+
+    try {
+      const result = await signIn("credentials", {
+        email,
+        password,
+        callbackUrl,
+        redirect: false,
+      });
+
+      if (!result || result.error) {
+        setFeedback({
+          type: "error",
+          message: getAuthErrorMessage(result?.error ?? "CredentialsSignin") ?? "Invalid email or password.",
+        });
+        setSubmitting(false);
+        return;
+      }
+
+      setFeedback({
+        type: "success",
+        message: "Signed in successfully. Redirecting...",
+      });
+
+      const session = await getSession();
+      window.setTimeout(() => {
+        window.location.href = getPostLoginRedirect(session?.user?.role, callbackUrl);
+      }, 650);
+    } catch {
+      setFeedback({
+        type: "error",
+        message: "Sign-in failed. Please try again.",
+      });
+      setSubmitting(false);
+    }
+  }
+
+  async function onGoogleSignIn() {
+    setFeedback(null);
+
+    if (googleAvailable === false) {
+      setFeedback({
+        type: "error",
+        message: "Google sign-in is not configured yet.",
+      });
+      return;
+    }
+
+    setGoogleSubmitting(true);
+    await signIn("google", { callbackUrl });
   }
 
   return (
     <div className="min-h-screen bg-[#f6f9fc] px-4 py-8 text-[#10182d]">
-      <div className="mx-auto flex min-h-[calc(100vh-4rem)] max-w-[620px] items-center justify-center">
-        <div className="relative w-full rounded-[22px] bg-white px-6 pb-8 pt-20 shadow-[0_22px_60px_rgba(15,23,42,0.08)] sm:px-10 sm:pb-10 sm:pt-24">
-          <img
-            src="https://media.base44.com/images/public/69cc55fa50bba233144fe99d/5050da81c_YeHagerBahilLibs-03.png"
-            alt="Yehager Bahil Libs"
-            className="absolute left-1/2 top-0 h-20 w-20 -translate-x-1/2 -translate-y-1/2 rounded-full border-[6px] border-white object-cover shadow-[0_8px_20px_rgba(15,23,42,0.08)] sm:h-24 sm:w-24"
-          />
+      <div className="mx-auto flex min-h-[calc(100vh-4rem)] max-w-[540px] items-center justify-center">
+        <div className="relative flex min-h-[650px] w-full flex-col justify-center rounded-[22px] bg-white px-6 pb-8 pt-20 shadow-[0_22px_60px_rgba(15,23,42,0.08)] sm:min-h-[670px] sm:px-8 sm:pb-9 sm:pt-24">
+          <div className="absolute left-1/2 top-0 flex h-20 w-20 -translate-x-1/2 -translate-y-1/2 items-center justify-center overflow-hidden rounded-full border-[6px] border-white bg-white shadow-[0_8px_20px_rgba(15,23,42,0.08)]">
+            <img
+              src="https://media.base44.com/images/public/69cc55fa50bba233144fe99d/5050da81c_YeHagerBahilLibs-03.png"
+              alt="Yehager Bahil Libs"
+              className="h-full w-full scale-[1.55] object-cover"
+            />
+          </div>
 
-          <div className="mx-auto max-w-[500px]">
+          <div className="mx-auto w-full max-w-[440px]">
             <div className="text-center">
               <h1 className="text-[30px] font-extrabold leading-[1.08] tracking-[-0.03em] text-[#11182d] sm:text-[36px]">
                 Welcome to Yehager
@@ -87,22 +209,24 @@ function SignInForm() {
 
             <button
               type="button"
-              className="mt-8 flex h-14 w-full items-center justify-center gap-4 rounded-[16px] border border-[#dce5f0] bg-white text-[17px] font-medium text-[#34435c] sm:h-16 sm:text-[19px]"
+              onClick={() => void onGoogleSignIn()}
+              disabled={googleSubmitting}
+              className="mt-8 flex h-14 w-full items-center justify-center gap-4 rounded-[16px] border border-[#dce5f0] bg-white text-[17px] font-medium text-[#34435c] transition hover:bg-[#f8fbff] disabled:cursor-not-allowed disabled:opacity-60 sm:text-[19px]"
             >
               <GoogleMark />
-              Continue with Google
+              {googleSubmitting ? "Opening Google..." : "Continue with Google"}
             </button>
 
-            <div className="mt-7 flex items-center gap-5 text-sm uppercase tracking-[0.08em] text-[#8ca0bd]">
+            <div className="mt-8 flex items-center gap-5 text-sm uppercase tracking-[0.08em] text-[#8ca0bd]">
               <span className="h-px flex-1 bg-[#dce5f0]" />
-              or
+              OR
               <span className="h-px flex-1 bg-[#dce5f0]" />
             </div>
 
-            <form onSubmit={onSubmit} className="mt-7">
+            <form onSubmit={onSubmit} noValidate className="mt-8">
               <label className="block text-center">
-                <span className="mb-2 block text-base font-medium text-[#34435c]">Email</span>
-                <span className="flex h-14 items-center gap-4 rounded-[16px] border border-[#dce5f0] px-4 text-[#9badc5] sm:h-16">
+                <span className="mb-3 block text-base font-medium text-[#34435c]">Email</span>
+                <span className="flex h-14 items-center gap-4 rounded-[16px] border border-[#dce5f0] px-4 text-[#9badc5]">
                   <MailIcon />
                   <input
                     type="email"
@@ -115,9 +239,9 @@ function SignInForm() {
                 </span>
               </label>
 
-              <label className="mt-5 block text-center">
-                <span className="mb-2 block text-base font-medium text-[#34435c]">Password</span>
-                <span className="flex h-14 items-center gap-4 rounded-[16px] border border-[#dce5f0] px-4 text-[#9badc5] sm:h-16">
+              <label className="mt-6 block text-center">
+                <span className="mb-3 block text-base font-medium text-[#34435c]">Password</span>
+                <span className="flex h-14 items-center gap-4 rounded-[16px] border border-[#dce5f0] px-4 text-[#9badc5]">
                   <LockIcon />
                   <input
                     type="password"
@@ -130,22 +254,22 @@ function SignInForm() {
                 </span>
               </label>
 
-              {error ? <p className="mt-3 text-center text-sm text-red-600">{error}</p> : null}
+              <FeedbackBanner feedback={feedback} />
 
               <button
                 type="submit"
                 disabled={submitting}
-                className="mt-6 h-14 w-full rounded-[16px] bg-[#10172d] text-lg font-medium text-white disabled:opacity-60 sm:h-16"
+                className="mt-6 h-14 w-full rounded-[16px] bg-[#10172d] text-lg font-medium text-white transition hover:bg-[#18213b] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {submitting ? "Signing in..." : "Sign in"}
               </button>
             </form>
 
-            <div className="mt-4 flex items-center justify-between gap-3 text-sm text-[#7184a1] sm:text-base">
-              <button type="button">Forgot password?</button>
+            <div className="mt-5 flex items-center justify-between gap-3 text-sm text-[#7184a1] sm:text-base">
+              <Link href="/forgot-password">Forgot password?</Link>
               <span>
                 Need an account?{" "}
-                <Link href="/register" className="text-[#34435c]">
+                <Link href="/register" className="font-medium text-[#34435c]">
                   Sign up
                 </Link>
               </span>

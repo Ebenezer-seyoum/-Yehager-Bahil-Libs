@@ -8,6 +8,7 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
   const isStandaloneRoute =
     pathname === "/signin" ||
     pathname === "/register" ||
+    pathname === "/forgot-password" ||
     pathname.startsWith("/admin") ||
     pathname.startsWith("/employee");
 

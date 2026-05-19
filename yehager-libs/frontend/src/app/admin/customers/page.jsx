@@ -3,11 +3,14 @@ import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/auth-options";
 import { apiRequest } from "@/lib/api-client";
+import { AdminCustomersDirectory } from "@/components/admin-customers-directory";
 
-function formatCurrency(value) {
-  const n = Number(value);
-  if (!Number.isFinite(n)) return "$0.00";
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
+function hrefFor(params) {
+  const search = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value) search.set(key, value);
+  });
+  return `/admin/customers?${search.toString()}`;
 }
 
 export default async function AdminCustomersPage({ searchParams }) {
@@ -18,43 +21,20 @@ export default async function AdminCustomersPage({ searchParams }) {
 
   async function createCustomer(formData) {
     "use server";
-    await apiRequest("/api/v1/admin/users/customers", {
-      method: "POST",
-      body: {
-        name: String(formData.get("name") ?? ""),
-        email: String(formData.get("email") ?? ""),
-        password: String(formData.get("password") ?? ""),
-      },
-    });
-    revalidatePath("/admin/customers");
-    redirect("/admin/customers?tab=create");
-  }
-
-  async function updateProfile(formData) {
-    "use server";
-    await apiRequest(`/api/v1/admin/users/${String(formData.get("userId"))}`, {
-      method: "PATCH",
-      body: { name: String(formData.get("name")), email: String(formData.get("email")) },
-    });
-    revalidatePath("/admin/customers");
-    redirect("/admin/customers?tab=update");
-  }
-
-  async function updateStatus(formData) {
-    "use server";
-    await apiRequest(`/api/v1/admin/users/${String(formData.get("userId"))}/status`, {
-      method: "PATCH",
-      body: { status: String(formData.get("status")) },
-    });
-    revalidatePath("/admin/customers");
-    redirect("/admin/customers?tab=block");
-  }
-
-  async function deleteCustomer(formData) {
-    "use server";
-    await apiRequest(`/api/v1/admin/users/${String(formData.get("userId"))}`, { method: "DELETE" });
-    revalidatePath("/admin/customers");
-    redirect("/admin/customers?tab=delete");
+    try {
+      await apiRequest("/api/v1/admin/users/customers", {
+        method: "POST",
+        body: {
+          name: String(formData.get("name") ?? ""),
+          email: String(formData.get("email") ?? ""),
+          password: String(formData.get("password") ?? ""),
+        },
+      });
+      revalidatePath("/admin/customers");
+      redirect("/admin/customers?created=1");
+    } catch {
+      redirect("/admin/customers?error=create");
+    }
   }
 
   let users = [];
@@ -72,64 +52,62 @@ export default async function AdminCustomersPage({ searchParams }) {
     const customerOrders = orders.filter((order) => order.userEmail === customer.email);
     return { ...customer, totalOrders: customerOrders.length, totalSpent: customerOrders.reduce((sum, order) => sum + Number(order.totalUsd ?? 0), 0) };
   });
+  const panelMode = query.panel === "create" ? "create" : "manage";
 
-  const tab = query.tab ?? "create";
   return (
-    <div className="mx-auto w-full max-w-6xl space-y-6">
-      <div>
-        <p className="text-xs uppercase tracking-widest text-primary">People</p>
-        <h1 className="mt-2 font-heading text-3xl font-semibold">Customer Management</h1>
+    <div className="mx-auto w-full max-w-7xl space-y-6">
+      <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
+        <div>
+          <p className="text-xs uppercase tracking-widest text-primary">Customers</p>
+          <h1 className="mt-2 font-heading text-3xl font-semibold">{panelMode === "create" ? "New Customer" : "All Customers"}</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {panelMode === "create"
+              ? "Create a customer account for storefront access and order tracking."
+              : "Search, review, and manage customer accounts with the same workflow as employees."}
+          </p>
+        </div>
+        <a
+          href={hrefFor({ panel: "create" })}
+          className="inline-flex w-full items-center justify-center rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground sm:w-auto"
+        >
+          + Add customer
+        </a>
       </div>
-      <div className="flex flex-wrap gap-2">
-        {["create", "update", "delete", "block"].map((key) => (
-          <a key={key} href={`/admin/customers?tab=${key}`} className={`rounded-xl px-4 py-2 text-sm capitalize ${tab === key ? "bg-primary text-primary-foreground" : "border border-border"}`}>{key}</a>
-        ))}
-      </div>
-      {tab === "create" ? (
-        <form action={createCustomer} className="grid gap-3 rounded-2xl border border-border bg-card p-5 md:grid-cols-4">
-          <input name="name" placeholder="Name" required className="h-11 rounded-xl border border-input bg-background px-3" />
-          <input name="email" type="email" placeholder="Email" required className="h-11 rounded-xl border border-input bg-background px-3" />
-          <input name="password" type="password" minLength={8} placeholder="Password" required className="h-11 rounded-xl border border-input bg-background px-3" />
-          <button className="rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground">Create customer</button>
-        </form>
-      ) : null}
-      <div className="space-y-3">
-        {customers.map((customer) => (
-          <article key={customer.id} className="rounded-2xl border border-border bg-card p-4">
-            <div className="flex justify-between gap-4">
-              <div>
-                <p className="font-semibold">{customer.name ?? "Unnamed customer"}</p>
-                <p className="text-sm text-muted-foreground">{customer.email}</p>
-                <p className="mt-1 text-xs text-muted-foreground">{customer.totalOrders} orders · {formatCurrency(customer.totalSpent)}</p>
+
+      {query.created === "1" ? <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-medium text-emerald-800 shadow-sm">Success — customer account created.</div> : null}
+      {query.updated ? <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-medium text-emerald-800 shadow-sm">Success — customer information updated.</div> : null}
+      {query.deleted === "1" ? <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-medium text-emerald-800 shadow-sm">Success — customer was deleted.</div> : null}
+      {query.error ? <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-700 shadow-sm">Action failed — please review the customer details and try again.</div> : null}
+
+      {panelMode === "create" ? (
+        <section className="overflow-hidden rounded-[28px] border border-border bg-card">
+          <div className="border-t-4 border-primary bg-background/60 px-5 py-8 text-center sm:px-8">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 text-2xl text-primary">👤</div>
+            <h2 className="mt-5 text-3xl font-semibold">Register New Customer</h2>
+            <p className="mx-auto mt-2 max-w-2xl text-sm text-muted-foreground">Create a customer account for storefront access and order tracking.</p>
+          </div>
+          <form action={createCustomer} className="space-y-6 p-5 sm:p-6">
+            <section className="rounded-3xl border border-border bg-background/50 p-5">
+              <div className="mb-5">
+                <p className="text-xs uppercase tracking-widest text-primary">Customer Information</p>
+                <h3 className="mt-2 text-xl font-semibold">Account Information</h3>
+                <p className="mt-1 text-sm text-muted-foreground">Basic details used to identify the customer account.</p>
               </div>
-              <span className="text-sm capitalize">{customer.status}</span>
+              <div className="grid gap-4 md:grid-cols-2">
+                <input name="name" placeholder="Name" required className="h-12 rounded-xl border border-input bg-background px-4" />
+                <input name="email" type="email" placeholder="Email" required className="h-12 rounded-xl border border-input bg-background px-4" />
+                <input name="password" type="password" minLength={8} placeholder="Password" required className="h-12 rounded-xl border border-input bg-background px-4 md:col-span-2" />
+              </div>
+            </section>
+            <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-between">
+              <a href="/admin/customers" className="rounded-xl border border-border px-5 py-3 text-center text-sm font-medium">Back to customers</a>
+              <button className="rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground">+ Create customer</button>
             </div>
-            {tab === "update" ? (
-              <form action={updateProfile} className="mt-4 flex flex-wrap gap-2">
-                <input type="hidden" name="userId" value={customer.id} />
-                <input name="name" defaultValue={customer.name ?? ""} className="h-10 rounded-xl border border-input bg-background px-3" />
-                <input name="email" defaultValue={customer.email} className="h-10 rounded-xl border border-input bg-background px-3" />
-                <button className="rounded-xl bg-secondary px-3 text-sm">Update</button>
-              </form>
-            ) : null}
-            {tab === "block" ? (
-              <form action={updateStatus} className="mt-4 flex gap-2">
-                <input type="hidden" name="userId" value={customer.id} />
-                <select name="status" defaultValue={customer.status} className="h-10 rounded-xl border border-input bg-background px-3">
-                  {["active", "inactive", "suspended"].map((status) => <option key={status}>{status}</option>)}
-                </select>
-                <button className="rounded-xl bg-secondary px-3 text-sm">Save status</button>
-              </form>
-            ) : null}
-            {tab === "delete" ? (
-              <form action={deleteCustomer} className="mt-4">
-                <input type="hidden" name="userId" value={customer.id} />
-                <button className="rounded-xl border border-destructive/50 px-3 py-2 text-sm text-destructive">Delete</button>
-              </form>
-            ) : null}
-          </article>
-        ))}
-      </div>
+          </form>
+        </section>
+      ) : (
+        <AdminCustomersDirectory customers={customers} />
+      )}
     </div>
   );
 }

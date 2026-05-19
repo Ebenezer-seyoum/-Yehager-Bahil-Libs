@@ -172,6 +172,83 @@
 }
 
 @layer utilities {
+  .dashboard-theme {
+    --background: 0 0% 96%;
+    --foreground: 0 0% 5%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 5%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 5%;
+    --secondary: 0 0% 94%;
+    --secondary-foreground: 0 0% 18%;
+    --muted: 0 0% 92%;
+    --muted-foreground: 0 0% 32%;
+    --border: 0 0% 78%;
+    --input: 0 0% 82%;
+  }
+
+  .dashboard-theme [class~="bg-card"] {
+    box-shadow:
+      0 1px 2px rgba(0, 0, 0, 0.04),
+      0 10px 28px rgba(0, 0, 0, 0.06);
+  }
+
+  .dashboard-theme [class~="border-border"][class~="bg-card"] {
+    border-color: hsl(0 0% 74%);
+  }
+
+  .dashboard-theme table thead tr {
+    background: hsl(0 0% 96%);
+  }
+
+  .dashboard-theme table thead th {
+    color: hsl(0 0% 24%);
+    font-weight: 700;
+  }
+
+  .dashboard-theme table tbody tr {
+    transition: background-color 0.18s ease;
+  }
+
+  .dashboard-theme table tbody tr:hover {
+    background: hsl(210 100% 97%);
+  }
+
+  .dashboard-theme input,
+  .dashboard-theme textarea,
+  .dashboard-theme button[role="combobox"],
+  .dashboard-theme select:not([class*="rounded-full"]) {
+    background: hsl(0 0% 100%);
+  }
+
+  .dashboard-theme input,
+  .dashboard-theme textarea,
+  .dashboard-theme select:not([class*="rounded-full"]),
+  .dashboard-theme [class*="border-input"] {
+    border-color: hsl(0 0% 72%);
+  }
+
+  .dashboard-theme input:focus-visible,
+  .dashboard-theme textarea:focus-visible,
+  .dashboard-theme button[role="combobox"]:focus-visible,
+  .dashboard-theme select:not([class*="rounded-full"]):focus-visible {
+    box-shadow:
+      0 0 0 1px hsl(var(--ring)),
+      0 0 0 4px hsla(38, 95%, 54%, 0.16);
+  }
+
+  .dashboard-theme button[class*="bg-primary"] {
+    font-weight: 700;
+    box-shadow:
+      0 1px 2px rgba(0, 0, 0, 0.12),
+      0 10px 24px rgba(255, 170, 38, 0.18);
+  }
+
+  .dashboard-theme button[class*="bg-secondary"],
+  .dashboard-theme button[class*="border-input"] {
+    font-weight: 600;
+  }
+
   .text-gold {
     color: hsl(38, 95%, 54%);
   }

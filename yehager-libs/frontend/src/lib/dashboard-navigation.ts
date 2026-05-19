@@ -4,16 +4,16 @@ export const adminNavigation = [
     items: [{ href: "/admin", label: "Dashboard", icon: "dashboard", permission: "dashboard.view" }],
   },
   {
-    label: "People",
+    label: "Users",
     items: [
-      { href: "/admin/users", label: "Employee Management", icon: "users", permission: "employees.view" },
-      { href: "/admin/customers", label: "Customer Management", icon: "customers", permission: "customers.view" },
+      { href: "/admin/users", label: "Employees", icon: "users", permission: "employees.view" },
+      { href: "/admin/customers", label: "Customers", icon: "customers", permission: "customers.view" },
       { href: "/admin/roles", label: "Roles & Permissions", icon: "roles", permission: "roles.view" },
     ],
   },
   {
     label: "Catalog",
-    items: [{ href: "/admin/inventory", label: "Product Management", icon: "products", permission: "products.view" }],
+    items: [{ href: "/admin/inventory", label: "Products", icon: "products", permission: "products.view" }],
   },
   {
     label: "Operations",

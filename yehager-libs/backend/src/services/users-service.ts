@@ -18,7 +18,7 @@ import {
   upsertUserFromAuth,
 } from "../repositories/users-repository.js";
 import { getEffectivePermissionsForUser } from "./permissions-service.js";
-import { ensureSystemRoleAssignment, replaceUserSystemRole } from "./roles-service.js";
+import { assignAdditionalRoleToUser, ensureSystemRoleAssignment, replaceUserSystemRole } from "./roles-service.js";
 
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
@@ -152,6 +152,8 @@ export async function createEmployeeForAdmin(payload: {
   email: string;
   name: string;
   password: string;
+  roleId?: string;
+  status?: "active" | "inactive" | "suspended";
   performedBy?: string;
 }) {
   const email = normalizeEmail(payload.email);
@@ -165,12 +167,16 @@ export async function createEmployeeForAdmin(payload: {
     name: payload.name.trim(),
     passwordHash: await hashPassword(payload.password),
     role: "employee",
+    status: payload.status ?? "active",
   });
 
   if (!user) {
     throw new HTTPException(409, { message: "An account with this email already exists" });
   }
   await ensureSystemRoleAssignment(user.id, user.role);
+  if (payload.roleId) {
+    await assignAdditionalRoleToUser(user.id, payload.roleId);
+  }
 
   await db.insert(auditLogs).values({
     action: "employee_account_created",

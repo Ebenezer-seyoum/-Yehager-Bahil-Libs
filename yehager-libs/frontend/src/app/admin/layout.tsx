@@ -6,7 +6,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     <DashboardShell
       navigation={adminNavigation}
       title="Admin workspace"
-      subtitle="Executive overview, staff control, operational visibility, and system governance."
       variant="admin"
     >
       {children}

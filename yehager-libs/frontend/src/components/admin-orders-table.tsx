@@ -116,7 +116,7 @@ export function AdminOrdersTable({ initialOrders }: { initialOrders: Order[] }) 
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Search orders..."
-            className="w-full rounded-lg border border-border bg-secondary py-2 pl-9 pr-4 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+            className="w-full rounded-xl border border-input bg-background py-2.5 pl-9 pr-4 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
           />
         </div>
         <p className="text-xs text-muted-foreground">
@@ -127,7 +127,8 @@ export function AdminOrdersTable({ initialOrders }: { initialOrders: Order[] }) 
       {error ? <div className="rounded-md border border-destructive/40 bg-card p-3 text-sm text-destructive">{error}</div> : null}
 
       <div className="overflow-hidden rounded-xl border border-border bg-card">
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto">
+        <table className="min-w-[760px] w-full text-sm">
           <thead className="bg-secondary/60 text-left">
             <tr>
               <th className="px-4 py-3 font-medium">Order</th>
@@ -214,7 +215,7 @@ export function AdminOrdersTable({ initialOrders }: { initialOrders: Order[] }) 
                             event.stopPropagation();
                             void updateOrder(order.id, { status: "delivered" });
                           }}
-                          className="rounded-md p-2 hover:bg-secondary disabled:opacity-60"
+                          className="rounded-lg border border-border bg-background p-2 transition hover:bg-secondary disabled:opacity-60"
                         >
                           <CheckCircle2 className="h-4 w-4" />
                         </button>
@@ -226,7 +227,7 @@ export function AdminOrdersTable({ initialOrders }: { initialOrders: Order[] }) 
                             event.stopPropagation();
                             void updateOrder(order.id, { paymentStatus: "refunded" });
                           }}
-                          className="rounded-md p-2 hover:bg-secondary disabled:opacity-60"
+                          className="rounded-lg border border-border bg-background p-2 transition hover:bg-secondary disabled:opacity-60"
                         >
                           <Ban className="h-4 w-4 text-destructive" />
                         </button>
@@ -238,7 +239,7 @@ export function AdminOrdersTable({ initialOrders }: { initialOrders: Order[] }) 
                             event.stopPropagation();
                             void updateOrder(order.id, { status: "shipped" });
                           }}
-                          className="rounded-md p-2 hover:bg-secondary disabled:opacity-60"
+                          className="rounded-lg border border-border bg-background p-2 transition hover:bg-secondary disabled:opacity-60"
                         >
                           <Truck className="h-4 w-4 text-blue-600" />
                         </button>
@@ -269,6 +270,7 @@ export function AdminOrdersTable({ initialOrders }: { initialOrders: Order[] }) 
             )}
           </tbody>
         </table>
+        </div>
       </div>
     </div>
   );

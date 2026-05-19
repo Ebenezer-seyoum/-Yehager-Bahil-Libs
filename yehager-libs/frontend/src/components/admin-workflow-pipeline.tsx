@@ -23,7 +23,7 @@ export function AdminWorkflowPipeline({ orders }: { orders: Order[] }) {
   };
 
   return (
-    <div className="rounded-xl border border-border bg-card p-5">
+    <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
       <div className="mb-5">
         <h2 className="font-heading text-xl font-semibold">Order Pipeline</h2>
         <p className="mt-1 text-sm text-muted-foreground">A quick operational read on where orders are sitting right now.</p>

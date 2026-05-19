@@ -3,6 +3,10 @@ import { apiRequest } from "@/lib/api-client";
 
 export async function GET() {
   try {
+    await apiRequest("/api/v1/users/me/sync", {
+      method: "POST",
+    });
+
     const session = await apiRequest<{ user: { sub?: string; email?: string; role?: string } }>("/api/v1/auth/session");
     const user = await apiRequest<{ data: unknown | null }>("/api/v1/users/me");
 
@@ -13,7 +17,7 @@ export async function GET() {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
-    const isUnauthorized = message.includes("401");
+    const isUnauthorized = message.includes("401") || message.includes("No authenticated user found");
 
     return NextResponse.json(
       {

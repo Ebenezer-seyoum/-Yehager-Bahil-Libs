@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { requireAuth } from "../../middleware/auth.js";
+import { requireAuth, requireAuthenticatedToken } from "../../middleware/auth.js";
 import { z } from "zod";
 import { zValidator } from "@hono/zod-validator";
 import {
@@ -47,7 +47,7 @@ usersRouter.patch("/me/password", requireAuth, zValidator("json", passwordPatchS
   return c.json({ data: user });
 });
 
-usersRouter.post("/me/sync", requireAuth, async (c) => {
+usersRouter.post("/me/sync", requireAuthenticatedToken, async (c) => {
   const authUser = c.get("authUser");
   const user = await syncCurrentUserFromAuth({
     sub: authUser?.sub ?? "",

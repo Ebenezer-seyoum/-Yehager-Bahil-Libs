@@ -4,7 +4,7 @@ import { verifyAccessToken } from "../lib/auth/token.js";
 import { getUserByEmail } from "../repositories/users-repository.js";
 import type { AppBindings } from "../types/hono.js";
 
-export const requireAuth: MiddlewareHandler<AppBindings> = async (c, next) => {
+async function authenticateRequest(c: Parameters<MiddlewareHandler<AppBindings>>[0]) {
   const authHeader = c.req.header("authorization");
   const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : undefined;
 
@@ -18,18 +18,30 @@ export const requireAuth: MiddlewareHandler<AppBindings> = async (c, next) => {
       throw new HTTPException(401, { message: "Invalid token subject" });
     }
 
-    if (user.email) {
-      const currentUser = await getUserByEmail(user.email);
-      if (!currentUser || currentUser.status !== "active") {
-        throw new HTTPException(401, { message: "Unauthorized" });
-      }
-    }
-
-    c.set("authUser", user);
-    await next();
+    return user;
   } catch {
     throw new HTTPException(401, { message: "Unauthorized" });
   }
+}
+
+export const requireAuthenticatedToken: MiddlewareHandler<AppBindings> = async (c, next) => {
+  const user = await authenticateRequest(c);
+  c.set("authUser", user);
+  await next();
+};
+
+export const requireAuth: MiddlewareHandler<AppBindings> = async (c, next) => {
+  const user = await authenticateRequest(c);
+
+  if (user.email) {
+    const currentUser = await getUserByEmail(user.email);
+    if (!currentUser || currentUser.status !== "active") {
+      throw new HTTPException(401, { message: "Unauthorized" });
+    }
+  }
+
+  c.set("authUser", user);
+  await next();
 };
 
 export function requireRole(...allowedRoles: string[]): MiddlewareHandler<AppBindings> {

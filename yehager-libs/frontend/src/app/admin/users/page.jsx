@@ -1,38 +1,29 @@
+import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/auth-options";
 import { apiRequest } from "@/lib/api-client";
 import { can } from "@/lib/permissions";
-import { EmployeePermissionsPanel } from "@/components/employee-permissions-panel";
+import { AdminUsersDirectory } from "@/components/admin-users-directory";
 
-const ROLE_OPTIONS = ["customer", "employee", "admin"];
 const STATUS_OPTIONS = ["active", "inactive", "suspended"];
 
-function formatDate(value) {
-  if (!value) return "Never";
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  }).format(new Date(value));
-}
-
-function statusTone(status) {
-  if (status === "active") return "bg-green-100 text-green-800";
-  if (status === "suspended") return "bg-rose-100 text-rose-800";
-  return "bg-amber-100 text-amber-800";
+function hrefFor(params) {
+  const search = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value) search.set(key, value);
+  });
+  return `/admin/users?${search.toString()}`;
 }
 
 export default async function AdminUsersPage({ searchParams }) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) redirect("/signin?callbackUrl=/admin/users");
   if (!can(session.user.permissions, "employees.view")) redirect("/");
+
   const query = (await searchParams) ?? {};
   const canCreate = can(session.user.permissions, "employees.create");
-  const canEdit = can(session.user.permissions, "employees.edit");
-  const canDelete = can(session.user.permissions, "employees.delete");
-  const canAssign = can(session.user.permissions, "employees.assign");
 
   async function createEmployee(formData) {
     "use server";
@@ -43,6 +34,8 @@ export default async function AdminUsersPage({ searchParams }) {
           name: String(formData.get("name") ?? ""),
           email: String(formData.get("email") ?? ""),
           password: String(formData.get("password") ?? ""),
+          roleId: String(formData.get("roleId") ?? "") || undefined,
+          status: String(formData.get("status") ?? "") || undefined,
         },
       });
       revalidatePath("/admin/users");
@@ -53,277 +46,209 @@ export default async function AdminUsersPage({ searchParams }) {
     }
   }
 
-  async function updateProfile(formData) {
-    "use server";
-    const userId = String(formData.get("userId") ?? "");
-    try {
-      await apiRequest(`/api/v1/admin/users/${userId}`, {
-        method: "PATCH",
-        body: {
-          name: String(formData.get("name") ?? ""),
-          email: String(formData.get("email") ?? ""),
-        },
-      });
-      revalidatePath("/admin/users");
-      revalidatePath("/admin/audit");
-      redirect("/admin/users?updated=profile");
-    } catch {
-      redirect("/admin/users?error=profile");
-    }
-  }
-
-  async function updateRole(formData) {
-    "use server";
-    const userId = String(formData.get("userId") ?? "");
-    const role = String(formData.get("role") ?? "");
-    try {
-      await apiRequest(`/api/v1/admin/users/${userId}/role`, {
-        method: "PATCH",
-        body: { role },
-      });
-      revalidatePath("/admin/users");
-      revalidatePath("/admin/audit");
-      redirect("/admin/users?updated=role");
-    } catch {
-      redirect("/admin/users?error=role");
-    }
-  }
-
-  async function updateStatus(formData) {
-    "use server";
-    const userId = String(formData.get("userId") ?? "");
-    const status = String(formData.get("status") ?? "");
-    try {
-      await apiRequest(`/api/v1/admin/users/${userId}/status`, {
-        method: "PATCH",
-        body: { status },
-      });
-      revalidatePath("/admin/users");
-      revalidatePath("/admin/audit");
-      redirect("/admin/users?updated=status");
-    } catch {
-      redirect("/admin/users?error=status");
-    }
-  }
-
-  async function resetPassword(formData) {
-    "use server";
-    const userId = String(formData.get("userId") ?? "");
-    try {
-      await apiRequest(`/api/v1/admin/users/${userId}/password`, {
-        method: "PATCH",
-        body: { password: String(formData.get("password") ?? "") },
-      });
-      revalidatePath("/admin/users");
-      revalidatePath("/admin/audit");
-      redirect("/admin/users?updated=password");
-    } catch {
-      redirect("/admin/users?error=password");
-    }
-  }
-
-  async function deleteUser(formData) {
-    "use server";
-    const userId = String(formData.get("userId") ?? "");
-    try {
-      await apiRequest(`/api/v1/admin/users/${userId}`, {
-        method: "DELETE",
-      });
-      revalidatePath("/admin/users");
-      revalidatePath("/admin/audit");
-      redirect("/admin/users?deleted=1");
-    } catch {
-      redirect("/admin/users?error=delete");
-    }
-  }
 
   let users = [];
-  let permissions = [];
+  let roles = [];
   try {
-    const [response, permissionsResponse] = await Promise.all([
+    const [response, rolesResponse] = await Promise.all([
       apiRequest("/api/v1/admin/users?limit=200"),
-      apiRequest("/api/v1/admin/permissions"),
+      apiRequest("/api/v1/admin/roles"),
     ]);
     users = Array.isArray(response?.data) ? response.data : [];
-    permissions = Array.isArray(permissionsResponse?.data) ? permissionsResponse.data : [];
+    roles = Array.isArray(rolesResponse?.data) ? rolesResponse.data : [];
   } catch {
     users = [];
-    permissions = [];
+    roles = [];
   }
 
-  const employees = users.filter((user) => user.role === "employee");
-  const activeUsers = users.filter((user) => user.status === "active").length;
-  const suspendedUsers = users.filter((user) => user.status === "suspended").length;
+  const search = String(query.q ?? "").trim().toLowerCase();
+  const filteredUsers = search
+    ? users.filter((user) =>
+        [user.name, user.email, user.role, user.status]
+          .some((value) => String(value ?? "").toLowerCase().includes(search)),
+      )
+    : users;
+  const panelMode = query.panel === "create" ? "create" : "manage";
 
   return (
-    <div className="mx-auto w-full max-w-6xl space-y-6">
-      <div>
-        <p className="text-xs uppercase tracking-widest text-primary">Admin</p>
-        <h1 className="mt-2 font-heading text-3xl font-semibold">Employees</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Create staff accounts, control access, and manage employee lifecycle from one place.
-        </p>
+    <div className="mx-auto w-full max-w-7xl space-y-6">
+      <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
+        <div>
+          <p className="text-xs uppercase tracking-widest text-primary">Users</p>
+          <h1 className="mt-2 font-heading text-3xl font-semibold">{panelMode === "create" ? "New User" : "All Users"}</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {panelMode === "create"
+              ? "Complete the form below to create a new user account with the right role and status."
+              : "Search, review, and manage staff accounts from one workspace."}
+          </p>
+        </div>
+        <Link
+          href={hrefFor({ panel: "create", q: query.q })}
+          className="inline-flex w-full items-center justify-center rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground sm:w-auto"
+        >
+          + Add employee
+        </Link>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-3">
-        {[
-          ["Total users", users.length],
-          ["Employees", employees.length],
-          ["Active users", activeUsers],
-          ["Suspended", suspendedUsers],
-        ].slice(0, 3).map(([label, value]) => (
-          <div key={label} className="rounded-2xl border border-border bg-card p-4">
-            <p className="text-2xl font-semibold">{value}</p>
-            <p className="mt-1 text-xs text-muted-foreground">{label}</p>
+      {query.created === "1" ? <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-medium text-emerald-800 shadow-sm">Success — employee account created.</div> : null}
+      {query.updated ? <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-medium text-emerald-800 shadow-sm">Success — employee information updated.</div> : null}
+      {query.deleted === "1" ? <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-medium text-emerald-800 shadow-sm">Success — user was deleted.</div> : null}
+      {query.error ? <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-700 shadow-sm">Action failed — please review the user details and try again.</div> : null}
+
+      {panelMode === "create" ? (
+        <section className="overflow-hidden rounded-[28px] border border-border bg-card">
+          <div className="border-t-4 border-primary bg-background/60 px-5 py-8 text-center sm:px-8">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 text-primary">
+              <span className="text-2xl">👤</span>
+            </div>
+            <h2 className="mt-5 text-3xl font-semibold">Register New User</h2>
+            <p className="mx-auto mt-2 max-w-2xl text-sm text-muted-foreground">
+              Complete the form below to create a new user account with appropriate permissions and access levels.
+            </p>
           </div>
-        ))}
-      </div>
 
-      {query.created === "1" ? <div className="rounded-xl border border-border bg-card p-4 text-sm text-primary">Employee account created.</div> : null}
-      {query.updated ? <div className="rounded-xl border border-border bg-card p-4 text-sm text-primary">Employee updated.</div> : null}
-      {query.deleted === "1" ? <div className="rounded-xl border border-border bg-card p-4 text-sm text-primary">User deleted.</div> : null}
-      {query.error ? <div className="rounded-xl border border-destructive/40 bg-card p-4 text-sm text-destructive">Could not complete that employee action.</div> : null}
-
-      <div className="flex flex-wrap gap-2">
-        {[
-          ["create", "Create"],
-          ["update", "Update"],
-          ["delete", "Delete"],
-          ["block", "Block"],
-          ["permissions", "Permissions"],
-        ].map(([key, label]) => (
-          <a key={key} href={`/admin/users?tab=${key}`} className={`rounded-xl px-4 py-2 text-sm ${query.tab === key || (!query.tab && key === "create") ? "bg-primary text-primary-foreground" : "border border-border"}`}>
-            {label}
-          </a>
-        ))}
-      </div>
-
-      {query.tab === "permissions" ? <EmployeePermissionsPanel employees={employees} permissions={permissions} /> : null}
-
-      <div className="grid gap-6 xl:grid-cols-[0.75fr_1.25fr]">
-        {(query.tab === "create" || !query.tab) ? <section className="rounded-2xl border border-border bg-card p-5">
-          <p className="text-xs uppercase tracking-widest text-primary">Create Employee</p>
-          <h2 className="mt-2 text-xl font-semibold">New staff account</h2>
-          <form action={createEmployee} className="mt-5 space-y-4">
-            <label className="block text-sm">
-              <span className="mb-1 block text-muted-foreground">Name</span>
-              <input name="name" required disabled={!canCreate} className="h-11 w-full rounded-xl border border-input bg-background px-3 disabled:opacity-50" />
-            </label>
-            <label className="block text-sm">
-              <span className="mb-1 block text-muted-foreground">Email</span>
-              <input name="email" type="email" required disabled={!canCreate} className="h-11 w-full rounded-xl border border-input bg-background px-3 disabled:opacity-50" />
-            </label>
-            <label className="block text-sm">
-              <span className="mb-1 block text-muted-foreground">Initial Password</span>
-              <input name="password" type="password" minLength={8} required disabled={!canCreate} className="h-11 w-full rounded-xl border border-input bg-background px-3 disabled:opacity-50" />
-            </label>
-            <button disabled={!canCreate} type="submit" className="w-full rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground disabled:opacity-50">
-              Create employee
-            </button>
-          </form>
-        </section> : null}
-
-        {query.tab !== "permissions" ? <section className="space-y-4">
-          {users.length === 0 ? (
-            <div className="rounded-2xl border border-border bg-card p-5 text-sm text-muted-foreground">No users found.</div>
-          ) : (
-            users.map((user) => (
-              <article key={user.id} className="rounded-2xl border border-border bg-card p-5">
-                <div className="flex flex-col justify-between gap-3 border-b border-border pb-4 sm:flex-row sm:items-start">
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h2 className="text-lg font-semibold">{user.name ?? "Unnamed user"}</h2>
-                      <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${statusTone(user.status)}`}>{user.status}</span>
-                      <span className="rounded-full bg-secondary px-2.5 py-1 text-xs text-muted-foreground">{user.role}</span>
+          <form action={createEmployee} className="space-y-6 p-5 sm:p-6">
+            <section className="rounded-3xl border border-border bg-primary/[0.03] p-5">
+              <div className="mb-5">
+                <p className="text-xs uppercase tracking-widest text-primary">Profile Picture</p>
+                <h3 className="mt-2 text-xl font-semibold">Profile Picture</h3>
+                <p className="mt-1 text-sm text-muted-foreground">Upload a clear profile photo for identification.</p>
+              </div>
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+                <div className="flex h-24 w-24 items-center justify-center rounded-full border border-border bg-card text-3xl text-primary">👤</div>
+                <div className="flex-1">
+                  <label className="block text-sm">
+                    <span className="mb-2 block font-medium">Upload profile picture</span>
+                    <div className="flex flex-col gap-3 sm:flex-row">
+                      <input type="text" disabled value="Choose file  No file chosen" className="h-12 flex-1 rounded-xl border border-input bg-background px-4 text-muted-foreground" />
+                      <button type="button" className="rounded-xl border border-border px-5 py-3 text-sm font-medium">
+                        Browse
+                      </button>
                     </div>
-                    <p className="mt-1 text-sm text-muted-foreground">{user.email}</p>
-                  </div>
-                  <div className="text-sm text-muted-foreground">
-                    <p>Joined {formatDate(user.createdAt)}</p>
-                    <p>Last login {formatDate(user.lastLoginAt)}</p>
-                  </div>
+                  </label>
+                  <p className="mt-2 text-xs text-muted-foreground">Recommended: Square image, max 2MB</p>
                 </div>
+              </div>
+            </section>
 
-                {query.tab === "update" || (!query.tab && false) ? <div className="mt-5 grid gap-4 lg:grid-cols-2">
-                  <form action={updateProfile} className="rounded-2xl border border-border bg-background/50 p-4">
-                    <input type="hidden" name="userId" value={user.id} />
-                    <p className="text-sm font-semibold">Profile</p>
-                    <div className="mt-3 space-y-3">
-                      <input name="name" defaultValue={user.name ?? ""} disabled={!canEdit} className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm disabled:opacity-50" />
-                      <input name="email" type="email" defaultValue={user.email} disabled={!canEdit} className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm disabled:opacity-50" />
-                      <button disabled={!canEdit} className="rounded-xl bg-secondary px-3 py-2 text-sm font-medium disabled:opacity-50">Save profile</button>
-                    </div>
-                  </form>
+            <section className="rounded-3xl border border-border bg-background/50 p-5">
+              <div className="mb-5">
+                <p className="text-xs uppercase tracking-widest text-primary">Personal Information</p>
+                <h3 className="mt-2 text-xl font-semibold">Account Information</h3>
+                <p className="mt-1 text-sm text-muted-foreground">Basic personal details and identification information.</p>
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <label className="block text-sm">
+                  <span className="mb-2 block font-medium">Full name *</span>
+                  <input name="name" required disabled={!canCreate} className="h-12 w-full rounded-xl border border-input bg-background px-4 disabled:opacity-50" />
+                </label>
+                <label className="block text-sm">
+                  <span className="mb-2 block font-medium">Email *</span>
+                  <input name="email" type="email" required disabled={!canCreate} className="h-12 w-full rounded-xl border border-input bg-background px-4 disabled:opacity-50" />
+                </label>
+                <label className="block text-sm md:col-span-2">
+                  <span className="mb-2 block font-medium">Initial password *</span>
+                  <input name="password" type="password" minLength={8} required disabled={!canCreate} className="h-12 w-full rounded-xl border border-input bg-background px-4 disabled:opacity-50" />
+                </label>
+              </div>
+            </section>
 
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <form action={updateRole} className="rounded-2xl border border-border bg-background/50 p-4">
-                      <input type="hidden" name="userId" value={user.id} />
-                      <p className="text-sm font-semibold">Role</p>
-                      <select name="role" defaultValue={user.role ?? "customer"} disabled={!canAssign} className="mt-3 h-10 w-full rounded-xl border border-input bg-background px-3 text-sm disabled:opacity-50">
-                        {ROLE_OPTIONS.map((role) => (
-                          <option key={role} value={role}>
-                            {role}
-                          </option>
-                        ))}
-                      </select>
-                      <button disabled={!canAssign} className="mt-3 rounded-xl bg-secondary px-3 py-2 text-sm font-medium disabled:opacity-50">Save role</button>
-                    </form>
+            <section className="rounded-3xl border border-border bg-background/50 p-5">
+              <div className="mb-5">
+                <p className="text-xs uppercase tracking-widest text-primary">Contact Information</p>
+                <h3 className="mt-2 text-xl font-semibold">Contact Information</h3>
+                <p className="mt-1 text-sm text-muted-foreground">Primary contact details for communication.</p>
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <label className="block text-sm">
+                  <span className="mb-2 block font-medium">Phone number</span>
+                  <input disabled className="h-12 w-full rounded-xl border border-input bg-background px-4" placeholder="+251 ..." />
+                </label>
+                <label className="block text-sm">
+                  <span className="mb-2 block font-medium">Work email</span>
+                  <input disabled className="h-12 w-full rounded-xl border border-input bg-background px-4" placeholder="user@example.com" />
+                </label>
+              </div>
+            </section>
 
-                    <form action={updateStatus} className="rounded-2xl border border-border bg-background/50 p-4">
-                      <input type="hidden" name="userId" value={user.id} />
-                      <p className="text-sm font-semibold">Status</p>
-                      <select name="status" defaultValue={user.status} disabled={!canEdit} className="mt-3 h-10 w-full rounded-xl border border-input bg-background px-3 text-sm disabled:opacity-50">
-                        {STATUS_OPTIONS.map((status) => (
-                          <option key={status} value={status}>
-                            {status}
-                          </option>
-                        ))}
-                      </select>
-                      <button disabled={!canEdit} className="mt-3 rounded-xl bg-secondary px-3 py-2 text-sm font-medium disabled:opacity-50">Save status</button>
-                    </form>
-                  </div>
-                </div> : null}
+            <section className="rounded-3xl border border-border bg-background/50 p-5">
+              <div className="mb-5">
+                <p className="text-xs uppercase tracking-widest text-primary">Address Information</p>
+                <h3 className="mt-2 text-xl font-semibold">Address Information</h3>
+                <p className="mt-1 text-sm text-muted-foreground">Complete residential address details.</p>
+              </div>
+              <div className="grid gap-4 md:grid-cols-3">
+                {["Citizenship", "Region", "Zone", "Woreda", "Kebele"].map((label) => (
+                  <label key={label} className="block text-sm">
+                    <span className="mb-2 block font-medium">{label}</span>
+                    <input disabled className="h-12 w-full rounded-xl border border-input bg-background px-4" placeholder={label === "Kebele" ? "Enter kebele" : `Select ${label}`} />
+                  </label>
+                ))}
+              </div>
+            </section>
 
-                {query.tab === "block" ? <div className="mt-4 grid gap-4">
-                  <form action={updateStatus} className="rounded-2xl border border-border bg-background/50 p-4">
-                    <input type="hidden" name="userId" value={user.id} />
-                    <p className="text-sm font-semibold">Block / status</p>
-                    <select name="status" defaultValue={user.status} className="mt-3 h-10 w-full rounded-xl border border-input bg-background px-3 text-sm">
-                      {STATUS_OPTIONS.map((status) => <option key={status}>{status}</option>)}
-                    </select>
-                    <button className="mt-3 rounded-xl bg-secondary px-3 py-2 text-sm">Save status</button>
-                  </form>
-                </div> : null}
+            <section className="rounded-3xl border border-border bg-background/50 p-5">
+              <div className="mb-5">
+                <p className="text-xs uppercase tracking-widest text-primary">Employment Information</p>
+                <h3 className="mt-2 text-xl font-semibold">Employment Information</h3>
+                <p className="mt-1 text-sm text-muted-foreground">Professional and employment details.</p>
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <label className="block text-sm">
+                  <span className="mb-2 block font-medium">Education level</span>
+                  <input disabled className="h-12 w-full rounded-xl border border-input bg-background px-4" placeholder="Select education level" />
+                </label>
+                <label className="block text-sm">
+                  <span className="mb-2 block font-medium">Employment date</span>
+                  <input disabled className="h-12 w-full rounded-xl border border-input bg-background px-4" placeholder="mm/dd/yyyy" />
+                </label>
+              </div>
+            </section>
 
-                {query.tab === "delete" ? <div className="mt-4 flex justify-end">
-                  <form action={deleteUser}>
-                    <input type="hidden" name="userId" value={user.id} />
-                    <button className="rounded-xl border border-destructive/50 px-4 py-2 text-sm text-destructive">Delete user</button>
-                  </form>
-                </div> : null}
+            <section className="rounded-3xl border border-primary/15 bg-primary/[0.04] p-5">
+              <div className="mb-5">
+                <p className="text-xs uppercase tracking-widest text-primary">Permissions and Status</p>
+                <h3 className="mt-2 text-xl font-semibold">Permissions and Status</h3>
+                <p className="mt-1 text-sm text-muted-foreground">Choose the employee user type and starting account availability.</p>
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <label className="block text-sm">
+                  <span className="mb-2 block font-medium">Role / user type *</span>
+                  <select name="roleId" disabled={!canCreate} className="h-12 w-full rounded-xl border border-input bg-background px-4 disabled:opacity-50">
+                    <option value="">Default employee</option>
+                    {roles.map((role) => (
+                      <option key={role.id} value={role.id}>
+                        {role.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block text-sm">
+                  <span className="mb-2 block font-medium">Status *</span>
+                  <select name="status" defaultValue="active" disabled={!canCreate} className="h-12 w-full rounded-xl border border-input bg-background px-4 disabled:opacity-50">
+                    {STATUS_OPTIONS.map((status) => (
+                      <option key={status} value={status}>
+                        {status}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            </section>
 
-                {query.tab === "update" ? <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_auto]">
-                  <form action={resetPassword} className="rounded-2xl border border-border bg-background/50 p-4">
-                    <input type="hidden" name="userId" value={user.id} />
-                    <p className="text-sm font-semibold">Reset password</p>
-                    <div className="mt-3 flex flex-col gap-3 sm:flex-row">
-                      <input name="password" type="password" minLength={8} placeholder="New temporary password" disabled={!canEdit} className="h-10 flex-1 rounded-xl border border-input bg-background px-3 text-sm disabled:opacity-50" />
-                      <button disabled={!canEdit} className="rounded-xl bg-secondary px-3 py-2 text-sm font-medium disabled:opacity-50">Reset</button>
-                    </div>
-                  </form>
-
-                  <form action={deleteUser} className="flex items-end">
-                    <input type="hidden" name="userId" value={user.id} />
-                    <button disabled={!canDelete} className="rounded-xl border border-destructive/50 px-4 py-2 text-sm font-medium text-destructive disabled:opacity-50">
-                      Delete user
-                    </button>
-                  </form>
-                </div> : null}
-              </article>
-            ))
-          )}
-        </section> : null}
-      </div>
+            <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-between">
+              <Link href="/admin/users" className="rounded-xl border border-border px-5 py-3 text-center text-sm font-medium">
+                Back to users
+              </Link>
+              <button disabled={!canCreate} type="submit" className="rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground disabled:opacity-50">
+                + Create employee
+              </button>
+            </div>
+          </form>
+        </section>
+      ) : (
+      <AdminUsersDirectory users={filteredUsers} query={query.q} />
+      )}
     </div>
   );
 }
