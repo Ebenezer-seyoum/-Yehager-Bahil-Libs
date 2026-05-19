@@ -30,11 +30,13 @@ export default async function AdminUserDetailPage({ params, searchParams }) {
       const fatherName = String(formData.get("fatherName") ?? "").trim();
       const grandfatherName = String(formData.get("grandfatherName") ?? "").trim();
       const composedName = [firstName, fatherName, grandfatherName].filter(Boolean).join(" ");
+      const submittedName = String(formData.get("name") ?? "").trim();
+      const submittedEmail = String(formData.get("email") ?? "").trim();
       await apiRequest(`/api/v1/admin/users/${id}`, {
         method: "PATCH",
         body: {
-          name: composedName || String(formData.get("name") ?? ""),
-          email: String(formData.get("email") ?? ""),
+          name: composedName || submittedName || user.name,
+          email: submittedEmail || user.email,
         },
       });
       revalidatePath(`/admin/users/${id}`);

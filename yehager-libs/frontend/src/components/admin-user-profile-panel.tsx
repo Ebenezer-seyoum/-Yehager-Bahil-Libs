@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { ClipboardList, FileText, MapPin, Ruler, ShieldCheck, ShoppingBag, UserRound } from "lucide-react";
+import { MapPin, Ruler, ShieldCheck, ShoppingBag, UserRound } from "lucide-react";
 
 type User = {
   id: string;
@@ -97,8 +97,40 @@ export function AdminUserProfilePanel({
   const [editing, setEditing] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
   const [confirm, setConfirm] = useState<"block" | "delete" | null>(null);
-  const [overviewSection, setOverviewSection] = useState<"personal" | "address" | "account" | "mandatory" | "orders" | "measurements">("personal");
+  const [overviewSection, setOverviewSection] = useState<"personal" | "address" | "account" | "orders" | "measurements">("personal");
   const nameParts = splitName(user.name);
+  const overviewItems = [
+    {
+      key: "personal",
+      label: "Personal Information",
+      description: "Name, gender, birth, citizenship",
+      icon: UserRound,
+    },
+    {
+      key: "address",
+      label: "Address Information",
+      description: "Phone, region, zone, kebele",
+      icon: MapPin,
+    },
+    {
+      key: "account",
+      label: "Account Information",
+      description: "Login, status, registration",
+      icon: ShieldCheck,
+    },
+    {
+      key: "orders",
+      label: "Order History",
+      description: "Purchases and order activity",
+      icon: ShoppingBag,
+    },
+    {
+      key: "measurements",
+      label: "Saved Measurements",
+      description: "Tailoring measurement profile",
+      icon: Ruler,
+    },
+  ] as const;
   const permissionGroups = [
     ["Dashboard", "Can view dashboard overview and workspace summary."],
     ["Users", "Can access user-related workspace information based on assigned role."],
@@ -158,7 +190,7 @@ export function AdminUserProfilePanel({
                   Cancel
                 </button>
               </>
-            ) : tab === "overview" && (overviewSection === "orders" || overviewSection === "measurements") ? null : (
+            ) : tab === "overview" && (overviewSection === "address" || overviewSection === "orders" || overviewSection === "measurements") ? null : (
               <button type="button" onClick={() => setEditing(true)} className="rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white">
                 Edit
               </button>
@@ -180,19 +212,12 @@ export function AdminUserProfilePanel({
                 {user.role === "customer" ? "Customer Overview" : "Profile Overview"}
               </p>
               <div className="mt-3 space-y-2">
-                {[
-                  ["personal", "PI", "Personal Information", "Name, gender, birth, citizenship"],
-                  ["address", "AI", "Address Information", "Phone, region, zone, kebele"],
-                  ["account", "AC", "Account Information", "Login, status, registration"],
-                  ["mandatory", "MI", "Mandatory Information", "Required profile and access details"],
-                  ["orders", "OH", "Order History", "Purchases and order activity"],
-                  ["measurements", "SM", "Saved Measurements", "Tailoring measurement profile"],
-                ].map(([key, icon, label, description]) => (
+                {overviewItems.map(({ key, icon: Icon, label, description }) => (
                   <button
                     key={key}
                     type="button"
                     onClick={() => {
-                      setOverviewSection(key as "personal" | "address" | "account" | "mandatory" | "orders" | "measurements");
+                      setOverviewSection(key as "personal" | "address" | "account" | "orders" | "measurements");
                       setEditing(false);
                     }}
                     className={`group flex w-full items-center gap-3 rounded-2xl border px-4 py-3 text-left transition hover:border-blue-200 hover:bg-blue-50 ${
@@ -200,11 +225,11 @@ export function AdminUserProfilePanel({
                     }`}
                   >
                     <span className={`flex h-11 w-11 items-center justify-center rounded-2xl text-xs font-extrabold ${overviewSection === key ? "bg-emerald-700 text-white" : "bg-secondary text-foreground group-hover:bg-blue-100"}`}>
-                      {icon}
+                      <Icon className="h-5 w-5" />
                     </span>
                     <span>
                       <span className="block text-sm font-extrabold text-foreground">{label}</span>
-                      <span className="mt-0.5 block text-xs font-medium text-muted-foreground">{description}</span>
+                      {description ? <span className="mt-0.5 block text-xs font-medium text-muted-foreground">{description}</span> : null}
                     </span>
                   </button>
                 ))}
@@ -215,7 +240,7 @@ export function AdminUserProfilePanel({
               {overviewSection === "personal" ? (
                 <div>
                   <div className="flex items-center gap-3 border-b border-border pb-4">
-                    <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-700 text-sm font-extrabold text-white">PI</span>
+                    <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-700 text-white"><UserRound className="h-6 w-6" /></span>
                     <div>
                       <h2 className="text-xl font-extrabold">Personal Information</h2>
                       <p className="text-sm text-muted-foreground">Customer identity and personal details.</p>
@@ -244,7 +269,7 @@ export function AdminUserProfilePanel({
 
               {overviewSection === "address" ? (
                 <div>
-                  <div className="flex items-center gap-3 border-b border-border pb-4"><span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-600 text-sm font-extrabold text-white">AI</span><div><h2 className="text-xl font-extrabold">Address Information</h2><p className="text-sm text-muted-foreground">Customer contact and location information.</p></div></div>
+                  <div className="flex items-center gap-3 border-b border-border pb-4"><span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-600 text-white"><MapPin className="h-6 w-6" /></span><div><h2 className="text-xl font-extrabold">Address Information</h2><p className="text-sm text-muted-foreground">Customer contact and location information.</p></div></div>
                   {editing ? (
                     <form id="user-profile-edit-form" action={updateProfileAction} className="mt-5 grid gap-4 md:grid-cols-2">
                       <input name="name" type="hidden" defaultValue={user.name ?? ""} /><input name="email" type="hidden" defaultValue={user.email} />
@@ -262,7 +287,7 @@ export function AdminUserProfilePanel({
 
               {overviewSection === "account" ? (
                 <div>
-                  <div className="flex items-center gap-3 border-b border-border pb-4"><span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-sidebar text-sm font-extrabold text-white">AC</span><div><h2 className="text-xl font-extrabold">Account Information</h2><p className="text-sm text-muted-foreground">Current account state and access profile.</p></div></div>
+                  <div className="flex items-center gap-3 border-b border-border pb-4"><span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-sidebar text-white"><ShieldCheck className="h-6 w-6" /></span><div><h2 className="text-xl font-extrabold">Account Information</h2><p className="text-sm text-muted-foreground">Current account state and access profile.</p></div></div>
                   {editing ? (
                     <form id="user-profile-edit-form" action={updateProfileAction} className="mt-5 grid gap-4 md:grid-cols-2">
                       <input name="name" type="hidden" defaultValue={user.name ?? ""} />
@@ -276,28 +301,12 @@ export function AdminUserProfilePanel({
                 </div>
               ) : null}
 
-              {overviewSection === "mandatory" ? (
-                <div>
-                  <div className="flex items-center gap-3 border-b border-border pb-4"><span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-purple-600 text-sm font-extrabold text-white">MI</span><div><h2 className="text-xl font-extrabold">Mandatory Information</h2><p className="text-sm text-muted-foreground">Required profile fields and customer access details.</p></div></div>
-                  {editing ? (
-                    <form id="user-profile-edit-form" action={updateProfileAction} className="mt-5 grid gap-4 md:grid-cols-2">
-                      <input name="name" type="hidden" defaultValue={user.name ?? ""} /><input name="email" type="hidden" defaultValue={user.email} />
-                      <label className="block text-sm font-semibold">Customer Type<select className="mt-1 h-11 w-full rounded-xl border border-input bg-background px-3"><option>Retail Customer</option><option>Wholesale Customer</option></select></label>
-                      <label className="block text-sm font-semibold">Preferred Language<select className="mt-1 h-11 w-full rounded-xl border border-input bg-background px-3"><option>English</option><option>Amharic</option></select></label>
-                      <label className="block text-sm font-semibold">Verification Status<select className="mt-1 h-11 w-full rounded-xl border border-input bg-background px-3"><option>Pending</option><option>Verified</option></select></label>
-                    </form>
-                  ) : (
-                    <div className="mt-5 grid gap-4 md:grid-cols-2">{[["Customer Type", "Retail Customer"], ["Preferred Language", "English"], ["Verification Status", "Pending"], ["Account Role", user.role], ["Access Status", user.status], ["Required Fields", "Profile, address, account"]].map(([label, value]) => <div key={label} className="rounded-2xl border border-border bg-card p-4 transition hover:border-blue-200 hover:bg-blue-50"><p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">{label}</p><p className="mt-1 text-sm font-extrabold text-foreground capitalize">{value}</p></div>)}</div>
-                  )}
-                </div>
-              ) : null}
-
               {overviewSection === "orders" ? (
-                <div><div className="flex items-center gap-3 border-b border-border pb-4"><span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-500 text-sm font-extrabold text-white">OH</span><div><h2 className="text-xl font-extrabold">Order History</h2><p className="text-sm text-muted-foreground">Recent purchase activity for this customer.</p></div></div><div className="mt-5 rounded-2xl border border-border bg-card p-5 transition hover:border-blue-200 hover:bg-blue-50"><div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-mono text-sm font-extrabold text-foreground">#YBL-DEMO-001</p><p className="mt-1 text-sm text-muted-foreground">No live order records connected yet.</p></div><div className="flex gap-2"><span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-800">pending</span><span className="rounded-full bg-secondary px-3 py-1 text-xs font-bold text-muted-foreground">0 items</span></div></div></div></div>
+                <div><div className="flex items-center gap-3 border-b border-border pb-4"><span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-500 text-white"><ShoppingBag className="h-6 w-6" /></span><div><h2 className="text-xl font-extrabold">Order History</h2><p className="text-sm text-muted-foreground">Recent purchase activity for this customer.</p></div></div><div className="mt-5 rounded-2xl border border-dashed border-border bg-card p-8 text-center transition hover:border-blue-200 hover:bg-blue-50"><ShoppingBag className="mx-auto h-10 w-10 text-muted-foreground" /><h3 className="mt-3 text-lg font-extrabold text-foreground">No orders yet</h3><p className="mt-1 text-sm text-muted-foreground">This customer has not placed any orders yet.</p></div></div>
               ) : null}
 
               {overviewSection === "measurements" ? (
-                <div><div className="flex items-center gap-3 border-b border-border pb-4"><span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-600 text-sm font-extrabold text-white">SM</span><div><h2 className="text-xl font-extrabold">Saved Measurements</h2><p className="text-sm text-muted-foreground">Measurement profile used for tailoring.</p></div></div><div className="mt-5 rounded-2xl border border-border bg-card p-5"><div className="grid gap-4 md:grid-cols-2">{[["Chest", "-"], ["Waist", "-"], ["Hips", "-"], ["Shoulder Width", "-"], ["Arm Length", "-"], ["Torso Length", "-"], ["Inseam", "-"], ["Neck", "-"]].map(([label, value]) => <div key={label} className="flex items-center justify-between rounded-xl bg-secondary/60 px-4 py-3 transition hover:bg-blue-50"><span className="text-sm font-semibold text-muted-foreground">{label}</span><span className="text-sm font-extrabold text-foreground">{value}</span></div>)}</div></div></div>
+                <div><div className="flex items-center gap-3 border-b border-border pb-4"><span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-600 text-white"><Ruler className="h-6 w-6" /></span><div><h2 className="text-xl font-extrabold">Saved Measurements</h2><p className="text-sm text-muted-foreground">Measurement profile used for tailoring.</p></div></div><div className="mt-5 rounded-2xl border border-dashed border-border bg-card p-8 text-center transition hover:border-blue-200 hover:bg-blue-50"><Ruler className="mx-auto h-10 w-10 text-muted-foreground" /><h3 className="mt-3 text-lg font-extrabold text-foreground">No saved measurements</h3><p className="mt-1 text-sm text-muted-foreground">This customer does not have saved tailoring measurements yet.</p></div></div>
               ) : null}
             </section>
           </div>
