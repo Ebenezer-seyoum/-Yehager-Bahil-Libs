@@ -22,6 +22,7 @@ export const adminNavigation = [
     label: "Operations",
     items: [
       { href: "/admin/orders", label: "Orders", icon: "orders", permission: "orders.view" },
+      { href: "/admin/orders/documents", label: "Order Documents", icon: "documents", permission: "orders.view" },
       { href: "/admin/exchange-rate", label: "Exchange Rate", icon: "exchange", permission: "exchange_rates.view" },
       { href: "/admin/alerts", label: "Alerts", icon: "alerts", permission: "alerts.view" },
     ],

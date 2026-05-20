@@ -4,7 +4,6 @@ import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/auth-options";
 import { apiRequest } from "@/lib/api-client";
-import { AdminOrderDocuments } from "@/components/admin-order-documents";
 
 function prettyJson(value) {
   return JSON.stringify(value ?? {}, null, 2);
@@ -22,7 +21,7 @@ const ORDER_STATUS_OPTIONS = [
   "picked_up",
   "cancelled",
 ];
-const PAYMENT_STATUS_OPTIONS = ["pending", "paid", "failed", "refunded", "unpaid"];
+const PAYMENT_STATUS_OPTIONS = ["pending", "awaiting_verification", "paid", "failed", "refunded", "unpaid"];
 
 export default async function AdminOrderDetailPage({ params, searchParams }) {
   const session = await getServerSession(authOptions);
@@ -73,8 +72,8 @@ export default async function AdminOrderDetailPage({ params, searchParams }) {
     return (
       <div className="mx-auto w-full max-w-4xl px-4 py-10 sm:px-6 lg:px-8">
         <p className="text-sm text-muted-foreground">Order not found.</p>
-        <Link href="/admin" className="mt-4 inline-block text-sm text-primary hover:underline">
-          Back to Admin
+        <Link href="/admin/orders" className="mt-4 inline-block text-sm text-primary hover:underline">
+          Back to Orders
         </Link>
       </div>
     );
@@ -87,8 +86,8 @@ export default async function AdminOrderDetailPage({ params, searchParams }) {
           <p className="text-xs uppercase tracking-widest text-primary">Admin</p>
           <h1 className="mt-2 font-heading text-3xl font-semibold">Order {order.orderNumber ?? order.id}</h1>
         </div>
-        <Link href="/admin" className="text-sm text-primary hover:underline">
-          Back to Admin
+        <Link href="/admin/orders" className="text-sm text-primary hover:underline">
+          Back to Orders
         </Link>
       </div>
       {query.saved === "1" ? (
@@ -119,6 +118,25 @@ export default async function AdminOrderDetailPage({ params, searchParams }) {
         <p>
           <span className="text-muted-foreground">Currency:</span> {order.paymentCurrency ?? "USD"}
         </p>
+        {order.paymentCurrency === "ETB" ? (
+          <>
+            <p>
+              <span className="text-muted-foreground">ETB Total:</span> {Number(order.totalEtb ?? 0).toLocaleString()} ETB
+            </p>
+            <p>
+              <span className="text-muted-foreground">Exchange Rate:</span>{" "}
+              {order.etbExchangeRate ? `1 USD = ${Number(order.etbExchangeRate).toLocaleString()} ETB` : "—"}
+            </p>
+          </>
+        ) : null}
+        {order.paymentProofUrl ? (
+          <p className="sm:col-span-2">
+            <span className="text-muted-foreground">ETB Proof:</span>{" "}
+            <a href={order.paymentProofUrl} target="_blank" rel="noreferrer" className="font-medium text-primary hover:underline">
+              View payment proof
+            </a>
+          </p>
+        ) : null}
       </div>
 
       <div className="rounded-xl border border-border bg-card p-5">
@@ -173,16 +191,36 @@ export default async function AdminOrderDetailPage({ params, searchParams }) {
 
       <div className="rounded-xl border border-border bg-card p-5">
         <h2 className="font-heading text-xl font-semibold">Documents</h2>
-        <p className="mt-1 text-sm text-muted-foreground">Upload pickup evidence or attach shipping paperwork directly to this order.</p>
-        <div className="mt-4">
-          <AdminOrderDocuments
-            orderId={order.id}
-            pickupIdUrl={order.pickupIdUrl}
-            pickupSignedDocUrl={order.pickupSignedDocUrl}
-            pickupProofUrl={order.pickupProofUrl}
-            shippingDocuments={order.shippingDocuments}
-          />
+        <p className="mt-1 text-sm text-muted-foreground">Document upload and verification is managed from the dedicated Order Documents page.</p>
+        <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+          <p>
+            <span className="text-muted-foreground">Pickup ID:</span>{" "}
+            {order.pickupIdUrl ? <a href={order.pickupIdUrl} target="_blank" rel="noreferrer" className="text-primary hover:underline">View</a> : "Not uploaded"}
+          </p>
+          <p>
+            <span className="text-muted-foreground">Signed Pickup:</span>{" "}
+            {order.pickupSignedDocUrl ? <a href={order.pickupSignedDocUrl} target="_blank" rel="noreferrer" className="text-primary hover:underline">View</a> : "Not uploaded"}
+          </p>
+          <p>
+            <span className="text-muted-foreground">Pickup Proof:</span>{" "}
+            {order.pickupProofUrl ? <a href={order.pickupProofUrl} target="_blank" rel="noreferrer" className="text-primary hover:underline">View</a> : "Not uploaded"}
+          </p>
+          <p>
+            <span className="text-muted-foreground">Shipping Docs:</span> {(order.shippingDocuments ?? []).length}
+          </p>
         </div>
+        {(order.shippingDocuments ?? []).length > 0 ? (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {(order.shippingDocuments ?? []).map((doc, index) => (
+              <a key={`${doc.url}-${index}`} href={doc.url} target="_blank" rel="noreferrer" className="rounded-full bg-secondary px-3 py-1 text-xs font-medium text-primary hover:underline">
+                {doc.label ?? `Document ${index + 1}`}
+              </a>
+            ))}
+          </div>
+        ) : null}
+        <Link href="/admin/orders/documents" className="mt-4 inline-flex rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90">
+          Manage Order Documents
+        </Link>
       </div>
     </div>
   );

@@ -13,5 +13,5 @@ export function getPostLoginRedirect(role: string | null | undefined, callbackUr
     return callbackUrl;
   }
 
-  return "/";
+  return "/my-account";
 }

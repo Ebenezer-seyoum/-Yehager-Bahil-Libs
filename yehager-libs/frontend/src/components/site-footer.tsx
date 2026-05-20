@@ -84,29 +84,29 @@ export function SiteFooter() {
           <div>
             <h4 className="mb-5 text-xs font-semibold uppercase tracking-widest text-primary">Follow Us</h4>
             <div className="flex items-center gap-3">
-              <SocialLink href="https://www.facebook.com/profile.php?id=61559444502598" className="bg-[#1877F2]">
-                <svg className="h-5 w-5 fill-white" viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M22 12.07C22 6.48 17.52 2 11.93 2S1.86 6.48 1.86 12.07c0 5.05 3.7 9.24 8.54 10v-7.07H7.85v-2.93h2.55V9.84c0-2.52 1.5-3.91 3.79-3.91 1.1 0 2.24.2 2.24.2v2.46h-1.26c-1.24 0-1.63.77-1.63 1.56v1.87h2.78l-.44 2.93h-2.34v7.07c4.84-.76 8.46-4.95 8.46-10Z" />
+              <SocialLink href="https://www.facebook.com/profile.php?id=61559444502598" label="Facebook" className="bg-[#1877F2] text-white">
+                <svg viewBox="0 0 24 24" aria-hidden="true" className="h-5 w-5 fill-current">
+                  <path d="M24 12.073C24 5.405 18.627 0 12 0S0 5.405 0 12.073C0 18.1 4.388 23.094 10.125 24v-8.438H7.078v-3.49h3.047V9.414c0-3.025 1.792-4.697 4.533-4.697 1.312 0 2.686.236 2.686.236v2.97H15.83c-1.49 0-1.955.93-1.955 1.885v2.265h3.328l-.532 3.49h-2.796V24C19.612 23.094 24 18.1 24 12.073Z" />
                 </svg>
               </SocialLink>
-              <SocialLink href="https://www.instagram.com/yehagerbahillibs?igsh=dHZtOXc2b2gwbGk0" className="bg-[#555]">
-                <svg className="h-5 w-5 fill-white" viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M7.5 2h9A5.5 5.5 0 0 1 22 7.5v9a5.5 5.5 0 0 1-5.5 5.5h-9A5.5 5.5 0 0 1 2 16.5v-9A5.5 5.5 0 0 1 7.5 2Zm0 2A3.5 3.5 0 0 0 4 7.5v9A3.5 3.5 0 0 0 7.5 20h9a3.5 3.5 0 0 0 3.5-3.5v-9A3.5 3.5 0 0 0 16.5 4h-9Zm10.25 1.5a1.25 1.25 0 1 1 0 2.5 1.25 1.25 0 0 1 0-2.5ZM12 7a5 5 0 1 1 0 10 5 5 0 0 1 0-10Zm0 2a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z" />
+              <SocialLink href="https://www.instagram.com/yehagerbahillibs?igsh=dHZtOXc2b2gwbGk0" label="Instagram" className="bg-[radial-gradient(circle_at_30%_110%,#fdf497_0%,#fdf497_18%,#fd5949_43%,#d6249f_62%,#285AEB_100%)] text-white">
+                <svg viewBox="0 0 24 24" aria-hidden="true" className="h-5 w-5 fill-current">
+                  <path d="M7.8 2h8.4A5.806 5.806 0 0 1 22 7.8v8.4a5.806 5.806 0 0 1-5.8 5.8H7.8A5.806 5.806 0 0 1 2 16.2V7.8A5.806 5.806 0 0 1 7.8 2Zm-.2 2A3.6 3.6 0 0 0 4 7.6v8.8A3.6 3.6 0 0 0 7.6 20h8.8a3.6 3.6 0 0 0 3.6-3.6V7.6A3.6 3.6 0 0 0 16.4 4H7.6Zm9.65 1.5a1.25 1.25 0 1 1 0 2.5 1.25 1.25 0 0 1 0-2.5ZM12 7a5 5 0 1 1 0 10 5 5 0 0 1 0-10Zm0 2a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z" />
                 </svg>
               </SocialLink>
-              <SocialLink href="https://x.com/yehagerbah54327" className="border border-white/20 bg-black">
-                <svg className="h-4 w-4 fill-white" viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.737-8.835L1.254 2.25H8.08l4.253 5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+              <SocialLink href="https://x.com/yehagerbah54327" label="X (Twitter)" className="border border-white/20 bg-black text-white">
+                <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4 w-4 fill-current">
+                  <path d="M18.901 1.153h3.68l-8.04 9.19L24 22.846h-7.406l-5.8-7.584-6.638 7.584H.474l8.6-9.831L0 1.154h7.594l5.243 6.932 6.064-6.933Zm-1.292 19.491h2.039L6.486 3.24H4.298l13.311 17.404Z" />
                 </svg>
               </SocialLink>
-              <SocialLink href="https://www.youtube.com/@YehagerbahilLibs" className="bg-[#FF0000]">
-                <svg className="h-5 w-5 fill-white" viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M23.5 6.2a3 3 0 0 0-2.1-2.1C19.5 3.6 12 3.6 12 3.6s-7.5 0-9.4.5A3 3 0 0 0 .5 6.2 31 31 0 0 0 0 12a31 31 0 0 0 .5 5.8 3 3 0 0 0 2.1 2.1c1.9.5 9.4.5 9.4.5s7.5 0 9.4-.5a3 3 0 0 0 2.1-2.1A31 31 0 0 0 24 12a31 31 0 0 0-.5-5.8ZM9.6 15.6V8.4L15.8 12l-6.2 3.6Z" />
+              <SocialLink href="https://www.youtube.com/@YehagerbahilLibs" label="YouTube" className="bg-[#FF0000] text-white">
+                <svg viewBox="0 0 24 24" aria-hidden="true" className="h-6 w-6 fill-current">
+                  <path d="M23.5 6.19a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.509A3.016 3.016 0 0 0 .5 6.19C0 8.073 0 12 0 12s0 3.927.5 5.81a3.016 3.016 0 0 0 2.123 2.136c1.872.509 9.377.509 9.377.509s7.505 0 9.378-.509A3.016 3.016 0 0 0 23.5 17.81C24 15.927 24 12 24 12s0-3.927-.5-5.81ZM9.545 15.568V8.432L15.818 12l-6.273 3.568Z" />
                 </svg>
               </SocialLink>
-              <SocialLink href="https://www.tiktok.com/@yehager.bahil.lib" className="bg-[#555]">
-                <svg className="h-4 w-4 fill-white" viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-2.88 2.5 2.89 2.89 0 0 1-2.89-2.89 2.89 2.89 0 0 1 2.89-2.89c.28 0 .54.04.79.1V9.01a6.27 6.27 0 0 0-.79-.05 6.34 6.34 0 0 0-6.34 6.34 6.34 6.34 0 0 0 6.34 6.34 6.34 6.34 0 0 0 6.33-6.34V8.69a8.18 8.18 0 0 0 4.78 1.52V6.78a4.85 4.85 0 0 1-1.01-.09Z" />
+              <SocialLink href="https://www.tiktok.com/@yehager.bahil.lib" label="TikTok" className="bg-black text-white ring-1 ring-white/15">
+                <svg viewBox="0 0 24 24" aria-hidden="true" className="h-5 w-5 fill-current">
+                  <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64c.298 0 .593.045.88.13V9.4a6.337 6.337 0 0 0-.88-.05A6.33 6.33 0 0 0 5 20.17a6.34 6.34 0 0 0 10.86-4.43v-7a8.16 8.16 0 0 0 4.77 1.52V6.82c-.35 0-.699-.043-1.04-.13Z" />
                 </svg>
               </SocialLink>
             </div>
@@ -185,15 +185,17 @@ export function SiteFooter() {
 
 function SocialLink({
   href,
+  label,
   className,
   children,
 }: {
   href: string;
+  label: string;
   className: string;
   children: React.ReactNode;
 }) {
   return (
-    <a href={href} target="_blank" rel="noreferrer" className={`flex h-11 w-11 items-center justify-center rounded-lg transition-opacity hover:opacity-80 ${className}`}>
+    <a href={href} target="_blank" rel="noreferrer" aria-label={label} title={label} className={`flex h-11 w-11 items-center justify-center rounded-lg transition-opacity hover:opacity-80 ${className}`}>
       {children}
     </a>
   );

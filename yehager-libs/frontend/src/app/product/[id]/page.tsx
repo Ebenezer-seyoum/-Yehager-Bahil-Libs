@@ -7,7 +7,7 @@ import { ensureBackendUserSynced } from "@/lib/backend-user-sync";
 import { ProductDetailGallery } from "@/components/product-detail-gallery";
 import { ShareLinks } from "@/components/share-links";
 import { MeasurementHelp } from "@/components/measurement-help";
-import { Clock3, Users } from "lucide-react";
+import { ChevronRight, Clock, ShoppingBag, Users } from "lucide-react";
 
 type Product = {
   id: string;
@@ -33,6 +33,9 @@ type Measurement = {
   chest?: number | null;
   waist?: number | null;
   hips?: number | null;
+  shoulderWidth?: number | null;
+  armLength?: number | null;
+  torsoLength?: number | null;
 };
 
 type Event = {
@@ -173,6 +176,10 @@ export default async function ProductDetailPage({
             { label: "Groom", price: Number(product.groomPriceUsd), gender: "male" as const },
           ]
         : [];
+  const selectedRole = roles[0] ?? null;
+  const displayPrice = Number(selectedRole?.price ?? price);
+  const measurementGender = selectedRole?.gender ?? product.gender ?? "female";
+  const latestMeasurement = measurements[0] ?? null;
 
   return (
     <div className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-12 xl:px-20 sm:py-12">
@@ -180,18 +187,20 @@ export default async function ProductDetailPage({
         <Link href="/" className="hover:text-foreground">
           Home
         </Link>
-        <span>/</span>
+        <ChevronRight className="h-3 w-3" />
         <Link href="/catalog" className="hover:text-foreground">
           Collection
         </Link>
         {product.region ? (
           <>
-            <span>/</span>
+            <ChevronRight className="h-3 w-3" />
             <Link href={`/catalog?region=${encodeURIComponent(product.region)}`} className="hover:text-foreground">
               {product.region}
             </Link>
           </>
         ) : null}
+        <ChevronRight className="h-3 w-3" />
+        <span className="max-w-[150px] truncate text-foreground">{product.name}</span>
       </div>
 
       {event ? (
@@ -222,8 +231,8 @@ export default async function ProductDetailPage({
           <div>
             <h1 className="font-heading text-3xl font-bold leading-tight sm:text-4xl">{product.name}</h1>
             <div className="mt-3">
-              <p className="text-3xl font-light text-primary">${price.toFixed(2)}</p>
-              {etbRate ? <p className="mt-0.5 text-sm text-muted-foreground">~ {(price * etbRate).toLocaleString()} ETB</p> : null}
+              <p className="text-3xl font-light text-primary">${displayPrice.toFixed(2)}</p>
+              {etbRate ? <p className="mt-0.5 text-sm text-muted-foreground">~ {(displayPrice * etbRate).toLocaleString()} ETB</p> : null}
             </div>
           </div>
 
@@ -277,7 +286,7 @@ export default async function ProductDetailPage({
           </div>
 
           <div className="flex items-start gap-3 rounded-xl border border-amber-100 bg-amber-50 p-4">
-            <Clock3 className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" />
+            <Clock className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" />
             <div>
               <p className="text-xs font-semibold text-amber-800">Production to delivery time</p>
               <p className="mt-0.5 text-xs text-amber-700">
@@ -294,39 +303,6 @@ export default async function ProductDetailPage({
               Sign in is required to add this product to your cart.
             </div>
           ) : null}
-
-          <form action={addToCart} className="flex flex-wrap gap-3">
-            <input type="hidden" name="productId" value={product.id} />
-            <input type="hidden" name="eventId" value={eventId} />
-            {roles.length > 0 ? (
-              <select
-                name="roleLabel"
-                defaultValue={roles[0]?.label}
-                className="h-10 min-w-[180px] rounded-md border border-input bg-background px-3 text-sm text-foreground"
-              >
-                {roles.map((role) => (
-                  <option key={role.label} value={role.label}>
-                    {role.label} - ${Number(role.price).toFixed(2)}
-                  </option>
-                ))}
-              </select>
-            ) : null}
-            <select
-              name="measurementId"
-              defaultValue=""
-              className="h-10 min-w-[240px] rounded-md border border-input bg-background px-3 text-sm text-foreground"
-            >
-              <option value="">No measurement selected</option>
-              {measurements.map((measurement) => (
-                <option key={measurement.id} value={measurement.id}>
-                  {measurement.label ?? "My Measurements"}
-                </option>
-              ))}
-            </select>
-            <button type="submit" className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90">
-              Add to Cart
-            </button>
-          </form>
 
           {!event ? (
             <div className="rounded-xl border border-border bg-card p-4">
@@ -358,6 +334,32 @@ export default async function ProductDetailPage({
           <div className="rounded-xl border border-border bg-card p-4">
             <p className="text-sm font-semibold">Add measurements</p>
             <p className="mt-1 text-xs text-muted-foreground">Create a measurement profile here, then select it above before adding to cart.</p>
+            {latestMeasurement ? (
+              <div className="mt-4 rounded-xl border border-border bg-background/60 p-4">
+                <div className="mb-3 flex items-center justify-between">
+                  <p className="text-sm font-semibold">Your Measurements</p>
+                  <span className="text-xs text-muted-foreground">{latestMeasurement.label ?? "My Measurements"}</span>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    ["Chest", latestMeasurement.chest],
+                    ["Waist", latestMeasurement.waist],
+                    ["Hips", latestMeasurement.hips],
+                    ["Shoulder", latestMeasurement.shoulderWidth],
+                    ["Arm", latestMeasurement.armLength],
+                    ["Torso", latestMeasurement.torsoLength],
+                  ].map(([label, value]) => (
+                    <div key={label} className="text-xs">
+                      <span className="text-muted-foreground">{label}</span>
+                      <span className="ml-1 font-medium">{value ?? "-"}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+            <div className="mt-4">
+              <MeasurementHelp gender={measurementGender} />
+            </div>
             <form action={createMeasurement} className="mt-4 grid grid-cols-2 gap-3 text-sm">
               <input type="hidden" name="productId" value={product.id} />
               <label className="col-span-2">
@@ -399,7 +401,24 @@ export default async function ProductDetailPage({
             </form>
           </div>
 
-          <MeasurementHelp />
+          <form action={addToCart} className="flex gap-3">
+            <input type="hidden" name="productId" value={product.id} />
+            <input type="hidden" name="eventId" value={eventId} />
+            <input type="hidden" name="roleLabel" value={roles[0]?.label ?? ""} />
+            <select name="measurementId" defaultValue={latestMeasurement?.id ?? ""} className="min-w-0 flex-1 rounded-md border border-input bg-background px-3 text-sm text-foreground">
+              <option value="">No measurement selected</option>
+              {measurements.map((measurement) => (
+                <option key={measurement.id} value={measurement.id}>
+                  {measurement.label ?? "My Measurements"}
+                </option>
+              ))}
+            </select>
+            <button type="submit" className="inline-flex flex-1 items-center justify-center gap-2 rounded-md bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground hover:bg-primary/90">
+              <ShoppingBag className="h-4 w-4" />
+              Add to Cart
+            </button>
+          </form>
+
           <ShareLinks url={`${process.env.NEXTAUTH_URL ?? ""}/product/${product.id}`} title={`Check out ${product.name}`} />
         </div>
       </div>

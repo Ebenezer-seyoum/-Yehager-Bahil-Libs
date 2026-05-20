@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { CheckCircle, Package } from "lucide-react";
+import { CheckCircle, GraduationCap, Package } from "lucide-react";
 import { apiRequest } from "@/lib/api-client";
 import { ensureBackendUserSynced } from "@/lib/backend-user-sync";
+import { LEARN_LANGUAGES_URL } from "@/lib/taxonomy";
 
 type OrderDetails = {
   id: string;
@@ -36,7 +37,7 @@ export default async function OrderConfirmationPage({
       <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
         <CheckCircle className="h-8 w-8 text-green-600" />
       </div>
-      <h1 className="mb-3 font-heading text-3xl font-bold">Order Confirmed!</h1>
+      <h1 className="mb-3 font-heading text-3xl font-bold">{order?.paymentStatus === "awaiting_verification" ? "Order Received!" : "Order Confirmed!"}</h1>
       <p className="mb-2 text-muted-foreground">Thank you for choosing Yehager Bahil Libs.</p>
 
       {order ? (
@@ -46,7 +47,18 @@ export default async function OrderConfirmationPage({
         </p>
       ) : null}
 
-      <div className="mb-8 mt-8 space-y-4 rounded-2xl border border-border bg-card p-6 text-left">
+      {order?.paymentStatus === "awaiting_verification" ? (
+        <div className="mx-auto mb-8 max-w-md rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
+          <p className="mb-1 text-sm font-semibold text-amber-600">Payment Verification In Progress</p>
+          <p className="text-xs leading-relaxed text-amber-700">
+            We have received your bank transfer proof. Our team will verify your payment shortly and tailoring will begin once verified.
+          </p>
+        </div>
+      ) : (
+        <div className="mb-8" />
+      )}
+
+      <div className="mb-8 space-y-4 rounded-2xl border border-border bg-card p-6 text-left">
         <div className="flex items-center gap-3">
           <Package className="h-5 w-5 text-primary" />
           <div>
@@ -57,7 +69,7 @@ export default async function OrderConfirmationPage({
         <div className="space-y-3 text-sm">
           <div className="flex items-center gap-3">
             <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">1</div>
-            <span>Tailoring and embroidery (~30 days)</span>
+            <span>Tailoring & Embroidery (~30 days)</span>
           </div>
           <div className="flex items-center gap-3">
             <div className="flex h-6 w-6 items-center justify-center rounded-full bg-secondary text-xs font-bold text-secondary-foreground">2</div>
@@ -65,7 +77,7 @@ export default async function OrderConfirmationPage({
           </div>
           <div className="flex items-center gap-3">
             <div className="flex h-6 w-6 items-center justify-center rounded-full bg-secondary text-xs font-bold text-secondary-foreground">3</div>
-            <span>Global shipping and tracking</span>
+            <span>Global Shipping & Tracking</span>
           </div>
         </div>
       </div>
@@ -82,6 +94,24 @@ export default async function OrderConfirmationPage({
           Continue Shopping
         </Link>
       </div>
+
+      <a
+        href={LEARN_LANGUAGES_URL}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="mt-8 block rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-700 p-5 text-left text-white shadow-lg shadow-emerald-900/20 transition-all hover:from-emerald-700 hover:to-teal-800"
+      >
+        <div className="flex items-center gap-4">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white/20">
+            <GraduationCap className="h-6 w-6 text-white" />
+          </div>
+          <div className="flex-1">
+            <p className="font-heading text-base font-bold">Interested in learning Ethiopian Languages? Start here</p>
+            <p className="mt-0.5 text-xs text-white/80">Live classes in Amharic, Afan Oromo, Tigrigna & English</p>
+          </div>
+          <span className="text-2xl">-&gt;</span>
+        </div>
+      </a>
     </div>
   );
 }

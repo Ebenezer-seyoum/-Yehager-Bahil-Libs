@@ -8,15 +8,16 @@ import { UserNotRegisteredError } from "@/components/user-not-registered-error";
 export function AuthenticatedGate({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
-  const isPublicRoute = pathname === "/signin" || pathname === "/register" || pathname === "/forgot-password";
+  const protectedPrefixes = ["/cart", "/checkout", "/my-account", "/admin", "/employee"];
+  const isProtectedRoute = protectedPrefixes.some((prefix) => pathname.startsWith(prefix));
 
   useEffect(() => {
-    if (!isPublicRoute && authError?.type === "auth_required") {
+    if (isProtectedRoute && authError?.type === "auth_required") {
       navigateToLogin();
     }
-  }, [authError, isPublicRoute, navigateToLogin]);
+  }, [authError, isProtectedRoute, navigateToLogin]);
 
-  if (isPublicRoute) {
+  if (!isProtectedRoute) {
     return <>{children}</>;
   }
 

@@ -5,12 +5,14 @@ import { ChevronDown, ChevronRight, Menu, ShoppingBag, User, X } from "lucide-re
 import { useEffect, useRef, useState } from "react";
 import { signOut, useSession } from "next-auth/react";
 import { LanguageSwitcher } from "@/components/language-switcher";
+import { CreateGroupOrderModal } from "@/components/create-group-order-modal";
 import { REGIONS, TAXONOMY } from "@/lib/taxonomy";
 
 export function SiteNavbar() {
   const [open, setOpen] = useState(false);
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [openRegion, setOpenRegion] = useState<string | null>(null);
+  const [groupOrderOpen, setGroupOrderOpen] = useState(false);
   const [cartCount, setCartCount] = useState(0);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { data: session } = useSession();
@@ -37,7 +39,7 @@ export function SiteNavbar() {
 
   return (
     <header className="sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur-lg">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+      <div className="w-full px-6 sm:px-8 lg:px-12">
         <div className="flex h-16 items-center justify-between sm:h-20">
           <Link href="/" className="flex items-center">
             <img
@@ -89,9 +91,13 @@ export function SiteNavbar() {
                 </div>
               );
             })}
-            <Link href="/create-family-group" className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90">
+            <button
+              type="button"
+              onClick={() => setGroupOrderOpen(true)}
+              className="inline-flex items-center justify-center rounded-md bg-primary px-3 py-2 text-center text-sm font-medium leading-tight text-primary-foreground transition-colors hover:bg-primary/90"
+            >
               Our Home Cart
-            </Link>
+            </button>
             {isAdmin ? (
               <Link href="/admin" className="rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground">
                 Admin
@@ -126,10 +132,10 @@ export function SiteNavbar() {
               </>
             ) : (
               <div className="hidden items-center gap-2 sm:flex">
-                <Link href="/signin" className="rounded-lg px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground">
+                <Link href="/signin" className="inline-flex items-center justify-center whitespace-nowrap rounded-lg px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground">
                   Sign In
                 </Link>
-                <Link href="/register" className="rounded-lg bg-primary px-4 py-1.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90">
+                <Link href="/register" className="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-1.5 text-center text-sm font-semibold leading-tight text-primary-foreground transition-colors hover:bg-primary/90">
                   Create Account
                 </Link>
               </div>
@@ -192,9 +198,16 @@ export function SiteNavbar() {
               );
             })}
             <div className="my-2 border-t border-border" />
-            <Link href="/create-family-group" onClick={() => setOpen(false)} className="flex h-11 items-center rounded-lg bg-primary px-3 text-sm font-semibold text-primary-foreground hover:bg-primary/90">
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                setGroupOrderOpen(true);
+              }}
+              className="flex h-11 w-full items-center rounded-lg bg-primary px-3 text-left text-sm font-semibold text-primary-foreground hover:bg-primary/90"
+            >
               Our Home Cart
-            </Link>
+            </button>
             {isAuthed ? (
               <Link href="/my-account" onClick={() => setOpen(false)} className="flex h-11 items-center rounded-lg px-3 text-sm font-semibold hover:bg-secondary">
                 My Orders & My Account
@@ -212,6 +225,7 @@ export function SiteNavbar() {
           </nav>
         </div>
       ) : null}
+      {groupOrderOpen ? <CreateGroupOrderModal onClose={() => setGroupOrderOpen(false)} /> : null}
     </header>
   );
 }

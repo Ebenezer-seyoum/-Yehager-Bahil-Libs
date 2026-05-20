@@ -1,10 +1,14 @@
 import Link from "next/link";
+import { ExternalLink, FileCheck, FileText, MapPin, Package, Truck, Users } from "lucide-react";
 import { apiRequest } from "@/lib/api-client";
 import { ensureBackendUserSynced } from "@/lib/backend-user-sync";
 
 type OrderItem = {
   product_name?: string;
+  productName?: string;
   quantity?: number;
+  price?: number;
+  priceUsd?: number;
 };
 
 type Order = {
@@ -43,6 +47,15 @@ const STATUS_STYLES: Record<string, string> = {
   picked_up: "bg-green-200 text-green-900",
 };
 
+const CARRIER_TRACKING: Record<string, { name: string; url: string }> = {
+  DHL: { name: "DHL", url: "https://www.dhl.com/en/express/tracking.html" },
+  UPS: { name: "UPS", url: "https://www.ups.com/track" },
+  "Ethiopian Mail Service": { name: "Ethiopian Postal Service", url: "https://www.ethiopianpostalservice.com" },
+};
+
+const STEP_LABELS_MAIL = ["Received", "Tailoring", "QC", "Shipped", "Delivered"];
+const STEP_LABELS_PICKUP = ["Received", "Tailoring", "QC", "Ready", "Picked Up"];
+
 function getOrderSteps(fulfillmentType?: "mail" | "pickup") {
   return fulfillmentType === "pickup"
     ? ["pending", "tailoring", "quality_check", "ready_for_pickup", "picked_up"]
@@ -76,8 +89,10 @@ export default async function MyOrdersPage({
   if (authRequired) {
     return (
       <div className="mx-auto max-w-xl px-4 py-20 text-center">
-        <h2 className="font-heading mb-2 text-2xl font-bold">Sign in to view your orders</h2>
-        <Link href="/signin" className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90">
+        <Package className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
+        <h2 className="mb-2 font-heading text-2xl font-bold">Sign in first to view your orders</h2>
+        <p className="mb-5 text-sm text-muted-foreground">Your order history, event orders, shipping documents, and tracking details are connected to your account.</p>
+        <Link href="/signin?callbackUrl=/my-orders" className="inline-flex rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90">
           Sign In
         </Link>
       </div>
@@ -86,7 +101,8 @@ export default async function MyOrdersPage({
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 sm:py-12">
-      <h1 className="mb-8 font-heading text-3xl font-bold">My Orders</h1>
+      <h1 className="mb-2 font-heading text-3xl font-bold">My Orders</h1>
+      <p className="mb-8 text-sm text-muted-foreground">Track your orders and event groups in one place.</p>
 
       <div className="mb-8 inline-flex gap-1 rounded-xl bg-secondary p-1">
         <Link
@@ -106,6 +122,7 @@ export default async function MyOrdersPage({
       {tab === "orders" ? (
         orders.length === 0 ? (
           <div className="rounded-2xl border-2 border-dashed border-border py-16 text-center">
+            <Package className="mx-auto mb-3 h-10 w-10 text-muted-foreground" />
             <h3 className="font-heading mb-1 text-lg font-semibold">No orders yet</h3>
             <p className="mb-4 text-sm text-muted-foreground">Browse collections and place your first order.</p>
             <Link href="/catalog" className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90">
@@ -124,21 +141,32 @@ export default async function MyOrdersPage({
                     <div>
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="font-mono text-sm font-bold">{order.orderNumber ?? order.id}</span>
-                        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${statusStyle}`}>{order.status ?? "pending"}</span>
-                        <span className="rounded-full bg-secondary px-2 py-0.5 text-xs font-medium text-secondary-foreground">{order.paymentStatus ?? "unpaid"}</span>
+                        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${statusStyle}`}>{(order.status ?? "pending").replaceAll("_", " ")}</span>
+                        {order.paymentStatus === "paid" ? (
+                          <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800">Paid</span>
+                        ) : (
+                          <span className="rounded-full bg-secondary px-2 py-0.5 text-xs font-medium text-secondary-foreground">{order.paymentStatus ?? "unpaid"}</span>
+                        )}
                       </div>
                       <p className="mt-1 text-sm text-muted-foreground">
-                        {(order.items ?? []).length} item(s) - <span className="font-semibold text-foreground">${Number(order.totalUsd ?? 0).toFixed(2)}</span>
+                        {(order.items ?? []).length} item(s) · <span className="font-semibold text-foreground">${Number(order.totalUsd ?? 0).toFixed(2)}</span>
                       </p>
-                      {order.eventName ? <p className="mt-1 text-xs text-primary">Group: {order.eventName}</p> : null}
+                      {order.eventName ? (
+                        <p className="mt-1 flex items-center gap-1 text-xs text-primary">
+                          <Users className="h-3 w-3" />
+                          Group: {order.eventName}
+                        </p>
+                      ) : null}
                     </div>
                     <p className="whitespace-nowrap text-xs text-muted-foreground">{order.createdAt ? new Date(order.createdAt).toLocaleDateString() : ""}</p>
                   </div>
 
                   <div className="mt-3 space-y-1">
                     {(order.items ?? []).map((item, idx) => (
-                      <p key={`${order.id}-${idx}`} className="text-xs text-muted-foreground">
-                        - {item.product_name ?? "Item"} x{Number(item.quantity ?? 1)}
+                      <p key={`${order.id}-${idx}`} className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
+                        {item.product_name ?? item.productName ?? "Item"}
+                        {Number(item.price ?? item.priceUsd ?? 0) > 0 ? ` — $${Number(item.price ?? item.priceUsd ?? 0).toFixed(2)}` : ` x${Number(item.quantity ?? 1)}`}
                       </p>
                     ))}
                   </div>
@@ -150,33 +178,52 @@ export default async function MyOrdersPage({
                       ))}
                     </div>
                     <div className="flex justify-between text-[10px] text-muted-foreground">
-                      {steps.map((step) => (
-                        <span key={`${order.id}-${step}`}>{step.replaceAll("_", " ")}</span>
+                      {(order.fulfillmentType === "pickup" ? STEP_LABELS_PICKUP : STEP_LABELS_MAIL).map((label) => (
+                        <span key={`${order.id}-${label}`}>{label}</span>
                       ))}
                     </div>
                   </div>
 
-                  <div className="mt-3 border-t border-border pt-3 text-xs text-muted-foreground">
+                  <div className="mt-3 space-y-2 border-t border-border pt-3 text-xs text-muted-foreground">
                     {order.fulfillmentType === "pickup" ? (
                       <div className="space-y-1">
-                        <p>In-Store Pickup: {order.pickupLocation ?? "Location to be confirmed"}</p>
-                        {order.pickupPersonName ? <p>Pickup Person: {order.pickupPersonName} · {order.pickupPersonPhone}</p> : null}
+                        <p className="flex items-center gap-1.5">
+                          <MapPin className="h-3 w-3 text-primary" />
+                          <span className="font-medium text-foreground">In-Store Pickup:</span> {order.pickupLocation ?? "Location to be confirmed"}
+                        </p>
+                        {order.pickupPersonName ? <p>Pickup Person: <strong>{order.pickupPersonName}</strong> · {order.pickupPersonPhone}</p> : null}
+                        <p className="flex items-center gap-1.5 text-amber-600">
+                          <FileCheck className="h-3 w-3" />
+                          Pickup documents appear here once completed.
+                        </p>
                       </div>
                     ) : (
                       <div className="space-y-1">
-                        <p>
-                          {order.carrier ?? "Carrier TBD"}
-                          {order.shippingAddress?.city ? ` -> ${order.shippingAddress.city}, ${order.shippingAddress.country}` : ""}
-                        </p>
-                        {(order.shippingDocuments ?? []).map((doc) => (
-                          <p key={doc.url}>
-                            <a className="text-primary hover:underline" href={doc.url} target="_blank" rel="noreferrer">
-                              {doc.label}
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Truck className="h-3.5 w-3.5 text-primary" />
+                          <span className="font-medium text-foreground">{order.carrier ?? "Carrier TBD"}</span>
+                          {order.shippingAddress?.city ? <span>→ {order.shippingAddress.city}, {order.shippingAddress.country}</span> : null}
+                          {order.carrier && CARRIER_TRACKING[order.carrier] ? (
+                            <a
+                              href={CARRIER_TRACKING[order.carrier].url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 rounded-lg bg-primary px-2.5 py-1 text-[11px] font-medium text-primary-foreground transition-opacity hover:opacity-80"
+                            >
+                              <ExternalLink className="h-3 w-3" />
+                              Track on {CARRIER_TRACKING[order.carrier].name}
                             </a>
-                          </p>
+                          ) : null}
+                        </div>
+                        {(order.shippingDocuments ?? []).map((doc) => (
+                          <a key={doc.url} className="flex items-center gap-1.5 text-blue-400 hover:underline" href={doc.url} target="_blank" rel="noreferrer">
+                            <FileText className="h-3 w-3" />
+                            {doc.label}
+                            {doc.uploadedAt ? <span className="text-muted-foreground">({new Date(doc.uploadedAt).toLocaleDateString()})</span> : null}
+                          </a>
                         ))}
                         {(order.shippingDocuments ?? []).length === 0 && order.status !== "delivered" ? (
-                          <p>Awaiting shipping documents.</p>
+                          <p>⏳ Shipping documents will appear here once dispatched</p>
                         ) : null}
                       </div>
                     )}
@@ -188,6 +235,7 @@ export default async function MyOrdersPage({
         )
       ) : myEvents.length === 0 ? (
         <div className="rounded-2xl border-2 border-dashed border-border py-16 text-center">
+          <Users className="mx-auto mb-3 h-10 w-10 text-muted-foreground" />
           <h3 className="font-heading mb-1 text-lg font-semibold">No events yet</h3>
           <p className="mb-4 text-sm text-muted-foreground">Create your first event group to get started.</p>
           <Link href="/events" className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90">

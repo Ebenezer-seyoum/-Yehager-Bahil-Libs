@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { Home } from "lucide-react";
 import { getProviders, getSession, signIn } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
@@ -22,6 +23,12 @@ const authErrorMessages: Record<string, string> = {
 function getAuthErrorMessage(error: string | null) {
   if (!error) return null;
   return authErrorMessages[error] ?? "Sign-in failed. Please try again.";
+}
+
+function getSafeCallbackUrl(value: string | null) {
+  if (!value || value === "/signin" || value.startsWith("/signin?")) return undefined;
+  if (!value.startsWith("/") || value.startsWith("//")) return undefined;
+  return value;
 }
 
 function GoogleMark() {
@@ -72,7 +79,7 @@ function FeedbackBanner({ feedback }: { feedback: Feedback }) {
 
 function SignInForm() {
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get("callbackUrl") ?? "/";
+  const callbackUrl = getSafeCallbackUrl(searchParams.get("callbackUrl"));
   const initialFeedback = (() => {
     if (searchParams.get("registered") === "1") {
       return {
@@ -139,7 +146,7 @@ function SignInForm() {
       const result = await signIn("credentials", {
         email,
         password,
-        callbackUrl,
+        callbackUrl: callbackUrl ?? "/my-account",
         redirect: false,
       });
 
@@ -182,11 +189,18 @@ function SignInForm() {
     }
 
     setGoogleSubmitting(true);
-    await signIn("google", { callbackUrl });
+    await signIn("google", { callbackUrl: callbackUrl ?? "/my-account" });
   }
 
   return (
     <div className="min-h-screen bg-[#f6f9fc] px-4 py-8 text-[#10182d]">
+      <Link
+        href="/"
+        className="mx-auto mb-6 flex w-fit items-center gap-2 rounded-full border border-[#dce5f0] bg-white px-4 py-2 text-sm font-semibold text-[#34435c] shadow-[0_8px_24px_rgba(15,23,42,0.06)] transition hover:bg-[#f8fbff]"
+      >
+        <Home className="h-4 w-4" />
+        Back to home
+      </Link>
       <div className="mx-auto flex min-h-[calc(100vh-4rem)] max-w-[540px] items-center justify-center">
         <div className="relative flex min-h-[650px] w-full flex-col justify-center rounded-[22px] bg-white px-6 pb-8 pt-20 shadow-[0_22px_60px_rgba(15,23,42,0.08)] sm:min-h-[670px] sm:px-8 sm:pb-9 sm:pt-24">
           <div className="absolute left-1/2 top-0 flex h-20 w-20 -translate-x-1/2 -translate-y-1/2 items-center justify-center overflow-hidden rounded-full border-[6px] border-white bg-white shadow-[0_8px_20px_rgba(15,23,42,0.08)]">

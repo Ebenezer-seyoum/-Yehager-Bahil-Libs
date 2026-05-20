@@ -12,6 +12,7 @@ import {
   ChevronDown,
   ChevronRight,
   ClipboardList,
+  FileText,
   FolderTree,
   LayoutDashboard,
   Menu,
@@ -32,6 +33,7 @@ type NavigationIcon =
   | "products"
   | "sections"
   | "orders"
+  | "documents"
   | "exchange"
   | "alerts"
   | "audit"
@@ -58,6 +60,7 @@ const icons = {
   products: Boxes,
   sections: FolderTree,
   orders: ClipboardList,
+  documents: FileText,
   exchange: ArrowLeftRight,
   alerts: BellRing,
   audit: ScrollText,
@@ -177,7 +180,12 @@ export function DashboardShell({
               <div className={variant === "admin" && group.label === "Users" ? "ml-3 space-y-1 border-l border-sidebar-border pl-3" : "space-y-1"}>
                 {group.items.map((item) => {
                   const Icon = icons[item.icon];
-                  const active = pathname === item.href || (item.href !== "/admin" && item.href !== "/employee" && pathname.startsWith(item.href));
+                  const active =
+                    pathname === item.href ||
+                    (item.href !== "/admin" &&
+                      item.href !== "/employee" &&
+                      pathname.startsWith(`${item.href}/`) &&
+                      !(item.href === "/admin/orders" && pathname.startsWith("/admin/orders/documents")));
                   return (
                     <Link
                       key={`${item.href}-${item.label}`}

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { ArrowLeft, Home } from "lucide-react";
 import { useState } from "react";
 
 type Feedback = {
@@ -133,11 +134,28 @@ export default function RegisterPage() {
 
   return (
     <div className="min-h-screen bg-[#f6f9fc] px-4 py-8 text-[#10182d]">
+      <div className="mx-auto mb-6 flex max-w-[540px] justify-start">
+        <Link
+          href="/"
+          className="inline-flex items-center gap-2 rounded-full border border-[#dce5f0] bg-white px-4 py-2 text-sm font-semibold text-[#34435c] shadow-[0_8px_24px_rgba(15,23,42,0.06)] transition hover:-translate-y-0.5 hover:border-[#b8c8dc] hover:bg-[#f8fbff] hover:text-[#10172d] hover:shadow-[0_14px_30px_rgba(15,23,42,0.1)]"
+        >
+          <Home className="h-4 w-4" />
+          Back to home
+        </Link>
+      </div>
       <div className="mx-auto flex min-h-[calc(100vh-4rem)] max-w-[540px] items-center justify-center">
-        <div className="flex min-h-[520px] w-full flex-col justify-center rounded-[22px] bg-white px-6 py-8 shadow-[0_22px_60px_rgba(15,23,42,0.08)] sm:min-h-[540px] sm:px-8 sm:py-10">
+        <div className="flex min-h-[560px] w-full flex-col justify-center rounded-[22px] bg-white px-6 py-8 shadow-[0_22px_60px_rgba(15,23,42,0.08)] sm:min-h-[580px] sm:px-8 sm:py-10">
           <div className="mx-auto w-full max-w-[440px]">
-            <Link href="/signin" className="inline-flex items-center gap-3 text-base text-[#7184a1] sm:text-lg">
-              <span className="text-2xl leading-none">←</span>
+            <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center overflow-hidden rounded-[22px] border border-[#dce5f0] bg-white p-2 shadow-[0_10px_28px_rgba(15,23,42,0.08)]">
+              <img
+                src="https://media.base44.com/images/public/69cc55fa50bba233144fe99d/5050da81c_YeHagerBahilLibs-03.png"
+                alt="Yehager Bahil Libs"
+                className="h-full w-full rounded-[16px] object-cover"
+              />
+            </div>
+
+            <Link href="/signin" className="inline-flex items-center gap-2 rounded-full px-1 text-sm font-medium text-[#7184a1] transition hover:text-[#10172d] sm:text-base">
+              <ArrowLeft className="h-4 w-4" />
               Back to sign in
             </Link>
 

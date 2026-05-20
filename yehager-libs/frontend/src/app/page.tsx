@@ -9,6 +9,7 @@ type Product = {
   subcategory?: string | null;
   images?: string[] | null;
   priceUsd?: number | null;
+  uniqueId?: string | null;
 };
 
 export default async function HomePage() {
@@ -19,12 +20,24 @@ export default async function HomePage() {
 
   const etbRate = Number(rateRes?.data?.rate ?? 0) || null;
   const products = (Array.isArray(productsRes?.data) ? productsRes.data : []) as Product[];
+  const excluded = new Set(["ORO-ARS-002", "ORO-ARS-003"]);
+  const curatedProducts = products
+    .filter((product) => {
+      if (product.uniqueId && excluded.has(product.uniqueId)) return false;
+      return (
+        (product.region === "Oromo" && product.subcategory === "Wollega") ||
+        (product.region === "Oromo" && product.subcategory === "Arsi") ||
+        product.region === "Mila's Choice"
+      );
+    })
+    .slice(0, 60);
+  const visibleProducts = curatedProducts.length > 0 ? curatedProducts : products;
 
   return (
     <div className="overflow-x-hidden">
-      <section className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 sm:py-24">
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
-          {products.map((product) => (
+      <section className="w-full px-6 py-16 sm:px-8 lg:px-12 sm:py-24">
+        <div className="grid grid-cols-2 gap-6 lg:grid-cols-3">
+          {visibleProducts.map((product) => (
             <ProductCard key={product.id} product={product} etbRate={etbRate} />
           ))}
         </div>

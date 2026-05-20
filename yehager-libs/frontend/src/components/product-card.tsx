@@ -41,9 +41,8 @@ export function ProductCard({ product, eventId, etbRate }: ProductCardProps) {
   const href = eventId ? `/product/${product.id}?event=${encodeURIComponent(eventId)}` : `/product/${product.id}`;
   const image = product.images?.[0] ?? DEFAULT_IMAGE;
   const basePrice = Number(product.priceUsd ?? 0);
-  const rolePrices =
-    product.familyRoles?.map((role) => Number(role.price ?? 0)).filter((price) => price > 0) ??
-    (product.isCouple && product.groomPriceUsd ? [basePrice, Number(product.groomPriceUsd)] : []);
+  const explicitRolePrices = product.familyRoles?.map((role) => Number(role.price ?? 0)).filter((price) => price > 0) ?? [];
+  const rolePrices = explicitRolePrices.length > 0 ? explicitRolePrices : product.isCouple && product.groomPriceUsd ? [basePrice, Number(product.groomPriceUsd)] : [];
   const shareUrl = typeof window === "undefined" ? "" : `${window.location.origin}/product/${product.id}`;
   const minPrice = rolePrices.length ? Math.min(...rolePrices) : basePrice;
   const maxPrice = rolePrices.length ? Math.max(...rolePrices) : basePrice;

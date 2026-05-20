@@ -13,7 +13,7 @@ export function SiteShell({ children }: SiteShellProps) {
     <div className="flex min-h-screen flex-col bg-background">
       <ScrollToTop />
       <SiteNavbar />
-      <div className="mx-auto w-full max-w-7xl px-4 pt-3 sm:px-6 lg:px-8">
+      <div className="w-full px-6 pt-5 sm:px-8 lg:px-12">
         <LearnLanguagesBanner />
       </div>
       <main className="flex-1">{children}</main>

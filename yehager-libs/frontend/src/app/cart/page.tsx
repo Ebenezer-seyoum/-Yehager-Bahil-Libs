@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { apiRequest } from "@/lib/api-client";
 import { ensureBackendUserSynced } from "@/lib/backend-user-sync";
 import { CartItemCard } from "@/components/cart-item-card";
+import { ArrowRight, ShoppingBag } from "lucide-react";
 
 type CartItem = {
   id: string;
@@ -63,6 +63,7 @@ export default async function CartPage({
   if (authRequired) {
     return (
       <div className="mx-auto max-w-2xl px-4 py-20 text-center">
+        <ShoppingBag className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
         <h2 className="font-heading mb-2 text-2xl font-bold">Sign in to view your cart</h2>
         <p className="mb-6 text-muted-foreground">You need to be signed in before adding and checking out garments.</p>
         <Link href="/signin" className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90">
@@ -75,6 +76,7 @@ export default async function CartPage({
   if (items.length === 0) {
     return (
       <div className="mx-auto max-w-2xl px-4 py-20 text-center">
+        <ShoppingBag className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
         <h2 className="font-heading mb-2 text-2xl font-bold">Your cart is empty</h2>
         <p className="mb-6 text-muted-foreground">Start browsing the latest collections to add your first piece.</p>
         <Link href="/catalog" className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90">
@@ -112,8 +114,8 @@ export default async function CartPage({
           <span className="text-2xl font-bold">${total.toFixed(2)}</span>
         </div>
         <p className="mb-4 text-xs text-muted-foreground">Shipping and handling are calculated at checkout.</p>
-        <Link href="/checkout" className="inline-block w-full rounded-md bg-primary px-4 py-2 text-center text-sm font-semibold text-primary-foreground hover:bg-primary/90">
-          Proceed to Checkout
+        <Link href="/checkout" className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-primary px-4 py-3 text-center text-sm font-semibold text-primary-foreground hover:bg-primary/90">
+          Proceed to Checkout <ArrowRight className="h-4 w-4" />
         </Link>
       </div>
     </div>

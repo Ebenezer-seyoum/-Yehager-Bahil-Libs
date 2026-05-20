@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { apiRequest } from "@/lib/api-client";
 import { backendPublicRequest } from "@/lib/backend-public";
 import { ensureBackendUserSynced } from "@/lib/backend-user-sync";
+import { Clock, CreditCard, MapPin, ShieldCheck, Truck } from "lucide-react";
 
 type CartItem = {
   id: string;
@@ -175,10 +176,15 @@ export default async function CheckoutPage({
       ) : null}
 
       <div className="mb-6 rounded-xl border border-amber-100 bg-amber-50 p-4">
-        <p className="text-sm font-semibold text-amber-800">Custom Tailoring Notice</p>
-        <p className="mt-0.5 text-xs text-amber-700">
-          All orders are custom-tailored and require a minimum of one month for production and delivery.
-        </p>
+        <div className="flex items-start gap-3">
+          <Clock className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" />
+          <div>
+            <p className="text-sm font-semibold text-amber-800">Custom Tailoring Notice</p>
+            <p className="mt-0.5 text-xs text-amber-700">
+              All orders require a minimum of one month for custom tailoring and production. We ship via EMS by default; contact us for DHL or UPS arrangements.
+            </p>
+          </div>
+        </div>
       </div>
 
       {event?.name ? (
@@ -210,11 +216,11 @@ export default async function CheckoutPage({
             <div className="grid gap-2 sm:grid-cols-2">
               <label className="flex items-center gap-2 rounded-lg border border-border p-3">
                 <input type="radio" name="fulfillmentType" value="mail" defaultChecked />
-                <span className="text-sm">Mail Delivery</span>
+                <span className="inline-flex items-center gap-1.5 text-sm"><Truck className="h-4 w-4 text-primary" /> Mail Delivery</span>
               </label>
               <label className="flex items-center gap-2 rounded-lg border border-border p-3">
                 <input type="radio" name="fulfillmentType" value="pickup" />
-                <span className="text-sm">In-Store Pickup</span>
+                <span className="inline-flex items-center gap-1.5 text-sm"><MapPin className="h-4 w-4 text-primary" /> In-Store Pickup</span>
               </label>
             </div>
           </div>
@@ -293,7 +299,7 @@ export default async function CheckoutPage({
           <div className="mt-3 space-y-2 text-sm">
             <label className="flex items-center gap-2">
               <input type="radio" name="paymentMethod" value="stripe_usd" defaultChecked />
-              <span>Card (Stripe, USD)</span>
+              <span className="inline-flex items-center gap-1.5"><CreditCard className="h-4 w-4 text-primary" /> Card (Stripe, USD)</span>
             </label>
             <label className="flex items-center gap-2">
               <input type="radio" name="paymentMethod" value="etb_bank_transfer" />
@@ -311,6 +317,10 @@ export default async function CheckoutPage({
           <button type="submit" className="mt-4 w-full rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90">
             Place Order
           </button>
+          <div className="mt-3 flex items-center justify-center gap-2 text-xs text-muted-foreground">
+            <ShieldCheck className="h-4 w-4" />
+            <span>Secure checkout · Encrypted payments · Measurements locked to order</span>
+          </div>
         </div>
       </form>
     </div>
