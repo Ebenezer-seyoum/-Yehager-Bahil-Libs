@@ -1,6 +1,17 @@
 import { NextResponse } from "next/server";
 import { apiRequest } from "@/lib/api-client";
 
+export async function GET(_: Request, { params }: { params: Promise<{ productId: string }> }) {
+  try {
+    const { productId } = await params;
+    const response = await apiRequest(`/api/v1/admin/products/${productId}`);
+    return NextResponse.json(response);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Product lookup failed";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
 export async function PATCH(request: Request, { params }: { params: Promise<{ productId: string }> }) {
   try {
     const { productId } = await params;

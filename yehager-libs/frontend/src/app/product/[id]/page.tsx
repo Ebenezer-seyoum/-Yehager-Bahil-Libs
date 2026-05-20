@@ -267,7 +267,7 @@ export default async function ProductDetailPage({
               </div>
               <div className="rounded-xl bg-secondary p-3">
                 <p className="mb-0.5 text-muted-foreground">Fit type</p>
-                <p className="font-semibold">{product.category?.includes("Men") ? "Men's custom fit" : product.category?.includes("Women") ? "Women's custom fit" : "Custom tailored fit"}</p>
+                <p className="font-semibold">Traditional Cut</p>
               </div>
               <div className="rounded-xl bg-secondary p-3">
                 <p className="mb-0.5 text-muted-foreground">Gender</p>

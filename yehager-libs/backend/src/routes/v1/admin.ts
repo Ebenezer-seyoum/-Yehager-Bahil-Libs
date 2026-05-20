@@ -38,6 +38,7 @@ const resolveAlertSchema = z.object({
 const productParamSchema = z.object({
   productId: z.string().uuid(),
 });
+const productImageSchema = z.union([z.string().url(), z.string().startsWith("/uploads/")]);
 const productPatchSchema = z.object({
   name: z.string().trim().min(1).optional(),
   description: z.string().trim().optional(),
@@ -46,11 +47,12 @@ const productPatchSchema = z.object({
   category: z.string().trim().optional(),
   priceUsd: z.coerce.number().positive().optional(),
   groomPriceUsd: z.coerce.number().positive().nullable().optional(),
+  uniqueId: z.string().trim().min(1).optional(),
   gender: z.enum(["male", "female", "unisex"]).optional(),
   fabricType: z.string().trim().optional(),
   embroideryStyle: z.string().trim().optional(),
   tailoringDays: z.coerce.number().int().positive().optional(),
-  images: z.array(z.string().url()).optional(),
+  images: z.array(productImageSchema).optional(),
   isActive: z.boolean().optional(),
   isFeatured: z.boolean().optional(),
 });
@@ -62,11 +64,12 @@ const createProductSchema = z.object({
   category: z.string().trim().optional(),
   priceUsd: z.coerce.number().positive(),
   groomPriceUsd: z.coerce.number().positive().nullable().optional(),
+  uniqueId: z.string().trim().min(1).optional(),
   gender: z.enum(["male", "female", "unisex"]),
   fabricType: z.string().trim().optional(),
   embroideryStyle: z.string().trim().optional(),
   tailoringDays: z.coerce.number().int().positive().optional(),
-  images: z.array(z.string().url()).default([]),
+  images: z.array(productImageSchema).default([]),
   isActive: z.boolean().optional(),
   isFeatured: z.boolean().optional(),
 });
@@ -465,6 +468,7 @@ adminRouter.post(
         category: body.category,
         priceUsd: body.priceUsd.toFixed(2),
         groomPriceUsd: body.groomPriceUsd == null ? null : body.groomPriceUsd.toFixed(2),
+        uniqueId: body.uniqueId,
         images: body.images,
         fabricType: body.fabricType,
         embroideryStyle: body.embroideryStyle,
@@ -522,6 +526,7 @@ adminRouter.patch(
             : body.groomPriceUsd == null
               ? null
               : body.groomPriceUsd.toFixed(2),
+        uniqueId: body.uniqueId,
         gender: body.gender,
         fabricType: body.fabricType,
         embroideryStyle: body.embroideryStyle,
