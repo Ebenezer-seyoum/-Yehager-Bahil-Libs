@@ -39,6 +39,12 @@ const productParamSchema = z.object({
   productId: z.string().uuid(),
 });
 const productImageSchema = z.union([z.string().url(), z.string().startsWith("/uploads/")]);
+const productFamilyRoleSchema = z.object({
+  label: z.string().trim().min(1).max(80),
+  icon: z.string().trim().max(16).optional(),
+  price: z.coerce.number().positive(),
+  gender: z.enum(["male", "female", "unisex"]),
+});
 const productPatchSchema = z.object({
   name: z.string().trim().min(1).optional(),
   description: z.string().trim().optional(),
@@ -47,6 +53,7 @@ const productPatchSchema = z.object({
   category: z.string().trim().optional(),
   priceUsd: z.coerce.number().positive().optional(),
   groomPriceUsd: z.coerce.number().positive().nullable().optional(),
+  familyRoles: z.array(productFamilyRoleSchema).nullable().optional(),
   uniqueId: z.string().trim().min(1).optional(),
   gender: z.enum(["male", "female", "unisex"]).optional(),
   fabricType: z.string().trim().optional(),
@@ -64,6 +71,7 @@ const createProductSchema = z.object({
   category: z.string().trim().optional(),
   priceUsd: z.coerce.number().positive(),
   groomPriceUsd: z.coerce.number().positive().nullable().optional(),
+  familyRoles: z.array(productFamilyRoleSchema).nullable().optional(),
   uniqueId: z.string().trim().min(1).optional(),
   gender: z.enum(["male", "female", "unisex"]),
   fabricType: z.string().trim().optional(),
@@ -468,6 +476,7 @@ adminRouter.post(
         category: body.category,
         priceUsd: body.priceUsd.toFixed(2),
         groomPriceUsd: body.groomPriceUsd == null ? null : body.groomPriceUsd.toFixed(2),
+        familyRoles: body.familyRoles ?? undefined,
         uniqueId: body.uniqueId,
         images: body.images,
         fabricType: body.fabricType,
@@ -526,6 +535,7 @@ adminRouter.patch(
             : body.groomPriceUsd == null
               ? null
               : body.groomPriceUsd.toFixed(2),
+        familyRoles: body.familyRoles === undefined ? undefined : body.familyRoles,
         uniqueId: body.uniqueId,
         gender: body.gender,
         fabricType: body.fabricType,

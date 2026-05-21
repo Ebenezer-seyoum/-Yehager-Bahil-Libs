@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { Loader2, Users } from "lucide-react";
 import { apiRequest } from "@/lib/api-client";
 import { backendPublicRequest } from "@/lib/backend-public";
 import { ensureBackendUserSynced } from "@/lib/backend-user-sync";
@@ -15,11 +16,14 @@ export default async function CreateFamilyGroupPage({ searchParams }) {
   const eventId = typeof params?.event === "string" ? params.event : "";
   const groupName = typeof params?.groupName === "string" ? params.groupName.trim() : "";
   const eventCode = typeof params?.eventCode === "string" ? params.eventCode.trim().toUpperCase() : "";
+  let eventCodeNotFound = false;
 
   if (!eventId && !groupName) {
     return (
       <div className="mx-auto max-w-xl px-4 py-20 text-center">
-        <p className="text-muted-foreground">Missing group details. Open Our Home Cart to create a group order.</p>
+        <Users className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
+        <h1 className="font-heading text-2xl font-bold">Missing group details</h1>
+        <p className="mt-2 text-muted-foreground">Open Our Home Cart to create a group order.</p>
       </div>
     );
   }
@@ -38,12 +42,8 @@ export default async function CreateFamilyGroupPage({ searchParams }) {
     } else if (eventCode) {
       const event = await findEventByCode(eventCode);
       if (!event?.id) {
-        return (
-          <div className="mx-auto max-w-xl px-4 py-20 text-center">
-            <p className="font-heading text-2xl font-semibold">Event code not found</p>
-            <p className="mt-2 text-sm text-muted-foreground">Please check the code and create the group again.</p>
-          </div>
-        );
+        eventCodeNotFound = true;
+        throw new Error("EVENT_CODE_NOT_FOUND");
       }
       resolvedEventId = event.id;
       resolvedEventName = event.name ?? "Event";
@@ -72,6 +72,14 @@ export default async function CreateFamilyGroupPage({ searchParams }) {
       createdGroupId = groupId;
     }
   } catch {
+    if (eventCodeNotFound) {
+      return (
+        <div className="mx-auto max-w-xl px-4 py-20 text-center">
+          <p className="font-heading text-2xl font-semibold">Event code not found</p>
+          <p className="mt-2 text-sm text-muted-foreground">Please check the code and create the group again.</p>
+        </div>
+      );
+    }
     const callback = eventId
       ? `/create-family-group?event=${encodeURIComponent(eventId)}`
       : `/create-family-group?groupName=${encodeURIComponent(groupName)}${eventCode ? `&eventCode=${encodeURIComponent(eventCode)}` : ""}`;
@@ -84,7 +92,12 @@ export default async function CreateFamilyGroupPage({ searchParams }) {
 
   return (
     <div className="mx-auto max-w-xl px-4 py-20 text-center">
-      <p className="text-muted-foreground">Creating your family group...</p>
+      <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+      <p className="text-xs font-bold uppercase tracking-[0.35em] text-primary">Family Group</p>
+      <h1 className="mt-2 font-heading text-3xl font-bold">Setting up your family group</h1>
+      <p className="mt-2 text-sm text-muted-foreground">We are preparing your household order workspace.</p>
     </div>
   );
 }

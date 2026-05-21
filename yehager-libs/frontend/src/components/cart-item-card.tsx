@@ -1,4 +1,4 @@
-import { Trash2, Users } from "lucide-react";
+import { Minus, Plus, Ruler, Trash2, Users } from "lucide-react";
 
 type CartItemCardProps = {
   item: {
@@ -11,6 +11,10 @@ type CartItemCardProps = {
     measurementSnapshot?: {
       chest?: number | string | null;
       waist?: number | string | null;
+      hips?: number | string | null;
+      shoulderWidth?: number | string | null;
+      armLength?: number | string | null;
+      torsoLength?: number | string | null;
     } | null;
   };
   updateItemQuantity: (formData: FormData) => Promise<void>;
@@ -22,55 +26,67 @@ const DEFAULT_IMAGE = "https://images.unsplash.com/photo-1594938298603-c8148c4da
 export function CartItemCard({ item, updateItemQuantity, removeItem }: CartItemCardProps) {
   const quantity = Number(item.quantity ?? 1);
   const lineTotal = Number(item.priceUsd ?? 0) * quantity;
-  const chest = item.measurementSnapshot?.chest;
-  const waist = item.measurementSnapshot?.waist;
+  const measurements = [
+    ["Chest", item.measurementSnapshot?.chest],
+    ["Waist", item.measurementSnapshot?.waist],
+    ["Hips", item.measurementSnapshot?.hips],
+    ["Shoulder", item.measurementSnapshot?.shoulderWidth],
+    ["Arm", item.measurementSnapshot?.armLength],
+    ["Torso", item.measurementSnapshot?.torsoLength],
+  ].filter(([, value]) => value != null && value !== "");
 
   return (
-    <div className="flex gap-4 rounded-xl border border-border bg-card p-4">
+    <div className="flex gap-4 rounded-xl border border-border bg-card p-4 transition-colors hover:border-primary/35">
       <img
         src={item.productImage || DEFAULT_IMAGE}
         alt={item.productName}
-        className="h-24 w-24 flex-shrink-0 rounded-lg object-cover"
+        className="h-28 w-24 flex-shrink-0 rounded-lg object-cover sm:h-32 sm:w-28"
       />
 
       <div className="min-w-0 flex-1">
-        <h3 className="font-heading text-sm font-semibold">{item.productName}</h3>
-        <p className="mt-1 font-bold text-primary">${Number(item.priceUsd ?? 0).toFixed(2)}</p>
+        <h3 className="font-heading text-lg font-semibold leading-tight">{item.productName}</h3>
+        <p className="mt-1 text-xl font-bold text-primary">${Number(item.priceUsd ?? 0).toFixed(2)}</p>
 
         {item.eventName ? (
-          <div className="mt-2 flex items-center gap-1.5 text-xs text-accent">
+          <div className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">
             <Users className="h-3 w-3" />
             <span>Group: {item.eventName}</span>
           </div>
         ) : null}
 
-        {chest != null || waist != null ? (
-          <p className="mt-1 text-xs text-muted-foreground">
-            Measurements locked:
-            {chest != null ? ` Chest ${chest}"` : ""}
-            {chest != null && waist != null ? " |" : ""}
-            {waist != null ? ` Waist ${waist}"` : ""}
-          </p>
+        {measurements.length > 0 ? (
+          <div className="mt-3 rounded-lg border border-border/70 bg-background/60 p-3">
+            <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+              <Ruler className="h-3.5 w-3.5 text-primary" />
+              Measurements locked
+            </div>
+            <div className="grid grid-cols-2 gap-1 text-xs text-muted-foreground sm:grid-cols-3">
+              {measurements.map(([label, value]) => (
+                <span key={label}>
+                  {label}: <strong className="text-foreground">{value}</strong>
+                </span>
+              ))}
+            </div>
+          </div>
         ) : null}
 
-        <div className="mt-3 flex flex-wrap items-center gap-2">
+        <div className="mt-4 flex flex-wrap items-center gap-2">
           <form action={updateItemQuantity}>
             <input type="hidden" name="itemId" value={item.id} />
             <input type="hidden" name="quantity" value={Math.max(1, quantity - 1)} />
-            <button className="rounded border border-border px-2 py-0.5 text-xs hover:bg-secondary" type="submit">
-              -
+            <button className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border hover:bg-secondary" type="submit" aria-label="Decrease quantity">
+              <Minus className="h-3.5 w-3.5" />
             </button>
           </form>
-          <span className="text-xs text-muted-foreground">Qty {quantity}</span>
+          <span className="inline-flex h-8 min-w-14 items-center justify-center rounded-md bg-secondary px-3 text-xs font-bold">Qty {quantity}</span>
           <form action={updateItemQuantity}>
             <input type="hidden" name="itemId" value={item.id} />
             <input type="hidden" name="quantity" value={quantity + 1} />
-            <button className="rounded border border-border px-2 py-0.5 text-xs hover:bg-secondary" type="submit">
-              +
+            <button className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border hover:bg-secondary" type="submit" aria-label="Increase quantity">
+              <Plus className="h-3.5 w-3.5" />
             </button>
           </form>
-          <span className="text-xs text-muted-foreground">·</span>
-          <span className="text-xs font-medium text-foreground">Line total ${lineTotal.toFixed(2)}</span>
+          <span className="ml-auto text-sm font-bold text-foreground">Line total ${lineTotal.toFixed(2)}</span>
         </div>
       </div>
 

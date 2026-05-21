@@ -16,6 +16,7 @@ type Product = {
   uniqueId?: string | null;
   priceUsd: string | number;
   groomPriceUsd?: string | number | null;
+  familyRoles?: Array<{ label: string; icon?: string; price: number; gender: "male" | "female" | "unisex" }> | null;
   gender: "male" | "female" | "unisex";
   images?: string[];
   fabricType?: string | null;
@@ -76,6 +77,17 @@ function formatCurrency(value: string | number | null | undefined) {
   const amount = Number(value);
   if (!Number.isFinite(amount)) return "$0.00";
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(amount);
+}
+
+function buildFamilyRoles(priceUsd: string | number, groomPriceUsd?: string | number | null) {
+  const womenPrice = Number(priceUsd);
+  if (!Number.isFinite(womenPrice) || womenPrice <= 0) return undefined;
+  const menPrice = Number(groomPriceUsd);
+  return [
+    { label: "Women", icon: "👩", price: womenPrice, gender: "female" as const },
+    { label: "Men", icon: "👨", price: Number.isFinite(menPrice) && menPrice > 0 ? menPrice : Math.max(1, Math.round(womenPrice * 0.57)), gender: "male" as const },
+    { label: "Kids", icon: "👧", price: Math.max(1, Math.round(womenPrice * 0.43)), gender: "unisex" as const },
+  ];
 }
 
 function codePart(value: string | null | undefined, length: number) {
@@ -204,6 +216,7 @@ export function AdminProductManager({ initialProducts }: { initialProducts: Prod
           uniqueId: identity.uniqueId,
           priceUsd: Number(draft.priceUsd),
           groomPriceUsd: draft.groomPriceUsd ? Number(draft.groomPriceUsd) : null,
+          familyRoles: buildFamilyRoles(draft.priceUsd, draft.groomPriceUsd),
           tailoringDays: Number(draft.tailoringDays),
           images: previewImages,
         }),
@@ -348,6 +361,7 @@ export function AdminProductManager({ initialProducts }: { initialProducts: Prod
             description: item.description || draft.description,
             priceUsd: Number(item.priceUsd),
             groomPriceUsd: item.groomPriceUsd ? Number(item.groomPriceUsd) : null,
+            familyRoles: buildFamilyRoles(item.priceUsd, item.groomPriceUsd),
             fabricType: item.fabricType,
             embroideryStyle: item.embroideryStyle,
             tailoringDays: Number(item.tailoringDays || draft.tailoringDays),
@@ -503,6 +517,7 @@ export function AdminProductManager({ initialProducts }: { initialProducts: Prod
           ...draft,
           priceUsd: Number(draft.priceUsd),
           groomPriceUsd: draft.groomPriceUsd ? Number(draft.groomPriceUsd) : null,
+          familyRoles: buildFamilyRoles(draft.priceUsd, draft.groomPriceUsd),
           tailoringDays: Number(draft.tailoringDays),
           images: previewImages,
         }),

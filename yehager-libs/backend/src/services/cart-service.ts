@@ -9,6 +9,26 @@ import { getMeasurementForUser } from "../repositories/measurements-repository.j
 import { getActiveProductById } from "../repositories/products-repository.js";
 import { getUserByEmail } from "../repositories/users-repository.js";
 
+type CartProductRole = { label: string; icon?: string; price: number; gender: "male" | "female" | "unisex" };
+
+function getProductRoles(product: Awaited<ReturnType<typeof getActiveProductById>>): CartProductRole[] {
+  if (!product) return [];
+  if (product.familyRoles?.length) return product.familyRoles;
+
+  const name = `${product.name} ${product.category ?? ""}`.toLowerCase();
+  const price = Number(product.priceUsd);
+  const isFamilyOutfit = name.includes("family") || Boolean(product.groomPriceUsd) || product.isCouple;
+  if (!isFamilyOutfit || !Number.isFinite(price)) return [];
+
+  const menPrice = Number(product.groomPriceUsd ?? 0) > 0 ? Number(product.groomPriceUsd) : Math.max(1, Math.round(price * 0.57));
+  const kidsPrice = Math.max(1, Math.round(price * 0.43));
+  return [
+    { label: "Women", icon: "👩", price, gender: "female" },
+    { label: "Men", icon: "👨", price: menPrice, gender: "male" },
+    { label: "Kids", icon: "👧", price: kidsPrice, gender: "unisex" },
+  ];
+}
+
 export async function getCartForUser(userEmail?: string) {
   if (!userEmail) {
     throw new HTTPException(400, { message: "Authenticated token must include email" });
@@ -40,8 +60,9 @@ export async function addItemToCart(payload: {
   }
 
   const user = await getUserByEmail(payload.userEmail);
+  const availableRoles = getProductRoles(product);
   const selectedRole = payload.roleLabel
-    ? product.familyRoles?.find((role) => role.label === payload.roleLabel)
+    ? availableRoles.find((role) => role.label === payload.roleLabel)
     : undefined;
   if (payload.roleLabel && !selectedRole) {
     throw new HTTPException(400, { message: "Selected product role is not available" });

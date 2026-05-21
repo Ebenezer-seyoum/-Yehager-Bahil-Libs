@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CheckCircle, GraduationCap, Package } from "lucide-react";
+import { CheckCircle, Clock, GraduationCap, Mail, Package, ShieldCheck } from "lucide-react";
 import { apiRequest } from "@/lib/api-client";
 import { ensureBackendUserSynced } from "@/lib/backend-user-sync";
 import { LEARN_LANGUAGES_URL } from "@/lib/taxonomy";
@@ -11,6 +11,9 @@ type OrderDetails = {
   totalEtb?: number | null;
   paymentCurrency?: "USD" | "ETB" | null;
   paymentStatus?: string | null;
+  status?: string | null;
+  fulfillmentType?: string | null;
+  shippingCostUsd?: number | null;
 };
 
 export default async function OrderConfirmationPage({
@@ -33,18 +36,31 @@ export default async function OrderConfirmationPage({
   }
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-16 text-center">
-      <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
-        <CheckCircle className="h-8 w-8 text-green-600" />
+    <div className="mx-auto max-w-3xl px-4 py-12 text-center sm:py-16">
+      <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-green-100 ring-8 ring-green-100/20">
+        <CheckCircle className="h-10 w-10 text-green-600" />
       </div>
-      <h1 className="mb-3 font-heading text-3xl font-bold">{order?.paymentStatus === "awaiting_verification" ? "Order Received!" : "Order Confirmed!"}</h1>
-      <p className="mb-2 text-muted-foreground">Thank you for choosing Yehager Bahil Libs.</p>
+      <p className="mb-2 text-xs font-bold uppercase tracking-[0.35em] text-primary">Yehager Bahil Libs</p>
+      <h1 className="mb-3 font-heading text-4xl font-bold">{order?.paymentStatus === "awaiting_verification" ? "Order Received!" : "Order Confirmed!"}</h1>
+      <p className="mx-auto mb-2 max-w-xl text-muted-foreground">Thank you for choosing Yehager Bahil Libs. Our team is preparing the next step in your custom tailoring journey.</p>
 
       {order ? (
-        <p className="mb-2 text-sm text-muted-foreground">
-          Order <span className="font-mono font-bold text-foreground">{order.orderNumber ?? order.id}</span> -{" "}
-          {order.paymentCurrency === "ETB" && order.totalEtb ? `${Number(order.totalEtb).toLocaleString()} ETB` : `$${Number(order.totalUsd ?? 0).toFixed(2)}`}
-        </p>
+        <div className="mx-auto mb-6 grid max-w-xl gap-3 rounded-2xl border border-border bg-card p-5 text-left sm:grid-cols-3">
+          <div>
+            <p className="text-xs uppercase tracking-wider text-muted-foreground">Order</p>
+            <p className="mt-1 truncate font-mono text-sm font-bold">{order.orderNumber ?? order.id}</p>
+          </div>
+          <div>
+            <p className="text-xs uppercase tracking-wider text-muted-foreground">Total</p>
+            <p className="mt-1 text-sm font-bold text-primary">
+              {order.paymentCurrency === "ETB" && order.totalEtb ? `${Number(order.totalEtb).toLocaleString()} ETB` : `$${Number(order.totalUsd ?? 0).toFixed(2)}`}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs uppercase tracking-wider text-muted-foreground">Fulfillment</p>
+            <p className="mt-1 text-sm font-bold capitalize">{order.fulfillmentType ?? "mail"}</p>
+          </div>
+        </div>
       ) : null}
 
       {order?.paymentStatus === "awaiting_verification" ? (
@@ -58,27 +74,31 @@ export default async function OrderConfirmationPage({
         <div className="mb-8" />
       )}
 
-      <div className="mb-8 space-y-4 rounded-2xl border border-border bg-card p-6 text-left">
+      <div className="mb-8 space-y-5 rounded-2xl border border-border bg-card p-6 text-left">
         <div className="flex items-center gap-3">
-          <Package className="h-5 w-5 text-primary" />
+          <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10">
+            <Package className="h-5 w-5 text-primary" />
+          </span>
           <div>
-            <p className="text-sm font-medium">What&apos;s Next</p>
+            <p className="font-heading text-xl font-bold">What&apos;s Next</p>
             <p className="text-xs text-muted-foreground">Our master tailors are preparing your garment.</p>
           </div>
         </div>
-        <div className="space-y-3 text-sm">
-          <div className="flex items-center gap-3">
-            <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">1</div>
-            <span>Tailoring & Embroidery (~30 days)</span>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="flex h-6 w-6 items-center justify-center rounded-full bg-secondary text-xs font-bold text-secondary-foreground">2</div>
-            <span>Quality inspection</span>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="flex h-6 w-6 items-center justify-center rounded-full bg-secondary text-xs font-bold text-secondary-foreground">3</div>
-            <span>Global Shipping & Tracking</span>
-          </div>
+        <div className="grid gap-3 text-sm sm:grid-cols-3">
+          {[
+            ["1", "Tailoring & Embroidery", "~30 days of handwork", Clock],
+            ["2", "Quality Inspection", "Measurements are checked", ShieldCheck],
+            ["3", "Shipping or Pickup", "Tracking or pickup notice", Mail],
+          ].map(([step, title, desc, Icon]) => (
+            <div key={String(step)} className="rounded-xl border border-border bg-background/50 p-4">
+              <div className="mb-3 flex items-center justify-between">
+                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">{step as string}</div>
+                <Icon className="h-4 w-4 text-primary" />
+              </div>
+              <p className="font-bold">{title as string}</p>
+              <p className="mt-1 text-xs text-muted-foreground">{desc as string}</p>
+            </div>
+          ))}
         </div>
       </div>
 

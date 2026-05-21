@@ -5,9 +5,8 @@ import { apiRequest } from "@/lib/api-client";
 import { backendPublicRequest } from "@/lib/backend-public";
 import { ensureBackendUserSynced } from "@/lib/backend-user-sync";
 import { ProductDetailGallery } from "@/components/product-detail-gallery";
-import { ShareLinks } from "@/components/share-links";
-import { MeasurementHelp } from "@/components/measurement-help";
-import { ChevronRight, Clock, ShoppingBag, Users } from "lucide-react";
+import { ProductPurchasePanel } from "@/components/product-purchase-panel";
+import { ChevronRight, Users } from "lucide-react";
 
 type Product = {
   id: string;
@@ -43,6 +42,22 @@ type Event = {
   name: string;
   ownerName?: string | null;
 };
+
+function buildStorefrontRoles(product: Product, price: number) {
+  if (product.familyRoles && product.familyRoles.length > 0) return product.familyRoles;
+
+  const name = `${product.name} ${product.category ?? ""}`.toLowerCase();
+  const isFamilyOutfit = name.includes("family") || Boolean(product.groomPriceUsd) || product.isCouple;
+  if (!isFamilyOutfit) return [];
+
+  const menPrice = Number(product.groomPriceUsd ?? 0) > 0 ? Number(product.groomPriceUsd) : Math.max(1, Math.round(price * 0.57));
+  const kidsPrice = Math.max(1, Math.round(price * 0.43));
+  return [
+    { label: "Women", icon: "👩", price, gender: "female" as const },
+    { label: "Men", icon: "👨", price: menPrice, gender: "male" as const },
+    { label: "Kids", icon: "👧", price: kidsPrice, gender: "unisex" as const },
+  ];
+}
 
 export default async function ProductDetailPage({
   params,
@@ -167,18 +182,7 @@ export default async function ProductDetailPage({
 
   const images = Array.isArray(product.images) && product.images.length > 0 ? product.images : [];
   const price = Number(product.priceUsd ?? 0);
-  const roles =
-    product.familyRoles && product.familyRoles.length > 0
-      ? product.familyRoles
-      : product.isCouple && product.groomPriceUsd
-        ? [
-            { label: "Bride", price, gender: "female" as const },
-            { label: "Groom", price: Number(product.groomPriceUsd), gender: "male" as const },
-          ]
-        : [];
-  const selectedRole = roles[0] ?? null;
-  const displayPrice = Number(selectedRole?.price ?? price);
-  const measurementGender = selectedRole?.gender ?? product.gender ?? "female";
+  const roles = buildStorefrontRoles(product, price);
   const latestMeasurement = measurements[0] ?? null;
 
   return (
@@ -221,206 +225,21 @@ export default async function ProductDetailPage({
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-2 lg:gap-16 xl:gap-24">
         <ProductDetailGallery images={images} alt={product.name} />
 
-        <div className="space-y-6">
-          <div className="flex flex-wrap items-center gap-2">
-            {product.region ? <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">{product.region}</span> : null}
-            {product.subcategory ? <span className="rounded-full bg-secondary px-3 py-1 text-xs text-secondary-foreground">{product.subcategory}</span> : null}
-            {product.uniqueId ? <span className="rounded-full bg-secondary px-3 py-1 font-mono text-xs text-muted-foreground">#{product.uniqueId}</span> : null}
-          </div>
-
-          <div>
-            <h1 className="font-heading text-3xl font-bold leading-tight sm:text-4xl">{product.name}</h1>
-            <div className="mt-3">
-              <p className="text-3xl font-light text-primary">${displayPrice.toFixed(2)}</p>
-              {etbRate ? <p className="mt-0.5 text-sm text-muted-foreground">~ {(displayPrice * etbRate).toLocaleString()} ETB</p> : null}
-            </div>
-          </div>
-
-          {roles.length > 0 ? (
-            <div>
-              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Select outfit</h3>
-              <div className={`grid gap-2 ${roles.length >= 4 ? "grid-cols-2 sm:grid-cols-4" : roles.length === 3 ? "grid-cols-3" : "grid-cols-2"}`}>
-                {roles.map((role, index) => (
-                  <label key={role.label} className="cursor-pointer">
-                    <input className="peer sr-only" type="radio" name="roleChoicePreview" defaultChecked={index === 0} />
-                    <span className="block rounded-xl border-2 border-border bg-secondary p-3 text-left transition-colors peer-checked:border-primary peer-checked:bg-primary/10">
-                      <span className="block text-sm font-semibold">{role.icon ? `${role.icon} ` : "👤 "}{role.label}</span>
-                      <span className="mt-0.5 block text-xs text-muted-foreground">${Number(role.price).toFixed(2)}</span>
-                    </span>
-                  </label>
-                ))}
-              </div>
-            </div>
-          ) : null}
-
-          {product.description ? <p className="text-sm leading-relaxed text-muted-foreground">{product.description}</p> : null}
-
-          <div className="space-y-2">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Garment details</h3>
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              {product.fabricType ? (
-                <div className="rounded-xl bg-secondary p-3">
-                  <p className="mb-0.5 text-muted-foreground">Fabric</p>
-                  <p className="font-semibold">{product.fabricType}</p>
-                </div>
-              ) : null}
-              {product.embroideryStyle ? (
-                <div className="rounded-xl bg-secondary p-3">
-                  <p className="mb-0.5 text-muted-foreground">Design name</p>
-                  <p className="font-semibold">{product.embroideryStyle}</p>
-                </div>
-              ) : null}
-              <div className="rounded-xl bg-secondary p-3">
-                <p className="mb-0.5 text-muted-foreground">Origin</p>
-                <p className="font-semibold">Handcrafted in Ethiopia</p>
-              </div>
-              <div className="rounded-xl bg-secondary p-3">
-                <p className="mb-0.5 text-muted-foreground">Fit type</p>
-                <p className="font-semibold">Traditional Cut</p>
-              </div>
-              <div className="rounded-xl bg-secondary p-3">
-                <p className="mb-0.5 text-muted-foreground">Gender</p>
-                <p className="font-semibold">{product.gender ?? "—"}</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex items-start gap-3 rounded-xl border border-amber-100 bg-amber-50 p-4">
-            <Clock className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" />
-            <div>
-              <p className="text-xs font-semibold text-amber-800">Production to delivery time</p>
-              <p className="mt-0.5 text-xs text-amber-700">
-                Each piece is made to order and typically ships after tailoring and quality review.{" "}
-                <Link href="/care-and-info" className="underline hover:text-amber-900">
-                  Learn more
-                </Link>
-              </p>
-            </div>
-          </div>
-
-          {authRequired ? (
-            <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
-              Sign in is required to add this product to your cart.
-            </div>
-          ) : null}
-
-          {!event ? (
-            <div className="rounded-xl border border-border bg-card p-4">
-              <p className="text-sm font-semibold">Create an event from this outfit</p>
-              <p className="mt-1 text-xs text-muted-foreground">Start a wedding, baptism, or celebration group around this look.</p>
-              <form action={createEventFromProduct} className="mt-3 flex flex-col gap-2 sm:flex-row">
-                <input type="hidden" name="productId" value={product.id} />
-                <input type="hidden" name="productName" value={product.name} />
-                <input name="eventName" required placeholder="Event name" className="h-10 flex-1 rounded-md border border-input bg-background px-3 text-sm" />
-                <button type="submit" className="rounded-md border border-border px-4 py-2 text-sm hover:bg-secondary">
-                  Create Event
-                </button>
-              </form>
-            </div>
-          ) : (
-            <div className="rounded-xl border border-border bg-card p-4">
-              <p className="text-sm font-semibold">Continue event flow</p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <Link href={`/event/${event.id}`} className="rounded-md border border-border px-3 py-1.5 text-xs hover:bg-secondary">
-                  View Event Dashboard
-                </Link>
-                <Link href={`/join/${event.id}`} className="rounded-md border border-border px-3 py-1.5 text-xs hover:bg-secondary">
-                  Invite Participants
-                </Link>
-              </div>
-            </div>
-          )}
-
-          <div className="rounded-xl border border-border bg-card p-4">
-            <p className="text-sm font-semibold">Add measurements</p>
-            <p className="mt-1 text-xs text-muted-foreground">Create a measurement profile here, then select it above before adding to cart.</p>
-            {latestMeasurement ? (
-              <div className="mt-4 rounded-xl border border-border bg-background/60 p-4">
-                <div className="mb-3 flex items-center justify-between">
-                  <p className="text-sm font-semibold">Your Measurements</p>
-                  <span className="text-xs text-muted-foreground">{latestMeasurement.label ?? "My Measurements"}</span>
-                </div>
-                <div className="grid grid-cols-3 gap-2">
-                  {[
-                    ["Chest", latestMeasurement.chest],
-                    ["Waist", latestMeasurement.waist],
-                    ["Hips", latestMeasurement.hips],
-                    ["Shoulder", latestMeasurement.shoulderWidth],
-                    ["Arm", latestMeasurement.armLength],
-                    ["Torso", latestMeasurement.torsoLength],
-                  ].map(([label, value]) => (
-                    <div key={label} className="text-xs">
-                      <span className="text-muted-foreground">{label}</span>
-                      <span className="ml-1 font-medium">{value ?? "-"}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-            <div className="mt-4">
-              <MeasurementHelp gender={measurementGender} />
-            </div>
-            <form action={createMeasurement} className="mt-4 grid grid-cols-2 gap-3 text-sm">
-              <input type="hidden" name="productId" value={product.id} />
-              <label className="col-span-2">
-                <span className="mb-1 block text-muted-foreground">Label</span>
-                <input name="label" defaultValue="My Measurements" className="h-10 w-full rounded-md border border-input bg-background px-3" />
-              </label>
-              <label className="col-span-2">
-                <span className="mb-1 block text-muted-foreground">Gender</span>
-                <select name="gender" defaultValue="female" className="h-10 w-full rounded-md border border-input bg-background px-3">
-                  <option value="female">female</option>
-                  <option value="male">male</option>
-                  <option value="unisex">unisex</option>
-                </select>
-              </label>
-              {[
-                ["chest", "Chest"],
-                ["waist", "Waist"],
-                ["hips", "Hips"],
-                ["shoulderWidth", "Shoulder Width"],
-                ["armLength", "Arm Length"],
-                ["torsoLength", "Torso Length"],
-                ["inseam", "Inseam (optional)"],
-                ["neck", "Neck (optional)"],
-              ].map(([name, label]) => (
-                <label key={name}>
-                  <span className="mb-1 block text-muted-foreground">{label}</span>
-                  <input
-                    name={name}
-                    type="number"
-                    step="0.01"
-                    required={!["inseam", "neck"].includes(name)}
-                    className="h-10 w-full rounded-md border border-input bg-background px-3"
-                  />
-                </label>
-              ))}
-              <button type="submit" className="col-span-2 rounded-md bg-secondary px-4 py-2 text-sm font-medium text-secondary-foreground hover:bg-secondary/80">
-                Save Measurement
-              </button>
-            </form>
-          </div>
-
-          <form action={addToCart} className="flex gap-3">
-            <input type="hidden" name="productId" value={product.id} />
-            <input type="hidden" name="eventId" value={eventId} />
-            <input type="hidden" name="roleLabel" value={roles[0]?.label ?? ""} />
-            <select name="measurementId" defaultValue={latestMeasurement?.id ?? ""} className="min-w-0 flex-1 rounded-md border border-input bg-background px-3 text-sm text-foreground">
-              <option value="">No measurement selected</option>
-              {measurements.map((measurement) => (
-                <option key={measurement.id} value={measurement.id}>
-                  {measurement.label ?? "My Measurements"}
-                </option>
-              ))}
-            </select>
-            <button type="submit" className="inline-flex flex-1 items-center justify-center gap-2 rounded-md bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground hover:bg-primary/90">
-              <ShoppingBag className="h-4 w-4" />
-              Add to Cart
-            </button>
-          </form>
-
-          <ShareLinks url={`${process.env.NEXTAUTH_URL ?? ""}/product/${product.id}`} title={`Check out ${product.name}`} />
-        </div>
+        <ProductPurchasePanel
+          product={product}
+          roles={roles}
+          price={price}
+          etbRate={etbRate}
+          measurements={measurements}
+          latestMeasurement={latestMeasurement}
+          eventId={eventId}
+          event={event}
+          authRequired={authRequired}
+          shareUrl={`${process.env.NEXTAUTH_URL ?? ""}/product/${product.id}`}
+          addToCartAction={addToCart}
+          createMeasurementAction={createMeasurement}
+          createEventAction={createEventFromProduct}
+        />
       </div>
     </div>
   );

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { ComponentType, PropsWithChildren } from "react";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth/next";
@@ -18,6 +19,9 @@ type Event = {
 };
 
 const EVENT_TYPES = ["Wedding", "Baptism", "Graduation", "Holiday", "Birthday", "Other"];
+const EventDialogContent = DialogContent as ComponentType<PropsWithChildren<{ className?: string }>>;
+const EventDialogHeader = DialogHeader as ComponentType<PropsWithChildren<{ className?: string }>>;
+const EventDialogTitle = DialogTitle as ComponentType<PropsWithChildren<{ className?: string }>>;
 
 export default async function EventsPage() {
   async function createEvent(formData: FormData) {
@@ -82,10 +86,10 @@ export default async function EventsPage() {
                 Create Event
               </button>
             </DialogTrigger>
-            <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
-              <DialogHeader>
-                <DialogTitle className="font-heading text-2xl">Create Event Group</DialogTitle>
-              </DialogHeader>
+            <EventDialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+              <EventDialogHeader>
+                <EventDialogTitle className="font-heading text-2xl">Create Event Group</EventDialogTitle>
+              </EventDialogHeader>
               <form action={createEvent} className="mt-2 space-y-4">
                 <div>
                   <label className="text-xs font-medium text-muted-foreground">Event Name *</label>
@@ -122,7 +126,7 @@ export default async function EventsPage() {
                   Create Event & Get Share Links
                 </button>
               </form>
-            </DialogContent>
+            </EventDialogContent>
           </Dialog>
         )}
       </div>
