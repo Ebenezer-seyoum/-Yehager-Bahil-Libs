@@ -15,23 +15,12 @@ type Product = {
 export default async function HomePage() {
   const [rateRes, productsRes] = await Promise.all([
     backendPublicRequest("/api/v1/exchange-rate").catch(() => ({ data: null })),
-    backendPublicRequest("/api/v1/products?limit=60").catch(() => ({ data: [] })),
+    backendPublicRequest("/api/v1/products?limit=200").catch(() => ({ data: [] })),
   ]);
 
   const etbRate = Number(rateRes?.data?.rate ?? 0) || null;
   const products = (Array.isArray(productsRes?.data) ? productsRes.data : []) as Product[];
-  const excluded = new Set(["ORO-ARS-002", "ORO-ARS-003"]);
-  const curatedProducts = products
-    .filter((product) => {
-      if (product.uniqueId && excluded.has(product.uniqueId)) return false;
-      return (
-        (product.region === "Oromo" && product.subcategory === "Wollega") ||
-        (product.region === "Oromo" && product.subcategory === "Arsi") ||
-        product.region === "Mila's Choice"
-      );
-    })
-    .slice(0, 60);
-  const visibleProducts = curatedProducts.length > 0 ? curatedProducts : products;
+  const visibleProducts = products;
 
   return (
     <div className="overflow-x-hidden">
