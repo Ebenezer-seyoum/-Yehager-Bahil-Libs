@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { BookOpen, ChevronDown, Clock, Mail, Pencil, Play, Ruler, ShoppingBag, Users, X } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ShareLinks } from "@/components/share-links";
 import { MeasurementVideoModal } from "@/components/measurement-help";
 
@@ -45,9 +45,20 @@ type ProductPurchasePanelProps = {
   authRequired: boolean;
   shareUrl: string;
   addToCartAction: (formData: FormData) => void | Promise<void>;
-  createMeasurementAction: (formData: FormData) => void | Promise<void>;
+  createMeasurementAction: (formData: FormData) => Promise<{
+    id: string;
+    label?: string | null;
+    chest?: number | null;
+    waist?: number | null;
+    hips?: number | null;
+    shoulderWidth?: number | null;
+    armLength?: number | null;
+    torsoLength?: number | null;
+  } | null | void>;
   createEventAction: (formData: FormData) => void | Promise<void>;
 };
+
+type SavedMeasurement = NonNullable<ProductPurchasePanelProps["latestMeasurement"]>;
 
 function formatGender(value?: string | null) {
   if (value === "male") return "Male";
@@ -170,6 +181,8 @@ export function ProductPurchasePanel({
   const [selectedRoleIndex, setSelectedRoleIndex] = useState(0);
   const [eventOpen, setEventOpen] = useState(false);
   const [showVideo, setShowVideo] = useState(false);
+  const [isMeasurementEditorOpen, setIsMeasurementEditorOpen] = useState(!latestMeasurement?.id);
+  const [savedMeasurement, setSavedMeasurement] = useState<SavedMeasurement | null>(latestMeasurement);
   const [hemStyle, setHemStyle] = useState("Straight");
   const [pressingStyle, setPressingStyle] = useState("Creased");
   const [tailorNote, setTailorNote] = useState("");
@@ -179,6 +192,22 @@ export function ProductPurchasePanel({
   const measurementGender = selectedRole?.gender ?? product.gender ?? "female";
   const etb = etbRate ? Math.round(displayPrice * etbRate).toLocaleString() : null;
   const signinHref = `/signin?callbackUrl=${encodeURIComponent(`/product/${product.id}`)}`;
+  const hasMeasurement = Boolean(savedMeasurement?.id);
+  const measurementSummary = [
+    ["Chest", savedMeasurement?.chest],
+    ["Waist", savedMeasurement?.waist],
+    ["Hips", savedMeasurement?.hips],
+    ["Shoulder", savedMeasurement?.shoulderWidth],
+    ["Arm", savedMeasurement?.armLength],
+    ["Torso", savedMeasurement?.torsoLength],
+  ] as const;
+
+  useEffect(() => {
+    if (latestMeasurement?.id) {
+      setSavedMeasurement(latestMeasurement);
+      setIsMeasurementEditorOpen(false);
+    }
+  }, [latestMeasurement]);
 
   const detailItems = useMemo(
     () =>
@@ -263,31 +292,294 @@ export function ProductPurchasePanel({
         </div>
       ) : null}
 
-      <section className="rounded-xl border border-border bg-card p-6">
-        <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <Ruler className="h-5 w-5 text-primary" />
-            <h2 className="font-heading text-xl font-bold">Your Measurements</h2>
+      {/* Measurement editor / summary: render in the same place so summary replaces the form when collapsed */}
+      {(hasMeasurement || isMeasurementEditorOpen) ? (
+        <section className="rounded-xl border border-border bg-card p-6">
+          <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <Ruler className="h-5 w-5 text-primary" />
+              <h2 className="font-heading text-xl font-bold">Your Measurements</h2>
+            </div>
+            <div className="flex items-center gap-4">
+              <a href="#measurement-form" className="inline-flex items-center gap-1.5 text-sm font-semibold text-primary hover:underline">
+                <BookOpen className="h-4 w-4" />
+                How to Measure
+              </a>
+              <button type="button" onClick={() => setShowVideo(true)} className="inline-flex items-center gap-1.5 text-sm font-semibold text-muted-foreground hover:text-primary hover:underline">
+                <Play className="h-4 w-4" />
+                Watch Tutorial
+              </button>
+            </div>
           </div>
-          <div className="flex items-center gap-4">
-            <a href="#measurement-form" className="inline-flex items-center gap-1.5 text-sm font-semibold text-primary hover:underline">
-              <BookOpen className="h-4 w-4" />
-              How to Measure
-            </a>
-            <button type="button" onClick={() => setShowVideo(true)} className="inline-flex items-center gap-1.5 text-sm font-semibold text-muted-foreground hover:text-primary hover:underline">
-              <Play className="h-4 w-4" />
-              Watch Tutorial
-            </button>
+
+          {hasMeasurement && !isMeasurementEditorOpen ? (
+            <div className="rounded-2xl border border-white/10 bg-[#1a1a1a] p-5 shadow-[0_10px_30px_rgba(0,0,0,0.35)]">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-zinc-400">Your Measurements</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsMeasurementEditorOpen(true)}
+                  className="inline-flex items-center rounded-md px-0 py-0 text-sm font-semibold text-[#f5a623] hover:text-[#ffb84d]"
+                >
+                  Edit
+                </button>
+              </div>
+              <div className="mt-4 grid grid-cols-2 gap-x-8 gap-y-4 text-sm sm:grid-cols-3">
+                {measurementSummary.map(([label, value]) => (
+                  <div key={label}>
+                    <p className="text-[13px] text-zinc-400">{label}</p>
+                    <p className="mt-1 text-[14px] font-semibold text-white">{value ? `${Number(value).toFixed(1)} cm` : "-"}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="mb-6 rounded-lg border border-primary/30 bg-primary/10 p-4">
+                <p className="font-bold text-primary">Please measure in centimeters (cm) only.</p>
+                <p className="mt-1 text-sm text-muted-foreground">Do not use inches - all values must be entered in CM to ensure a perfect fit.</p>
+              </div>
+
+              <form
+                id="measurement-form"
+                action={async (formData) => {
+                  const result = await createMeasurementAction(formData);
+                  if (result && typeof result === "object" && "id" in result) {
+                    setSavedMeasurement(result as SavedMeasurement);
+                    setIsMeasurementEditorOpen(false);
+                  }
+                }}
+                className="mt-6 space-y-6"
+              >
+                <input type="hidden" name="productId" value={product.id} />
+                <input type="hidden" name="measurementId" value={savedMeasurement?.id ?? ""} />
+                <input type="hidden" name="label" value={`${product.name} measurements`} />
+
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-muted-foreground">
+                    Select Gender <span className="text-primary">*</span>
+                  </label>
+                  <div className="grid grid-cols-2 gap-3">
+                    {[
+                      ["female", "👗 Women"],
+                      ["male", "👔 Men"],
+                    ].map(([value, label]) => (
+                      <label key={value} className="cursor-pointer">
+                        <input className="peer sr-only" type="radio" name="gender" value={value} defaultChecked={(measurementGender === "male" ? "male" : "female") === value} />
+                        <span className="flex h-16 items-center justify-center rounded-xl border-2 border-border text-xl font-bold text-muted-foreground transition peer-checked:border-primary peer-checked:bg-primary/10 peer-checked:text-primary">
+                          {label}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-border bg-background/40 p-5">
+                  <h3 className="text-xl font-bold text-primary">👗 Dress Measurements</h3>
+                  <p className="mt-1 text-sm text-muted-foreground">Measurements used to tailor your dress or top garment</p>
+                  <div className="my-5 h-px bg-primary/40" />
+                  <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2">
+                    <MeasurementInput name="shoulderWidth" label="Shoulder" hint="Seam to seam across the top of the shoulder" defaultValue={savedMeasurement?.shoulderWidth} />
+                    <MeasurementInput name="chest" label="Chest / Bust" hint="Around the fullest part of the bust" defaultValue={savedMeasurement?.chest} />
+                    <MeasurementInput name="waist" label="Waist" hint="Around the natural waistline" defaultValue={savedMeasurement?.waist} />
+                    <MeasurementInput name="torsoLength" label="Shoulder to Waist" hint="From shoulder down to natural waist" defaultValue={savedMeasurement?.torsoLength} />
+                    <MeasurementInput name="hips" label="Hip" hint="Around the fullest part of the hips, usually 7-9 inches below the waist" defaultValue={savedMeasurement?.hips} />
+                    <MeasurementInput name="armLength" label="Arm Length" hint="From shoulder seam to wrist with arm slightly bent" defaultValue={savedMeasurement?.armLength} />
+                    <MeasurementInput label="Thigh Circumference" hint="Around the fullest part of the upper thigh" required={false} />
+                    <MeasurementInput label="Wrist Circumference" hint="Around the wrist bone" required={false} />
+                  </div>
+                  <p className="mt-4 text-sm font-semibold text-muted-foreground">
+                    Length Preference <span className="font-normal italic">(choose one or both - optional)</span>
+                  </p>
+                  <div className="mt-3 grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2">
+                    <MeasurementInput label="Waist to Skirt Length" hint="From waist down to where you want the skirt hemline to end" required={false} />
+                    <MeasurementInput label="Waist to Dress Length" hint="From waist down to where you want the full dress to end" required={false} />
+                  </div>
+                  <p className="mt-3 text-sm italic text-muted-foreground">
+                    💡 Waist to Skirt Length - for garments ending at the skirt/hem. Waist to Dress Length - for the full dress from waist to hem.
+                  </p>
+                </div>
+
+                <details className="rounded-xl border border-border bg-background/40 p-5">
+                  <summary className="flex cursor-pointer list-none items-center justify-between text-xl font-bold">
+                    <span className="text-lg">👖 Add Women&apos;s Pants Measurements</span>
+                    <ChevronDown className="h-5 w-5" />
+                  </summary>
+                  <div className="mt-4 rounded-xl border border-border bg-background/40 p-5">
+                    <h3 className="text-xl font-bold text-primary">👖 Women&apos;s Pants Measurements</h3>
+                    <p className="mt-1 text-sm text-muted-foreground">Required if you are also ordering pants / trousers</p>
+                    <div className="my-5 h-px bg-primary/40" />
+                    <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2">
+                      <ExtraMeasurementInput label="Waist" hint="Around the narrowest part of your natural waist" />
+                      <ExtraMeasurementInput label="Hip" hint="Around the fullest part of the hips, usually 7-9 inches below the waist" />
+                      <ExtraMeasurementInput label="Thigh Circumference" hint="Around the fullest part of the upper thigh" />
+                      <ExtraMeasurementInput label="Waist to Length" hint="From waist down to where you want the pants to end" />
+                    </div>
+
+                    <input type="hidden" name="hemStyle" value={hemStyle} />
+                    <input type="hidden" name="pressingStyle" value={pressingStyle} />
+
+                    <p className="mt-6 text-sm font-semibold text-muted-foreground">
+                      Hem Style <span className="text-primary">*</span>
+                    </p>
+                    <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <ChoiceCard
+                        title="Straight"
+                        description="Clean, simple finish - the fabric lies flat at the bottom without any fold. A classic, neat look."
+                        selected={hemStyle === "Straight"}
+                        onClick={() => setHemStyle("Straight")}
+                      />
+                      <ChoiceCard
+                        title="Folded Hem"
+                        description="The bottom edge is folded inward and stitched - creates a structured, slightly heavier finish that holds its shape."
+                        selected={hemStyle === "Folded Hem"}
+                        onClick={() => setHemStyle("Folded Hem")}
+                      />
+                    </div>
+
+                    <p className="mt-6 text-sm font-semibold text-muted-foreground">
+                      Pressing (Iron) Style <span className="text-primary">*</span>
+                    </p>
+                    <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <ChoiceCard
+                        title="Creased"
+                        description="A sharp, pressed crease runs down the front and back of each leg - gives a formal, tailored appearance."
+                        selected={pressingStyle === "Creased"}
+                        onClick={() => setPressingStyle("Creased")}
+                      />
+                      <ChoiceCard
+                        title="Plain (No Crease)"
+                        description="The fabric is ironed smooth without any crease line - a relaxed, casual, and modern finish."
+                        selected={pressingStyle === "Plain (No Crease)"}
+                        onClick={() => setPressingStyle("Plain (No Crease)")}
+                      />
+                    </div>
+                  </div>
+                </details>
+
+                <div className="overflow-hidden rounded-xl border border-primary/30 bg-primary/5">
+                  <div className="flex gap-4 border-b border-primary/30 p-5">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/20">
+                      <Mail className="h-4 w-4 text-primary" />
+                    </span>
+                    <div>
+                      <h3 className="text-base font-bold sm:text-lg">A Message to Our Tailors</h3>
+                      <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+                        Is there anything specific you&apos;d like our tailors to know? Share fit preferences, design details, or special instructions.
+                      </p>
+                    </div>
+                  </div>
+                  {tailorNoteSkipped ? (
+                    <div className="space-y-5 p-5">
+                      <p className="text-sm italic text-muted-foreground">No note added.</p>
+                      <button
+                        type="button"
+                        onClick={() => setTailorNoteSkipped(false)}
+                        className="inline-flex items-center gap-2 text-sm font-semibold text-primary hover:underline"
+                      >
+                        <Pencil className="h-4 w-4" />
+                        Add a note to our tailors
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-4 p-5">
+                      <div className="rounded-lg border border-border bg-black p-4 text-blue-200">
+                        <p className="text-sm">Examples:</p>
+                        <ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-relaxed">
+                          <li>&quot;I prefer a slightly relaxed fit in the shoulders&quot;</li>
+                          <li>&quot;Please add a chest pocket on the left side&quot;</li>
+                          <li>&quot;The collar should be slightly wider than standard&quot;</li>
+                        </ul>
+                      </div>
+                      <textarea
+                        name="tailorNote"
+                        maxLength={300}
+                        rows={4}
+                        value={tailorNote}
+                        onChange={(event) => setTailorNote(event.target.value)}
+                        placeholder="Type your note here..."
+                        className="w-full resize-none rounded-lg border border-input bg-black p-4 text-sm outline-none transition focus:border-primary"
+                      />
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-xs text-muted-foreground">{tailorNote.length} / 300 characters</p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setTailorNote("");
+                            setTailorNoteSkipped(true);
+                          }}
+                          className="rounded-lg bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
+                        >
+                          Skip
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {isAuthenticated ? (
+                  <button type="submit" className="h-14 w-full rounded-lg bg-primary px-5 text-base font-bold text-primary-foreground transition-colors hover:bg-primary/90">
+                    {hasMeasurement ? "Update Measurements" : "Save Measurements"}
+                  </button>
+                ) : (
+                  <button type="button" disabled className="h-14 w-full cursor-not-allowed rounded-lg bg-primary px-5 text-base font-bold text-primary-foreground opacity-45">
+                    Sign in to save measurements
+                  </button>
+                )}
+              </form>
+              {hasMeasurement ? (
+                <button
+                  type="button"
+                  onClick={() => setIsMeasurementEditorOpen(false)}
+                  className="mt-4 inline-flex items-center justify-center rounded-md border border-border px-4 py-2 text-sm font-semibold text-muted-foreground hover:bg-secondary"
+                >
+                  Close
+                </button>
+              ) : null}
+            </>
+          )}
+        </section>
+      ) : null}
+
+      {isMeasurementEditorOpen ? (
+        <section className="rounded-xl border border-border bg-card p-6">
+          <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <Ruler className="h-5 w-5 text-primary" />
+              <h2 className="font-heading text-xl font-bold">Your Measurements</h2>
+            </div>
+            <div className="flex items-center gap-4">
+              <a href="#measurement-form" className="inline-flex items-center gap-1.5 text-sm font-semibold text-primary hover:underline">
+                <BookOpen className="h-4 w-4" />
+                How to Measure
+              </a>
+              <button type="button" onClick={() => setShowVideo(true)} className="inline-flex items-center gap-1.5 text-sm font-semibold text-muted-foreground hover:text-primary hover:underline">
+                <Play className="h-4 w-4" />
+                Watch Tutorial
+              </button>
+            </div>
           </div>
-        </div>
 
         <div className="mb-6 rounded-lg border border-primary/30 bg-primary/10 p-4">
           <p className="font-bold text-primary">Please measure in centimeters (cm) only.</p>
           <p className="mt-1 text-sm text-muted-foreground">Do not use inches - all values must be entered in CM to ensure a perfect fit.</p>
         </div>
 
-        <form id="measurement-form" action={createMeasurementAction} className="mt-6 space-y-6">
+        <form
+          id="measurement-form"
+          action={async (formData) => {
+            const result = await createMeasurementAction(formData);
+            if (result && typeof result === "object" && "id" in result) {
+              setSavedMeasurement(result as SavedMeasurement);
+              setIsMeasurementEditorOpen(false);
+            }
+          }}
+          className="mt-6 space-y-6"
+        >
           <input type="hidden" name="productId" value={product.id} />
+          <input type="hidden" name="measurementId" value={savedMeasurement?.id ?? ""} />
           <input type="hidden" name="label" value={`${product.name} measurements`} />
 
           <div>
@@ -314,12 +606,12 @@ export function ProductPurchasePanel({
             <p className="mt-1 text-sm text-muted-foreground">Measurements used to tailor your dress or top garment</p>
             <div className="my-5 h-px bg-primary/40" />
             <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2">
-              <MeasurementInput name="shoulderWidth" label="Shoulder" hint="Seam to seam across the top of the shoulder" defaultValue={latestMeasurement?.shoulderWidth} />
-              <MeasurementInput name="chest" label="Chest / Bust" hint="Around the fullest part of the bust" defaultValue={latestMeasurement?.chest} />
-              <MeasurementInput name="waist" label="Waist" hint="Around the natural waistline" defaultValue={latestMeasurement?.waist} />
-              <MeasurementInput name="torsoLength" label="Shoulder to Waist" hint="From shoulder down to natural waist" defaultValue={latestMeasurement?.torsoLength} />
-              <MeasurementInput name="hips" label="Hip" hint="Around the fullest part of the hips, usually 7-9 inches below the waist" defaultValue={latestMeasurement?.hips} />
-              <MeasurementInput name="armLength" label="Arm Length" hint="From shoulder seam to wrist with arm slightly bent" defaultValue={latestMeasurement?.armLength} />
+              <MeasurementInput name="shoulderWidth" label="Shoulder" hint="Seam to seam across the top of the shoulder" defaultValue={savedMeasurement?.shoulderWidth} />
+              <MeasurementInput name="chest" label="Chest / Bust" hint="Around the fullest part of the bust" defaultValue={savedMeasurement?.chest} />
+              <MeasurementInput name="waist" label="Waist" hint="Around the natural waistline" defaultValue={savedMeasurement?.waist} />
+              <MeasurementInput name="torsoLength" label="Shoulder to Waist" hint="From shoulder down to natural waist" defaultValue={savedMeasurement?.torsoLength} />
+              <MeasurementInput name="hips" label="Hip" hint="Around the fullest part of the hips, usually 7-9 inches below the waist" defaultValue={savedMeasurement?.hips} />
+              <MeasurementInput name="armLength" label="Arm Length" hint="From shoulder seam to wrist with arm slightly bent" defaultValue={savedMeasurement?.armLength} />
               <MeasurementInput label="Thigh Circumference" hint="Around the fullest part of the upper thigh" required={false} />
               <MeasurementInput label="Wrist Circumference" hint="Around the wrist bone" required={false} />
             </div>
@@ -452,15 +744,27 @@ export function ProductPurchasePanel({
             )}
           </div>
 
-          <button
-            type="submit"
-            disabled={!isAuthenticated}
-            className="h-14 w-full rounded-lg bg-primary px-5 text-base font-bold text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-45"
-          >
-            Save Measurements
-          </button>
+          {isAuthenticated ? (
+            <button type="submit" className="h-14 w-full rounded-lg bg-primary px-5 text-base font-bold text-primary-foreground transition-colors hover:bg-primary/90">
+              {hasMeasurement ? "Update Measurements" : "Save Measurements"}
+            </button>
+          ) : (
+            <button type="button" disabled className="h-14 w-full cursor-not-allowed rounded-lg bg-primary px-5 text-base font-bold text-primary-foreground opacity-45">
+              Sign in to save measurements
+            </button>
+          )}
         </form>
+        {hasMeasurement ? (
+          <button
+            type="button"
+            onClick={() => setIsMeasurementEditorOpen(false)}
+            className="mt-4 inline-flex items-center justify-center rounded-md border border-border px-4 py-2 text-sm font-semibold text-muted-foreground hover:bg-secondary"
+          >
+            Close
+          </button>
+        ) : null}
       </section>
+      ) : null}
 
       <div className="flex flex-col gap-3 sm:flex-row">
         {isAuthenticated ? (

@@ -5,10 +5,11 @@ import { authOptions } from "@/auth-options";
 import { apiRequest } from "@/lib/api-client";
 import { AdminOrdersTable } from "@/components/admin-orders-table";
 
-export default async function AdminOrdersPage() {
+export default async function AdminOrdersPage({ searchParams }) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) redirect("/signin?callbackUrl=/admin/orders");
   if (session.user.role !== "admin") redirect("/");
+  const selectedOrderId = typeof searchParams?.order === "string" ? searchParams.order : null;
 
   let orders = [];
   try {
@@ -82,7 +83,7 @@ export default async function AdminOrdersPage() {
           );
         })}
       </div>
-      <AdminOrdersTable initialOrders={orders} />
+      <AdminOrdersTable initialOrders={orders} initialSelectedOrderId={selectedOrderId} />
     </div>
   );
 }

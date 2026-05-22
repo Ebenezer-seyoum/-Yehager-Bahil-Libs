@@ -25,7 +25,6 @@ export const adminNavigation = [
       { href: "/admin/payments", label: "Payments", icon: "payments", permission: "orders.view" },
       { href: "/admin/orders/documents", label: "Order Documents", icon: "documents", permission: "orders.view" },
       { href: "/admin/exchange-rate", label: "Exchange Rate", icon: "exchange", permission: "exchange_rates.view" },
-      { href: "/admin/alerts", label: "Alerts", icon: "alerts", permission: "alerts.view" },
     ],
   },
   {

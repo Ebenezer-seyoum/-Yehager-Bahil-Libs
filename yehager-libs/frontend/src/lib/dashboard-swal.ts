@@ -41,6 +41,7 @@ export async function dashboardConfirm({
   cancelButtonText = "No, cancel",
   tone = "danger",
   icon = "warning",
+  variant = "default",
 }: {
   title: string;
   text: string;
@@ -48,7 +49,9 @@ export async function dashboardConfirm({
   cancelButtonText?: string;
   tone?: ConfirmTone;
   icon?: SweetAlertIcon;
+  variant?: "default" | "payment";
 }) {
+  const isPayment = variant === "payment";
   const result = await Swal.fire(
     dashboardSwalOptions({
       title,
@@ -59,6 +62,11 @@ export async function dashboardConfirm({
       cancelButtonText,
       reverseButtons: true,
       customClass: {
+        popup: isPayment ? "payment-swal-popup" : "dashboard-swal-popup",
+        icon: isPayment ? "dashboard-swal-icon dashboard-swal-icon-warning" : "dashboard-swal-icon",
+        title: isPayment ? "payment-swal-title" : "dashboard-swal-title",
+        htmlContainer: isPayment ? "payment-swal-text" : "dashboard-swal-text",
+        actions: isPayment ? "payment-swal-popup swal2-actions" : "dashboard-swal-actions",
         confirmButton: confirmClass(tone),
         cancelButton: "dashboard-swal-cancel",
       },

@@ -119,7 +119,7 @@ export function DashboardShell({
   const visibleOrderCount = activeOrderIds.length > 0
     ? activeOrderIds.filter((id) => !viewedOrderIds.includes(id)).length
     : Math.max((counts.orders ?? 0) - viewedOrderIds.length, 0);
-  const totalNotifications = visibleOrderCount + (counts.payments ?? 0) + (counts.alerts ?? 0);
+  const totalNotifications = visibleOrderCount + (counts.payments ?? 0);
   const badgeForHref = (href: string) => {
     if (variant !== "admin") return 0;
     if (href === "/admin/orders") return visibleOrderCount;
@@ -358,7 +358,6 @@ export function DashboardShell({
                   {[
                     { href: "/admin/payments", label: "Payments awaiting verification", value: counts.payments ?? 0 },
                     { href: "/admin/orders", label: "New or active orders to review", value: visibleOrderCount },
-                    { href: "/admin/alerts", label: "Unresolved system alerts", value: counts.alerts ?? 0 },
                   ].map((item) => (
                     <Link
                       key={item.href}

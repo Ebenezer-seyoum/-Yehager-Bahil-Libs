@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { ChevronDown, ChevronRight, Menu, ShoppingBag, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { useSession } from "next-auth/react";
+import { signOut, useSession } from "next-auth/react";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { CreateGroupOrderModal } from "@/components/create-group-order-modal";
 import { REGIONS, TAXONOMY } from "@/lib/taxonomy";
@@ -109,12 +109,29 @@ export function SiteNavbar() {
               ) : null}
             </Link>
             <div className="hidden items-center gap-2 sm:flex">
-              <Link href="/signin" className="inline-flex items-center justify-center whitespace-nowrap rounded-lg px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground">
-                Sign In
-              </Link>
-              <Link href="/register" className="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-1.5 text-center text-sm font-semibold leading-tight text-primary-foreground transition-colors hover:bg-primary/90">
-                Create Account
-              </Link>
+              {isAuthed ? (
+                <>
+                  <Link href="/my-account" className="inline-flex items-center justify-center whitespace-nowrap rounded-lg px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground">
+                    Account
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => signOut({ callbackUrl: "/" })}
+                    className="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-1.5 text-center text-sm font-semibold leading-tight text-primary-foreground transition-colors hover:bg-primary/90"
+                  >
+                    Sign Out
+                  </button>
+                </>
+              ) : (
+                <>
+                  <Link href="/signin" className="inline-flex items-center justify-center whitespace-nowrap rounded-lg px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground">
+                    Sign In
+                  </Link>
+                  <Link href="/register" className="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-1.5 text-center text-sm font-semibold leading-tight text-primary-foreground transition-colors hover:bg-primary/90">
+                    Create Account
+                  </Link>
+                </>
+              )}
             </div>
             <button type="button" onClick={() => setOpen((value) => !value)} className="rounded-md p-2 hover:bg-secondary lg:hidden">
               {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
@@ -184,12 +201,32 @@ export function SiteNavbar() {
             >
               Our Home Cart
             </button>
-            <Link href="/signin" onClick={() => setOpen(false)} className="flex h-11 items-center rounded-lg px-3 text-sm font-semibold hover:bg-secondary">
-              Sign In
-            </Link>
-            <Link href="/register" onClick={() => setOpen(false)} className="flex h-11 items-center rounded-lg px-3 text-sm font-semibold hover:bg-secondary">
-              Create Account
-            </Link>
+            {isAuthed ? (
+              <>
+                <Link href="/my-account" onClick={() => setOpen(false)} className="flex h-11 items-center rounded-lg px-3 text-sm font-semibold hover:bg-secondary">
+                  Account
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpen(false);
+                    signOut({ callbackUrl: "/" });
+                  }}
+                  className="flex h-11 w-full items-center rounded-lg px-3 text-left text-sm font-semibold hover:bg-secondary"
+                >
+                  Sign Out
+                </button>
+              </>
+            ) : (
+              <>
+                <Link href="/signin" onClick={() => setOpen(false)} className="flex h-11 items-center rounded-lg px-3 text-sm font-semibold hover:bg-secondary">
+                  Sign In
+                </Link>
+                <Link href="/register" onClick={() => setOpen(false)} className="flex h-11 items-center rounded-lg px-3 text-sm font-semibold hover:bg-secondary">
+                  Create Account
+                </Link>
+              </>
+            )}
           </nav>
         </div>
       ) : null}

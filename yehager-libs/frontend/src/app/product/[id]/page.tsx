@@ -69,6 +69,10 @@ function cmToInches(value: FormDataEntryValue | null) {
   return Math.round((num / 2.54) * 10) / 10;
 }
 
+function isAuthApiError(error: unknown) {
+  return error instanceof Error && /API error (401|403):/i.test(error.message);
+}
+
 export default async function ProductDetailPage({
   params,
   searchParams,
@@ -110,29 +114,33 @@ export default async function ProductDetailPage({
     "use server";
     const productId = String(formData.get("productId") ?? "");
     await ensureBackendUserSynced();
-    let ok = false;
+    const measurementId = String(formData.get("measurementId") ?? "").trim();
+    const body = {
+      label: String(formData.get("label") ?? "My Measurements"),
+      gender: String(formData.get("gender") ?? "female"),
+      chest: cmToInches(formData.get("chest")),
+      waist: cmToInches(formData.get("waist")),
+      hips: cmToInches(formData.get("hips")),
+      shoulderWidth: cmToInches(formData.get("shoulderWidth")),
+      armLength: cmToInches(formData.get("armLength")),
+      torsoLength: cmToInches(formData.get("torsoLength")),
+      inseam: cmToInches(formData.get("inseam")),
+      neck: cmToInches(formData.get("neck")),
+    };
     try {
-      await apiRequest("/api/v1/measurements", {
-        method: "POST",
-        body: {
-          label: String(formData.get("label") ?? "My Measurements"),
-          gender: String(formData.get("gender") ?? "female"),
-          chest: cmToInches(formData.get("chest")),
-          waist: cmToInches(formData.get("waist")),
-          hips: cmToInches(formData.get("hips")),
-          shoulderWidth: cmToInches(formData.get("shoulderWidth")),
-          armLength: cmToInches(formData.get("armLength")),
-          torsoLength: cmToInches(formData.get("torsoLength")),
-          inseam: cmToInches(formData.get("inseam")),
-          neck: cmToInches(formData.get("neck")),
-        },
+      const response = await apiRequest<{ data: Measurement }>(measurementId ? `/api/v1/measurements/${measurementId}` : "/api/v1/measurements", {
+        method: measurementId ? "PATCH" : "POST",
+        body,
       });
-      ok = true;
-    } catch {}
-
-    if (!ok) signinRedirect(`/product/${productId}?auth=required`);
-    revalidatePath(`/product/${productId}`);
-    redirect(`/product/${productId}`);
+      revalidatePath(`/product/${productId}`);
+      return response.data;
+    } catch (error) {
+      if (isAuthApiError(error)) {
+        signinRedirect(`/product/${productId}?auth=required`);
+      }
+      return;
+    }
+    return null;
   }
 
   async function createEventFromProduct(formData: FormData) {

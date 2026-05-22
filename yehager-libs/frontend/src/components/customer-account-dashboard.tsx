@@ -429,6 +429,17 @@ function MeasurementsPanel({
   updateMeasurement: ServerAction;
   deleteMeasurement: ServerAction;
 }) {
+  const fields = [
+    { key: "chest", label: "Chest", optional: false },
+    { key: "waist", label: "Waist", optional: false },
+    { key: "hips", label: "Hips", optional: false },
+    { key: "shoulderWidth", label: "Shoulder Width", optional: false },
+    { key: "armLength", label: "Arm Length", optional: false },
+    { key: "torsoLength", label: "Torso Length", optional: false },
+    { key: "inseam", label: "Inseam", optional: true },
+    { key: "neck", label: "Neck", optional: true },
+  ] as const;
+
   return (
     <div className="grid gap-6 lg:grid-cols-2">
       <div className="rounded-2xl border border-border bg-card p-5">
@@ -436,10 +447,10 @@ function MeasurementsPanel({
         <form action={createMeasurement} className="mt-4 grid grid-cols-2 gap-3 text-sm">
           <label className="col-span-2"><span className="mb-1 block text-muted-foreground">Label</span><input name="label" defaultValue="My Measurements" className="h-10 w-full rounded-md border border-input bg-background px-3" /></label>
           <label className="col-span-2"><span className="mb-1 block text-muted-foreground">Gender</span><select name="gender" defaultValue="female" className="h-10 w-full rounded-md border border-input bg-background px-3"><option value="female">female</option><option value="male">male</option><option value="unisex">unisex</option></select></label>
-          {["chest", "waist", "hips", "shoulderWidth", "armLength", "torsoLength", "inseam", "neck"].map((name) => (
-            <label key={name}>
-              <span className="mb-1 block text-muted-foreground">{name}</span>
-              <input name={name} type="number" step="0.01" required={!["inseam", "neck"].includes(name)} className="h-10 w-full rounded-md border border-input bg-background px-3" />
+          {fields.map((field) => (
+            <label key={field.key}>
+              <span className="mb-1 block text-muted-foreground">{field.label}</span>
+              <input name={field.key} type="number" step="0.01" required={!field.optional} className="h-10 w-full rounded-md border border-input bg-background px-3" />
             </label>
           ))}
           <button type="submit" className="col-span-2 mt-1 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground">Save Measurement</button>
@@ -453,11 +464,24 @@ function MeasurementsPanel({
           ) : (
             measurements.map((m) => (
               <div key={m.id} className="rounded-lg border border-border p-3">
-                <form action={updateMeasurement} className="space-y-2">
+                <form action={updateMeasurement} className="grid grid-cols-2 gap-2 text-sm">
                   <input type="hidden" name="measurementId" value={m.id} />
-                  <label className="block text-sm"><span className="mb-1 block text-muted-foreground">Label</span><input name="label" defaultValue={m.label ?? "My Measurements"} className="h-9 w-full rounded-md border border-input bg-background px-3" /></label>
-                  <label className="block text-sm"><span className="mb-1 block text-muted-foreground">Gender</span><select name="gender" defaultValue={m.gender ?? "female"} className="h-9 w-full rounded-md border border-input bg-background px-3"><option value="female">female</option><option value="male">male</option><option value="unisex">unisex</option></select></label>
-                  <button type="submit" className="rounded-md bg-secondary px-3 py-1.5 text-xs font-medium text-secondary-foreground">Update</button>
+                  <label className="col-span-2 block text-sm"><span className="mb-1 block text-muted-foreground">Label</span><input name="label" defaultValue={m.label ?? "My Measurements"} className="h-9 w-full rounded-md border border-input bg-background px-3" /></label>
+                  <label className="col-span-2 block text-sm"><span className="mb-1 block text-muted-foreground">Gender</span><select name="gender" defaultValue={m.gender ?? "female"} className="h-9 w-full rounded-md border border-input bg-background px-3"><option value="female">female</option><option value="male">male</option><option value="unisex">unisex</option></select></label>
+                  {fields.map((field) => (
+                    <label key={field.key} className="block text-sm">
+                      <span className="mb-1 block text-muted-foreground">{field.label}</span>
+                      <input
+                        name={field.key}
+                        type="number"
+                        step="0.01"
+                        defaultValue={m[field.key] ?? ""}
+                        required={!field.optional}
+                        className="h-9 w-full rounded-md border border-input bg-background px-3"
+                      />
+                    </label>
+                  ))}
+                  <button type="submit" className="col-span-2 rounded-md bg-secondary px-3 py-1.5 text-xs font-medium text-secondary-foreground">Update</button>
                 </form>
                 <form action={deleteMeasurement} className="mt-2">
                   <input type="hidden" name="measurementId" value={m.id} />

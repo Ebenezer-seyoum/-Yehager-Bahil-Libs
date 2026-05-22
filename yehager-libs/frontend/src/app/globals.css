@@ -346,6 +346,43 @@
     font-weight: 600 !important;
   }
 
+  /* Payment swal specifics to match delete-user dialog layout */
+  .payment-swal-popup {
+    width: 448px !important;
+  }
+
+  .payment-swal-popup .swal2-icon {
+    width: 4.5rem !important;
+    height: 4.5rem !important;
+    margin-bottom: 1rem !important;
+  }
+
+  .payment-swal-title {
+    color: #171717 !important;
+    font-size: 1.5rem !important;
+    font-weight: 700 !important;
+  }
+
+  .payment-swal-text {
+    color: hsl(var(--muted-foreground)) !important;
+    font-size: 0.95rem !important;
+    margin-top: 0.5rem !important;
+  }
+
+  .payment-swal-popup .swal2-actions {
+    display: flex !important;
+    justify-content: center !important;
+    gap: 0.75rem !important;
+  }
+
+  .payment-swal-popup .dashboard-swal-cancel,
+  .payment-swal-popup .dashboard-swal-confirm {
+    min-width: 140px !important;
+    padding: 0.75rem 1.25rem !important;
+    border-radius: 0.75rem !important;
+    font-weight: 700 !important;
+  }
+
   .dashboard-swal-cancel {
     background: #ffffff !important;
     border: 1px solid hsl(var(--border)) !important;

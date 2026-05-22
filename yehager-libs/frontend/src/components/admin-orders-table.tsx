@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   CheckCircle2,
   ClipboardCheck,
@@ -136,17 +136,52 @@ function measurementRows(item: OrderItem) {
   return Object.entries(measurements).filter(([, value]) => value !== null && value !== undefined && value !== "");
 }
 
-export function AdminOrdersTable({ initialOrders }: { initialOrders: Order[] }) {
+function needsAttention(order: Order) {
+  return order.status === "pending" || order.paymentStatus === "awaiting_verification";
+}
+
+export function AdminOrdersTable({ initialOrders, initialSelectedOrderId }: { initialOrders: Order[]; initialSelectedOrderId?: string | null }) {
   const [orders, setOrders] = useState(initialOrders);
   const [search, setSearch] = useState("");
   const [fulfillmentFilter, setFulfillmentFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [paymentFilter, setPaymentFilter] = useState("all");
-  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(initialSelectedOrderId ?? null);
+  const [viewedOrderIdsLocal, setViewedOrderIdsLocal] = useState<string[]>([]);
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const selectedOrder = orders.find((order) => order.id === selectedOrderId) ?? null;
+
+  useEffect(() => {
+    if (initialSelectedOrderId) {
+      setSelectedOrderId(initialSelectedOrderId);
+    }
+  }, [initialSelectedOrderId]);
+
+  useEffect(() => {
+    const key = "admin-viewed-order-notifications";
+    const read = () => {
+      try {
+        const raw = window.localStorage.getItem(key);
+        setViewedOrderIdsLocal(raw ? JSON.parse(raw) : []);
+      } catch {
+        setViewedOrderIdsLocal([]);
+      }
+    };
+    const onViewed = (event: Event) => {
+      const id = (event as CustomEvent<string>).detail;
+      if (!id) return;
+      setViewedOrderIdsLocal((current) => {
+        const next = Array.from(new Set([...current, id]));
+        try { window.localStorage.setItem(key, JSON.stringify(next)); } catch {}
+        return next;
+      });
+    };
+    read();
+    window.addEventListener("admin-order-viewed", onViewed);
+    return () => window.removeEventListener("admin-order-viewed", onViewed);
+  }, []);
 
   function openOrder(orderId: string) {
     setSelectedOrderId(orderId);
@@ -249,11 +284,20 @@ export function AdminOrdersTable({ initialOrders }: { initialOrders: Order[] }) 
                   const items = order.items ?? [];
                   const firstItem = items[0];
                   const isPickup = order.fulfillmentType === "pickup";
+                  const isViewed = viewedOrderIdsLocal.includes(order.id);
+                  const highlightRow = needsAttention(order) && !isViewed;
+                  const isSelected = selectedOrderId === order.id;
                   return (
-                    <tr key={order.id} className="border-t border-border transition hover:bg-secondary/30">
+                    <tr
+                      key={order.id}
+                      className={`border-t border-border transition hover:bg-secondary/30 ${highlightRow ? "bg-red-950/25 ring-2 ring-inset ring-red-800/35 shadow-[inset_0_0_0_1px_rgba(127,29,29,0.35)]" : ""} ${isSelected ? "bg-primary/5 ring-1 ring-inset ring-primary/25" : ""}`}
+                    >
                       <td className="px-4 py-5 align-middle">
                         <button type="button" onClick={() => openOrder(order.id)} className="text-left">
-                          <p className="max-w-[120px] break-words font-mono text-xs font-black text-foreground">{shortOrderNumber(order.orderNumber ?? order.id)}</p>
+                          <div className="flex items-center gap-2">
+                            {highlightRow ? <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-red-700 shadow-[0_0_0_0_rgba(127,29,29,0.9)] animate-pulse" /> : null}
+                            <p className="max-w-[120px] break-words font-mono text-xs font-black text-foreground">{shortOrderNumber(order.orderNumber ?? order.id)}</p>
+                          </div>
                           <p className="mt-1 text-xs text-muted-foreground">{order.createdAt ? new Date(order.createdAt).toLocaleDateString() : "-"}</p>
                         </button>
                       </td>

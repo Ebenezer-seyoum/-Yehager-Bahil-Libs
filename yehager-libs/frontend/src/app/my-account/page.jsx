@@ -12,23 +12,27 @@ function toOptionalNumber(value) {
   return Number.isFinite(n) ? n : undefined;
 }
 
+function buildMeasurementBody(formData) {
+  return {
+    label: String(formData.get("label") ?? "My Measurements"),
+    gender: String(formData.get("gender") ?? "female"),
+    chest: Number(formData.get("chest")),
+    waist: Number(formData.get("waist")),
+    hips: Number(formData.get("hips")),
+    shoulderWidth: Number(formData.get("shoulderWidth")),
+    armLength: Number(formData.get("armLength")),
+    torsoLength: Number(formData.get("torsoLength")),
+    inseam: toOptionalNumber(formData.get("inseam")),
+    neck: toOptionalNumber(formData.get("neck")),
+  };
+}
+
 export default async function MyAccountPage() {
   async function createMeasurement(formData) {
     "use server";
     await ensureBackendUserSynced();
 
-    const body = {
-      label: String(formData.get("label") ?? "My Measurements"),
-      gender: String(formData.get("gender") ?? "female"),
-      chest: Number(formData.get("chest")),
-      waist: Number(formData.get("waist")),
-      hips: Number(formData.get("hips")),
-      shoulderWidth: Number(formData.get("shoulderWidth")),
-      armLength: Number(formData.get("armLength")),
-      torsoLength: Number(formData.get("torsoLength")),
-      inseam: toOptionalNumber(formData.get("inseam")),
-      neck: toOptionalNumber(formData.get("neck")),
-    };
+    const body = buildMeasurementBody(formData);
 
     await apiRequest("/api/v1/measurements", {
       method: "POST",
@@ -44,10 +48,7 @@ export default async function MyAccountPage() {
     const measurementId = String(formData.get("measurementId") ?? "");
     if (!measurementId) return;
 
-    const body = {
-      label: String(formData.get("label") ?? "My Measurements"),
-      gender: String(formData.get("gender") ?? "female"),
-    };
+    const body = buildMeasurementBody(formData);
 
     await apiRequest(`/api/v1/measurements/${measurementId}`, {
       method: "PATCH",
