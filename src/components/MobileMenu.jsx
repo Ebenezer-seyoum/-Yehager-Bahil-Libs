@@ -8,7 +8,7 @@ import LanguageSwitcher from "./LanguageSwitcher";
 // Sub-subcategory grouping within each region's subs
 const CATEGORY_SUBS = ["Bride & Groom", "Kids", "Apparels"];
 
-export default function MobileMenu({ taxonomy, regions, onClose, onGroupOrder, user }) {
+export default function MobileMenu({ taxonomy, regions, onClose, onGroupOrder }) {
   const [openRegion, setOpenRegion] = useState(null);
   const { t } = useT();
   const regionKey = (r) => {
@@ -98,23 +98,19 @@ export default function MobileMenu({ taxonomy, regions, onClose, onGroupOrder, u
           {t("nav.ourHomeCart")}
         </button>
 
-        {/* Account */}
-        {user ? (
-          <Link
-            to="/my-account"
-            onClick={onClose}
-            className="flex items-center h-11 px-3 text-sm font-semibold rounded-lg hover:bg-secondary transition-colors"
-          >
-            {t("nav.myOrders")} & {t("nav.myAccount")}
-          </Link>
-        ) : (
-          <button
-            onClick={() => { onClose(); base44.auth.redirectToLogin(); }}
-            className="w-full text-left h-11 px-3 text-sm font-semibold rounded-lg hover:bg-secondary transition-colors"
-          >
-            {t("nav.signIn")} / {t("nav.createAccount")}
-          </button>
-        )}
+        <button
+          onClick={() => { onClose(); base44.auth.redirectToLogin(); }}
+          className="w-full text-left h-11 px-3 text-sm font-semibold rounded-lg hover:bg-secondary transition-colors"
+        >
+          {t("nav.signIn")}
+        </button>
+        <button
+          onClick={() => { onClose(); base44.auth.redirectToLogin(); }}
+          className="w-full text-left h-11 px-3 text-sm font-semibold rounded-lg hover:bg-secondary transition-colors"
+        >
+          {t("nav.createAccount")}
+        </button>
+
       </nav>
     </div>
   );

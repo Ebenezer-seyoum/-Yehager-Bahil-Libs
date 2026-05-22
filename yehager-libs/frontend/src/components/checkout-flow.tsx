@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, Clock, CreditCard, MapPin, ShieldCheck, Truck } from "lucide-react";
+import { AlertTriangle, Banknote, CreditCard, DollarSign, Info, Mail, MapPin, ShieldCheck, Truck } from "lucide-react";
 import { useMemo, useState } from "react";
 
 type CartItem = {
@@ -28,6 +28,17 @@ type CheckoutFlowProps = {
   startCheckoutAction: (formData: FormData) => void | Promise<void>;
 };
 
+const STRIPE_CURRENCIES = [
+  { code: "USD", country: "US", name: "US Dollar", region: "For international customers", symbol: "$", rate: 1, default: true },
+  { code: "EUR", country: "EU", name: "Euro", region: "Europe", symbol: "€", rate: 0.92 },
+  { code: "GBP", country: "GB", name: "British Pound", region: "United Kingdom", symbol: "£", rate: 0.79 },
+  { code: "AED", country: "AE", name: "UAE Dirham", region: "United Arab Emirates", symbol: "د.إ", rate: 3.67, suffix: true },
+  { code: "SAR", country: "SA", name: "Saudi Riyal", region: "Saudi Arabia", symbol: "ريال", rate: 3.75, suffix: true },
+  { code: "CAD", country: "CA", name: "Canadian Dollar", region: "Canada", symbol: "CA$", rate: 1.37 },
+  { code: "AUD", country: "AU", name: "Australian Dollar", region: "Australia", symbol: "A$", rate: 1.54 },
+  { code: "ILS", country: "IL", name: "Israeli Shekel", region: "Israel", symbol: "₪", rate: 3.71 },
+];
+
 function computeEmsShipping(itemCount: number) {
   if (!Number.isFinite(itemCount) || itemCount <= 0) return 0;
   const fullPacks = Math.floor(itemCount / 5);
@@ -38,6 +49,12 @@ function computeEmsShipping(itemCount: number) {
   return cost;
 }
 
+function emsRateText(itemCount: number) {
+  const fullPacks = Math.floor(itemCount / 5);
+  const remainder = itemCount % 5;
+  return `EMS rate: ${itemCount} item${itemCount === 1 ? "" : "s"} · ${fullPacks} full pack${fullPacks === 1 ? "" : "s"} + ${remainder} extra`;
+}
+
 function errorMessage(error?: string) {
   if (error === "terms") return "Please agree to tailoring terms before placing your order.";
   if (error === "address") return "Please complete the required shipping address fields.";
@@ -46,10 +63,23 @@ function errorMessage(error?: string) {
   return "";
 }
 
+function formatCurrency(amount: number, currencyCode = "USD", symbol = "$", suffix = false) {
+  const value = amount.toFixed(2);
+  if (currencyCode === "USD") return `$${value}`;
+  if (suffix) return `${value}${symbol}`;
+  return `${symbol}${value}`;
+}
+
+function SelectDot({ selected }: { selected: boolean }) {
+  return <span className={`mt-1 h-4 w-4 shrink-0 rounded-full border-2 ${selected ? "border-primary bg-primary shadow-[inset_0_0_0_4px_#050505]" : "border-white bg-white"}`} />;
+}
+
 export function CheckoutFlow({ items, event, error, etbRate, startCheckoutAction }: CheckoutFlowProps) {
   const [fulfillmentType, setFulfillmentType] = useState<"mail" | "pickup">("mail");
   const [shipChoice, setShipChoice] = useState("own");
   const [paymentMethod, setPaymentMethod] = useState<"stripe_usd" | "etb_bank_transfer">("stripe_usd");
+  const [selectedCurrency, setSelectedCurrency] = useState("USD");
+  const [tailorNote, setTailorNote] = useState("");
 
   const totalItems = items.reduce((sum, item) => sum + Number(item.quantity ?? 1), 0);
   const subtotal = items.reduce((sum, item) => sum + Number(item.priceUsd ?? 0) * Number(item.quantity ?? 1), 0);
@@ -65,193 +95,306 @@ export function CheckoutFlow({ items, event, error, etbRate, startCheckoutAction
     return [address.city, address.country].filter(Boolean).join(", ");
   }, [event?.shippingAddress]);
 
+  const payLabel = paymentMethod === "etb_bank_transfer"
+    ? `Continue to ETB Payment${totalEtb ? ` (${totalEtb.toLocaleString()} ETB)` : ""}`
+    : `Pay $${total.toFixed(2)} USD with Stripe`;
+
+  function chooseStripeCurrency(code: string) {
+    setSelectedCurrency(code);
+    setPaymentMethod("stripe_usd");
+  }
+
   return (
-    <form action={startCheckoutAction} className="grid gap-6 lg:grid-cols-[1fr_350px]">
+    <form action={startCheckoutAction} className="space-y-6">
       <input type="hidden" name="fulfillmentType" value={fulfillmentType} />
       <input type="hidden" name="shipChoice" value={shipChoice} />
       <input type="hidden" name="paymentMethod" value={paymentMethod} />
+      <input type="hidden" name="selectedCurrency" value={selectedCurrency} />
+      <input type="hidden" name="tailorNote" value={tailorNote} />
 
-      <div className="space-y-6">
-        {message ? <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">{message}</div> : null}
+      {message ? <div className="rounded-xl border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">{message}</div> : null}
 
-        <div className="rounded-xl border border-amber-100 bg-amber-50 p-4">
-          <div className="flex items-start gap-3">
-            <Clock className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" />
-            <div>
-              <p className="text-sm font-bold text-amber-800">Custom Tailoring Notice</p>
-              <p className="mt-0.5 text-xs leading-relaxed text-amber-700">
-                All orders require a minimum of one month for custom tailoring and production. We ship via EMS by default; contact us for DHL or UPS arrangements.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {event?.name ? (
-          <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
-            <p className="text-sm font-bold">Event order</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              This cart is linked to <span className="font-semibold text-foreground">{event.name}</span>.
+      <div className="rounded-xl border border-amber-100 bg-amber-50 p-4 text-orange-700">
+        <div className="flex items-start gap-4">
+          <ClockIcon />
+          <div>
+            <p className="text-sm font-semibold">Custom Tailoring Notice</p>
+            <p className="mt-1 text-xs leading-relaxed">
+              All orders require a minimum of one month for custom tailoring and production. We ship via EMS (Ethiopian Mail Service). Due to their high costs, DHL and UPS are not offered by default - if you prefer DHL or UPS, please contact us and we will make the necessary arrangements.
             </p>
           </div>
-        ) : null}
-
-        <section className="rounded-xl border border-border bg-card p-5">
-          <h2 className="font-heading text-xl font-bold">Delivery Method</h2>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            <button
-              type="button"
-              onClick={() => setFulfillmentType("mail")}
-              className={`rounded-xl border-2 p-4 text-left transition-colors ${fulfillmentType === "mail" ? "border-primary bg-primary/10" : "border-border hover:border-primary/50"}`}
-            >
-              <span className="flex items-center gap-2 text-sm font-bold"><Truck className="h-4 w-4 text-primary" /> Mail Delivery</span>
-              <span className="mt-1 block text-xs text-muted-foreground">Shipped worldwide with EMS.</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setFulfillmentType("pickup")}
-              className={`rounded-xl border-2 p-4 text-left transition-colors ${fulfillmentType === "pickup" ? "border-primary bg-primary/10" : "border-border hover:border-primary/50"}`}
-            >
-              <span className="flex items-center gap-2 text-sm font-bold"><MapPin className="h-4 w-4 text-primary" /> In-Store Pickup</span>
-              <span className="mt-1 block text-xs text-muted-foreground">Pick up in Addis Ababa.</span>
-            </button>
-          </div>
-        </section>
-
-        {fulfillmentType === "mail" ? (
-          <section className="rounded-xl border border-border bg-card p-5">
-            <h2 className="font-heading text-xl font-bold">Shipping Carrier</h2>
-            <div className="mt-4 rounded-xl border-2 border-primary bg-primary/5 p-4">
-              <p className="text-sm font-bold">EMS - Ethiopian Mail Service</p>
-              <p className="mt-1 text-xs text-muted-foreground">1 item ≈ $45 · 2-5 items ≈ $100 total · larger orders repeat by package.</p>
-              <p className="mt-2 text-xs font-bold text-primary">Estimated: ${shipping.toFixed(2)} for {totalItems} item{totalItems === 1 ? "" : "s"}</p>
-            </div>
-            <input type="hidden" name="carrier" value="Ethiopian Mail Service" />
-
-            <h3 className="mt-5 text-sm font-bold">Ship To</h3>
-            <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              <button type="button" onClick={() => setShipChoice("own")} className={`rounded-xl border-2 p-4 text-left ${shipChoice === "own" ? "border-primary bg-primary/10" : "border-border"}`}>
-                <span className="text-sm font-bold">My address</span>
-                <span className="mt-1 block text-xs text-muted-foreground">Delivered directly to you.</span>
-              </button>
-              {hasEventAddress ? (
-                <button type="button" onClick={() => setShipChoice("event_owner")} className={`rounded-xl border-2 p-4 text-left ${shipChoice === "event_owner" ? "border-primary bg-primary/10" : "border-border"}`}>
-                  <span className="text-sm font-bold">Event Owner {event?.ownerName ? `(${event.ownerName})` : ""}</span>
-                  <span className="mt-1 block text-xs text-muted-foreground">{eventAddressLabel || "Group consolidation address"}</span>
-                </button>
-              ) : null}
-            </div>
-          </section>
-        ) : (
-          <section className="rounded-xl border border-border bg-card p-5">
-            <h2 className="font-heading text-xl font-bold">Pickup Location</h2>
-            <select name="pickupLocation" defaultValue="Dember Building - 3rd Floor, Store #369" className="mt-4 h-11 w-full rounded-lg border border-input bg-background px-3 text-sm">
-              <option value="Dember Building - 3rd Floor, Store #369">Dember Building - 3rd Floor, Store #369</option>
-              <option value="Zefmesh Building - 7th Floor, Suite #717">Zefmesh Building - 7th Floor, Suite #717</option>
-            </select>
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <label className="text-sm">
-                <span className="mb-1 block text-muted-foreground">Pickup person name *</span>
-                <input name="pickupPersonName" className="h-10 w-full rounded-lg border border-input bg-background px-3" />
-              </label>
-              <label className="text-sm">
-                <span className="mb-1 block text-muted-foreground">Pickup person phone *</span>
-                <input name="pickupPersonPhone" className="h-10 w-full rounded-lg border border-input bg-background px-3" />
-              </label>
-            </div>
-          </section>
-        )}
-
-        {fulfillmentType === "mail" && shipChoice === "own" ? (
-          <section className="rounded-xl border border-border bg-card p-5">
-            <h2 className="font-heading text-xl font-bold">Shipping Address</h2>
-            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-              {[
-                ["full_name", "Full Name", false],
-                ["street", "Street Address", true],
-                ["city", "City", true],
-                ["state", "State / Province", false],
-                ["zip", "ZIP / Postal Code", false],
-                ["country", "Country", true],
-                ["phone", "Phone Number", true],
-              ].map(([name, label, required]) => (
-                <label key={String(name)} className={`text-sm ${name === "full_name" || name === "street" || name === "phone" ? "sm:col-span-2" : ""}`}>
-                  <span className="mb-1 block text-muted-foreground">{label}{required ? <span className="text-destructive"> *</span> : null}</span>
-                  <input name={String(name)} className="h-10 w-full rounded-lg border border-input bg-background px-3" />
-                </label>
-              ))}
-            </div>
-          </section>
-        ) : null}
-
-        <section className="rounded-xl border-2 border-amber-500/40 bg-amber-500/5 p-5">
-          <div className="flex items-start gap-3">
-            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />
-            <div>
-              <p className="text-sm font-bold">Custom Tailoring - No Cancellation Policy</p>
-              <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-                All garments are custom-made to your measurements. After production begins, the order cannot be cancelled, modified, or refunded unless there is a quality defect or an error on our part.
-              </p>
-              <label className="mt-4 flex cursor-pointer items-start gap-3 text-sm font-semibold">
-                <input name="agreeTerms" type="checkbox" className="mt-1" />
-                <span>I understand and agree that this is a custom tailored order and cannot be cancelled or refunded after production starts.</span>
-              </label>
-            </div>
-          </div>
-        </section>
+        </div>
       </div>
 
-      <aside className="h-fit rounded-xl border border-border bg-card p-5">
-        <h2 className="font-heading text-xl font-bold">Order Summary</h2>
-        <div className="mt-4 space-y-3">
-          {items.map((item) => (
-            <div key={item.id} className="flex gap-3 border-b border-border/60 pb-3 last:border-b-0">
-              {item.productImage ? <img src={item.productImage} alt="" className="h-14 w-12 rounded-md object-cover" /> : null}
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold">{item.productName}</p>
-                {item.eventName ? <p className="text-xs text-primary">{item.eventName}</p> : null}
-                <p className="text-xs text-muted-foreground">Qty {item.quantity ?? 1}</p>
+      <section className="rounded-xl border border-border bg-card p-5">
+        <h3 className="font-heading font-semibold mb-4">Delivery Method</h3>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <button type="button" onClick={() => setFulfillmentType("mail")} className={`flex items-start gap-3 rounded-xl border-2 p-4 text-left transition-colors ${fulfillmentType === "mail" ? "border-primary bg-primary/5" : "border-border hover:border-border/80"}`}>
+            <SelectDot selected={fulfillmentType === "mail"} />
+            <div>
+              <p className="font-medium text-sm flex items-center gap-1.5"><Truck className="h-4 w-4 text-primary" /> Mail Delivery</p>
+              <p className="text-xs text-muted-foreground">Shipped to your address worldwide</p>
+            </div>
+          </button>
+          <button type="button" onClick={() => setFulfillmentType("pickup")} className={`flex items-start gap-3 rounded-xl border-2 p-4 text-left transition-colors ${fulfillmentType === "pickup" ? "border-primary bg-primary/5" : "border-border hover:border-border/80"}`}>
+            <SelectDot selected={fulfillmentType === "pickup"} />
+            <div>
+              <p className="font-medium text-sm flex items-center gap-1.5"><MapPin className="h-4 w-4 text-primary" /> In-Store Pickup</p>
+              <p className="text-xs text-muted-foreground">Pick up from our Addis Ababa locations</p>
+            </div>
+          </button>
+        </div>
+      </section>
+
+      {fulfillmentType === "mail" ? (
+        <section className="rounded-xl border border-border bg-card p-5">
+          <h3 className="font-heading font-semibold mb-4">Shipping Carrier</h3>
+          <div className="rounded-xl border-2 border-primary bg-primary/5 p-3">
+            <div className="flex gap-4">
+              <SelectDot selected />
+              <div>
+                <p className="font-medium text-sm">EMS - Ethiopian Mail Service</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">Rates calculated by weight - the more items you order, the cheaper per item. 1 item ≈ $45 · 2-5 items ≈ $100 total</p>
+                <p className="mt-1 text-xs font-semibold text-primary">Estimated: ${shipping.toFixed(2)} for {totalItems} item{totalItems === 1 ? "" : "s"}</p>
               </div>
-              <p className="text-sm font-bold">${(Number(item.priceUsd ?? 0) * Number(item.quantity ?? 1)).toFixed(2)}</p>
+            </div>
+          </div>
+          <input type="hidden" name="carrier" value="Ethiopian Mail Service" />
+          <p className="mt-4 text-xs text-muted-foreground">
+            Due to their high shipping costs, DHL and UPS are not offered by default. If you prefer DHL or UPS, please <a href="mailto:support@yehagerbahillibs.com" className="font-semibold text-primary underline">contact us</a> and we will make the necessary adjustments.
+          </p>
+
+          <h4 className="mt-5 text-sm font-semibold">Ship To</h4>
+          <div className="mt-3 grid gap-3">
+            <button type="button" onClick={() => setShipChoice("own")} className={`rounded-xl border-2 p-3 text-left ${shipChoice === "own" ? "border-primary bg-primary/5" : "border-border"}`}>
+              <span className="flex items-center gap-3 text-sm font-medium"><SelectDot selected={shipChoice === "own"} />My address</span>
+              <span className="ml-7 mt-1 block text-xs text-muted-foreground">Delivered directly to you</span>
+            </button>
+            {hasEventAddress ? (
+              <button type="button" onClick={() => setShipChoice("event_owner")} className={`rounded-xl border-2 p-3 text-left ${shipChoice === "event_owner" ? "border-primary bg-primary/5" : "border-border"}`}>
+                <span className="flex items-center gap-3 text-sm font-medium"><SelectDot selected={shipChoice === "event_owner"} />Event Owner {event?.ownerName ? `(${event.ownerName})` : ""}</span>
+                <span className="ml-7 mt-1 block text-xs text-muted-foreground">{eventAddressLabel || "Group consolidation address"}</span>
+              </button>
+            ) : null}
+          </div>
+        </section>
+      ) : (
+        <section className="rounded-xl border border-border bg-card p-5">
+          <h3 className="font-heading font-semibold mb-4">Pickup Location</h3>
+          <select name="pickupLocation" defaultValue="Dember Building - 3rd Floor, Store #369" className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm">
+            <option value="Dember Building - 3rd Floor, Store #369">Dember Building - 3rd Floor, Store #369</option>
+            <option value="Zefmesh Building - 7th Floor, Suite #717">Zefmesh Building - 7th Floor, Suite #717</option>
+          </select>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <CheckoutInput name="pickupPersonName" label="Pickup person name" required />
+            <CheckoutInput name="pickupPersonPhone" label="Pickup person phone" required />
+          </div>
+        </section>
+      )}
+
+      <section className="rounded-xl border border-border bg-card p-5">
+        <h3 className="font-heading font-semibold mb-4">Order Summary</h3>
+        <div className="space-y-2 mb-4">
+          {items.map((item) => (
+            <div key={item.id} className="flex items-center justify-between text-sm">
+              <span>{item.productName}</span>
+              <span className="font-medium">${(Number(item.priceUsd ?? 0) * Number(item.quantity ?? 1)).toFixed(2)} USD</span>
             </div>
           ))}
         </div>
-
-        <div className="mt-5 space-y-2 border-t border-border pt-4 text-sm">
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Clothing Subtotal</span>
-            <span className="font-semibold">${subtotal.toFixed(2)}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Shipping & Handling</span>
-            <span className={shipping === 0 ? "font-semibold text-green-500" : "font-semibold"}>{shipping === 0 ? "Free - Pickup" : `$${shipping.toFixed(2)}`}</span>
-          </div>
-          <div className="flex justify-between border-t border-border pt-3">
-            <span className="font-bold">Total</span>
-            <span className="text-2xl font-bold text-primary">${total.toFixed(2)}</span>
-          </div>
-          {totalEtb ? <p className="text-right text-xs text-muted-foreground">≈ {totalEtb.toLocaleString()} ETB</p> : null}
+        <div className="border-t border-border pt-4 space-y-2">
+          <SummaryLine label="Clothing Subtotal" value={`$${subtotal.toFixed(2)} USD`} />
+          <SummaryLine label="Shipping & Handling" value={fulfillmentType === "pickup" ? "Free - Pickup" : `$${shipping.toFixed(2)} USD`} />
+          {fulfillmentType === "mail" ? <p className="text-[10px] text-muted-foreground leading-relaxed">{emsRateText(totalItems)}</p> : null}
         </div>
-
-        <div className="mt-5 space-y-2 rounded-lg bg-secondary p-3 text-sm">
-          <p className="font-bold">Payment Method</p>
-          <label className="flex items-center gap-2">
-            <input type="radio" checked={paymentMethod === "stripe_usd"} onChange={() => setPaymentMethod("stripe_usd")} />
-            <span className="inline-flex items-center gap-1.5"><CreditCard className="h-4 w-4 text-primary" /> Card (Stripe, USD)</span>
-          </label>
-          <label className="flex items-center gap-2">
-            <input type="radio" checked={paymentMethod === "etb_bank_transfer"} onChange={() => setPaymentMethod("etb_bank_transfer")} />
-            <span>Bank Transfer (ETB)</span>
-          </label>
+        <div className="flex items-center justify-between pt-2 border-t border-border mt-2">
+          <span className="font-bold text-base">Total</span>
+          <span className="font-heading text-4xl font-bold text-primary">${total.toFixed(2)} USD</span>
         </div>
+      </section>
 
-        <button type="submit" className="mt-5 w-full rounded-md bg-primary px-4 py-3 text-sm font-bold text-primary-foreground hover:bg-primary/90">
-          {paymentMethod === "etb_bank_transfer" ? "Continue to ETB Payment" : "Pay with Stripe"}
-        </button>
-        <div className="mt-3 flex items-center justify-center gap-2 text-xs text-muted-foreground">
-          <ShieldCheck className="h-4 w-4" />
-          <span>Secure checkout · Measurements locked to order</span>
+      {fulfillmentType === "mail" && shipChoice === "own" ? (
+        <section className="rounded-xl border border-border bg-card p-5">
+          <h3 className="font-heading font-semibold mb-4">Shipping Address</h3>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <CheckoutInput name="full_name" label="Full Name" className="sm:col-span-2" defaultValue="" />
+            <CheckoutInput name="street" label="Street Address" required className="sm:col-span-2" />
+            <CheckoutInput name="city" label="City" required />
+            <CheckoutInput name="state" label="State / Province" />
+            <CheckoutInput name="zip" label="ZIP / Postal Code" />
+            <CheckoutInput name="country" label="Country" required />
+            <CheckoutInput name="phone" label="Phone Number" required className="sm:col-span-2" />
+          </div>
+        </section>
+      ) : null}
+
+      <section className="rounded-xl border-2 border-primary/50 bg-primary/5 p-5">
+        <div className="flex items-start gap-4">
+          <AlertTriangle className="mt-1 h-5 w-5 shrink-0 text-primary" />
+          <div className="space-y-3 text-xs leading-relaxed text-muted-foreground">
+            <h2 className="text-sm font-semibold text-foreground">Custom Tailoring - No Cancellation Policy</h2>
+            <p>All garments at <strong>Yehager Bahil Libs</strong> are <strong>100% custom-made and hand-tailored</strong> to your exact measurements. Once your order is placed:</p>
+            <ul className="list-disc space-y-2 pl-6">
+              <li>Our tailors in Ethiopia begin <strong>cutting, embroidering, and assembling</strong> your garment within 1-3 business days.</li>
+              <li>After <strong>3 business days</strong>, your order <strong>cannot be cancelled, modified, or refunded</strong> - the fabric has been cut and tailored specifically for you.</li>
+              <li>If there is a quality defect or error on our part, we will remake the garment at no cost.</li>
+              <li>All sales are final once production begins. Please double-check your measurements before confirming.</li>
+            </ul>
+            <p><strong className="text-foreground">Adjustments & Returns:</strong> After you receive your mailed/shipped garment, if you need any size adjustments or other alterations, you may send the clothing back to us using a <strong>paid return mail package</strong> of your choice. Once we receive it, our tailors will fix or adjust all the items and ship them back to you. This applies to all garments we have mailed or sent to you.</p>
+            <p className="font-bold text-foreground">By placing this order, you acknowledge and accept these terms in full.</p>
+            <label className="flex cursor-pointer items-start gap-4 text-sm font-semibold text-foreground">
+              <input name="agreeTerms" type="checkbox" className="mt-1 h-7 w-7 rounded border-border bg-black" />
+              <span>I understand and agree that this is a custom tailored order and cannot be cancelled or refunded after 3 business days of production starting.</span>
+            </label>
+          </div>
         </div>
-      </aside>
+      </section>
+
+      <section className="rounded-xl border-2 border-primary/50 bg-primary/5 p-5">
+        <div className="flex items-start gap-4">
+          <Mail className="mt-1 h-5 w-5 shrink-0 text-primary" />
+          <div className="flex-1">
+            <h2 className="text-sm font-semibold text-primary">Message to Our Tailors</h2>
+            <p className="mt-1 text-xs italic text-primary">(Optional)</p>
+            <p className="mt-4 text-xs leading-relaxed text-yellow-200">Share any fit preferences, design details, or special instructions - our tailors will read this before starting your garment.</p>
+            <textarea
+              name="checkoutTailorNote"
+              value={tailorNote}
+              maxLength={500}
+              onChange={(event) => setTailorNote(event.target.value)}
+              className="mt-4 min-h-60 w-full resize-none rounded-xl border-2 border-primary/70 bg-black p-4 text-sm outline-none transition focus:border-primary"
+              placeholder={`e.g.\n• "Prefer a relaxed fit in the shoulders"\n• "Add a chest pocket on the left side"\n• "Wider collar than standard"\n• "Make the sleeves slightly longer"`}
+            />
+            <p className="mt-3 text-right text-sm font-semibold text-muted-foreground">{tailorNote.length} / 500</p>
+          </div>
+        </div>
+      </section>
+
+      <section className="rounded-xl border-2 border-primary/40 bg-card p-5">
+        <div className="flex items-start gap-4">
+          <DollarSign className="mt-1 h-5 w-5 text-primary" />
+          <div className="flex-1">
+            <h2 className="font-heading text-sm font-semibold">Choose Your Payment Currency</h2>
+            <p className="mt-2 text-xs leading-snug text-muted-foreground">Select the currency you&apos;d like to pay in. Ethiopian customers can pay via bank transfer in ETB; all other currencies use Stripe.</p>
+
+            <p className="mt-5 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">ET Ethiopian Customers</p>
+            <CurrencyChoice
+              selected={paymentMethod === "etb_bank_transfer"}
+              onClick={() => {
+                setPaymentMethod("etb_bank_transfer");
+                setSelectedCurrency("ETB");
+              }}
+              left="ET"
+              title="Ethiopian Birr - ETB"
+              subtitle="Mainly for customers living in Ethiopia · QR code or manual bank transfer"
+              amount={totalEtb ? `${totalEtb.toLocaleString()} ETB` : "ETB"}
+              badge="Bank Transfer"
+              full
+            />
+
+            <p className="mt-5 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">International Customers - Stripe</p>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              {STRIPE_CURRENCIES.map((currency) => (
+                <CurrencyChoice
+                  key={currency.code}
+                  selected={paymentMethod === "stripe_usd" && selectedCurrency === currency.code}
+                  onClick={() => chooseStripeCurrency(currency.code)}
+                  left={currency.country}
+                  title={currency.name}
+                  subtitle={currency.region}
+                  amount={formatCurrency(total * currency.rate, currency.code, currency.symbol, currency.suffix)}
+                  code={currency.code}
+                  badge={currency.default ? "Default" : undefined}
+                />
+              ))}
+            </div>
+            <p className="mt-4 flex items-start gap-3 text-xs text-muted-foreground">
+              <Info className="mt-0.5 h-4 w-4 shrink-0 text-blue-400" />
+              <span>Non-USD Stripe amounts shown are <strong className="text-foreground">approximate</strong> - Stripe applies the exact live exchange rate at checkout. ETB prices use our daily rate.</span>
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <button type="submit" className="inline-flex h-14 w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90">
+        <CreditCard className="h-5 w-5" />
+        {payLabel}
+      </button>
+      <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
+        <ShieldCheck className="h-5 w-5" />
+        <span>{paymentMethod === "etb_bank_transfer" ? "Secure ETB bank transfer · Payment proof required · Measurements locked to order" : "Secure Stripe checkout · Encrypted payments · Measurements locked to order"}</span>
+      </div>
     </form>
+  );
+}
+
+function ClockIcon() {
+  return (
+    <span className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 border-orange-700 text-orange-700">
+      <span className="h-2 w-2 rounded-full border-l-2 border-t-2 border-current" />
+    </span>
+  );
+}
+
+function CheckoutInput({ name, label, required, className = "", defaultValue = "" }: { name: string; label: string; required?: boolean; className?: string; defaultValue?: string }) {
+  return (
+    <label className={`text-xs font-medium text-muted-foreground ${className}`}>
+      <span>
+        {label} {required ? <span className="text-destructive">*</span> : null}
+      </span>
+      <input name={name} defaultValue={defaultValue} className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground outline-none transition focus:border-primary" />
+    </label>
+  );
+}
+
+function SummaryLine({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-6 text-sm">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="font-bold text-foreground">{value}</span>
+    </div>
+  );
+}
+
+function CurrencyChoice({
+  selected,
+  onClick,
+  left,
+  title,
+  subtitle,
+  amount,
+  code,
+  badge,
+  full,
+}: {
+  selected: boolean;
+  onClick: () => void;
+  left: string;
+  title: string;
+  subtitle: string;
+  amount: string;
+  code?: string;
+  badge?: string;
+  full?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`mt-3 flex min-h-24 w-full items-center gap-3 rounded-xl border-2 p-4 text-left transition-colors ${selected ? "border-primary bg-primary/10" : "border-border bg-background/30 hover:border-primary/50"} ${full ? "sm:col-span-2" : ""}`}
+    >
+      <SelectDot selected={selected} />
+      <span className="text-sm font-semibold">{left}</span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-semibold text-foreground">
+          {title} {badge ? <span className="ml-2 rounded-full bg-green-500/20 px-3 py-1 text-[10px] font-bold uppercase text-green-400">{badge}</span> : null}
+        </span>
+        <span className="mt-1 block text-xs text-muted-foreground">{subtitle}</span>
+      </span>
+      <span className="text-right">
+        <span className="block text-sm font-semibold text-primary">{amount}</span>
+        {code ? <span className="text-sm text-muted-foreground">{code}</span> : null}
+      </span>
+    </button>
   );
 }

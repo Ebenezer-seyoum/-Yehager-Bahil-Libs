@@ -249,6 +249,127 @@
     font-weight: 600;
   }
 
+  .dashboard-swal-popup,
+  .payment-swal-popup {
+    border: 1px solid hsl(var(--border)) !important;
+    border-radius: 1.5rem !important;
+    padding: 1.5rem !important;
+    box-shadow: 0 28px 80px rgba(0, 0, 0, 0.38) !important;
+  }
+
+  .dashboard-swal-popup .swal2-icon,
+  .payment-swal-popup .swal2-icon,
+  .dashboard-swal-icon {
+    margin: 0 auto 1.25rem !important;
+    width: 4rem !important;
+    height: 4rem !important;
+    border: 0 !important;
+    font-size: 1rem !important;
+  }
+
+  .dashboard-swal-popup .swal2-icon.swal2-warning,
+  .payment-swal-popup .swal2-icon.swal2-warning,
+  .dashboard-swal-icon.swal2-warning,
+  .dashboard-swal-icon-danger {
+    background: #fee2e2 !important;
+    color: #ef0013 !important;
+  }
+
+  .dashboard-swal-icon-success {
+    background: #dcfce7 !important;
+    color: #047857 !important;
+  }
+
+  .dashboard-swal-popup .swal2-icon.swal2-warning [class^="swal2-icon-content"],
+  .payment-swal-popup .swal2-icon.swal2-warning [class^="swal2-icon-content"],
+  .dashboard-swal-icon.swal2-warning [class^="swal2-icon-content"] {
+    font-size: 3rem !important;
+    line-height: 4rem !important;
+    font-weight: 400 !important;
+  }
+
+  .dashboard-swal-popup .swal2-icon.swal2-success .swal2-success-ring,
+  .dashboard-swal-popup .swal2-icon.swal2-success [class^="swal2-success-line"] {
+    display: none !important;
+  }
+
+  .dashboard-swal-popup .swal2-icon.swal2-success::before {
+    content: "✓";
+    font-size: 2.35rem;
+    font-weight: 800;
+    line-height: 4rem;
+  }
+
+  .dashboard-swal-popup .swal2-icon.swal2-error [class^="swal2-x-mark"] {
+    display: none !important;
+  }
+
+  .dashboard-swal-popup .swal2-icon.swal2-error::before {
+    content: "!";
+    font-size: 3rem;
+    line-height: 4rem;
+  }
+
+  .dashboard-swal-title,
+  .payment-swal-title {
+    color: #171717 !important;
+    font-size: 1.5rem !important;
+    font-weight: 600 !important;
+    line-height: 2rem !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .dashboard-swal-text,
+  .payment-swal-text {
+    color: hsl(var(--muted-foreground)) !important;
+    font-size: 0.875rem !important;
+    line-height: 1.25rem !important;
+    margin: 0.5rem 0 0 !important;
+    padding: 0 !important;
+  }
+
+  .dashboard-swal-actions,
+  .payment-swal-popup .swal2-actions {
+    gap: 0.75rem !important;
+    margin-top: 1.5rem !important;
+  }
+
+  .dashboard-swal-cancel,
+  .dashboard-swal-confirm,
+  .payment-swal-button {
+    border-radius: 0.75rem !important;
+    min-width: auto !important;
+    padding: 0.625rem 1.25rem !important;
+    font-size: 0.875rem !important;
+    line-height: 1.25rem !important;
+    font-weight: 600 !important;
+  }
+
+  .dashboard-swal-cancel {
+    background: #ffffff !important;
+    border: 1px solid hsl(var(--border)) !important;
+    color: hsl(var(--foreground)) !important;
+  }
+
+  .dashboard-swal-confirm-danger {
+    background: #dc2626 !important;
+    border: 1px solid #dc2626 !important;
+    color: #ffffff !important;
+  }
+
+  .dashboard-swal-confirm-success {
+    background: #047857 !important;
+    border: 1px solid #047857 !important;
+    color: #ffffff !important;
+  }
+
+  .dashboard-swal-confirm-warning {
+    background: #a16207 !important;
+    border: 1px solid #a16207 !important;
+    color: #ffffff !important;
+  }
+
   .text-gold {
     color: hsl(38, 95%, 54%);
   }
@@ -263,5 +384,19 @@
 
   .partners-track:hover {
     animation-play-state: paused;
+  }
+
+  .home-modern {
+    font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  }
+
+  .home-modern h1,
+  .home-modern h2,
+  .home-modern h3,
+  .home-modern p,
+  .home-modern span,
+  .home-modern a,
+  .home-modern button {
+    letter-spacing: 0;
   }
 }

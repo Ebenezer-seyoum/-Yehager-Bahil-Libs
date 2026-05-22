@@ -70,51 +70,56 @@ export default async function CheckoutPage({
       redirect("/checkout?error=pickup");
     }
 
+    let destination = "";
+
     try {
       const cartRes = await apiRequest<{ data: CartItem[] }>("/api/v1/cart");
       const items = Array.isArray(cartRes?.data) ? cartRes.data : [];
-      if (items.length === 0) redirect("/cart");
-
-      const cartItemIds = items.map((item) => item.id);
-      const intentRes = await apiRequest<{ data: { order: { id: string } } }>("/api/v1/orders/checkout-intent", {
-        method: "POST",
-        body: {
-          cartItemIds,
-          paymentMethod,
-          paymentCurrency,
-          fulfillmentType,
-          shippingAddress,
-          useEventOwnerAddress: shipChoice === "event_owner",
-          carrier,
-          pickupLocation: pickupLocation || undefined,
-          pickupPersonName: pickupPersonName || undefined,
-          pickupPersonPhone: pickupPersonPhone || undefined,
-        },
-      });
-
-      const orderId = intentRes?.data?.order?.id;
-      if (!orderId) throw new Error("Missing order id");
-
-      if (paymentMethod === "stripe_usd") {
-        const stripeRes = await apiRequest<{ data: { url?: string } }>("/api/v1/payments/stripe/checkout-session", {
+      if (items.length === 0) {
+        destination = "/cart";
+      } else {
+        const cartItemIds = items.map((item) => item.id);
+        const intentRes = await apiRequest<{ data: { order: { id: string } } }>("/api/v1/orders/checkout-intent", {
           method: "POST",
           body: {
-            orderId,
-            successPath: "/order-confirmation",
-            cancelPath: "/checkout",
+            cartItemIds,
+            paymentMethod,
+            paymentCurrency,
+            fulfillmentType,
+            shippingAddress,
+            useEventOwnerAddress: shipChoice === "event_owner",
+            carrier,
+            pickupLocation: pickupLocation || undefined,
+            pickupPersonName: pickupPersonName || undefined,
+            pickupPersonPhone: pickupPersonPhone || undefined,
           },
         });
-        if (stripeRes?.data?.url) {
-          revalidatePath("/cart");
-          redirect(stripeRes.data.url);
-        }
-      }
 
-      revalidatePath("/cart");
-      redirect(`/checkout/etb?order=${orderId}`);
+        const orderId = intentRes?.data?.order?.id;
+        if (!orderId) throw new Error("Missing order id");
+
+        if (paymentMethod === "stripe_usd") {
+          const stripeRes = await apiRequest<{ data: { url?: string } }>("/api/v1/payments/stripe/checkout-session", {
+            method: "POST",
+            body: {
+              orderId,
+              successPath: "/order-confirmation",
+              cancelPath: "/checkout",
+            },
+          });
+          if (!stripeRes?.data?.url) throw new Error("Missing Stripe checkout URL");
+          destination = stripeRes.data.url;
+        } else {
+          destination = `/checkout/etb?order=${orderId}`;
+        }
+
+        revalidatePath("/cart");
+      }
     } catch {
       redirect("/checkout?error=checkout");
     }
+
+    redirect(destination);
   }
 
   let items: CartItem[] = [];
@@ -147,6 +152,9 @@ export default async function CheckoutPage({
       <div className="mx-auto w-full max-w-2xl px-4 py-16 text-center sm:px-6 lg:px-8">
         <h1 className="font-heading text-3xl font-semibold">Checkout</h1>
         <p className="mt-3 text-muted-foreground">Sign in is required to continue to checkout.</p>
+        <Link href="/signin?callbackUrl=/checkout" className="mt-5 inline-flex rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90">
+          Sign In
+        </Link>
       </div>
     );
   }
@@ -166,12 +174,8 @@ export default async function CheckoutPage({
   const err = typeof query?.error === "string" ? query.error : "";
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-12">
-      <div className="mb-8">
-        <p className="mb-2 text-xs font-bold uppercase tracking-[0.35em] text-primary">Secure Checkout</p>
-        <h1 className="font-heading text-4xl font-bold">Checkout</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Choose delivery, confirm tailoring terms, and pay securely.</p>
-      </div>
+    <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
+      <h1 className="font-heading text-3xl font-bold mb-8">Checkout</h1>
 
       <CheckoutFlow items={items} event={event} error={err} etbRate={etbRate} startCheckoutAction={startCheckout} />
     </div>

@@ -5,7 +5,7 @@ import { useMemo, useState } from "react";
 import { AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, CreditCard, FileCheck, FileSignature, FileText, MapPin, Package, Search, Truck, User } from "lucide-react";
 import { AdminOrderDocuments } from "@/components/admin-order-documents";
 
-type ShippingDocument = { url: string; label: string; uploadedAt?: string | null };
+type ShippingDocument = { url: string; label: string; uploadedAt?: string };
 
 type OrderItem = {
   productName?: string | null;
@@ -118,13 +118,16 @@ export function AdminOrderDocumentsManager({ initialOrders }: { initialOrders: O
   const mailOrders = filteredOrders.filter((order) => order.fulfillmentType !== "pickup");
   const missingPickupDocs = initialOrders.filter((order) => order.fulfillmentType === "pickup" && (!order.pickupIdUrl || !order.pickupSignedDocUrl)).length;
   const awaitingVerification = initialOrders.filter((order) => order.paymentStatus === "awaiting_verification").length;
-  const statusOptions = Array.from(new Set(initialOrders.map((order) => order.status).filter(Boolean))).sort();
-  const paymentOptions = Array.from(new Set(initialOrders.map((order) => order.paymentStatus).filter(Boolean))).sort();
+  const statusOptions = Array.from(new Set(initialOrders.map((order) => order.status).filter((status): status is string => Boolean(status)))).sort();
+  const paymentOptions = Array.from(new Set(initialOrders.map((order) => order.paymentStatus).filter((status): status is string => Boolean(status)))).sort();
 
   function renderOrder(order: Order) {
     const isPickup = order.fulfillmentType === "pickup";
     const isOpen = expandedOrderId === order.id;
-    const shippingDocuments = order.shippingDocuments ?? [];
+    const shippingDocuments = (order.shippingDocuments ?? []).map((doc) => ({
+      ...doc,
+      uploadedAt: doc.uploadedAt ?? undefined,
+    }));
 
     return (
       <div key={order.id} className="overflow-hidden rounded-xl border border-border bg-card">

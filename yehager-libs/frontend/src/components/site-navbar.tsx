@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { ChevronDown, ChevronRight, Menu, ShoppingBag, User, X } from "lucide-react";
+import { ChevronDown, ChevronRight, Menu, ShoppingBag, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { signOut, useSession } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { CreateGroupOrderModal } from "@/components/create-group-order-modal";
 import { REGIONS, TAXONOMY } from "@/lib/taxonomy";
@@ -17,8 +17,6 @@ export function SiteNavbar() {
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { data: session } = useSession();
   const isAuthed = Boolean(session?.user?.id);
-  const isAdmin = session?.user?.role === "admin";
-  const isEmployee = session?.user?.role === "employee";
 
   useEffect(() => {
     if (!isAuthed) return;
@@ -98,16 +96,6 @@ export function SiteNavbar() {
             >
               Our Home Cart
             </button>
-            {isAdmin ? (
-              <Link href="/admin" className="rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground">
-                Admin
-              </Link>
-            ) : null}
-            {isEmployee ? (
-              <Link href="/employee" className="rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground">
-                Employee
-              </Link>
-            ) : null}
           </nav>
 
           <div className="flex items-center gap-2">
@@ -120,26 +108,14 @@ export function SiteNavbar() {
                 </span>
               ) : null}
             </Link>
-            {isAuthed ? (
-              <>
-                <Link href="/my-account" className="hidden items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground sm:flex">
-                  <User className="h-4 w-4" />
-                  <span className="max-w-[90px] truncate">{session?.user?.name?.split(" ")[0] ?? "Account"}</span>
-                </Link>
-                <button type="button" onClick={() => signOut({ callbackUrl: "/" })} className="hidden rounded-lg px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground sm:block">
-                  Sign Out
-                </button>
-              </>
-            ) : (
-              <div className="hidden items-center gap-2 sm:flex">
-                <Link href="/signin" className="inline-flex items-center justify-center whitespace-nowrap rounded-lg px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground">
-                  Sign In
-                </Link>
-                <Link href="/register" className="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-1.5 text-center text-sm font-semibold leading-tight text-primary-foreground transition-colors hover:bg-primary/90">
-                  Create Account
-                </Link>
-              </div>
-            )}
+            <div className="hidden items-center gap-2 sm:flex">
+              <Link href="/signin" className="inline-flex items-center justify-center whitespace-nowrap rounded-lg px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground">
+                Sign In
+              </Link>
+              <Link href="/register" className="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-1.5 text-center text-sm font-semibold leading-tight text-primary-foreground transition-colors hover:bg-primary/90">
+                Create Account
+              </Link>
+            </div>
             <button type="button" onClick={() => setOpen((value) => !value)} className="rounded-md p-2 hover:bg-secondary lg:hidden">
               {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
             </button>
@@ -208,20 +184,12 @@ export function SiteNavbar() {
             >
               Our Home Cart
             </button>
-            {isAuthed ? (
-              <Link href="/my-account" onClick={() => setOpen(false)} className="flex h-11 items-center rounded-lg px-3 text-sm font-semibold hover:bg-secondary">
-                My Orders & My Account
-              </Link>
-            ) : (
-              <>
-                <Link href="/signin" onClick={() => setOpen(false)} className="flex h-11 items-center rounded-lg px-3 text-sm font-semibold hover:bg-secondary">
-                  Sign In
-                </Link>
-                <Link href="/register" onClick={() => setOpen(false)} className="flex h-11 items-center rounded-lg px-3 text-sm font-semibold hover:bg-secondary">
-                  Create Account
-                </Link>
-              </>
-            )}
+            <Link href="/signin" onClick={() => setOpen(false)} className="flex h-11 items-center rounded-lg px-3 text-sm font-semibold hover:bg-secondary">
+              Sign In
+            </Link>
+            <Link href="/register" onClick={() => setOpen(false)} className="flex h-11 items-center rounded-lg px-3 text-sm font-semibold hover:bg-secondary">
+              Create Account
+            </Link>
           </nav>
         </div>
       ) : null}

@@ -106,7 +106,7 @@ export function ProductCard({ product, eventId, etbRate }: ProductCardProps) {
                   <p className="text-[11px] text-white/50">≈ {Math.round(basePrice * etbRate).toLocaleString()} ETB</p>
                 ) : null}
               </div>
-              <span className="text-xs capitalize text-white/60">{rolePrices.length > 1 ? "Set" : product.gender ?? ""}</span>
+              <span className="text-[11px] capitalize text-white/60 sm:text-xs">{rolePrices.length > 1 ? "Set" : product.gender ?? ""}</span>
             </div>
           </div>
         </div>

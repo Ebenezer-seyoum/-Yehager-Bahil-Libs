@@ -4,8 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ArrowLeft, Pencil, Power, Save, Star, Trash2, X } from "lucide-react";
-import Swal from "sweetalert2";
-import "sweetalert2/dist/sweetalert2.min.css";
+import { dashboardConfirm, dashboardError, dashboardSuccess } from "@/lib/dashboard-swal";
 
 type Product = {
   id: string;
@@ -80,26 +79,18 @@ export function AdminProductDetailPanel({ product: initialProduct }: { product: 
   const activeImage = images.includes(selectedImage) ? selectedImage : images[0] ?? "";
 
   async function confirmAction(title: string, text: string, confirmButtonText: string, icon: "warning" | "question" = "warning") {
-    const result = await Swal.fire({
+    return dashboardConfirm({
       title,
       text,
-      icon,
-      showCancelButton: true,
       confirmButtonText,
-      cancelButtonText: "Cancel",
-      confirmButtonColor: confirmButtonText.toLowerCase().includes("delete") ? "#dc2626" : "#047857",
-      cancelButtonColor: "#64748b",
+      cancelButtonText: "No, cancel",
+      tone: confirmButtonText.toLowerCase().includes("delete") ? "danger" : "success",
+      icon,
     });
-    return result.isConfirmed;
   }
 
   function showResult(type: "success" | "error", message: string) {
-    void Swal.fire({
-      icon: type,
-      title: type === "success" ? "Success" : "Something went wrong",
-      text: message,
-      confirmButtonColor: type === "success" ? "#047857" : "#dc2626",
-    });
+    void (type === "success" ? dashboardSuccess("Success", message) : dashboardError("Something went wrong", message));
   }
 
   async function patchProduct(patch: Partial<Product>, successMessage: string) {
@@ -164,12 +155,7 @@ export function AdminProductDetailPanel({ product: initialProduct }: { product: 
         const payload = (await response.json().catch(() => null)) as { error?: string } | null;
         throw new Error(payload?.error ?? "Product delete failed");
       }
-      await Swal.fire({
-        icon: "success",
-        title: "Deleted",
-        text: "Product deleted successfully.",
-        confirmButtonColor: "#047857",
-      });
+      await dashboardSuccess("Deleted", "Product deleted successfully.");
       router.push("/admin/inventory");
       router.refresh();
     } catch (error) {

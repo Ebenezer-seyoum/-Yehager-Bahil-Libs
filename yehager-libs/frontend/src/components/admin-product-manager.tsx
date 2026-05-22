@@ -2,8 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { Banknote, Clock, DollarSign, Eye, Hash, ImageIcon, MapPin, Pencil, Power, Save, Shirt, Star, Trash2, Upload, X } from "lucide-react";
-import Swal from "sweetalert2";
-import "sweetalert2/dist/sweetalert2.min.css";
+import { dashboardConfirm, dashboardError, dashboardSuccess } from "@/lib/dashboard-swal";
 import { TAXONOMY, REGIONS } from "@/lib/taxonomy";
 
 type Product = {
@@ -167,14 +166,7 @@ export function AdminProductManager({ initialProducts }: { initialProducts: Prod
   const nextDraftIdentity = buildProductIdentity(draft.region, draft.subcategory, nextProductSequence(draft.region, draft.subcategory));
 
   function showAlert(type: "success" | "error", message: string) {
-    void Swal.fire({
-      icon: type,
-      title: type === "success" ? "Success" : "Something went wrong",
-      text: message,
-      confirmButtonColor: type === "success" ? "#047857" : "#dc2626",
-      background: "#ffffff",
-      color: "#0f172a",
-    });
+    void (type === "success" ? dashboardSuccess("Success", message) : dashboardError("Something went wrong", message));
   }
 
   function formatEtb(value: string | number | null | undefined) {
@@ -417,17 +409,14 @@ export function AdminProductManager({ initialProducts }: { initialProducts: Prod
   }
 
   async function confirmAndUpdateProduct(product: Product, patch: Partial<Product>, actionLabel: string) {
-    const result = await Swal.fire({
-      icon: "warning",
+    const confirmed = await dashboardConfirm({
       title: "Are you sure?",
       text: `Do you want to ${actionLabel.toLowerCase()} this product?`,
-      showCancelButton: true,
       confirmButtonText: actionLabel,
-      cancelButtonText: "Cancel",
-      confirmButtonColor: actionLabel.toLowerCase().includes("deactivate") ? "#334155" : "#047857",
-      cancelButtonColor: "#64748b",
+      cancelButtonText: "No, cancel",
+      tone: actionLabel.toLowerCase().includes("deactivate") ? "warning" : "success",
     });
-    if (result.isConfirmed) {
+    if (confirmed) {
       await updateProduct(product, patch);
     }
   }

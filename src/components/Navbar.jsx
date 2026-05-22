@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { ShoppingBag, Menu, X, ChevronDown, ChevronRight, User } from "lucide-react";
+import { Link } from "react-router-dom";
+import { ShoppingBag, Menu, X, ChevronDown, ChevronRight } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { TAXONOMY, REGIONS } from "@/lib/taxonomy";
 import CreateGroupOrderModal from "./CreateGroupOrderModal";
@@ -10,12 +10,10 @@ import { useT } from "@/lib/i18n/I18nContext";
 
 export default function Navbar() {
   const [open, setOpen] = useState(false);
-  const [user, setUser] = useState(null);
   const [cartCount, setCartCount] = useState(0);
   const [activeMenu, setActiveMenu] = useState(null);
   const [showGroupModal, setShowGroupModal] = useState(false);
   const timeoutRef = useRef(null);
-  const navigate = useNavigate();
   const { t } = useT();
 
   const regionKey = (r) => {
@@ -27,7 +25,6 @@ export default function Navbar() {
     base44.auth.isAuthenticated().then(async (authed) => {
       if (authed) {
         const me = await base44.auth.me();
-        setUser(me);
         const items = await base44.entities.CartItem.filter({ user_email: me.email });
         setCartCount(items.length);
       }
@@ -122,27 +119,20 @@ export default function Navbar() {
                 </span>
               )}
             </Link>
-            {user ? (
-              <Link to="/my-account" className="hidden sm:flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground px-2 py-1.5 rounded-lg hover:bg-secondary transition-colors">
-                <User className="w-4 h-4" />
-                <span className="max-w-[90px] truncate">{user.full_name?.split(" ")[0]}</span>
-              </Link>
-            ) : (
-              <div className="hidden sm:flex items-center gap-2">
-                <button
-                  onClick={() => base44.auth.redirectToLogin()}
-                  className="text-sm text-muted-foreground hover:text-foreground px-3 py-1.5 rounded-lg hover:bg-secondary transition-colors"
-                >
-                  {t("nav.signIn")}
-                </button>
-                <button
-                  onClick={() => base44.auth.redirectToLogin()}
-                  className="text-sm font-semibold bg-primary text-primary-foreground px-4 py-1.5 rounded-lg hover:bg-primary/90 transition-colors"
-                >
-                  {t("nav.createAccount")}
-                </button>
-              </div>
-            )}
+            <div className="hidden sm:flex items-center gap-2">
+              <button
+                onClick={() => base44.auth.redirectToLogin()}
+                className="text-sm text-muted-foreground hover:text-foreground px-3 py-1.5 rounded-lg hover:bg-secondary transition-colors"
+              >
+                {t("nav.signIn")}
+              </button>
+              <button
+                onClick={() => base44.auth.redirectToLogin()}
+                className="text-sm font-semibold bg-primary text-primary-foreground px-4 py-1.5 rounded-lg hover:bg-primary/90 transition-colors"
+              >
+                {t("nav.createAccount")}
+              </button>
+            </div>
             <button className="lg:hidden p-2 hover:bg-secondary rounded-md" onClick={() => setOpen(!open)}>
               {open ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
@@ -152,7 +142,7 @@ export default function Navbar() {
 
       {/* Mobile Menu */}
       {open && (
-        <MobileMenu taxonomy={TAXONOMY} regions={REGIONS} onClose={() => setOpen(false)} onGroupOrder={() => { setOpen(false); setShowGroupModal(true); }} user={user} />
+        <MobileMenu taxonomy={TAXONOMY} regions={REGIONS} onClose={() => setOpen(false)} onGroupOrder={() => { setOpen(false); setShowGroupModal(true); }} />
       )}
     </header>
     {showGroupModal && <CreateGroupOrderModal onClose={() => setShowGroupModal(false)} />}

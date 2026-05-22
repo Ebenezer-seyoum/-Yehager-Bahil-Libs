@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { AlertTriangle, CheckCircle2, Info, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Info, Search, XCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 type Alert = {
@@ -25,8 +25,12 @@ export function AdminAlertsPanel({ initialAlerts }: { initialAlerts: Alert[] }) 
   const router = useRouter();
   const [alerts, setAlerts] = useState(initialAlerts);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [severity, setSeverity] = useState("all");
   const unresolved = useMemo(() => alerts.filter((alert) => !alert.isResolved), [alerts]);
   const resolved = useMemo(() => alerts.filter((alert) => alert.isResolved), [alerts]);
+  const filteredUnresolved = useMemo(() => filterAlerts(unresolved, search, severity), [search, severity, unresolved]);
+  const filteredResolved = useMemo(() => filterAlerts(resolved, search, severity), [resolved, search, severity]);
 
   async function resolveAlert(alertId: string) {
     setBusyId(alertId);
@@ -51,7 +55,7 @@ export function AdminAlertsPanel({ initialAlerts }: { initialAlerts: Alert[] }) 
     const config = severityStyles[(alert.severity as keyof typeof severityStyles) ?? "info"] ?? severityStyles.info;
     const Icon = config.icon;
     return (
-      <div key={alert.id} className={`flex items-start gap-3 rounded-xl border p-4 ${config.classes} ${alert.isResolved ? "opacity-60" : ""}`}>
+      <div key={alert.id} className={`flex items-start gap-3 rounded-2xl border p-4 shadow-sm ${config.classes} ${alert.isResolved ? "opacity-60" : ""}`}>
         <Icon className="mt-0.5 h-5 w-5 shrink-0" />
         <div className="min-w-0 flex-1 text-foreground">
           <p className="font-medium">{alert.title}</p>
@@ -65,10 +69,10 @@ export function AdminAlertsPanel({ initialAlerts }: { initialAlerts: Alert[] }) 
             type="button"
             disabled={busyId !== null}
             onClick={() => void resolveAlert(alert.id)}
-            className="rounded-md p-1 hover:bg-background/70 disabled:opacity-60"
+            className="rounded-xl border border-green-200 bg-white/80 px-3 py-2 text-sm font-bold text-green-700 hover:bg-green-50 disabled:opacity-60"
             title="Mark resolved"
           >
-            <CheckCircle2 className="h-5 w-5 text-green-600" />
+            Resolve
           </button>
         ) : null}
       </div>
@@ -77,21 +81,73 @@ export function AdminAlertsPanel({ initialAlerts }: { initialAlerts: Alert[] }) 
 
   return (
     <div className="space-y-6">
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-muted-foreground">Active alerts</p>
+          <p className="mt-2 text-3xl font-black text-red-600">{unresolved.length}</p>
+        </div>
+        <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-muted-foreground">Critical</p>
+          <p className="mt-2 text-3xl font-black text-rose-700">{alerts.filter((alert) => alert.severity === "critical").length}</p>
+        </div>
+        <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-muted-foreground">Resolved</p>
+          <p className="mt-2 text-3xl font-black text-emerald-700">{resolved.length}</p>
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-3 rounded-2xl border border-border bg-card p-4 shadow-sm sm:flex-row">
+        <label className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search alerts..."
+            className="h-11 w-full rounded-xl border border-input bg-background pl-10 pr-4 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/25"
+          />
+        </label>
+        <select value={severity} onChange={(event) => setSeverity(event.target.value)} className="h-11 rounded-xl border border-input bg-background px-3 text-sm font-semibold">
+          <option value="all">All severities</option>
+          <option value="critical">Critical</option>
+          <option value="error">Error</option>
+          <option value="warning">Warning</option>
+          <option value="info">Info</option>
+        </select>
+      </div>
+
       <section>
         <h2 className="mb-3 flex items-center gap-2 font-heading text-xl font-semibold">
           {unresolved.length > 0 ? <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-red-500" /> : null}
           Active Alerts ({unresolved.length})
         </h2>
         <div className="space-y-3">
-          {unresolved.length === 0 ? <div className="rounded-xl border border-border bg-card p-4 text-sm text-muted-foreground">No active alerts.</div> : unresolved.map(renderAlert)}
+          {filteredUnresolved.length === 0 ? (
+            <div className="rounded-2xl border border-border bg-card p-8 text-center text-sm text-muted-foreground">
+              <CheckCircle2 className="mx-auto mb-3 h-9 w-9 text-emerald-600" />
+              No active alerts match this view.
+            </div>
+          ) : filteredUnresolved.map(renderAlert)}
         </div>
       </section>
-      {resolved.length > 0 ? (
+      {filteredResolved.length > 0 ? (
         <section>
           <h2 className="mb-3 font-heading text-xl font-semibold text-muted-foreground">Resolved ({resolved.length})</h2>
-          <div className="space-y-2">{resolved.slice(0, 10).map(renderAlert)}</div>
+          <div className="space-y-2">{filteredResolved.slice(0, 10).map(renderAlert)}</div>
         </section>
       ) : null}
     </div>
   );
+}
+
+function filterAlerts(alerts: Alert[], search: string, severity: string) {
+  const needle = search.trim().toLowerCase();
+  return alerts.filter((alert) => {
+    const matchesSearch =
+      !needle ||
+      [alert.title, alert.message, alert.type, alert.severity]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(needle));
+    const matchesSeverity = severity === "all" || alert.severity === severity;
+    return matchesSearch && matchesSeverity;
+  });
 }

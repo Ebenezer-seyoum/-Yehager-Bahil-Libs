@@ -12,6 +12,7 @@ import {
   ChevronDown,
   ChevronRight,
   ClipboardList,
+  CreditCard,
   FileText,
   FolderTree,
   LayoutDashboard,
@@ -33,6 +34,7 @@ type NavigationIcon =
   | "products"
   | "sections"
   | "orders"
+  | "payments"
   | "documents"
   | "exchange"
   | "alerts"
@@ -53,6 +55,13 @@ type NavigationGroup = {
   items: readonly NavigationItem[];
 };
 
+type NotificationCounts = {
+  orders?: number;
+  orderIds?: Array<string | null | undefined>;
+  payments?: number;
+  alerts?: number;
+};
+
 const icons = {
   dashboard: LayoutDashboard,
   users: UsersRound,
@@ -60,6 +69,7 @@ const icons = {
   products: Boxes,
   sections: FolderTree,
   orders: ClipboardList,
+  payments: CreditCard,
   documents: FileText,
   exchange: ArrowLeftRight,
   alerts: BellRing,
@@ -75,12 +85,14 @@ export function DashboardShell({
   title,
   subtitle,
   variant,
+  notificationCounts,
 }: {
   children: React.ReactNode;
   navigation: readonly NavigationGroup[];
   title: string;
   subtitle?: string;
   variant: "admin" | "employee";
+  notificationCounts?: NotificationCounts;
 }) {
   const pathname = usePathname();
   const { data: session } = useSession();
@@ -100,6 +112,21 @@ export function DashboardShell({
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
   const profileHref = variant === "admin" ? "/admin/settings" : "/employee/settings";
   const adminTopBar = variant === "admin";
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const counts = notificationCounts ?? {};
+  const [viewedOrderIds, setViewedOrderIds] = useState<string[]>([]);
+  const activeOrderIds = (counts.orderIds ?? []).filter(Boolean).map(String);
+  const visibleOrderCount = activeOrderIds.length > 0
+    ? activeOrderIds.filter((id) => !viewedOrderIds.includes(id)).length
+    : Math.max((counts.orders ?? 0) - viewedOrderIds.length, 0);
+  const totalNotifications = visibleOrderCount + (counts.payments ?? 0) + (counts.alerts ?? 0);
+  const badgeForHref = (href: string) => {
+    if (variant !== "admin") return 0;
+    if (href === "/admin/orders") return visibleOrderCount;
+    if (href === "/admin/payments") return counts.payments ?? 0;
+    if (href === "/admin/alerts") return counts.alerts ?? 0;
+    return 0;
+  };
   const initials =
     session?.user?.name
       ?.split(" ")
@@ -129,15 +156,43 @@ export function DashboardShell({
   }, [session?.user?.id, session?.user?.permissions]);
 
   useEffect(() => {
-    setCollapsedGroups((current) => {
-      const next = { ...current };
-      for (const group of visibleGroups) {
-        if (group.items.some((item) => pathname === item.href || pathname.startsWith(`${item.href}/`))) {
-          next[group.label] = false;
-        }
+    if (variant !== "admin") return;
+    const key = "admin-viewed-order-notifications";
+    const readStored = () => {
+      try {
+        const value = window.localStorage.getItem(key);
+        setViewedOrderIds(value ? JSON.parse(value) : []);
+      } catch {
+        setViewedOrderIds([]);
       }
-      return next;
-    });
+    };
+    const onViewed = (event: Event) => {
+      const orderId = (event as CustomEvent<string>).detail;
+      if (!orderId) return;
+      setViewedOrderIds((current) => {
+        const next = Array.from(new Set([...current, orderId]));
+        window.localStorage.setItem(key, JSON.stringify(next));
+        return next;
+      });
+    };
+    readStored();
+    window.addEventListener("admin-order-viewed", onViewed);
+    return () => window.removeEventListener("admin-order-viewed", onViewed);
+  }, [variant]);
+
+  useEffect(() => {
+    const id = window.setTimeout(() => {
+      setCollapsedGroups((current) => {
+        const next = { ...current };
+        for (const group of visibleGroups) {
+          if (group.items.some((item) => pathname === item.href || pathname.startsWith(`${item.href}/`))) {
+            next[group.label] = false;
+          }
+        }
+        return next;
+      });
+    }, 0);
+    return () => window.clearTimeout(id);
   }, [pathname, visibleGroups]);
 
   const sidebar = (
@@ -180,6 +235,7 @@ export function DashboardShell({
               <div className={variant === "admin" && group.label === "Users" ? "ml-3 space-y-1 border-l border-sidebar-border pl-3" : "space-y-1"}>
                 {group.items.map((item) => {
                   const Icon = icons[item.icon];
+                  const badgeCount = badgeForHref(item.href);
                   const active =
                     pathname === item.href ||
                     (item.href !== "/admin" &&
@@ -198,7 +254,12 @@ export function DashboardShell({
                       }
                     >
                       <Icon className="h-4 w-4" />
-                      {item.label}
+                      <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                      {badgeCount > 0 ? (
+                        <span className="rounded-full bg-red-600 px-2 py-0.5 text-xs font-black text-white shadow-sm shadow-red-950/20">
+                          {badgeCount > 99 ? "99+" : badgeCount}
+                        </span>
+                      ) : null}
                     </Link>
                   );
                 })}
@@ -269,17 +330,51 @@ export function DashboardShell({
               Search anything...
             </div>
 
-            <button
-              type="button"
-              className={
-                adminTopBar
-                  ? "relative rounded-2xl border border-white/10 bg-sidebar-accent/80 p-2.5 shadow-inner shadow-black/20 transition hover:bg-sidebar-accent"
-                  : "relative rounded-xl border border-border p-2.5"
-              }
-            >
-              <Bell className="h-4 w-4" />
-              <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-primary" />
-            </button>
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setNotificationsOpen((value) => !value)}
+                className={
+                  adminTopBar
+                    ? "relative rounded-2xl border border-white/10 bg-sidebar-accent/80 p-2.5 shadow-inner shadow-black/20 transition hover:bg-sidebar-accent"
+                    : "relative rounded-xl border border-border p-2.5"
+                }
+                aria-label="Admin notifications"
+              >
+                <Bell className="h-4 w-4" />
+                {totalNotifications > 0 ? (
+                  <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-black text-white">
+                    {totalNotifications > 99 ? "99+" : totalNotifications}
+                  </span>
+                ) : null}
+              </button>
+              {notificationsOpen ? (
+                <div className="absolute right-0 top-full z-40 mt-2 w-80 rounded-2xl border border-red-500/30 bg-sidebar p-2 text-sidebar-foreground shadow-2xl">
+                  <div className="px-3 py-2">
+                    <p className="text-sm font-bold text-white">Admin notifications</p>
+                    <p className="text-xs text-red-200">Items that need attention now.</p>
+                  </div>
+                  <div className="my-1 h-px bg-sidebar-border" />
+                  {[
+                    { href: "/admin/payments", label: "Payments awaiting verification", value: counts.payments ?? 0 },
+                    { href: "/admin/orders", label: "New or active orders to review", value: visibleOrderCount },
+                    { href: "/admin/alerts", label: "Unresolved system alerts", value: counts.alerts ?? 0 },
+                  ].map((item) => (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      onClick={() => setNotificationsOpen(false)}
+                      className={item.value > 0 ? "mt-1 flex items-center justify-between gap-3 rounded-xl border border-red-500/25 bg-red-500/15 px-3 py-2.5 text-sm text-red-50 transition hover:bg-red-500/25" : "mt-1 flex items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-sm transition hover:bg-sidebar-accent hover:text-white"}
+                    >
+                      <span>{item.label}</span>
+                      <span className={item.value > 0 ? "rounded-full bg-red-600 px-2 py-0.5 text-xs font-black text-white" : "text-xs text-sidebar-foreground/55"}>
+                        {item.value}
+                      </span>
+                    </Link>
+                  ))}
+                </div>
+              ) : null}
+            </div>
 
             <div className="relative">
               <button

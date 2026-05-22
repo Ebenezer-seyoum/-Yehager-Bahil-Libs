@@ -1,12 +1,47 @@
 import { DashboardShell } from "@/components/dashboard-shell";
 import { adminNavigation } from "@/lib/dashboard-navigation";
+import { apiRequest } from "@/lib/api-client";
 
-export default function AdminLayout({ children }: { children: React.ReactNode }) {
+type Order = {
+  id?: string | null;
+  status?: string | null;
+  paymentStatus?: string | null;
+};
+
+type Alert = {
+  isResolved?: boolean | null;
+};
+
+async function getAdminNotificationCounts() {
+  try {
+    const [ordersResponse, alertsResponse] = await Promise.all([
+      apiRequest<{ data?: Order[] }>("/api/v1/orders?limit=200"),
+      apiRequest<{ data?: Alert[] }>("/api/v1/admin/alerts?limit=200"),
+    ]);
+    const orders = Array.isArray(ordersResponse?.data) ? ordersResponse.data : [];
+    const alerts = Array.isArray(alertsResponse?.data) ? alertsResponse.data : [];
+
+    const orderNotifications = orders.filter((order) => ["pending", "processing"].includes(order.status ?? "pending"));
+    return {
+      orders: orderNotifications.length,
+      orderIds: orderNotifications.map((order) => order.id).filter(Boolean),
+      payments: orders.filter((order) => order.paymentStatus === "awaiting_verification").length,
+      alerts: alerts.filter((alert) => !alert.isResolved).length,
+    };
+  } catch {
+    return { orders: 0, orderIds: [], payments: 0, alerts: 0 };
+  }
+}
+
+export default async function AdminLayout({ children }: { children: React.ReactNode }) {
+  const notificationCounts = await getAdminNotificationCounts();
+
   return (
     <DashboardShell
       navigation={adminNavigation}
       title="Admin workspace"
       variant="admin"
+      notificationCounts={notificationCounts}
     >
       {children}
     </DashboardShell>

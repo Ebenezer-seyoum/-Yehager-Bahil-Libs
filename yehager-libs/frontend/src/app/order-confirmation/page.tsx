@@ -3,6 +3,7 @@ import { CheckCircle, Clock, GraduationCap, Mail, Package, ShieldCheck } from "l
 import { apiRequest } from "@/lib/api-client";
 import { ensureBackendUserSynced } from "@/lib/backend-user-sync";
 import { LEARN_LANGUAGES_URL } from "@/lib/taxonomy";
+import { OrderConfirmationPopupGate } from "@/components/order-confirmation-popup-gate";
 
 type OrderDetails = {
   id: string;
@@ -37,6 +38,7 @@ export default async function OrderConfirmationPage({
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-12 text-center sm:py-16">
+      <OrderConfirmationPopupGate orderId={order?.id ?? orderId} paymentStatus={order?.paymentStatus} />
       <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-green-100 ring-8 ring-green-100/20">
         <CheckCircle className="h-10 w-10 text-green-600" />
       </div>

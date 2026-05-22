@@ -1,8 +1,46 @@
 "use client";
 
-import Link from "next/link";
 import { useMemo, useState } from "react";
-import { Ban, CheckCircle2, FileCheck, MapPin, Search, Truck } from "lucide-react";
+import {
+  CheckCircle2,
+  ClipboardCheck,
+  CreditCard,
+  Eye,
+  ExternalLink,
+  FileCheck,
+  MapPin,
+  Package,
+  Ruler,
+  Search,
+  Truck,
+  UserRound,
+  X,
+} from "lucide-react";
+
+type OrderItem = {
+  id?: string | null;
+  productId?: string | null;
+  productName?: string | null;
+  name?: string | null;
+  imageUrl?: string | null;
+  image_url?: string | null;
+  quantity?: number | string | null;
+  price?: number | string | null;
+  priceUsd?: number | string | null;
+  measurements?: Record<string, string | number | null> | null;
+  measurementDetails?: Record<string, string | number | null> | null;
+  measurement_details?: Record<string, string | number | null> | null;
+};
+
+type ShippingAddress = {
+  street?: string | null;
+  city?: string | null;
+  state?: string | null;
+  zip?: string | null;
+  postalCode?: string | null;
+  country?: string | null;
+  phone?: string | null;
+};
 
 type Order = {
   id: string;
@@ -11,57 +49,58 @@ type Order = {
   userEmail?: string | null;
   totalUsd?: number | string | null;
   totalEtb?: number | string | null;
-  etbExchangeRate?: number | string | null;
   status?: string | null;
   paymentStatus?: string | null;
   paymentMethod?: string | null;
   paymentCurrency?: string | null;
   paymentProofUrl?: string | null;
+  paymentProofUploadedAt?: string | null;
   fulfillmentType?: string | null;
+  carrier?: string | null;
   pickupLocation?: string | null;
   pickupPersonName?: string | null;
   pickupPersonPhone?: string | null;
   pickupIdUrl?: string | null;
   pickupSignedDocUrl?: string | null;
   pickupProofUrl?: string | null;
-  shippingDocuments?: Array<{ url: string; label: string; uploadedAt?: string | null }> | null;
+  shippingDocuments?: Array<{ url: string; label?: string | null; uploadedAt?: string | null }> | null;
+  shippingAddress?: ShippingAddress | null;
+  items?: OrderItem[] | null;
   createdAt?: string | null;
 };
 
-const ORDER_STATUSES = [
-  "pending",
-  "processing",
-  "fulfilled",
-  "tailoring",
-  "quality_check",
-  "shipped",
-  "delivered",
-  "ready_for_pickup",
-  "picked_up",
-  "cancelled",
-];
+const ORDER_STATUSES = ["pending", "tailoring", "quality_check", "shipped", "delivered", "ready_for_pickup", "picked_up"];
 const PAYMENT_STATUSES = ["pending", "awaiting_verification", "paid", "failed", "refunded", "unpaid"];
 
 const STATUS_STYLES: Record<string, string> = {
-  pending: "bg-amber-100 text-amber-800",
-  processing: "bg-slate-100 text-slate-700",
-  fulfilled: "bg-green-100 text-green-800",
-  tailoring: "bg-blue-100 text-blue-700",
-  quality_check: "bg-purple-100 text-purple-800",
-  shipped: "bg-emerald-100 text-emerald-800",
-  delivered: "bg-green-200 text-green-900",
-  ready_for_pickup: "bg-orange-100 text-orange-800",
-  picked_up: "bg-green-200 text-green-900",
-  cancelled: "bg-red-100 text-red-700",
+  pending: "bg-yellow-100 text-yellow-900 border-yellow-200",
+  tailoring: "bg-blue-100 text-blue-800 border-blue-200",
+  quality_check: "bg-purple-100 text-purple-800 border-purple-200",
+  shipped: "bg-cyan-100 text-cyan-800 border-cyan-200",
+  delivered: "bg-green-100 text-green-800 border-green-200",
+  ready_for_pickup: "bg-orange-100 text-orange-800 border-orange-200",
+  picked_up: "bg-green-100 text-green-900 border-green-200",
 };
 
 const PAYMENT_STYLES: Record<string, string> = {
-  pending: "bg-amber-100 text-amber-800",
-  awaiting_verification: "bg-yellow-100 text-yellow-900",
-  paid: "bg-green-100 text-green-800",
-  failed: "bg-red-100 text-red-700",
-  refunded: "bg-slate-100 text-slate-700",
-  unpaid: "bg-orange-100 text-orange-800",
+  pending: "bg-yellow-100 text-yellow-900 border-yellow-200",
+  awaiting_verification: "bg-orange-100 text-orange-800 border-orange-200",
+  paid: "bg-green-100 text-green-800 border-green-200",
+  failed: "bg-red-100 text-red-800 border-red-200",
+  refunded: "bg-slate-100 text-slate-800 border-slate-200",
+  unpaid: "bg-orange-100 text-orange-800 border-orange-200",
+};
+
+const MEASUREMENT_LABELS: Record<string, string> = {
+  chest: "Chest",
+  hips: "Hips",
+  armLength: "Arm Length",
+  arm_length: "Arm Length",
+  waist: "Waist",
+  shoulderWidth: "Shoulder Width",
+  shoulder_width: "Shoulder Width",
+  torsoLength: "Torso Length",
+  torso_length: "Torso Length",
 };
 
 function formatCurrency(value: Order["totalUsd"]) {
@@ -70,8 +109,31 @@ function formatCurrency(value: Order["totalUsd"]) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
 }
 
-function prettyLabel(value: string) {
-  return value.replaceAll("_", " ");
+function formatDate(value?: string | null) {
+  if (!value) return "-";
+  return new Date(value).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
+}
+
+function prettyLabel(value?: string | null) {
+  return (value ?? "pending").replaceAll("_", " ");
+}
+
+function shortOrderNumber(value?: string | null) {
+  if (!value) return "-";
+  return value.replace(/^#?/, "");
+}
+
+function itemTitle(item: OrderItem, index: number) {
+  return item.productName ?? item.name ?? `Item ${index + 1}`;
+}
+
+function itemImage(item: OrderItem) {
+  return item.imageUrl ?? item.image_url ?? null;
+}
+
+function measurementRows(item: OrderItem) {
+  const measurements = item.measurements ?? item.measurementDetails ?? item.measurement_details ?? {};
+  return Object.entries(measurements).filter(([, value]) => value !== null && value !== undefined && value !== "");
 }
 
 export function AdminOrdersTable({ initialOrders }: { initialOrders: Order[] }) {
@@ -80,10 +142,16 @@ export function AdminOrdersTable({ initialOrders }: { initialOrders: Order[] }) 
   const [fulfillmentFilter, setFulfillmentFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [paymentFilter, setPaymentFilter] = useState("all");
-  const [reviewFilter, setReviewFilter] = useState("all");
-  const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const selectedOrder = orders.find((order) => order.id === selectedOrderId) ?? null;
+
+  function openOrder(orderId: string) {
+    setSelectedOrderId(orderId);
+    window.dispatchEvent(new CustomEvent("admin-order-viewed", { detail: orderId }));
+  }
 
   const filteredOrders = useMemo(() => {
     const needle = search.trim().toLowerCase();
@@ -91,26 +159,15 @@ export function AdminOrdersTable({ initialOrders }: { initialOrders: Order[] }) 
       const matchesSearch =
         !needle ||
         [order.orderNumber, order.customerName, order.userEmail]
-        .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(needle));
+          .filter(Boolean)
+          .some((value) => String(value).toLowerCase().includes(needle));
       const isPickup = order.fulfillmentType === "pickup";
-      const missingPickupDocs = isPickup && (!order.pickupIdUrl || !order.pickupSignedDocUrl);
-      const hasShippingDocs = !isPickup && (order.shippingDocuments ?? []).length > 0;
       const matchesFulfillment = fulfillmentFilter === "all" || (fulfillmentFilter === "pickup" ? isPickup : !isPickup);
       const matchesStatus = statusFilter === "all" || order.status === statusFilter;
       const matchesPayment = paymentFilter === "all" || order.paymentStatus === paymentFilter;
-      const matchesReview =
-        reviewFilter === "all" ||
-        (reviewFilter === "needs_review" && (missingPickupDocs || order.paymentStatus === "awaiting_verification")) ||
-        (reviewFilter === "etb_proof" && Boolean(order.paymentProofUrl)) ||
-        (reviewFilter === "missing_pickup_docs" && missingPickupDocs) ||
-        (reviewFilter === "shipping_docs" && hasShippingDocs);
-      return matchesSearch && matchesFulfillment && matchesStatus && matchesPayment && matchesReview;
+      return matchesSearch && matchesFulfillment && matchesStatus && matchesPayment;
     });
-  }, [fulfillmentFilter, orders, paymentFilter, reviewFilter, search, statusFilter]);
-
-  const statusOptions = useMemo(() => Array.from(new Set(orders.map((order) => order.status).filter(Boolean))).sort(), [orders]);
-  const paymentOptions = useMemo(() => Array.from(new Set(orders.map((order) => order.paymentStatus).filter(Boolean))).sort(), [orders]);
+  }, [fulfillmentFilter, orders, paymentFilter, search, statusFilter]);
 
   async function updateOrder(orderId: string, patch: Partial<Pick<Order, "status" | "paymentStatus">>) {
     const key = `${orderId}-${Object.keys(patch).join("-")}`;
@@ -127,10 +184,8 @@ export function AdminOrdersTable({ initialOrders }: { initialOrders: Order[] }) 
         throw new Error(payload?.error ?? "Could not update order");
       }
       const payload = (await res.json()) as { data?: Order };
-      const updated = payload.data;
-      if (updated) {
-        setOrders((current) => current.map((order) => (order.id === orderId ? { ...order, ...updated } : order)));
-      }
+      const updated = payload.data ?? { id: orderId, ...patch };
+      setOrders((current) => current.map((order) => (order.id === orderId ? { ...order, ...updated } : order)));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not update order");
     } finally {
@@ -141,260 +196,329 @@ export function AdminOrdersTable({ initialOrders }: { initialOrders: Order[] }) 
   return (
     <div className="space-y-4">
       <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
-        <div className="grid gap-3 lg:grid-cols-[minmax(220px,1.4fr)_repeat(4,minmax(150px,1fr))]">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search orders..."
-            className="w-full rounded-xl border border-input bg-background py-2.5 pl-9 pr-4 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
-          />
+        <div className="grid gap-3 lg:grid-cols-[minmax(260px,1.4fr)_repeat(3,minmax(150px,1fr))_auto]">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search by order #, name, or email..."
+              className="h-12 w-full rounded-xl border border-input bg-background py-2.5 pl-9 pr-4 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/25"
+            />
+          </div>
+          <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="h-12 rounded-xl border border-input bg-background px-3 text-sm font-medium">
+            <option value="all">All Statuses</option>
+            {ORDER_STATUSES.map((status) => <option key={status} value={status}>{prettyLabel(status)}</option>)}
+          </select>
+          <select value={paymentFilter} onChange={(event) => setPaymentFilter(event.target.value)} className="h-12 rounded-xl border border-input bg-background px-3 text-sm font-medium">
+            <option value="all">All Payments</option>
+            {PAYMENT_STATUSES.map((status) => <option key={status} value={status}>{prettyLabel(status)}</option>)}
+          </select>
+          <select value={fulfillmentFilter} onChange={(event) => setFulfillmentFilter(event.target.value)} className="h-12 rounded-xl border border-input bg-background px-3 text-sm font-medium">
+            <option value="all">All Types</option>
+            <option value="mail">Mail / EMS</option>
+            <option value="pickup">Pickup</option>
+          </select>
+          <p className="flex h-12 items-center whitespace-nowrap text-sm text-muted-foreground">{filteredOrders.length} orders</p>
         </div>
-          <select value={fulfillmentFilter} onChange={(event) => setFulfillmentFilter(event.target.value)} className="h-10 rounded-xl border border-input bg-background px-3 text-sm font-medium">
-            <option value="all">All fulfillment</option>
-            <option value="pickup">In-store pickup</option>
-            <option value="mail">Mailed orders</option>
-          </select>
-          <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="h-10 rounded-xl border border-input bg-background px-3 text-sm font-medium">
-            <option value="all">All status</option>
-            {statusOptions.map((status) => (
-              <option key={status} value={status ?? ""}>{prettyLabel(status ?? "")}</option>
-            ))}
-          </select>
-          <select value={paymentFilter} onChange={(event) => setPaymentFilter(event.target.value)} className="h-10 rounded-xl border border-input bg-background px-3 text-sm font-medium">
-            <option value="all">All payment</option>
-            {paymentOptions.map((status) => (
-              <option key={status} value={status ?? ""}>{prettyLabel(status ?? "")}</option>
-            ))}
-          </select>
-          <select value={reviewFilter} onChange={(event) => setReviewFilter(event.target.value)} className="h-10 rounded-xl border border-input bg-background px-3 text-sm font-medium">
-            <option value="all">All review states</option>
-            <option value="needs_review">Needs review</option>
-            <option value="etb_proof">ETB proof</option>
-            <option value="missing_pickup_docs">Missing pickup docs</option>
-            <option value="shipping_docs">Has shipping docs</option>
-          </select>
-        </div>
-        <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-          <p>Showing {filteredOrders.length} of {orders.length} order(s)</p>
-          {(search || fulfillmentFilter !== "all" || statusFilter !== "all" || paymentFilter !== "all" || reviewFilter !== "all") ? (
-            <button
-              type="button"
-              onClick={() => {
-                setSearch("");
-                setFulfillmentFilter("all");
-                setStatusFilter("all");
-                setPaymentFilter("all");
-                setReviewFilter("all");
-              }}
-              className="rounded-full bg-secondary px-3 py-1 font-medium text-foreground hover:bg-secondary/80"
-            >
-              Clear filters
-            </button>
-          ) : null}
-        </div>
+        {error ? <div className="mt-3 rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm font-medium text-destructive">{error}</div> : null}
       </div>
 
-      {error ? <div className="rounded-md border border-destructive/40 bg-card p-3 text-sm text-destructive">{error}</div> : null}
-
-      <div className="overflow-hidden rounded-xl border border-border bg-card">
+      <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
         <div className="overflow-x-auto">
-        <table className="min-w-[760px] w-full text-sm">
-          <thead className="bg-secondary/60 text-left">
-            <tr>
-              <th className="px-4 py-3 font-medium">Order</th>
-              <th className="px-4 py-3 font-medium">Customer</th>
-              <th className="px-4 py-3 font-medium">Total</th>
-              <th className="px-4 py-3 font-medium">Status</th>
-              <th className="px-4 py-3 font-medium">Payment</th>
-              <th className="px-4 py-3 font-medium">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredOrders.length === 0 ? (
+          <table className="w-full min-w-[1180px] text-sm">
+            <thead className="bg-secondary/60 text-left">
               <tr>
-                <td className="px-4 py-5 text-muted-foreground" colSpan={6}>
-                  No orders found.
-                </td>
+                <th className="px-4 py-4 font-bold text-muted-foreground">Order #</th>
+                <th className="px-4 py-4 font-bold text-muted-foreground">Customer</th>
+                <th className="px-4 py-4 font-bold text-muted-foreground">Items</th>
+                <th className="px-4 py-4 font-bold text-muted-foreground">Total</th>
+                <th className="px-4 py-4 font-bold text-muted-foreground">Fulfillment</th>
+                <th className="px-4 py-4 font-bold text-muted-foreground">Order Status</th>
+                <th className="px-4 py-4 font-bold text-muted-foreground">Payment</th>
+                <th className="px-4 py-4 font-bold text-muted-foreground" aria-label="Open details" />
               </tr>
-            ) : (
-              filteredOrders.map((order) => (
-                <>
-                  <tr
-                    key={order.id}
-                    className="cursor-pointer border-t border-border transition-colors hover:bg-secondary/30"
-                    onClick={() => setExpandedOrderId((current) => (current === order.id ? null : order.id))}
-                  >
-                    <td className="px-4 py-3">
-                      <Link
-                        href={`/admin/orders/${order.id}`}
-                        onClick={(event) => event.stopPropagation()}
-                        className="font-medium text-primary hover:underline"
-                      >
-                        {order.orderNumber ?? order.id}
-                      </Link>
-                      {order.createdAt ? <p className="mt-1 text-xs text-muted-foreground">{new Date(order.createdAt).toLocaleDateString()}</p> : null}
-                    </td>
-                    <td className="px-4 py-3">
-                      <p>{order.customerName ?? "—"}</p>
-                      <p className="text-xs text-muted-foreground">{order.userEmail ?? "—"}</p>
-                      {order.fulfillmentType === "pickup" ? (
-                        <span className="mt-1 inline-flex items-center gap-1 text-[10px] font-medium text-primary">
-                          <MapPin className="h-3 w-3" />
-                          Pickup
-                        </span>
-                      ) : null}
-                    </td>
-                    <td className="px-4 py-3">
-                      <p className="font-medium text-primary">{formatCurrency(order.totalUsd)}</p>
-                      {order.paymentCurrency === "ETB" && order.totalEtb ? (
-                        <p className="mt-1 text-xs text-muted-foreground">{Number(order.totalEtb).toLocaleString()} ETB</p>
-                      ) : null}
-                    </td>
-                    <td className="px-4 py-3">
-                      <select
-                        value={order.status ?? "pending"}
-                        disabled={busyKey !== null}
-                        onClick={(event) => event.stopPropagation()}
-                        onChange={(event) => void updateOrder(order.id, { status: event.target.value })}
-                        className={`rounded-full border-0 px-2 py-1 text-xs font-medium ${STATUS_STYLES[order.status ?? "pending"] ?? "bg-slate-100 text-slate-700"}`}
-                      >
-                        {ORDER_STATUSES.map((status) => (
-                          <option key={status} value={status}>
-                            {prettyLabel(status)}
-                          </option>
-                        ))}
-                      </select>
-                      {order.paymentMethod || order.paymentCurrency ? (
-                        <p className="mt-1 text-[10px] text-muted-foreground">
-                          {order.paymentMethod ?? "payment"} · {order.paymentCurrency ?? "USD"}
+            </thead>
+            <tbody>
+              {filteredOrders.length === 0 ? (
+                <tr>
+                  <td className="px-4 py-12 text-center text-muted-foreground" colSpan={8}>No orders found.</td>
+                </tr>
+              ) : (
+                filteredOrders.map((order) => {
+                  const items = order.items ?? [];
+                  const firstItem = items[0];
+                  const isPickup = order.fulfillmentType === "pickup";
+                  return (
+                    <tr key={order.id} className="border-t border-border transition hover:bg-secondary/30">
+                      <td className="px-4 py-5 align-middle">
+                        <button type="button" onClick={() => openOrder(order.id)} className="text-left">
+                          <p className="max-w-[120px] break-words font-mono text-xs font-black text-foreground">{shortOrderNumber(order.orderNumber ?? order.id)}</p>
+                          <p className="mt-1 text-xs text-muted-foreground">{order.createdAt ? new Date(order.createdAt).toLocaleDateString() : "-"}</p>
+                        </button>
+                      </td>
+                      <td className="px-4 py-5 align-middle">
+                        <p className="font-bold">{order.customerName ?? "-"}</p>
+                        <p className="text-sm text-muted-foreground">{order.userEmail ?? "-"}</p>
+                      </td>
+                      <td className="px-4 py-5 align-middle">
+                        <p className="font-bold">{items.length || 0} item(s)</p>
+                        <p className="mt-1 max-w-[190px] truncate text-sm text-muted-foreground">{firstItem ? itemTitle(firstItem, 0) : "No items"}</p>
+                      </td>
+                      <td className="px-4 py-5 align-middle">
+                        <p className="font-black text-primary">{formatCurrency(order.totalUsd)}</p>
+                        {order.paymentCurrency === "ETB" && order.totalEtb ? <p className="mt-1 text-xs text-muted-foreground">{Number(order.totalEtb).toLocaleString()} ETB</p> : null}
+                      </td>
+                      <td className="px-4 py-5 align-middle">
+                        <p className="flex items-center gap-1.5 font-bold">
+                          {isPickup ? <MapPin className="h-4 w-4 text-cyan-500" /> : <Package className="h-4 w-4 text-primary" />}
+                          {isPickup ? "Pickup" : "Ethiopian Mail Service"}
                         </p>
-                      ) : null}
-                      {order.paymentProofUrl ? (
-                        <a
-                          href={order.paymentProofUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          onClick={(event) => event.stopPropagation()}
-                          className="mt-1 inline-flex items-center gap-1 text-[10px] font-medium text-primary hover:underline"
-                        >
-                          <FileCheck className="h-3 w-3" />
-                          ETB proof
-                        </a>
-                      ) : null}
-                    </td>
-                    <td className="px-4 py-3">
-                      <select
-                        value={order.paymentStatus ?? "pending"}
-                        disabled={busyKey !== null}
-                        onClick={(event) => event.stopPropagation()}
-                        onChange={(event) => void updateOrder(order.id, { paymentStatus: event.target.value })}
-                        className={`rounded-full border-0 px-2 py-1 text-xs font-medium ${PAYMENT_STYLES[order.paymentStatus ?? "pending"] ?? "bg-slate-100 text-slate-700"}`}
-                      >
-                        {PAYMENT_STATUSES.map((status) => (
-                          <option key={status} value={status}>
-                            {prettyLabel(status)}
-                          </option>
-                        ))}
-                      </select>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex gap-1">
-                        <button
-                          type="button"
-                          title="Mark delivered"
+                        <p className="mt-1 max-w-[160px] truncate text-sm text-muted-foreground">
+                          {isPickup ? order.pickupLocation ?? order.pickupPersonPhone ?? "-" : order.shippingAddress?.country ?? order.shippingAddress?.city ?? "-"}
+                        </p>
+                      </td>
+                      <td className="px-4 py-5 align-middle">
+                        <select
+                          value={order.status ?? "pending"}
                           disabled={busyKey !== null}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            void updateOrder(order.id, { status: "delivered" });
-                          }}
-                          className="rounded-lg border border-border bg-background p-2 transition hover:bg-secondary disabled:opacity-60"
+                          onChange={(event) => void updateOrder(order.id, { status: event.target.value })}
+                          className={`h-9 min-w-[190px] rounded-full border px-4 text-sm font-bold capitalize outline-none ${STATUS_STYLES[order.status ?? "pending"] ?? STATUS_STYLES.pending}`}
                         >
-                          <CheckCircle2 className="h-4 w-4" />
-                        </button>
-                        <button
-                          type="button"
-                          title="Refund payment"
+                          {ORDER_STATUSES.map((status) => <option key={status} value={status}>{prettyLabel(status)}</option>)}
+                        </select>
+                      </td>
+                      <td className="px-4 py-5 align-middle">
+                        <select
+                          value={order.paymentStatus ?? "pending"}
                           disabled={busyKey !== null}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            void updateOrder(order.id, { paymentStatus: "refunded" });
-                          }}
-                          className="rounded-lg border border-border bg-background p-2 transition hover:bg-secondary disabled:opacity-60"
+                          onChange={(event) => void updateOrder(order.id, { paymentStatus: event.target.value })}
+                          className={`h-9 min-w-[170px] rounded-full border px-4 text-sm font-bold capitalize outline-none ${PAYMENT_STYLES[order.paymentStatus ?? "pending"] ?? PAYMENT_STYLES.pending}`}
                         >
-                          <Ban className="h-4 w-4 text-destructive" />
+                          {PAYMENT_STATUSES.map((status) => <option key={status} value={status}>{prettyLabel(status)}</option>)}
+                        </select>
+                      </td>
+                      <td className="px-4 py-5 align-middle">
+                        <button type="button" onClick={() => openOrder(order.id)} className="inline-flex h-9 items-center gap-2 rounded-xl bg-primary px-3 text-sm font-bold text-primary-foreground transition hover:bg-primary/90" aria-label="Open order details">
+                          <Eye className="h-4 w-4" />
+                          View
                         </button>
-                        <button
-                          type="button"
-                          title="Mark shipped"
-                          disabled={busyKey !== null}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            void updateOrder(order.id, { status: "shipped" });
-                          }}
-                          className="rounded-lg border border-border bg-background p-2 transition hover:bg-secondary disabled:opacity-60"
-                        >
-                          <Truck className="h-4 w-4 text-blue-600" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                  {expandedOrderId === order.id ? (
-                    <tr key={`${order.id}-expanded`} className="border-t border-border bg-secondary/20">
-                      <td colSpan={6} className="px-6 py-4">
-                        <div className="space-y-3 text-sm">
-                          {order.fulfillmentType === "pickup" ? (
-                            <div className="space-y-1">
-                              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Pickup Details</p>
-                              <p>
-                                <span className="font-medium">Location:</span> {order.pickupLocation ?? "Not set"}
-                              </p>
-                              <p>
-                                <span className="font-medium">Pickup Person:</span> {order.pickupPersonName ?? "—"}
-                                {order.pickupPersonPhone ? ` · ${order.pickupPersonPhone}` : ""}
-                              </p>
-                              <div className="flex flex-wrap gap-2 pt-1 text-xs">
-                                <span className={order.pickupIdUrl ? "text-green-600" : "text-amber-600"}>ID: {order.pickupIdUrl ? "uploaded" : "missing"}</span>
-                                <span className={order.pickupSignedDocUrl ? "text-green-600" : "text-amber-600"}>Signed form: {order.pickupSignedDocUrl ? "uploaded" : "missing"}</span>
-                                <span className={order.pickupProofUrl ? "text-green-600" : "text-muted-foreground"}>Pickup proof: {order.pickupProofUrl ? "uploaded" : "not uploaded"}</span>
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="space-y-1">
-                              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Shipping Documents</p>
-                              {(order.shippingDocuments ?? []).length > 0 ? (
-                                <div className="flex flex-wrap gap-2 text-xs">
-                                  {(order.shippingDocuments ?? []).map((doc, index) => (
-                                    <a key={`${doc.url}-${index}`} href={doc.url} target="_blank" rel="noreferrer" className="rounded-full bg-background px-2 py-1 text-primary hover:underline">
-                                      {doc.label}
-                                    </a>
-                                  ))}
-                                </div>
-                              ) : (
-                                <p className="text-xs text-muted-foreground">No shipping documents uploaded yet.</p>
-                              )}
-                            </div>
-                          )}
-                          <div className="flex flex-wrap gap-3 pt-1">
-                            <Link href={`/admin/orders/${order.id}`} className="text-sm text-primary hover:underline">
-                              Open full order details
-                            </Link>
-                            <Link href="/admin/orders/documents" className="text-sm text-primary hover:underline">
-                              Manage documents
-                            </Link>
-                          </div>
-                        </div>
                       </td>
                     </tr>
-                  ) : null}
-                </>
-              ))
-            )}
-          </tbody>
-        </table>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
+
+      {selectedOrder ? (
+        <OrderDetailDrawer
+          order={selectedOrder}
+          busy={busyKey !== null}
+          onClose={() => setSelectedOrderId(null)}
+          onStatusChange={(status) => void updateOrder(selectedOrder.id, { status })}
+          onPaymentChange={(paymentStatus) => void updateOrder(selectedOrder.id, { paymentStatus })}
+        />
+      ) : null}
     </div>
+  );
+}
+
+function OrderDetailDrawer({
+  order,
+  busy,
+  onClose,
+  onStatusChange,
+  onPaymentChange,
+}: {
+  order: Order;
+  busy: boolean;
+  onClose: () => void;
+  onStatusChange: (status: string) => void;
+  onPaymentChange: (paymentStatus: string) => void;
+}) {
+  const items = order.items ?? [];
+  const shipping = order.shippingAddress ?? {};
+  const isPickup = order.fulfillmentType === "pickup";
+
+  return (
+    <div className="fixed inset-0 z-[90] bg-black/45 backdrop-blur-sm">
+      <button type="button" className="absolute inset-0 cursor-default" onClick={onClose} aria-label="Close order details" />
+      <aside className="absolute right-0 top-0 flex h-full w-full max-w-4xl flex-col bg-background text-foreground shadow-2xl md:w-[55vw]">
+        <header className="flex items-start justify-between gap-4 border-b border-border bg-card px-6 py-6">
+          <div>
+            <p className="text-sm tracking-[0.18em] text-muted-foreground">Order</p>
+            <h2 className="mt-2 text-3xl font-black text-primary">#{shortOrderNumber(order.orderNumber ?? order.id)}</h2>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className={`rounded-full px-4 py-2 text-sm font-black capitalize ${STATUS_STYLES[order.status ?? "pending"] ?? STATUS_STYLES.pending}`}>{prettyLabel(order.status)}</span>
+            <span className={`rounded-full px-4 py-2 text-sm font-black capitalize ${PAYMENT_STYLES[order.paymentStatus ?? "pending"] ?? PAYMENT_STYLES.pending}`}>{prettyLabel(order.paymentStatus)}</span>
+            <button type="button" onClick={onClose} className="rounded-full p-2 text-muted-foreground transition hover:bg-secondary hover:text-foreground" aria-label="Close">
+              <X className="h-6 w-6" />
+            </button>
+          </div>
+        </header>
+
+        <div className="flex-1 overflow-y-auto px-6 py-6">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="space-y-2">
+              <span className="text-sm font-medium text-muted-foreground">Order Status</span>
+              <select disabled={busy} value={order.status ?? "pending"} onChange={(event) => onStatusChange(event.target.value)} className={`h-12 w-full rounded-xl border px-4 text-base font-bold capitalize outline-none ${STATUS_STYLES[order.status ?? "pending"] ?? STATUS_STYLES.pending}`}>
+                {ORDER_STATUSES.map((status) => <option key={status} value={status}>{prettyLabel(status)}</option>)}
+              </select>
+            </label>
+            <label className="space-y-2">
+              <span className="text-sm font-medium text-muted-foreground">Payment Status</span>
+              <select disabled={busy} value={order.paymentStatus ?? "pending"} onChange={(event) => onPaymentChange(event.target.value)} className={`h-12 w-full rounded-xl border px-4 text-base font-bold capitalize outline-none ${PAYMENT_STYLES[order.paymentStatus ?? "pending"] ?? PAYMENT_STYLES.pending}`}>
+                {PAYMENT_STATUSES.map((status) => <option key={status} value={status}>{prettyLabel(status)}</option>)}
+              </select>
+            </label>
+          </div>
+
+          <DarkSection icon={UserRound} title="Customer Information">
+            <DetailRow label="Full Name" value={order.customerName ?? "-"} />
+            <DetailRow label="Email" value={order.userEmail ?? "-"} />
+            <DetailRow label="Order Date" value={formatDate(order.createdAt)} />
+            <DetailRow label="Order Number" value={`#${shortOrderNumber(order.orderNumber ?? order.id)}`} highlight />
+          </DarkSection>
+
+          <DarkSection icon={CreditCard} title="Payment Details">
+            <DetailRow label="Payment Method" value={order.paymentMethod === "etb_bank_transfer" ? "ETB Bank Transfer" : order.paymentMethod ?? "Stripe"} />
+            <DetailRow label="Total (USD)" value={formatCurrency(order.totalUsd)} highlight />
+            {order.totalEtb ? <DetailRow label="Total (ETB)" value={`${Number(order.totalEtb).toLocaleString()} ETB`} /> : null}
+            <DetailRow label="Payment Status" value={prettyLabel(order.paymentStatus)} />
+            {order.paymentProofUrl ? (
+              <a href={order.paymentProofUrl} target="_blank" rel="noreferrer" className="mt-4 inline-flex items-center gap-2 text-sm font-bold text-primary hover:underline">
+                <ExternalLink className="h-4 w-4" />
+                View ETB Payment Proof Screenshot
+              </a>
+            ) : null}
+          </DarkSection>
+
+          <DarkSection icon={Truck} title={isPickup ? "Pickup Details" : "Shipping Details"}>
+            <DetailRow label="Fulfillment Type" value={isPickup ? "Pickup" : "Mail / EMS Shipping"} />
+            {isPickup ? (
+              <>
+                <DetailRow label="Location" value={order.pickupLocation ?? "-"} />
+                <DetailRow label="Pickup Person" value={order.pickupPersonName ?? "-"} />
+                <DetailRow label="Phone" value={order.pickupPersonPhone ?? "-"} />
+              </>
+            ) : (
+              <>
+                <DetailRow label="Carrier" value={order.carrier ?? "Ethiopian Mail Service"} />
+                <DetailRow label="Street" value={shipping.street ?? "-"} />
+                <DetailRow label="City / State" value={[shipping.city, shipping.state].filter(Boolean).join(", ") || "-"} />
+                <DetailRow label="ZIP / Country" value={[shipping.postalCode ?? shipping.zip, shipping.country].filter(Boolean).join(" ") || "-"} />
+                <DetailRow label="Phone" value={shipping.phone ?? "-"} />
+              </>
+            )}
+          </DarkSection>
+
+          <DarkSection icon={FileCheck} title="Documents & Proof">
+            <p className="mb-2 text-sm font-bold text-muted-foreground">Shipping Documents</p>
+            {(order.shippingDocuments ?? []).length > 0 ? (
+              <div className="mb-4 flex flex-wrap gap-2">
+                {(order.shippingDocuments ?? []).map((doc, index) => (
+                  <a key={`${doc.url}-${index}`} href={doc.url} target="_blank" rel="noreferrer" className="text-sm font-bold text-primary hover:underline">
+                    {doc.label ?? `Document ${index + 1}`}
+                  </a>
+                ))}
+              </div>
+            ) : (
+              <p className="mb-4 text-muted-foreground">No shipping documents uploaded yet</p>
+            )}
+            {order.paymentProofUrl ? (
+              <>
+                <p className="text-sm font-bold text-muted-foreground">ETB Payment Proof</p>
+                <a href={order.paymentProofUrl} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-2 text-sm font-bold text-primary hover:underline">
+                  <ExternalLink className="h-4 w-4" />
+                  View Payment Screenshot
+                  {order.paymentProofUploadedAt ? <span className="text-muted-foreground">· {new Date(order.paymentProofUploadedAt).toLocaleDateString()}</span> : null}
+                </a>
+              </>
+            ) : null}
+          </DarkSection>
+
+          <DarkSection icon={Ruler} title="Items & Measurements">
+            {items.length === 0 ? (
+              <p className="text-muted-foreground">No items found.</p>
+            ) : (
+              <div className="space-y-4">
+                {items.map((item, index) => (
+                  <div key={`${item.productId ?? item.id ?? index}`} className="overflow-hidden rounded-xl border border-border bg-background">
+                    <div className="flex items-center gap-4 border-b border-border p-4">
+                      {itemImage(item) ? <img src={itemImage(item) ?? ""} alt="" className="h-16 w-16 rounded-lg object-cover" /> : <div className="flex h-16 w-16 items-center justify-center rounded-lg bg-secondary"><Package className="h-6 w-6" /></div>}
+                      <div>
+                        <p className="text-lg font-black">{itemTitle(item, index)}</p>
+                        <p className="text-sm text-muted-foreground">Qty: {item.quantity ?? 1} · {formatCurrency(item.priceUsd ?? item.price ?? 0)}</p>
+                      </div>
+                    </div>
+                    {measurementRows(item).length > 0 ? (
+                      <div className="grid gap-x-8 gap-y-2 p-4 sm:grid-cols-2">
+                        {measurementRows(item).map(([key, value]) => (
+                          <div key={key} className="flex justify-between gap-4 text-sm">
+                            <span className="text-muted-foreground">{MEASUREMENT_LABELS[key] ?? prettyLabel(key)}</span>
+                            <span className="font-black">{value}&quot;</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="p-4 text-sm text-muted-foreground">No measurements recorded for this item.</p>
+                    )}
+                  </div>
+                ))}
+                <div className="flex justify-between border-t border-border pt-4 text-lg font-black">
+                  <span>Order Total</span>
+                  <span className="text-primary">{formatCurrency(order.totalUsd)}</span>
+                </div>
+              </div>
+            )}
+          </DarkSection>
+
+          <div className="grid gap-3 pb-8 sm:grid-cols-2">
+            <WorkflowButton label="Tailoring" icon={Package} onClick={() => onStatusChange("tailoring")} />
+            <WorkflowButton label="Quality Check" icon={ClipboardCheck} onClick={() => onStatusChange("quality_check")} />
+            <WorkflowButton label="Shipped" icon={Truck} onClick={() => onStatusChange("shipped")} />
+            <WorkflowButton label="Delivered" icon={CheckCircle2} active={order.status === "delivered"} onClick={() => onStatusChange("delivered")} />
+          </div>
+        </div>
+      </aside>
+    </div>
+  );
+}
+
+function DarkSection({ icon: Icon, title, children }: { icon: typeof UserRound; title: string; children: React.ReactNode }) {
+  return (
+    <section className="mt-6 rounded-2xl border border-border bg-card p-5 shadow-sm">
+      <h3 className="flex items-center gap-3 text-xl font-black">
+        <Icon className="h-5 w-5 text-primary" />
+        {title}
+      </h3>
+      <div className="mt-4 border-t border-border pt-4">{children}</div>
+    </section>
+  );
+}
+
+function DetailRow({ label, value, highlight = false }: { label: string; value: string; highlight?: boolean }) {
+  return (
+    <div className="flex justify-between gap-6 py-2 text-base">
+      <span className="text-muted-foreground">{label}</span>
+      <span className={`text-right font-bold ${highlight ? "text-primary" : "text-foreground"}`}>{value}</span>
+    </div>
+  );
+}
+
+function WorkflowButton({ icon: Icon, label, active = false, onClick }: { icon: typeof Package; label: string; active?: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={active ? "rounded-xl border border-green-600 bg-green-600/10 px-4 py-3 font-black text-green-700" : "rounded-xl border border-border bg-card px-4 py-3 font-black text-foreground transition hover:bg-secondary"}
+    >
+      <Icon className="mr-2 inline h-5 w-5" />
+      → {label}{active ? " ✓" : ""}
+    </button>
   );
 }

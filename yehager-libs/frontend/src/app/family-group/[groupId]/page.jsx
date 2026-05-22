@@ -24,7 +24,7 @@ const REQUIRED_MEASUREMENT_FIELDS = [
 export default async function FamilyGroupPage({ params }) {
   const { groupId } = await params;
 
-  async function addMember(formData) {
+async function addMember(formData) {
     "use server";
     await ensureBackendUserSynced();
 
@@ -32,6 +32,16 @@ export default async function FamilyGroupPage({ params }) {
     const relation = String(formData.get("relation") ?? "").trim();
     const gender = String(formData.get("gender") ?? "female");
     if (!name) return;
+    const measurements = {
+      chest: toOptionalNumber(formData.get("chest")),
+      waist: toOptionalNumber(formData.get("waist")),
+      hips: toOptionalNumber(formData.get("hips")),
+      shoulderWidth: toOptionalNumber(formData.get("shoulderWidth")),
+      armLength: toOptionalNumber(formData.get("armLength")),
+      torsoLength: toOptionalNumber(formData.get("torsoLength")),
+      inseam: toOptionalNumber(formData.get("inseam")),
+      neck: toOptionalNumber(formData.get("neck")),
+    };
 
     await apiRequest(`/api/v1/family-groups/${groupId}/members`, {
       method: "POST",
@@ -39,6 +49,7 @@ export default async function FamilyGroupPage({ params }) {
         name,
         relation: relation || undefined,
         gender,
+        measurements,
       },
     });
     revalidatePath(`/family-group/${groupId}`);
@@ -102,9 +113,13 @@ export default async function FamilyGroupPage({ params }) {
   async function addAllToCart() {
     "use server";
     await ensureBackendUserSynced();
-    await apiRequest(`/api/v1/family-groups/${groupId}/add-to-cart`, {
-      method: "POST",
-    });
+    try {
+      await apiRequest(`/api/v1/family-groups/${groupId}/add-to-cart`, {
+        method: "POST",
+      });
+    } catch {
+      redirect(`/signin?callbackUrl=${encodeURIComponent(`/family-group/${groupId}`)}`);
+    }
     revalidatePath("/cart");
     redirect("/cart");
   }
@@ -121,7 +136,7 @@ export default async function FamilyGroupPage({ params }) {
     payload = response?.data;
     products = Array.isArray(productResponse?.data) ? productResponse.data : [];
   } catch {
-    redirect("/events");
+    redirect(`/signin?callbackUrl=${encodeURIComponent(`/family-group/${groupId}`)}`);
   }
 
   const group = payload?.group;
@@ -178,18 +193,31 @@ export default async function FamilyGroupPage({ params }) {
         </p>
       </div>
 
-      <div className="rounded-xl border border-border bg-card p-5">
+      <div className="rounded-xl border border-primary/20 bg-primary/5 p-5">
         <h2 className="flex items-center gap-2 font-heading text-xl font-semibold"><Plus className="h-5 w-5 text-primary" /> Add Member</h2>
-        <form action={addMember} className="mt-3 grid gap-3 sm:grid-cols-3">
+        <p className="mt-1 text-xs text-muted-foreground">Add the person and their required measurements in one step, like the Base44 group order flow.</p>
+        <form action={addMember} className="mt-4 grid gap-3 sm:grid-cols-3">
           <input name="name" required placeholder="Name" className="h-10 rounded-md border border-input bg-background px-3 text-sm" />
-          <input name="relation" placeholder="Relation" className="h-10 rounded-md border border-input bg-background px-3 text-sm" />
+          <select name="relation" defaultValue="Other" className="h-10 rounded-md border border-input bg-background px-3 text-sm">
+            {["Myself", "Husband", "Wife", "Son", "Daughter", "Other"].map((relation) => (
+              <option key={relation} value={relation}>{relation}</option>
+            ))}
+          </select>
           <select name="gender" className="h-10 rounded-md border border-input bg-background px-3 text-sm">
             <option value="female">female</option>
             <option value="male">male</option>
             <option value="unisex">unisex</option>
           </select>
-          <button type="submit" className="w-fit rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90">
-            <Plus className="mr-1 inline h-3.5 w-3.5" /> Add Member
+          <input name="chest" type="number" step="0.5" min="0" required placeholder="Chest" className="h-10 rounded-md border border-input bg-background px-3 text-sm" />
+          <input name="waist" type="number" step="0.5" min="0" required placeholder="Waist" className="h-10 rounded-md border border-input bg-background px-3 text-sm" />
+          <input name="hips" type="number" step="0.5" min="0" required placeholder="Hips" className="h-10 rounded-md border border-input bg-background px-3 text-sm" />
+          <input name="shoulderWidth" type="number" step="0.5" min="0" required placeholder="Shoulder Width" className="h-10 rounded-md border border-input bg-background px-3 text-sm" />
+          <input name="armLength" type="number" step="0.5" min="0" required placeholder="Arm Length" className="h-10 rounded-md border border-input bg-background px-3 text-sm" />
+          <input name="torsoLength" type="number" step="0.5" min="0" required placeholder="Torso Length" className="h-10 rounded-md border border-input bg-background px-3 text-sm" />
+          <input name="inseam" type="number" step="0.5" min="0" placeholder="Inseam" className="h-10 rounded-md border border-input bg-background px-3 text-sm" />
+          <input name="neck" type="number" step="0.5" min="0" placeholder="Neck" className="h-10 rounded-md border border-input bg-background px-3 text-sm" />
+          <button type="submit" className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 sm:col-span-3">
+            <Plus className="mr-1 inline h-3.5 w-3.5" /> Add to Family Group
           </button>
         </form>
       </div>
@@ -288,7 +316,7 @@ export default async function FamilyGroupPage({ params }) {
           disabled={!canAddAllToCart}
           className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          <ShoppingCart className="mr-1 inline h-4 w-4" /> Add All to Cart
+          <ShoppingCart className="mr-1 inline h-4 w-4" /> Add All to Cart & Checkout
         </button>
       </form>
       {!canAddAllToCart ? (

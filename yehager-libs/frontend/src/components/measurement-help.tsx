@@ -34,7 +34,7 @@ function normalGender(gender?: string | null): TutorialGender {
   return gender === "male" ? "male" : "female";
 }
 
-function MeasurementVideoModal({ gender, onClose }: { gender?: string | null; onClose: () => void }) {
+export function MeasurementVideoModal({ gender, onClose }: { gender?: string | null; onClose: () => void }) {
   const [activeGender, setActiveGender] = useState<TutorialGender>(normalGender(gender));
   const [activeIdx, setActiveIdx] = useState(0);
   const category = VIDEO_CATEGORIES[activeGender];
@@ -56,7 +56,7 @@ function MeasurementVideoModal({ gender, onClose }: { gender?: string | null; on
         <div className="flex items-center justify-between border-b border-[#1e1e1e] px-5 py-4">
           <div>
             <h3 className="font-heading text-lg font-semibold text-white">Measurement Tutorials</h3>
-            <p className="mt-0.5 text-xs text-neutral-400">All measurements in inches - watch before you measure</p>
+            <p className="mt-0.5 text-xs text-neutral-400">Enter measurements in centimeters - watch before you measure</p>
           </div>
           <button type="button" onClick={onClose} className="rounded-full p-2 transition-colors hover:bg-white/10" aria-label="Close measurement tutorial">
             <X className="h-4 w-4 text-white" />

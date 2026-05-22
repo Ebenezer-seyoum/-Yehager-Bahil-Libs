@@ -23,9 +23,9 @@ export default async function HomePage() {
   const visibleProducts = products;
 
   return (
-    <div className="overflow-x-hidden">
-      <section className="w-full px-6 py-16 sm:px-8 lg:px-12 sm:py-24">
-        <div className="grid grid-cols-2 gap-6 lg:grid-cols-3">
+    <div className="home-modern overflow-x-hidden">
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-24">
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
           {visibleProducts.map((product) => (
             <ProductCard key={product.id} product={product} etbRate={etbRate} />
           ))}
