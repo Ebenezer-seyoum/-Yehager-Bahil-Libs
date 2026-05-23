@@ -22,6 +22,7 @@ import {
 import { createRoleForAdmin, listRolesForAdmin, updateRolePermissionsForAdmin } from "../../services/roles-service.js";
 import { getEffectivePermissionsForUser, listPermissionsForAdmin, updateUserPermissionsForAdmin } from "../../services/permissions-service.js";
 import { getOrderReport, toOrderReportCsv } from "../../services/reports-service.js";
+import { getReportsCenterPayload } from "../../services/reports-center-service.js";
 import type { AppBindings } from "../../types/hono.js";
 
 const listQuerySchema = z.object({
@@ -108,6 +109,28 @@ const userParamSchema = z.object({
 });
 const rolePatchSchema = z.object({
   role: z.enum(USER_ROLES),
+});
+const reportsQuerySchema = z.object({
+  category: z.string().optional(),
+  report: z.string().optional(),
+  dateRange: z.enum(["Today", "Last 7 Days", "Last 30 Days", "This Month", "This Year"]).optional(),
+  status: z.string().optional(),
+  paymentMethod: z.string().optional(),
+  paymentStatus: z.string().optional(),
+  country: z.string().optional(),
+  city: z.string().optional(),
+  customer: z.string().optional(),
+  employee: z.string().optional(),
+  driver: z.string().optional(),
+  product: z.string().optional(),
+  productCategory: z.string().optional(),
+  refundStatus: z.string().optional(),
+  ticketStatus: z.string().optional(),
+  priority: z.string().optional(),
+  search: z.string().optional(),
+  amountMin: z.coerce.number().optional(),
+  amountMax: z.coerce.number().optional(),
+  stockLevel: z.string().optional(),
 });
 const userProfilePatchSchema = z.object({
   name: z.string().trim().min(1).max(255),
@@ -236,6 +259,16 @@ adminRouter.get("/permissions", requirePermission(PERMISSIONS.ROLES_VIEW), async
   const data = await listPermissionsForAdmin();
   return c.json({ data });
 });
+
+adminRouter.get(
+  "/reports",
+  requirePermission(PERMISSIONS.REPORTS_VIEW),
+  zValidator("query", reportsQuerySchema),
+  async (c) => {
+    const data = await getReportsCenterPayload(c.req.valid("query"));
+    return c.json({ data });
+  },
+);
 
 adminRouter.get(
   "/reports/orders",

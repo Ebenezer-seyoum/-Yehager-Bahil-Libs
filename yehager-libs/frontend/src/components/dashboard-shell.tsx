@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { signOut, useSession } from "next-auth/react";
 import {
   ArrowLeftRight,
@@ -25,35 +25,8 @@ import {
   UsersRound,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import type { NavigationGroup, NavigationItem } from "@/lib/dashboard-navigation";
 import { can } from "@/lib/permissions";
-
-type NavigationIcon =
-  | "dashboard"
-  | "users"
-  | "customers"
-  | "products"
-  | "sections"
-  | "orders"
-  | "payments"
-  | "documents"
-  | "exchange"
-  | "alerts"
-  | "audit"
-  | "roles"
-  | "reports"
-  | "settings";
-
-type NavigationItem = {
-  href: string;
-  label: string;
-  icon: NavigationIcon;
-  permission: string;
-};
-
-type NavigationGroup = {
-  label: string;
-  items: readonly NavigationItem[];
-};
 
 type NotificationCounts = {
   orders?: number;
@@ -95,7 +68,10 @@ export function DashboardShell({
   notificationCounts?: NotificationCounts;
 }) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { data: session } = useSession();
+  const isReportsRoute = pathname.startsWith("/admin/reports");
+  const shellTitle = isReportsRoute ? "Reports Center" : title;
   const [mobileOpen, setMobileOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [refreshedPermissions, setRefreshedPermissions] = useState<string[] | null>(null);
@@ -110,6 +86,41 @@ export function DashboardShell({
           }))
           .filter((group) => group.items.length > 0);
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
+  const [expandedNavItems, setExpandedNavItems] = useState<Record<string, boolean>>({
+    "/admin/reports": true,
+  });
+
+  useEffect(() => {
+    if (isReportsRoute) {
+      setExpandedNavItems((current) => ({ ...current, "/admin/reports": true }));
+    }
+  }, [isReportsRoute]);
+
+  function isReportChildActive(href: string) {
+    if (!isReportsRoute) return false;
+    const queryIndex = href.indexOf("?");
+    if (queryIndex === -1) {
+      return true;
+    }
+    const params = new URLSearchParams(href.slice(queryIndex + 1));
+    return (
+      searchParams.get("category") === params.get("category") &&
+      searchParams.get("report") === params.get("report")
+    );
+  }
+
+  function isNavItemActive(item: NavigationItem) {
+    if (item.children?.length) {
+      return isReportsRoute;
+    }
+    return (
+      pathname === item.href ||
+      (item.href !== "/admin" &&
+        item.href !== "/employee" &&
+        pathname.startsWith(`${item.href}/`) &&
+        !(item.href === "/admin/orders" && pathname.startsWith("/admin/orders/documents")))
+    );
+  }
   const profileHref = variant === "admin" ? "/admin/settings" : "/employee/settings";
   const adminTopBar = variant === "admin";
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -232,35 +243,85 @@ export function DashboardShell({
               {collapsedGroups[group.label] ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
             </button>
             {!collapsedGroups[group.label] ? (
-              <div className={variant === "admin" && group.label === "Users" ? "ml-3 space-y-1 border-l border-sidebar-border pl-3" : "space-y-1"}>
+              <div
+                className={
+                  variant === "admin" && (group.label === "Users" || group.label === "Reports")
+                    ? "ml-3 space-y-1 border-l border-sidebar-border pl-3"
+                    : "space-y-1"
+                }
+              >
                 {group.items.map((item) => {
                   const Icon = icons[item.icon];
                   const badgeCount = badgeForHref(item.href);
-                  const active =
-                    pathname === item.href ||
-                    (item.href !== "/admin" &&
-                      item.href !== "/employee" &&
-                      pathname.startsWith(`${item.href}/`) &&
-                      !(item.href === "/admin/orders" && pathname.startsWith("/admin/orders/documents")));
+                  const active = isNavItemActive(item);
+                  const hasChildren = Boolean(item.children?.length);
+                  const childrenOpen = expandedNavItems[item.href] ?? false;
+
                   return (
-                    <Link
-                      key={`${item.href}-${item.label}`}
-                      href={item.href}
-                      onClick={() => setMobileOpen(false)}
-                      className={
-                        active
-                          ? "flex items-center gap-3 rounded-xl bg-sidebar-primary px-3 py-2.5 text-[15px] font-bold text-sidebar-primary-foreground shadow-sm"
-                          : "flex items-center gap-3 rounded-xl px-3 py-2.5 text-[15px] font-semibold text-sidebar-foreground/88 transition hover:bg-sidebar-accent hover:text-white"
-                      }
-                    >
-                      <Icon className="h-4 w-4" />
-                      <span className="min-w-0 flex-1 truncate">{item.label}</span>
-                      {badgeCount > 0 ? (
-                        <span className="rounded-full bg-red-600 px-2 py-0.5 text-xs font-black text-white shadow-sm shadow-red-950/20">
-                          {badgeCount > 99 ? "99+" : badgeCount}
-                        </span>
+                    <div key={`${item.href}-${item.label}`}>
+                      <div className="flex items-center gap-1">
+                        {hasChildren ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setExpandedNavItems((current) => ({
+                                ...current,
+                                [item.href]: !childrenOpen,
+                              }))
+                            }
+                            className="flex h-9 w-7 shrink-0 items-center justify-center rounded-lg text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-white"
+                            aria-label={childrenOpen ? "Collapse" : "Expand"}
+                          >
+                            {childrenOpen ? (
+                              <ChevronDown className="h-3.5 w-3.5" />
+                            ) : (
+                              <ChevronRight className="h-3.5 w-3.5" />
+                            )}
+                          </button>
+                        ) : null}
+
+                        <Link
+                          href={item.href}
+                          onClick={() => setMobileOpen(false)}
+                          className={
+                            active
+                              ? "flex min-w-0 flex-1 items-center gap-3 rounded-xl bg-sidebar-primary px-3 py-2.5 text-[15px] font-bold text-sidebar-primary-foreground shadow-sm"
+                              : "flex min-w-0 flex-1 items-center gap-3 rounded-xl px-3 py-2.5 text-[15px] font-semibold text-sidebar-foreground/88 transition hover:bg-sidebar-accent hover:text-white"
+                          }
+                        >
+                          <Icon className="h-4 w-4 shrink-0" />
+                          <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                          {badgeCount > 0 ? (
+                            <span className="rounded-full bg-red-600 px-2 py-0.5 text-xs font-black text-white shadow-sm shadow-red-950/20">
+                              {badgeCount > 99 ? "99+" : badgeCount}
+                            </span>
+                          ) : null}
+                        </Link>
+                      </div>
+
+                      {hasChildren && childrenOpen ? (
+                        <ul className="mb-2 ml-4 mt-1 space-y-0.5 border-l border-sidebar-border/80 pl-2">
+                          {item.children?.map((child) => {
+                            const childActive = isReportChildActive(child.href);
+                            return (
+                              <li key={child.href}>
+                                <Link
+                                  href={child.href}
+                                  onClick={() => setMobileOpen(false)}
+                                  className={
+                                    childActive
+                                      ? "block rounded-xl bg-sidebar-primary px-3 py-2.5 text-[15px] font-bold text-sidebar-primary-foreground shadow-sm"
+                                      : "block rounded-xl px-3 py-2.5 text-[15px] font-semibold text-sidebar-foreground/88 transition hover:bg-sidebar-accent hover:text-white"
+                                  }
+                                >
+                                  {child.label}
+                                </Link>
+                              </li>
+                            );
+                          })}
+                        </ul>
                       ) : null}
-                    </Link>
+                    </div>
                   );
                 })}
               </div>
@@ -316,7 +377,7 @@ export function DashboardShell({
               >
                 {variant}
               </p>
-              <h1 className={adminTopBar ? "truncate text-lg font-bold tracking-tight text-white sm:text-xl" : "truncate text-lg font-semibold"}>{title}</h1>
+              <h1 className={adminTopBar ? "truncate text-lg font-bold tracking-tight text-white sm:text-xl" : "truncate text-lg font-semibold"}>{shellTitle}</h1>
             </div>
 
             <div

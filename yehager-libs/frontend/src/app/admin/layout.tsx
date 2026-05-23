@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { adminNavigation } from "@/lib/dashboard-navigation";
 import { apiRequest } from "@/lib/api-client";
@@ -37,13 +38,21 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const notificationCounts = await getAdminNotificationCounts();
 
   return (
-    <DashboardShell
-      navigation={adminNavigation}
-      title="Admin workspace"
-      variant="admin"
-      notificationCounts={notificationCounts}
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">
+          Loading admin…
+        </div>
+      }
     >
-      {children}
-    </DashboardShell>
+      <DashboardShell
+        navigation={adminNavigation}
+        title="Admin workspace"
+        variant="admin"
+        notificationCounts={notificationCounts}
+      >
+        {children}
+      </DashboardShell>
+    </Suspense>
   );
 }

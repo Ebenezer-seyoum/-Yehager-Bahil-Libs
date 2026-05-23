@@ -1,4 +1,39 @@
-export const adminNavigation = [
+export type NavigationIcon =
+  | "dashboard"
+  | "users"
+  | "customers"
+  | "products"
+  | "sections"
+  | "orders"
+  | "payments"
+  | "documents"
+  | "exchange"
+  | "alerts"
+  | "audit"
+  | "roles"
+  | "reports"
+  | "settings";
+
+export type NavigationChild = {
+  href: string;
+  label: string;
+  kind?: "category" | "report";
+};
+
+export type NavigationItem = {
+  href: string;
+  label: string;
+  icon: NavigationIcon;
+  permission: string;
+  children?: NavigationChild[];
+};
+
+export type NavigationGroup = {
+  label: string;
+  items: readonly NavigationItem[];
+};
+
+export const adminNavigation: readonly NavigationGroup[] = [
   {
     label: "Overview",
     items: [{ href: "/admin", label: "Dashboard", icon: "dashboard", permission: "dashboard.view" }],
@@ -28,19 +63,26 @@ export const adminNavigation = [
     ],
   },
   {
-    label: "Insights",
+    label: "Reports",
     items: [
-      { href: "/admin/reports", label: "Reports", icon: "reports", permission: "reports.view" },
-      { href: "/admin/audit", label: "Audit Logs", icon: "audit", permission: "audit.view" },
+      {
+        href: "/admin/reports",
+        label: "Reports Center",
+        icon: "reports",
+        permission: "reports.view",
+      },
     ],
   },
   {
-    label: "Settings",
-    items: [{ href: "/admin/settings", label: "Profile Settings", icon: "settings", permission: "settings.view" }],
+    label: "System",
+    items: [
+      { href: "/admin/settings", label: "Settings", icon: "settings", permission: "settings.view" },
+      { href: "/admin/audit", label: "Activity Logs", icon: "audit", permission: "audit.view" },
+    ],
   },
 ] as const;
 
-export const employeeNavigation = [
+export const employeeNavigation: readonly NavigationGroup[] = [
   {
     label: "Overview",
     items: [{ href: "/employee", label: "Dashboard", icon: "dashboard", permission: "dashboard.view" }],
