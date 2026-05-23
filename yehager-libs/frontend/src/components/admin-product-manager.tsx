@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Banknote, Clock, DollarSign, Eye, Hash, ImageIcon, MapPin, Pencil, Power, Save, Shirt, Star, Trash2, Upload, X } from "lucide-react";
+import { TableHeadCell, TableHeadRow, TableHeader } from "@/components/admin/table-header";
 import { dashboardConfirm, dashboardError, dashboardSuccess } from "@/lib/dashboard-swal";
 import { TAXONOMY, REGIONS } from "@/lib/taxonomy";
 
@@ -107,10 +108,22 @@ function buildProductIdentity(region: string, subcategory: string | null | undef
   };
 }
 
-export function AdminProductManager({ initialProducts }: { initialProducts: Product[] }) {
+export function AdminProductManager({
+  initialProducts,
+  externalSearch,
+}: {
+  initialProducts: Product[];
+  externalSearch?: string;
+}) {
   const [products, setProducts] = useState(initialProducts);
+
+  useEffect(() => {
+    setProducts(initialProducts);
+  }, [initialProducts]);
+
   const [draft, setDraft] = useState(emptyDraft);
   const [search, setSearch] = useState("");
+  const effectiveSearch = externalSearch ?? search;
   const [regionFilter, setRegionFilter] = useState("all");
   const [previewOpen, setPreviewOpen] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
@@ -140,7 +153,7 @@ export function AdminProductManager({ initialProducts }: { initialProducts: Prod
   const previewImages = parseImages(draft.imagesText);
 
   const filteredProducts = useMemo(() => {
-    const needle = search.trim().toLowerCase();
+    const needle = effectiveSearch.trim().toLowerCase();
     return products.filter((product) => {
       const matchesSearch =
         !needle ||
@@ -159,7 +172,7 @@ export function AdminProductManager({ initialProducts }: { initialProducts: Prod
       const matchesMax = !maxPrice || price <= Number(maxPrice);
       return matchesSearch && matchesRegion && matchesSubsection && matchesStatus && matchesMin && matchesMax;
     });
-  }, [maxPrice, minPrice, products, regionFilter, search, statusFilter, subsectionFilter]);
+  }, [effectiveSearch, maxPrice, minPrice, products, regionFilter, statusFilter, subsectionFilter]);
 
   const activeCount = products.filter((product) => product.isActive).length;
   const inactiveCount = products.length - activeCount;
@@ -559,13 +572,15 @@ export function AdminProductManager({ initialProducts }: { initialProducts: Prod
           </button>
         </div>
 
-        <div className="mt-5 grid gap-3 rounded-3xl border border-slate-200 bg-slate-50 p-4 xl:grid-cols-[1.4fr_repeat(5,minmax(0,1fr))]">
+        <div className={`mt-5 grid gap-3 rounded-xl border border-border bg-muted/30 p-3 ${externalSearch === undefined ? "xl:grid-cols-[1.4fr_repeat(5,minmax(0,1fr))]" : "xl:grid-cols-[repeat(5,minmax(0,1fr))]"}`}>
+          {externalSearch === undefined ? (
           <input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search products..."
-            className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-900 placeholder:text-slate-400"
+            placeholder="Search clothes..."
+            className="h-9 rounded-lg border border-border bg-background px-3 text-sm"
           />
+          ) : null}
           <select
             value={regionFilter}
             onChange={(event) => {
@@ -620,18 +635,18 @@ export function AdminProductManager({ initialProducts }: { initialProducts: Prod
         <div className="mt-5 overflow-hidden rounded-2xl border border-slate-200">
           <div className="overflow-x-auto">
             <table className="min-w-[1120px] w-full divide-y divide-slate-200 text-left text-sm">
-              <thead className="bg-slate-50 text-xs font-extrabold uppercase tracking-widest text-slate-500">
-                <tr>
-                  <th className="px-6 py-4">Product</th>
-                  <th className="px-6 py-4">ID</th>
-                  <th className="px-6 py-4">Region</th>
-                  <th className="px-6 py-4">USD Price</th>
-                  <th className="px-6 py-4">ETB Price</th>
-                  <th className="px-6 py-4">Status</th>
-                  <th className="px-6 py-4">Featured</th>
-                  <th className="px-6 py-4 text-right">Actions</th>
-                </tr>
-              </thead>
+              <TableHeader>
+                <TableHeadRow>
+                  <TableHeadCell>Clothing Item</TableHeadCell>
+                  <TableHeadCell>ID</TableHeadCell>
+                  <TableHeadCell>Section</TableHeadCell>
+                  <TableHeadCell>USD Price</TableHeadCell>
+                  <TableHeadCell>ETB Price</TableHeadCell>
+                  <TableHeadCell>Status</TableHeadCell>
+                  <TableHeadCell>Featured</TableHeadCell>
+                  <TableHeadCell className="text-right">Actions</TableHeadCell>
+                </TableHeadRow>
+              </TableHeader>
               <tbody className="divide-y divide-slate-100 bg-white">
                 {filteredProducts.map((product) => {
                   const image = product.images?.[0];

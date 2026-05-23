@@ -15,6 +15,7 @@ import {
   CreditCard,
   FileText,
   FolderTree,
+  Inbox,
   LayoutDashboard,
   Menu,
   ScrollText,
@@ -33,6 +34,7 @@ type NotificationCounts = {
   orderIds?: Array<string | null | undefined>;
   payments?: number;
   alerts?: number;
+  support?: number;
 };
 
 const icons = {
@@ -50,6 +52,7 @@ const icons = {
   roles: ShieldCheck,
   reports: BarChart3,
   settings: Settings,
+  inbox: Inbox,
 };
 
 export function DashboardShell({
@@ -136,6 +139,7 @@ export function DashboardShell({
     if (href === "/admin/orders") return visibleOrderCount;
     if (href === "/admin/payments") return counts.payments ?? 0;
     if (href === "/admin/alerts") return counts.alerts ?? 0;
+    if (href === "/admin/support-inbox") return counts.support ?? 0;
     return 0;
   };
   const initials =

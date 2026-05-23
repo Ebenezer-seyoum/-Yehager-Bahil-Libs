@@ -2,9 +2,7 @@ import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/auth-options";
 import { apiRequest } from "@/lib/api-client";
-import { AdminWorkflowPipeline } from "@/components/admin-workflow-pipeline";
-import { AdminRevenueCharts } from "@/components/admin-revenue-charts";
-import { AdminOverviewCards } from "@/components/admin-overview-cards";
+import { AdminDashboardWorkspace } from "@/components/admin/pages/admin-dashboard-workspace";
 
 export default async function AdminPage() {
   const session = await getServerSession(authOptions);
@@ -34,17 +32,13 @@ export default async function AdminPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-6xl space-y-6">
-      <div>
-        <p className="text-xs uppercase tracking-widest text-primary">Overview</p>
-        <h1 className="mt-2 font-heading text-3xl font-semibold">Business Overview</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Top-level performance, risk, and operating health.</p>
-      </div>
-
-      <AdminOverviewCards orders={orders} alerts={alerts} products={products} users={users} />
-
-      <AdminRevenueCharts orders={orders} />
-      <AdminWorkflowPipeline orders={orders} />
-    </div>
+    <AdminDashboardWorkspace
+      data={{
+        orders,
+        alerts,
+        products,
+        users,
+      }}
+    />
   );
 }

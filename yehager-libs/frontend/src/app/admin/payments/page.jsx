@@ -2,8 +2,7 @@ import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/auth-options";
 import { apiRequest } from "@/lib/api-client";
-import { AdminPaymentsTable } from "@/components/admin-payments-table";
-import { PaymentsOverviewCards } from "@/components/payments-overview-cards";
+import { AdminPaymentsWorkspace } from "@/components/admin/pages/admin-payments-workspace";
 
 export default async function AdminPaymentsPage() {
   const session = await getServerSession(authOptions);
@@ -35,18 +34,13 @@ export default async function AdminPaymentsPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-screen-2xl space-y-9 pb-8">
-      <div className="rounded-2xl border border-red-200 bg-red-50 p-5 text-red-950 shadow-sm">
-        <p className="text-sm font-black uppercase tracking-[0.18em] text-red-700">Payment attention</p>
-        <h1 className="mt-2 font-heading text-2xl font-semibold">
-          {orders.filter((order) => order.paymentStatus === "awaiting_verification").length} payment(s) awaiting verification
-        </h1>
-        <p className="mt-1 text-sm text-red-800">
-          Open each proof, confirm the transfer, then approve or reject while the status is still awaiting verification.
-        </p>
-      </div>
-      <PaymentsOverviewCards orders={orders} alerts={alerts} products={products} users={users} />
-      <AdminPaymentsTable initialOrders={orders} />
-    </div>
+    <AdminPaymentsWorkspace
+      data={{
+        orders,
+        alerts,
+        products,
+        users,
+      }}
+    />
   );
 }

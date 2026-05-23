@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/auth-options";
 import { apiRequest } from "@/lib/api-client";
 import { can } from "@/lib/permissions";
-import { ReferenceRolePermissionPanel } from "@/components/reference-role-permission-panel";
+import { AdminRolesWorkspace } from "@/components/admin/pages/admin-roles-workspace";
 
 type User = {
   id: string;
@@ -54,5 +54,12 @@ export default async function AdminRolesPage() {
     roles = [];
   }
 
-  return <ReferenceRolePermissionPanel users={users} permissions={permissions} roles={roles} />;
+  return (
+    <AdminRolesWorkspace
+      data={{ users, roles, permissions }}
+      users={users}
+      roles={roles}
+      permissions={permissions}
+    />
+  );
 }

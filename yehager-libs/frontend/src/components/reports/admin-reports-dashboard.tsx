@@ -5,6 +5,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Grid2X2, List, Search } from "lucide-react";
 import { ReportsCategorySidebar, firstReportInCategory } from "@/components/reports/reports-category-sidebar";
 import { ReportsFilterPanel } from "@/components/reports/reports-filter-panel";
+import { AdminPageHeader } from "@/components/admin/admin-page-header";
+import { ReportsCategoryTabs } from "@/components/reports/reports-category-tabs";
 import { ReportsKpiRow } from "@/components/reports/reports-kpi-row";
 import { ReportsReportCardGrid } from "@/components/reports/reports-report-card-grid";
 import { ReportsResults, type ResultsTab } from "@/components/reports/reports-results";
@@ -341,17 +343,35 @@ export function AdminReportsDashboard({
   }
 
   return (
-    <main className="min-h-screen bg-[#f7f9fc] text-slate-900">
-      <div className="space-y-4 px-4 py-6 sm:px-6 xl:px-8">
+    <main className="min-h-screen bg-background text-foreground">
+      <div className="mx-auto max-w-screen-2xl space-y-4 px-4 py-6 sm:px-6 xl:px-8">
         {fetchError ? (
           <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
             {fetchError}
           </div>
         ) : null}
 
+        <AdminPageHeader
+          pageId="reports"
+          showDateRange
+          dateRange={globalDateRange}
+          onDateRangeChange={(value) => setGlobalDateRange(value)}
+          onRefresh={() => refreshFromBackend(filters)}
+          isRefreshing={isRefreshing}
+          showExport
+          onExport={() => {
+            void refreshFromBackend(filters);
+          }}
+        />
+
         <ReportsKpiRow metrics={metrics} comparisonLabel={comparisonLabel} />
 
-        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_8px_28px_rgba(15,23,42,0.06)]">
+        <ReportsCategoryTabs
+          selectedCategory={selectedCategory}
+          onSelectCategory={handleSelectCategory}
+        />
+
+        <section className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
           <ReportsSectionHeader
             step="1"
             title="Choose Report Category & Report"

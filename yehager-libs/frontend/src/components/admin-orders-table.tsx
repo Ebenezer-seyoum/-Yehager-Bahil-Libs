@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { TableHeadCell, TableHeadRow, TableHeader } from "@/components/admin/table-header";
+import { ADMIN_TABLE_WRAPPER } from "@/lib/admin/admin-design-system";
 import {
   CheckCircle2,
   ClipboardCheck,
@@ -140,9 +142,20 @@ function needsAttention(order: Order) {
   return order.status === "pending" || order.paymentStatus === "awaiting_verification";
 }
 
-export function AdminOrdersTable({ initialOrders, initialSelectedOrderId }: { initialOrders: Order[]; initialSelectedOrderId?: string | null }) {
+export function AdminOrdersTable({
+  initialOrders,
+  initialSelectedOrderId,
+  externalSearch,
+  hideToolbar,
+}: {
+  initialOrders: Order[];
+  initialSelectedOrderId?: string | null;
+  externalSearch?: string;
+  hideToolbar?: boolean;
+}) {
   const [orders, setOrders] = useState(initialOrders);
   const [search, setSearch] = useState("");
+  const effectiveSearch = externalSearch ?? search;
   const [fulfillmentFilter, setFulfillmentFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [paymentFilter, setPaymentFilter] = useState("all");
@@ -152,6 +165,10 @@ export function AdminOrdersTable({ initialOrders, initialSelectedOrderId }: { in
   const [error, setError] = useState<string | null>(null);
 
   const selectedOrder = orders.find((order) => order.id === selectedOrderId) ?? null;
+
+  useEffect(() => {
+    setOrders(initialOrders);
+  }, [initialOrders]);
 
   useEffect(() => {
     if (initialSelectedOrderId) {
@@ -189,7 +206,7 @@ export function AdminOrdersTable({ initialOrders, initialSelectedOrderId }: { in
   }
 
   const filteredOrders = useMemo(() => {
-    const needle = search.trim().toLowerCase();
+    const needle = effectiveSearch.trim().toLowerCase();
     return orders.filter((order) => {
       const matchesSearch =
         !needle ||
@@ -202,7 +219,7 @@ export function AdminOrdersTable({ initialOrders, initialSelectedOrderId }: { in
       const matchesPayment = paymentFilter === "all" || order.paymentStatus === paymentFilter;
       return matchesSearch && matchesFulfillment && matchesStatus && matchesPayment;
     });
-  }, [fulfillmentFilter, orders, paymentFilter, search, statusFilter]);
+  }, [effectiveSearch, fulfillmentFilter, orders, paymentFilter, statusFilter]);
 
   async function updateOrder(orderId: string, patch: Partial<Pick<Order, "status" | "paymentStatus">>) {
     const key = `${orderId}-${Object.keys(patch).join("-")}`;
@@ -230,50 +247,52 @@ export function AdminOrdersTable({ initialOrders, initialSelectedOrderId }: { in
 
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
-        <div className="grid gap-3 lg:grid-cols-[minmax(260px,1.4fr)_repeat(3,minmax(150px,1fr))_auto]">
+      <div className="rounded-xl border border-border bg-card p-3 shadow-sm">
+        <div className={`grid gap-2 ${hideToolbar ? "sm:grid-cols-3" : "lg:grid-cols-[minmax(260px,1.4fr)_repeat(3,minmax(150px,1fr))_auto]"}`}>
+          {!hideToolbar ? (
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Search by order #, name, or email..."
-              className="h-12 w-full rounded-xl border border-input bg-background py-2.5 pl-9 pr-4 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/25"
+              className="h-9 w-full rounded-lg border border-input bg-background py-2 pl-9 pr-4 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/25"
             />
           </div>
-          <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="h-12 rounded-xl border border-input bg-background px-3 text-sm font-medium">
+          ) : null}
+          <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="h-9 rounded-lg border border-input bg-background px-3 text-sm font-medium">
             <option value="all">All Statuses</option>
             {ORDER_STATUSES.map((status) => <option key={status} value={status}>{prettyLabel(status)}</option>)}
           </select>
-          <select value={paymentFilter} onChange={(event) => setPaymentFilter(event.target.value)} className="h-12 rounded-xl border border-input bg-background px-3 text-sm font-medium">
+          <select value={paymentFilter} onChange={(event) => setPaymentFilter(event.target.value)} className="h-9 rounded-lg border border-input bg-background px-3 text-sm font-medium">
             <option value="all">All Payments</option>
             {PAYMENT_STATUSES.map((status) => <option key={status} value={status}>{prettyLabel(status)}</option>)}
           </select>
-          <select value={fulfillmentFilter} onChange={(event) => setFulfillmentFilter(event.target.value)} className="h-12 rounded-xl border border-input bg-background px-3 text-sm font-medium">
+          <select value={fulfillmentFilter} onChange={(event) => setFulfillmentFilter(event.target.value)} className="h-9 rounded-lg border border-input bg-background px-3 text-sm font-medium">
             <option value="all">All Types</option>
             <option value="mail">Mail / EMS</option>
             <option value="pickup">Pickup</option>
           </select>
-          <p className="flex h-12 items-center whitespace-nowrap text-sm text-muted-foreground">{filteredOrders.length} orders</p>
+          <p className="flex h-9 items-center whitespace-nowrap text-sm text-muted-foreground">{filteredOrders.length} orders</p>
         </div>
         {error ? <div className="mt-3 rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm font-medium text-destructive">{error}</div> : null}
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+      <div className={ADMIN_TABLE_WRAPPER}>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[1180px] text-sm">
-            <thead className="bg-secondary/60 text-left">
-              <tr>
-                <th className="px-4 py-4 font-bold text-muted-foreground">Order #</th>
-                <th className="px-4 py-4 font-bold text-muted-foreground">Customer</th>
-                <th className="px-4 py-4 font-bold text-muted-foreground">Items</th>
-                <th className="px-4 py-4 font-bold text-muted-foreground">Total</th>
-                <th className="px-4 py-4 font-bold text-muted-foreground">Fulfillment</th>
-                <th className="px-4 py-4 font-bold text-muted-foreground">Order Status</th>
-                <th className="px-4 py-4 font-bold text-muted-foreground">Payment</th>
-                <th className="px-4 py-4 font-bold text-muted-foreground" aria-label="Open details" />
-              </tr>
-            </thead>
+            <TableHeader>
+              <TableHeadRow>
+                <TableHeadCell>Order #</TableHeadCell>
+                <TableHeadCell>Customer</TableHeadCell>
+                <TableHeadCell>Clothing Items</TableHeadCell>
+                <TableHeadCell>Total</TableHeadCell>
+                <TableHeadCell>Fulfillment</TableHeadCell>
+                <TableHeadCell>Order Status</TableHeadCell>
+                <TableHeadCell>Payment</TableHeadCell>
+                <TableHeadCell aria-label="Open details" />
+              </TableHeadRow>
+            </TableHeader>
             <tbody>
               {filteredOrders.length === 0 ? (
                 <tr>

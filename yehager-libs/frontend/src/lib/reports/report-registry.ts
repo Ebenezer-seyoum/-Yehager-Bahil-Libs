@@ -135,8 +135,8 @@ export const categories: {
   },
   {
     key: "product",
-    title: "Product Reports",
-    subtitle: "Product performance & stock",
+    title: "Clothes / Products",
+    subtitle: "Clothing performance, inventory & stock",
     icon: Box,
     color: "cyan",
   },

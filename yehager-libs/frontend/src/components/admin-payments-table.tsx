@@ -1,6 +1,8 @@
 "use client";
 
 import { useMemo, useState, useEffect } from "react";
+import { TableHeadCell, TableHeadRow, TableHeader } from "@/components/admin/table-header";
+import { ADMIN_TABLE_WRAPPER } from "@/lib/admin/admin-design-system";
 import { AlertCircle, CheckCircle2, CreditCard, Eye, Landmark, Search, X } from "lucide-react";
 import Link from "next/link";
 import { dashboardConfirm, dashboardError, dashboardSuccess } from "@/lib/dashboard-swal";
@@ -62,9 +64,18 @@ function canReviewPayment(order: Order) {
   return order.paymentStatus === "awaiting_verification";
 }
 
-export function AdminPaymentsTable({ initialOrders }: { initialOrders: Order[] }) {
+export function AdminPaymentsTable({
+  initialOrders,
+  externalSearch,
+  hideToolbar,
+}: {
+  initialOrders: Order[];
+  externalSearch?: string;
+  hideToolbar?: boolean;
+}) {
   const [orders, setOrders] = useState(initialOrders);
   const [search, setSearch] = useState("");
+  const effectiveSearch = externalSearch ?? search;
   const [statusFilter, setStatusFilter] = useState("all");
   const [methodFilter, setMethodFilter] = useState("all");
   const [viewer, setViewer] = useState<Order | null>(null);
@@ -72,6 +83,10 @@ export function AdminPaymentsTable({ initialOrders }: { initialOrders: Order[] }
   const [viewedPaymentIds, setViewedPaymentIds] = useState<string[]>([]);
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
+
+  useEffect(() => {
+    setOrders(initialOrders);
+  }, [initialOrders]);
 
   const paymentOrders = useMemo(
     () => orders.filter((order) => order.paymentMethod || order.paymentCurrency || order.paymentStatus),
@@ -84,7 +99,7 @@ export function AdminPaymentsTable({ initialOrders }: { initialOrders: Order[] }
   );
 
   const filteredOrders = useMemo(() => {
-    const needle = search.trim().toLowerCase();
+    const needle = effectiveSearch.trim().toLowerCase();
     return paymentOrders.filter((order) => {
       const matchesSearch =
         !needle ||
@@ -95,7 +110,7 @@ export function AdminPaymentsTable({ initialOrders }: { initialOrders: Order[] }
       const matchesMethod = methodFilter === "all" || getMethodValue(order) === methodFilter;
       return matchesSearch && matchesStatus && matchesMethod;
     });
-  }, [methodFilter, paymentOrders, search, statusFilter]);
+  }, [effectiveSearch, methodFilter, paymentOrders, statusFilter]);
 
   const needsAttention = (order: Order) => order.paymentStatus === "awaiting_verification" || order.paymentStatus === "pending";
 
@@ -203,24 +218,25 @@ export function AdminPaymentsTable({ initialOrders }: { initialOrders: Order[] }
   }
 
   return (
-    <section className="rounded-2xl border border-border bg-card p-6 shadow-sm">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <h2 className="text-lg font-bold text-foreground">Payment Transactions</h2>
-        <div className="grid gap-3 sm:grid-cols-3 lg:w-[760px]">
+    <section className={ADMIN_TABLE_WRAPPER}>
+      <div className="border-b border-border bg-card p-3">
+        <div className={`grid gap-2 ${hideToolbar ? "sm:grid-cols-2" : "sm:grid-cols-3"}`}>
+          {!hideToolbar ? (
           <label className="relative">
-            <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Search payments..."
-              className="h-11 w-full rounded-xl border border-input bg-background pl-12 pr-4 text-sm font-medium outline-none focus:border-primary focus:ring-2 focus:ring-primary/25"
+              className="h-9 w-full rounded-lg border border-input bg-background pl-9 pr-3 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/25"
             />
           </label>
-          <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="h-11 rounded-xl border border-input bg-background px-4 text-sm font-semibold">
+          ) : null}
+          <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="h-9 rounded-lg border border-input bg-background px-3 text-sm font-medium">
             <option value="all">All Statuses</option>
             {statuses.map((status) => <option key={status} value={status}>{pretty(status)}</option>)}
           </select>
-          <select value={methodFilter} onChange={(event) => setMethodFilter(event.target.value)} className="h-11 rounded-xl border border-input bg-background px-4 text-sm font-semibold">
+          <select value={methodFilter} onChange={(event) => setMethodFilter(event.target.value)} className="h-9 rounded-lg border border-input bg-background px-3 text-sm font-medium">
             <option value="all">All Methods</option>
             <option value="stripe">Stripe</option>
             <option value="etb">ETB Transfer</option>
@@ -234,19 +250,19 @@ export function AdminPaymentsTable({ initialOrders }: { initialOrders: Order[] }
         </div>
       ) : null}
 
-      <div className="mt-6 overflow-x-auto">
+      <div className="overflow-x-auto">
         <table className="w-full min-w-[980px] text-left text-sm">
-          <thead>
-            <tr className="bg-secondary/60 text-muted-foreground">
-              <th className="px-5 py-4 font-bold">Date</th>
-              <th className="px-5 py-4 font-bold">Order #</th>
-              <th className="px-5 py-4 font-bold">Customer</th>
-              <th className="px-5 py-4 font-bold">Method</th>
-              <th className="px-5 py-4 font-bold">Amount</th>
-              <th className="px-5 py-4 font-bold">Status</th>
-              <th className="px-5 py-4 font-bold">Action</th>
-            </tr>
-          </thead>
+          <TableHeader>
+            <TableHeadRow>
+              <TableHeadCell>Date</TableHeadCell>
+              <TableHeadCell>Order #</TableHeadCell>
+              <TableHeadCell>Customer</TableHeadCell>
+              <TableHeadCell>Method</TableHeadCell>
+              <TableHeadCell>Amount</TableHeadCell>
+              <TableHeadCell>Status</TableHeadCell>
+              <TableHeadCell>Action</TableHeadCell>
+            </TableHeadRow>
+          </TableHeader>
           <tbody>
             {filteredOrders.length === 0 ? (
               <tr>

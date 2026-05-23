@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/auth-options";
 import { apiRequest } from "@/lib/api-client";
-import { AdminOrderDocumentsManager } from "@/components/admin-order-documents-manager";
+import { AdminDocumentsWorkspace } from "@/components/admin/pages/admin-documents-workspace";
 
 export default async function AdminOrderDocumentsPage() {
   const session = await getServerSession(authOptions);
@@ -17,17 +17,5 @@ export default async function AdminOrderDocumentsPage() {
     orders = [];
   }
 
-  return (
-    <div className="mx-auto w-full max-w-6xl space-y-6">
-      <div>
-        <p className="text-xs uppercase tracking-widest text-primary">Operations</p>
-        <h1 className="mt-2 font-heading text-3xl font-semibold">Order Documents</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Manage pickup IDs, signed pickup forms, pickup proof, ETB payment proof review, and shipping paperwork.
-        </p>
-      </div>
-
-      <AdminOrderDocumentsManager initialOrders={orders} />
-    </div>
-  );
+  return <AdminDocumentsWorkspace data={{ orders }} />;
 }

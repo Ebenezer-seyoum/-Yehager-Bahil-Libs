@@ -15,9 +15,10 @@ type Alert = {
 
 async function getAdminNotificationCounts() {
   try {
-    const [ordersResponse, alertsResponse] = await Promise.all([
+    const [ordersResponse, alertsResponse, supportResponse] = await Promise.all([
       apiRequest<{ data?: Order[] }>("/api/v1/orders?limit=200"),
       apiRequest<{ data?: Alert[] }>("/api/v1/admin/alerts?limit=200"),
+      apiRequest<{ count?: number }>("/api/v1/admin/support/unread-count").catch(() => ({ count: 0 })),
     ]);
     const orders = Array.isArray(ordersResponse?.data) ? ordersResponse.data : [];
     const alerts = Array.isArray(alertsResponse?.data) ? alertsResponse.data : [];
@@ -28,9 +29,10 @@ async function getAdminNotificationCounts() {
       orderIds: orderNotifications.map((order) => order.id).filter(Boolean),
       payments: orders.filter((order) => order.paymentStatus === "awaiting_verification").length,
       alerts: alerts.filter((alert) => !alert.isResolved).length,
+      support: supportResponse?.count ?? 0,
     };
   } catch {
-    return { orders: 0, orderIds: [], payments: 0, alerts: 0 };
+    return { orders: 0, orderIds: [], payments: 0, alerts: 0, support: 0 };
   }
 }
 

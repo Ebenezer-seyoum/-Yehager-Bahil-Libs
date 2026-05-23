@@ -2,6 +2,7 @@
 
 import { useMemo, useState, type ComponentType } from "react";
 import { BellRing, Boxes, ClipboardList, DollarSign, Search, ShoppingCart, TrendingUp, UserRound, UsersRound, X } from "lucide-react";
+import { TableHeadCell, TableHeadRow, TableHeader } from "@/components/admin/table-header";
 
 type Order = {
   id: string;
@@ -281,15 +282,13 @@ export function AdminOverviewCards({
               <div className="overflow-hidden rounded-2xl border border-border bg-card">
                 <div className="overflow-x-auto">
                   <table className="min-w-[640px] w-full text-sm">
-                    <thead>
-                      <tr>
+                    <TableHeader>
+                      <TableHeadRow>
                         {activeMetric.columns.map((column) => (
-                          <th key={column} className="px-5 py-4 text-left text-xs font-bold uppercase tracking-[0.16em]">
-                            {column}
-                          </th>
+                          <TableHeadCell key={column}>{column}</TableHeadCell>
                         ))}
-                      </tr>
-                    </thead>
+                      </TableHeadRow>
+                    </TableHeader>
                     <tbody>
                       {filteredRows.length === 0 ? (
                         <tr>

@@ -369,6 +369,88 @@ export const systemAlerts = pgTable(
   (table) => [index("system_alerts_resolved_idx").on(table.isResolved)],
 );
 
+export const supportTickets = pgTable(
+  "support_tickets",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    ticketNumber: varchar("ticket_number", { length: 50 }).notNull(),
+    customerId: uuid("customer_id").references(() => users.id, { onDelete: "set null" }),
+    customerName: varchar("customer_name", { length: 255 }).notNull(),
+    customerEmail: varchar("customer_email", { length: 320 }).notNull(),
+    orderId: uuid("order_id").references(() => orders.id, { onDelete: "set null" }),
+    subject: text("subject").notNull(),
+    category: varchar("category", { length: 100 }).notNull(),
+    priority: varchar("priority", { length: 50 }).default("medium").notNull(),
+    status: varchar("status", { length: 50 }).default("open").notNull(),
+    assignedAdminId: uuid("assigned_admin_id").references(() => users.id, { onDelete: "set null" }),
+    unreadByAdmin: boolean("unread_by_admin").default(true).notNull(),
+    unreadByCustomer: boolean("unread_by_customer").default(false).notNull(),
+    lastMessageAt: timestamp("last_message_at", { withTimezone: true }).defaultNow().notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("support_tickets_ticket_number_unique").on(table.ticketNumber),
+    index("support_tickets_customer_email_idx").on(table.customerEmail),
+  ]
+);
+
+export const supportMessages = pgTable(
+  "support_messages",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    ticketId: uuid("ticket_id")
+      .notNull()
+      .references(() => supportTickets.id, { onDelete: "cascade" }),
+    senderType: varchar("sender_type", { length: 50 }).notNull(), // customer/admin/system
+    senderName: varchar("sender_name", { length: 255 }).notNull(),
+    senderEmail: varchar("sender_email", { length: 320 }).notNull(),
+    messageBody: text("message_body").notNull(),
+    attachments: jsonb("attachments").$type<string[]>(),
+    isRead: boolean("is_read").default(false).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("support_messages_ticket_id_idx").on(table.ticketId),
+  ]
+);
+
+export const supportAttachments = pgTable(
+  "support_attachments",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    ticketId: uuid("ticket_id")
+      .notNull()
+      .references(() => supportTickets.id, { onDelete: "cascade" }),
+    messageId: uuid("message_id")
+      .notNull()
+      .references(() => supportMessages.id, { onDelete: "cascade" }),
+    fileName: varchar("file_name", { length: 255 }).notNull(),
+    fileUrl: text("file_url").notNull(),
+    fileType: varchar("file_type", { length: 100 }).notNull(),
+    uploadedAt: timestamp("uploaded_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("support_attachments_ticket_id_idx").on(table.ticketId),
+    index("support_attachments_message_id_idx").on(table.messageId),
+  ]
+);
+
+export const adminNotifications = pgTable(
+  "admin_notifications",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    type: varchar("type", { length: 100 }).notNull(),
+    title: text("title").notNull(),
+    message: text("message").notNull(),
+    relatedTicketId: uuid("related_ticket_id").references(() => supportTickets.id, { onDelete: "cascade" }),
+    isRead: boolean("is_read").default(false).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("admin_notifications_is_read_idx").on(table.isRead),
+  ]
+);
+
 export const usersRelations = relations(users, ({ many }) => ({
   cartItems: many(cartItems),
   orders: many(orders),

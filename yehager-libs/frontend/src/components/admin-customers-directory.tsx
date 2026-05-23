@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { TableHeadCell, TableHeadRow, TableHeader } from "@/components/admin/table-header";
 
 type Customer = {
   id: string;
@@ -36,18 +37,22 @@ function initials(name: string | null | undefined, email: string) {
   );
 }
 
-export function AdminCustomersDirectory({ customers }: { customers: Customer[] }) {
-  const [search, setSearch] = useState("");
+export function AdminCustomersDirectory({
+  customers,
+  query: externalQuery,
+}: {
+  customers: Customer[];
+  query?: string;
+}) {
+  const [localSearch, setLocalSearch] = useState("");
+  const search = externalQuery ?? localSearch;
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const filtered = customers.filter((customer) =>
-    [customer.name, customer.email, customer.status].some((value) => String(value ?? "").toLowerCase().includes(search.trim().toLowerCase())),
+    [customer.name, customer.email, customer.status].some((value) =>
+      String(value ?? "").toLowerCase().includes(search.trim().toLowerCase()),
+    ),
   );
   const allSelected = filtered.length > 0 && filtered.every((customer) => selectedIds.includes(customer.id));
-  const active = customers.filter((customer) => customer.status === "active").length;
-  const suspended = customers.filter((customer) => customer.status === "suspended").length;
-  const inactive = customers.filter((customer) => customer.status === "inactive").length;
-  const totalOrders = customers.reduce((sum, customer) => sum + customer.totalOrders, 0);
-  const totalSpent = customers.reduce((sum, customer) => sum + Number(customer.totalSpent ?? 0), 0);
 
   function toggleCustomer(customerId: string) {
     setSelectedIds((current) => (current.includes(customerId) ? current.filter((id) => id !== customerId) : [...current, customerId]));
@@ -67,7 +72,14 @@ export function AdminCustomersDirectory({ customers }: { customers: Customer[] }
           </div>
 
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search customers..." className="h-11 w-full rounded-xl border border-input bg-background px-4 text-sm lg:max-w-sm" />
+            {externalQuery === undefined ? (
+              <input
+                value={localSearch}
+                onChange={(event) => setLocalSearch(event.target.value)}
+                placeholder="Search customers..."
+                className="h-11 w-full rounded-xl border border-input bg-background px-4 text-sm lg:max-w-sm"
+              />
+            ) : null}
             <div className="flex flex-wrap gap-2">
               <button type="button" className="rounded-xl border border-border px-4 py-2 text-sm font-medium">Actions</button>
               <button type="button" className="rounded-xl border border-border px-4 py-2 text-sm font-medium">Columns</button>
@@ -77,16 +89,18 @@ export function AdminCustomersDirectory({ customers }: { customers: Customer[] }
 
         <div className="overflow-x-auto">
           <table className="w-full min-w-[840px] border-collapse text-left">
-            <thead className="bg-secondary/20">
-              <tr className="border-b border-border text-xs uppercase tracking-wide text-muted-foreground">
-                <th className="px-4 py-3"><input type="checkbox" aria-label="Select all customers" checked={allSelected} onChange={toggleAll} /></th>
-                <th className="px-4 py-3">No.</th>
-                <th className="px-4 py-3">Customer</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3">Orders</th>
-                <th className="px-4 py-3">Total Spent</th>
-              </tr>
-            </thead>
+            <TableHeader>
+              <TableHeadRow>
+                <TableHeadCell>
+                  <input type="checkbox" aria-label="Select all customers" checked={allSelected} onChange={toggleAll} />
+                </TableHeadCell>
+                <TableHeadCell>No.</TableHeadCell>
+                <TableHeadCell>Customer</TableHeadCell>
+                <TableHeadCell>Status</TableHeadCell>
+                <TableHeadCell>Orders</TableHeadCell>
+                <TableHeadCell>Total Spent</TableHeadCell>
+              </TableHeadRow>
+            </TableHeader>
             <tbody>
               {filtered.length === 0 ? (
                 <tr><td colSpan={6} className="px-4 py-10 text-center text-sm text-muted-foreground">No customers found.</td></tr>
@@ -109,23 +123,6 @@ export function AdminCustomersDirectory({ customers }: { customers: Customer[] }
           </table>
         </div>
       </section>
-
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
-        {[
-          ["Customer Directory", customers.length, "Total customer accounts", "from-slate-800 to-blue-700"],
-          ["Active Customers", active, "Can currently sign in", "from-emerald-800 to-emerald-600"],
-          ["Suspended", suspended, "Access blocked", "from-rose-800 to-red-600"],
-          ["Inactive", inactive, "Needs review", "from-amber-700 to-orange-500"],
-          ["Total Orders", totalOrders, "Orders from customers", "from-cyan-800 to-sky-600"],
-          ["Customer Revenue", formatCurrency(totalSpent), "Total customer spend", "from-violet-800 to-purple-600"],
-        ].map(([label, value, helper, tone]) => (
-          <div key={label} className={`rounded-3xl bg-gradient-to-br ${tone} p-5 text-white shadow-[0_16px_34px_rgba(15,23,42,0.16)] ring-1 ring-white/10`}>
-            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-white/75">{label}</p>
-            <p className="mt-5 text-3xl font-bold">{value}</p>
-            <p className="mt-2 min-h-10 text-sm font-medium text-white/80">{helper}</p>
-          </div>
-        ))}
-      </div>
     </div>
   );
 }

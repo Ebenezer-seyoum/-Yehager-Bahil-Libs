@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/auth-options";
 import { apiRequest } from "@/lib/api-client";
-import { AdminProductManager } from "@/components/admin-product-manager";
+import { AdminProductsWorkspace } from "@/components/admin/pages/admin-products-workspace";
 
 export default async function AdminInventoryPage() {
   const session = await getServerSession(authOptions);
@@ -17,16 +17,5 @@ export default async function AdminInventoryPage() {
     products = [];
   }
 
-  return (
-    <div className="mx-auto w-full max-w-6xl space-y-6">
-      <div>
-        <p className="text-xs uppercase tracking-widest text-primary">Catalog</p>
-        <h1 className="mt-2 font-heading text-3xl font-semibold">Product Management</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Create products, assign sections and subsections, preview multiple product images, and manage storefront visibility.
-        </p>
-      </div>
-      <AdminProductManager initialProducts={products} />
-    </div>
-  );
+  return <AdminProductsWorkspace data={{ products }} />;
 }

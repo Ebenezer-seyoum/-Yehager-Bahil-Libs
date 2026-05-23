@@ -12,7 +12,8 @@ export type NavigationIcon =
   | "audit"
   | "roles"
   | "reports"
-  | "settings";
+  | "settings"
+  | "inbox";
 
 export type NavigationChild = {
   href: string;
@@ -77,6 +78,7 @@ export const adminNavigation: readonly NavigationGroup[] = [
     label: "System",
     items: [
       { href: "/admin/settings", label: "Settings", icon: "settings", permission: "settings.view" },
+      { href: "/admin/support-inbox", label: "Support Inbox", icon: "inbox", permission: "settings.view" },
       { href: "/admin/audit", label: "Activity Logs", icon: "audit", permission: "audit.view" },
     ],
   },

@@ -1,6 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { TableHeadCell, TableHeadRow, TableHeader } from "@/components/admin/table-header";
+import { ADMIN_TABLE_WRAPPER } from "@/lib/admin/admin-design-system";
 import { AlertTriangle, CheckCircle2, CreditCard, Package, Search, ShieldCheck, Truck, UserRound } from "lucide-react";
 
 type AuditLog = {
@@ -88,18 +90,18 @@ export function AdminAuditTable({ logs }: { logs: AuditLog[] }) {
         </select>
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+      <div className={ADMIN_TABLE_WRAPPER}>
         <table className="w-full text-sm">
-          <thead className="bg-secondary/60 text-left">
-            <tr>
-              <th className="px-4 py-3 font-medium">Time</th>
-              <th className="px-4 py-3 font-medium">Action</th>
-              <th className="px-4 py-3 font-medium">Category</th>
-              <th className="px-4 py-3 font-medium">Severity</th>
-              <th className="px-4 py-3 font-medium">Entity</th>
-              <th className="px-4 py-3 font-medium">By</th>
-            </tr>
-          </thead>
+          <TableHeader>
+            <TableHeadRow>
+              <TableHeadCell>Time</TableHeadCell>
+              <TableHeadCell>Action</TableHeadCell>
+              <TableHeadCell>Category</TableHeadCell>
+              <TableHeadCell>Severity</TableHeadCell>
+              <TableHeadCell>Entity</TableHeadCell>
+              <TableHeadCell>By</TableHeadCell>
+            </TableHeadRow>
+          </TableHeader>
           <tbody>
             {filtered.length === 0 ? (
               <tr>

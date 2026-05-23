@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useState } from "react";
+import { TableHeadCell, TableHeadRow, TableHeader } from "@/components/admin/table-header";
 
 type User = {
   id: string;
@@ -49,14 +50,6 @@ export function AdminUsersDirectory({
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const allSelected = users.length > 0 && selectedIds.length === users.length;
 
-  const counts = useMemo(() => {
-    const employees = users.filter((user) => user.role === "employee").length;
-    const active = users.filter((user) => user.status === "active").length;
-    const suspended = users.filter((user) => user.status === "suspended").length;
-    const inactive = users.filter((user) => user.status === "inactive").length;
-    return { employees, active, suspended, inactive };
-  }, [users]);
-
   function toggleUser(userId: string) {
     setSelectedIds((current) => (current.includes(userId) ? current.filter((id) => id !== userId) : [...current, userId]));
   }
@@ -99,18 +92,18 @@ export function AdminUsersDirectory({
 
         <div className="overflow-x-auto">
           <table className="w-full min-w-[860px] border-collapse text-left">
-            <thead className="bg-secondary/20">
-              <tr className="border-b border-border text-xs uppercase tracking-wide text-muted-foreground">
-                <th className="px-4 py-3 font-semibold">
+            <TableHeader>
+              <TableHeadRow>
+                <TableHeadCell>
                   <input type="checkbox" aria-label="Select all users" checked={allSelected} onChange={toggleAll} />
-                </th>
-                <th className="px-4 py-3 font-semibold">No.</th>
-                <th className="px-4 py-3 font-semibold">Employee</th>
-                <th className="px-4 py-3 font-semibold">Role</th>
-                <th className="px-4 py-3 font-semibold">Status</th>
-                <th className="px-4 py-3 font-semibold">Last login</th>
-              </tr>
-            </thead>
+                </TableHeadCell>
+                <TableHeadCell>No.</TableHeadCell>
+                <TableHeadCell>Employee</TableHeadCell>
+                <TableHeadCell>Role</TableHeadCell>
+                <TableHeadCell>Status</TableHeadCell>
+                <TableHeadCell>Last login</TableHeadCell>
+              </TableHeadRow>
+            </TableHeader>
             <tbody>
               {users.length === 0 ? (
                 <tr>
@@ -156,23 +149,6 @@ export function AdminUsersDirectory({
           </table>
         </div>
       </section>
-
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
-        {[
-          ["Directory Size", users.length, "All visible records", "from-slate-800 to-blue-700"],
-          ["Staff Accounts", counts.employees, "Employee workspace users", "from-emerald-800 to-emerald-600"],
-          ["Active Access", counts.active, "Can currently sign in", "from-cyan-800 to-sky-600"],
-          ["Suspended", counts.suspended, "Access blocked", "from-rose-800 to-red-600"],
-          ["Inactive", counts.inactive, "Needs review", "from-amber-700 to-orange-500"],
-          ["Selected Rows", selectedIds.length, "Marked in this table", "from-violet-800 to-purple-600"],
-        ].map(([label, value, helper, tone]) => (
-          <div key={label} className={`rounded-3xl bg-gradient-to-br ${tone} p-5 text-white shadow-[0_16px_34px_rgba(15,23,42,0.16)] ring-1 ring-white/10`}>
-            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-white/75">{label}</p>
-            <p className="mt-5 text-3xl font-bold">{value}</p>
-            <p className="mt-2 min-h-10 text-sm font-medium text-white/80">{helper}</p>
-          </div>
-        ))}
-      </div>
     </div>
   );
 }

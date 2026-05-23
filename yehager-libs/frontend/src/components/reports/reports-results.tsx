@@ -27,6 +27,16 @@ import {
   buildSummary,
   buildTableView,
 } from "@/lib/reports/report-views";
+import {
+  ADMIN_TAB_ACTIVE,
+  ADMIN_TAB_BUTTON_BASE,
+  ADMIN_TAB_INACTIVE,
+  ADMIN_TAB_LIST,
+  ADMIN_TAB_WRAPPER,
+  ADMIN_TAB_WRAPPER_ACCENT,
+} from "@/lib/admin/admin-design-system";
+import { TableHeadCell, TableHeadRow, TableHeader } from "@/components/admin/table-header";
+import { cn } from "@/lib/utils";
 import { money } from "@/lib/reports/utils";
 
 const TABS = ["Data Table", "Charts", "Summary", "Insights"] as const;
@@ -66,15 +76,13 @@ function DataTable({
   return (
     <div className="overflow-x-auto">
       <table className="min-w-full text-left text-sm">
-        <thead className="bg-slate-50 text-xs font-bold uppercase tracking-wide text-slate-500">
-          <tr>
+        <TableHeader>
+          <TableHeadRow>
             {displayColumns.map((column) => (
-              <th key={column} className="px-6 py-4">
-                {column}
-              </th>
+              <TableHeadCell key={column}>{column}</TableHeadCell>
             ))}
-          </tr>
-        </thead>
+          </TableHeadRow>
+        </TableHeader>
         <tbody className="divide-y divide-slate-100 bg-white">
           {rows.map((row, rowIndex) => (
             <tr key={rowIndex} className="hover:bg-slate-50">
@@ -468,21 +476,25 @@ export function ReportsResults({
           </div>
         </div>
 
-        <div className="mt-4 flex gap-7 border-b border-slate-200">
-          {TABS.map((tab) => (
-            <button
-              key={tab}
-              type="button"
-              onClick={() => onTabChange(tab)}
-              className={`border-b-2 px-0 pb-3 text-sm font-extrabold ${
-                activeTab === tab
-                  ? "border-blue-600 text-blue-600"
-                  : "border-transparent text-slate-600 hover:text-slate-900"
-              }`}
-            >
-              {tab}
-            </button>
-          ))}
+        <div className="mt-4">
+          <div className={ADMIN_TAB_WRAPPER}>
+            <span className={ADMIN_TAB_WRAPPER_ACCENT} aria-hidden />
+            <div className={ADMIN_TAB_LIST}>
+              {TABS.map((tab) => (
+                <button
+                  key={tab}
+                  type="button"
+                  onClick={() => onTabChange(tab)}
+                  className={cn(
+                    ADMIN_TAB_BUTTON_BASE,
+                    activeTab === tab ? ADMIN_TAB_ACTIVE : ADMIN_TAB_INACTIVE,
+                  )}
+                >
+                  {tab}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
 
         {hasGenerated && activeTab === "Data Table" ? (

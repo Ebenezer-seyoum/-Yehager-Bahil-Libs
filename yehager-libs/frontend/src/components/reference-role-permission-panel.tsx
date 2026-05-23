@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { TableHeadCell, TableHeadRow, TableHeader } from "@/components/admin/table-header";
 
 type User = {
   id: string;
@@ -214,7 +215,7 @@ export function ReferenceRolePermissionPanel({
               </button>
             ) : null}
             <div className="mt-5 overflow-hidden rounded-2xl border border-border">
-              <div className="grid grid-cols-[52px_220px_minmax(0,1fr)] border-b border-border bg-secondary/20 px-4 py-3 text-sm font-semibold">
+              <div className="grid grid-cols-[52px_220px_minmax(0,1fr)] border-b border-blue-100 bg-gradient-to-r from-white to-blue-50 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-700">
                 <label className="flex items-center">
                   <input type="checkbox" checked={allVisibleChecked} onChange={toggleAll} />
                 </label>
@@ -251,15 +252,15 @@ export function ReferenceRolePermissionPanel({
           </div>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[760px] border-collapse text-left">
-              <thead className="bg-secondary/20 text-sm">
-                <tr className="border-b border-border">
-                  <th className="px-4 py-3 font-semibold">No.</th>
-                  <th className="px-4 py-3 font-semibold">Name</th>
-                  <th className="px-4 py-3 font-semibold">Created Date</th>
-                  <th className="px-4 py-3 font-semibold">Modified Date</th>
-                  <th className="px-4 py-3 font-semibold">Type</th>
-                </tr>
-              </thead>
+              <TableHeader>
+                <TableHeadRow>
+                  <TableHeadCell>No.</TableHeadCell>
+                  <TableHeadCell>Name</TableHeadCell>
+                  <TableHeadCell>Created Date</TableHeadCell>
+                  <TableHeadCell>Modified Date</TableHeadCell>
+                  <TableHeadCell>Type</TableHeadCell>
+                </TableHeadRow>
+              </TableHeader>
               <tbody>
                 {filteredRoles.map((role, index) => (
                   <tr key={role.id} className="border-b border-border last:border-b-0">

@@ -2,6 +2,9 @@ import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import { Client } from "pg";
+import { config } from "dotenv";
+
+config();
 
 const migrationsDir = path.resolve(process.cwd(), "migrations");
 const databaseUrl = process.env.DATABASE_URL;
