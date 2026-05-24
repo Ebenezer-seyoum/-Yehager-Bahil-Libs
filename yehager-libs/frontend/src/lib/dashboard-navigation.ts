@@ -58,9 +58,9 @@ export const adminNavigation: readonly NavigationGroup[] = [
     label: "Operations",
     items: [
       { href: "/admin/orders", label: "Orders", icon: "orders", permission: "orders.view" },
-      { href: "/admin/payments", label: "Payments", icon: "payments", permission: "orders.view" },
-      { href: "/admin/orders/documents", label: "Order Documents", icon: "documents", permission: "orders.view" },
-      { href: "/admin/exchange-rate", label: "Exchange Rate", icon: "exchange", permission: "exchange_rates.view" },
+      { href: "/admin/payments", label: "Payments", icon: "payments", permission: "payments.view" },
+      { href: "/admin/orders/documents", label: "Order Documents", icon: "documents", permission: "documents.view" },
+      { href: "/admin/exchange-rate", label: "Exchange Rate", icon: "exchange", permission: "exchange.view" },
     ],
   },
   {
@@ -78,7 +78,7 @@ export const adminNavigation: readonly NavigationGroup[] = [
     label: "System",
     items: [
       { href: "/admin/settings", label: "Settings", icon: "settings", permission: "settings.view" },
-      { href: "/admin/support-inbox", label: "Support Inbox", icon: "inbox", permission: "settings.view" },
+      { href: "/admin/support-inbox", label: "Support Inbox", icon: "inbox", permission: "support.view" },
       { href: "/admin/audit", label: "Activity Logs", icon: "audit", permission: "audit.view" },
     ],
   },

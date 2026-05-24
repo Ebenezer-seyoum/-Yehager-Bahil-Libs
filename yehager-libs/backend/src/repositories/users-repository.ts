@@ -1,6 +1,6 @@
 import { desc, eq } from "drizzle-orm";
 import { db } from "../lib/db/drizzle.js";
-import { users } from "../lib/db/schema.js";
+import { passwordResetRequests, users } from "../lib/db/schema.js";
 import type { UserRole } from "../lib/auth/roles.js";
 
 export async function upsertUserFromAuth(payload: {
@@ -47,6 +47,10 @@ export async function createUser(payload: {
   passwordHash: string;
   role: UserRole;
   status?: "active" | "inactive" | "suspended";
+  accountStatus?: "active" | "invited" | "pending";
+  roleStatus?: "unassigned" | "assigned";
+  phone?: string | null;
+  avatarUrl?: string | null;
 }) {
   const [row] = await db
     .insert(users)
@@ -56,6 +60,10 @@ export async function createUser(payload: {
       passwordHash: payload.passwordHash,
       role: payload.role,
       status: payload.status ?? "active",
+      accountStatus: payload.accountStatus ?? "active",
+      roleStatus: payload.roleStatus ?? "assigned",
+      phone: payload.phone ?? null,
+      avatarUrl: payload.avatarUrl ?? null,
     })
     .onConflictDoNothing()
     .returning();
@@ -71,6 +79,10 @@ export async function listUsers(limit = 200) {
       name: users.name,
       role: users.role,
       status: users.status,
+      accountStatus: users.accountStatus,
+      roleStatus: users.roleStatus,
+      assignedRoleId: users.assignedRoleId,
+      phone: users.phone,
       avatarUrl: users.avatarUrl,
       lastLoginAt: users.lastLoginAt,
       mustChangePassword: users.mustChangePassword,
@@ -122,11 +134,53 @@ export async function updateUserProfileForAdmin(payload: { userId: string; name:
   return row;
 }
 
+export async function updateEmployeeCoreForAdmin(payload: {
+  userId: string;
+  name?: string;
+  email?: string;
+  phone?: string | null;
+  accountStatus?: "active" | "invited" | "pending";
+  avatarUrl?: string | null;
+}) {
+  const [row] = await db
+    .update(users)
+    .set({
+      ...(payload.name !== undefined ? { name: payload.name } : {}),
+      ...(payload.email !== undefined ? { email: payload.email } : {}),
+      ...(payload.phone !== undefined ? { phone: payload.phone } : {}),
+      ...(payload.accountStatus !== undefined ? { accountStatus: payload.accountStatus } : {}),
+      ...(payload.avatarUrl !== undefined ? { avatarUrl: payload.avatarUrl } : {}),
+      updatedAt: new Date(),
+    })
+    .where(eq(users.id, payload.userId))
+    .returning();
+
+  return row;
+}
+
 export async function updateUserStatus(payload: { userId: string; status: "active" | "inactive" | "suspended" }) {
   const [row] = await db
     .update(users)
     .set({
       status: payload.status,
+      updatedAt: new Date(),
+    })
+    .where(eq(users.id, payload.userId))
+    .returning();
+
+  return row;
+}
+
+export async function updateEmployeeAccess(payload: {
+  userId: string;
+  roleStatus: "unassigned" | "assigned";
+  assignedRoleId: string | null;
+}) {
+  const [row] = await db
+    .update(users)
+    .set({
+      roleStatus: payload.roleStatus,
+      assignedRoleId: payload.assignedRoleId,
       updatedAt: new Date(),
     })
     .where(eq(users.id, payload.userId))
@@ -141,6 +195,9 @@ export async function updateUserPasswordForAdmin(payload: { userId: string; pass
     .set({
       passwordHash: payload.passwordHash,
       mustChangePassword: true,
+      passwordStatus: "temporary_password_set",
+      lastPasswordResetAt: new Date(),
+      lastPasswordResetMethod: "temporary_password",
       updatedAt: new Date(),
     })
     .where(eq(users.id, payload.userId))
@@ -165,5 +222,31 @@ export async function updateOwnPassword(payload: { userId: string; passwordHash:
 
 export async function deleteUserById(userId: string) {
   const [row] = await db.delete(users).where(eq(users.id, userId)).returning();
+  return row;
+}
+
+export async function createPasswordResetRequest(payload: { userId: string; tokenHash: string; expiresAt: Date }) {
+  const [row] = await db
+    .insert(passwordResetRequests)
+    .values({
+      userId: payload.userId,
+      tokenHash: payload.tokenHash,
+      expiresAt: payload.expiresAt,
+    })
+    .returning();
+  return row;
+}
+
+export async function markPasswordResetLinkSent(payload: { userId: string }) {
+  const [row] = await db
+    .update(users)
+    .set({
+      passwordStatus: "reset_link_sent",
+      lastPasswordResetRequestedAt: new Date(),
+      lastPasswordResetMethod: "email_reset_link",
+      updatedAt: new Date(),
+    })
+    .where(eq(users.id, payload.userId))
+    .returning();
   return row;
 }

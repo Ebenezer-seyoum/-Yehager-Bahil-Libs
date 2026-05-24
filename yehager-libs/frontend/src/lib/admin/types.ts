@@ -1,6 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 
-export type KpiColor = "green" | "blue" | "yellow" | "red" | "purple" | "gray";
+export type KpiColor = "green" | "blue" | "yellow" | "red" | "purple" | "teal" | "gray";
 
 export type AdminPageId =
   | "dashboard"
@@ -13,6 +13,7 @@ export type AdminPageId =
   | "payments"
   | "documents"
   | "exchange-rate"
+  | "support-inbox"
   | "settings"
   | "activity-logs"
   | "reports";
@@ -68,6 +69,9 @@ export type AdminWorkspaceData = {
   products?: Record<string, unknown>[];
   users?: Record<string, unknown>[];
   alerts?: Record<string, unknown>[];
+  support?: Record<string, unknown>[];
+  notifications?: Record<string, unknown>[];
+  measurements?: Record<string, unknown>[];
   audit?: Record<string, unknown>[];
   roles?: Record<string, unknown>[];
   permissions?: Record<string, unknown>[];

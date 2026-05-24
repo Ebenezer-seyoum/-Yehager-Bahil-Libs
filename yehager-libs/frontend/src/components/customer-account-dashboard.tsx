@@ -20,7 +20,7 @@ import {
   User,
   X,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 type Profile = {
   id?: string | null;
@@ -28,6 +28,7 @@ type Profile = {
   email?: string | null;
   role?: string | null;
   status?: string | null;
+  mustChangePassword?: boolean | null;
   phone?: string | null;
   createdAt?: string | null;
   lastLoginAt?: string | null;
@@ -124,6 +125,11 @@ export function CustomerAccountDashboard({
   const displayName = profile.name ?? "Customer";
   const email = profile.email ?? "";
   const initials = displayName.charAt(0).toUpperCase() || email.charAt(0).toUpperCase() || "?";
+  const mustChangePassword = Boolean(profile.mustChangePassword);
+
+  useEffect(() => {
+    if (mustChangePassword) setTab("security");
+  }, [mustChangePassword]);
 
   const tabs = [
     { key: "profile", label: "My Profile", icon: User },
@@ -136,6 +142,12 @@ export function CustomerAccountDashboard({
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 sm:py-12">
+      {mustChangePassword ? (
+        <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 shadow-sm">
+          <p className="font-semibold">Password reset required</p>
+          <p className="mt-0.5">Your password was reset. Please change it now to continue using your account securely.</p>
+        </div>
+      ) : null}
       <div className="mb-8 rounded-2xl bg-foreground p-6 text-background sm:p-8">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-4">

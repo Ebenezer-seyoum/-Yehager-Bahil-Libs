@@ -65,6 +65,28 @@ export async function replaceSystemRoleForUser(userId: string, role: UserRole) {
     .onConflictDoNothing();
 }
 
+export async function replaceNonSystemRolesForUser(userId: string, roleIds: string[]) {
+  const systemRoles = await db.query.roles.findMany({
+    where: eq(roles.isSystem, true),
+  });
+  const systemRoleIds = new Set(systemRoles.map((role) => role.id));
+
+  const existing = await db.query.userRoles.findMany({
+    where: eq(userRoles.userId, userId),
+  });
+
+  for (const row of existing) {
+    if (!systemRoleIds.has(row.roleId)) {
+      await db.delete(userRoles).where(and(eq(userRoles.userId, userId), eq(userRoles.roleId, row.roleId)));
+    }
+  }
+
+  for (const roleId of roleIds) {
+    if (systemRoleIds.has(roleId)) continue;
+    await db.insert(userRoles).values({ userId, roleId }).onConflictDoNothing();
+  }
+}
+
 export async function listRolesWithPermissionKeys() {
   const roleRows = await db.query.roles.findMany({
     orderBy: (table, { asc }) => [asc(table.name)],

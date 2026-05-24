@@ -13,8 +13,10 @@ import {
   createEmployeeForAdmin,
   createCustomerForAdmin,
   deleteUserForAdmin,
+  getEmployeeDetailForAdmin,
   listUsersForAdmin,
   resetUserPasswordForAdmin,
+  sendPasswordResetLinkForAdmin,
   updateUserProfileForAdminService,
   updateRoleForAdmin,
   updateUserStatusForAdmin,
@@ -99,6 +101,26 @@ const createEmployeeSchema = z.object({
   password: z.string().min(8).max(128),
   roleId: z.string().uuid().optional(),
   status: z.enum(["active", "inactive", "suspended"]).optional(),
+  accountStatus: z.enum(["active", "invited", "pending"]).optional(),
+  phone: z.string().trim().min(1).max(50).optional(),
+  avatarUrl: z.string().trim().url().optional(),
+  profile: z
+    .object({
+      firstName: z.string().trim().min(1).max(120),
+      fatherName: z.string().trim().min(1).max(120),
+      grandfatherName: z.string().trim().max(120).optional(),
+      gender: z.string().trim().min(1).max(20),
+      dateOfBirth: z.string().trim().optional(),
+      maritalStatus: z.string().trim().optional(),
+      country: z.string().trim().optional(),
+      city: z.string().trim().optional(),
+      address: z.string().trim().optional(),
+      employmentType: z.string().trim().optional(),
+      startDate: z.string().trim().optional(),
+      inviteStatus: z.string().trim().optional(),
+      notes: z.string().trim().optional(),
+    })
+    .optional(),
 });
 const createRoleSchema = z.object({
   name: z.string().trim().min(1).max(255),
@@ -133,8 +155,30 @@ const reportsQuerySchema = z.object({
   stockLevel: z.string().optional(),
 });
 const userProfilePatchSchema = z.object({
-  name: z.string().trim().min(1).max(255),
-  email: z.string().trim().email().max(320),
+  name: z.string().trim().min(1).max(255).optional(),
+  email: z.string().trim().email().max(320).optional(),
+  phone: z.string().trim().min(1).max(50).optional().nullable(),
+  accountStatus: z.enum(["active", "invited", "pending"]).optional(),
+  avatarUrl: z.string().trim().url().optional().nullable(),
+  profile: z
+    .object({
+      firstName: z.string().trim().min(1).max(120).optional(),
+      fatherName: z.string().trim().min(1).max(120).optional(),
+      grandfatherName: z.string().trim().max(120).optional().nullable(),
+      gender: z.string().trim().min(1).max(20).optional(),
+      dateOfBirth: z.string().trim().optional().nullable(),
+      maritalStatus: z.string().trim().optional().nullable(),
+      country: z.string().trim().optional().nullable(),
+      city: z.string().trim().optional().nullable(),
+      address: z.string().trim().optional().nullable(),
+      employmentType: z.string().trim().optional().nullable(),
+      startDate: z.string().trim().optional().nullable(),
+      inviteStatus: z.string().trim().optional().nullable(),
+      notes: z.string().trim().optional().nullable(),
+    })
+    .optional(),
+}).refine((value) => Boolean(value.name || value.email || value.phone || value.accountStatus || value.avatarUrl || value.profile), {
+  message: "At least one field must be provided",
 });
 const userStatusPatchSchema = z.object({
   status: z.enum(["active", "inactive", "suspended"]),
@@ -214,6 +258,12 @@ adminRouter.get("/audit/:auditId", requirePermission(PERMISSIONS.AUDIT_VIEW), as
 adminRouter.get("/users", requirePermission(PERMISSIONS.EMPLOYEES_VIEW), zValidator("query", listQuerySchema), async (c) => {
   const { limit } = c.req.valid("query");
   const data = await listUsersForAdmin(limit ?? 200);
+  return c.json({ data });
+});
+
+adminRouter.get("/users/:userId", requirePermission(PERMISSIONS.EMPLOYEES_VIEW), zValidator("param", userParamSchema), async (c) => {
+  const { userId } = c.req.valid("param");
+  const data = await getEmployeeDetailForAdmin(userId);
   return c.json({ data });
 });
 
@@ -462,6 +512,21 @@ adminRouter.patch(
     const data = await resetUserPasswordForAdmin({
       userId,
       password,
+      performedBy: authUser?.email,
+    });
+    return c.json({ data });
+  },
+);
+
+adminRouter.post(
+  "/users/:userId/password-reset-link",
+  requirePermission(PERMISSIONS.EMPLOYEES_EDIT),
+  zValidator("param", userParamSchema),
+  async (c) => {
+    const authUser = c.get("authUser");
+    const { userId } = c.req.valid("param");
+    const data = await sendPasswordResetLinkForAdmin({
+      userId,
       performedBy: authUser?.email,
     });
     return c.json({ data });

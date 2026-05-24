@@ -68,9 +68,11 @@ export function isCancelled(row: { status?: string | null }) {
 
 export type DateRangeKey =
   | "Today"
+  | "Yesterday"
   | "Last 7 Days"
   | "Last 30 Days"
   | "This Month"
+  | "Last Month"
   | "This Year";
 
 export function getDateRangeBounds(range: DateRangeKey): { start: Date; end: Date } {
@@ -82,6 +84,11 @@ export function getDateRangeBounds(range: DateRangeKey): { start: Date; end: Dat
   switch (range) {
     case "Today":
       break;
+    case "Yesterday": {
+      start.setDate(end.getDate() - 1);
+      end.setDate(end.getDate() - 1);
+      break;
+    }
     case "Last 7 Days":
       start.setDate(end.getDate() - 6);
       break;
@@ -91,6 +98,18 @@ export function getDateRangeBounds(range: DateRangeKey): { start: Date; end: Dat
     case "This Month":
       start.setDate(1);
       break;
+    case "Last Month": {
+      const monthStart = new Date(end);
+      monthStart.setDate(1);
+      monthStart.setHours(0, 0, 0, 0);
+      monthStart.setMonth(monthStart.getMonth() - 1);
+      const monthEnd = new Date(monthStart);
+      monthEnd.setMonth(monthEnd.getMonth() + 1);
+      monthEnd.setMilliseconds(monthEnd.getMilliseconds() - 1);
+      start.setTime(monthStart.getTime());
+      end.setTime(monthEnd.getTime());
+      break;
+    }
     case "This Year":
       start.setMonth(0, 1);
       break;

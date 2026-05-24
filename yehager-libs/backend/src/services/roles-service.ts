@@ -4,6 +4,7 @@ import {
   assignRoleToUser,
   createRole,
   listRolesWithPermissionKeys,
+  replaceNonSystemRolesForUser,
   replaceRolePermissions,
   replaceSystemRoleForUser,
 } from "../repositories/roles-repository.js";
@@ -30,4 +31,8 @@ export async function assignAdditionalRoleToUser(userId: string, roleId: string)
 
 export async function updateRolePermissionsForAdmin(roleId: string, permissionKeys: string[]) {
   return replaceRolePermissions(roleId, permissionKeys);
+}
+
+export async function replaceUserAdditionalRolesForAdmin(userId: string, roleIds: string[]) {
+  await replaceNonSystemRolesForUser(userId, roleIds);
 }

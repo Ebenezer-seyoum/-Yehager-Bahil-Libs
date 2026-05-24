@@ -15,6 +15,7 @@ import {
   List,
   Send,
   Paperclip,
+  CreditCard,
   AlertTriangle,
   RefreshCw,
   Archive,
@@ -26,6 +27,24 @@ import {
   Shield,
   MessageSquare
 } from "lucide-react";
+import { AdminPageHeader } from "@/components/admin/admin-page-header";
+import { KPIGrid } from "@/components/admin/kpi-grid";
+
+const SUPPORT_TABS = [
+  { id: "all", label: "All Messages", icon: Mail },
+  { id: "new", label: "New Messages", icon: Inbox, query: { status: "new" } },
+  { id: "unread", label: "Unread", icon: AlertCircle, query: { unreadOnly: "true" } },
+  { id: "open", label: "Open Tickets", icon: Clock, query: { status: "open" } },
+  { id: "pending_reply", label: "Pending Reply", icon: MessageSquare, query: { status: "pending_reply" } },
+  { id: "payment_issue", label: "Payment Issues", icon: CreditCard, query: { category: "payment_issue" } },
+  { id: "order_question", label: "Order Questions", icon: Mail, query: { category: "order_question" } },
+  { id: "delivery_issue", label: "Delivery Issues", icon: Mail, query: { category: "delivery_issue" } },
+  { id: "measurement_question", label: "Measurement Questions", icon: Mail, query: { category: "measurement_question" } },
+  { id: "product_question", label: "Product Questions", icon: Mail, query: { category: "product_question" } },
+  { id: "complaint", label: "Complaints", icon: AlertTriangle, query: { category: "complaint" } },
+  { id: "resolved", label: "Resolved", icon: CheckCircle2, query: { status: "resolved" } },
+  { id: "archived", label: "Archived / Spam", icon: Archive, query: { status: "archived" } },
+];
 
 // Formatter helper
 const formatTimeAgo = (dateStr) => {
@@ -71,7 +90,7 @@ export default function SupportInboxPage() {
   const [seeding, setSeeding] = useState(false);
 
   // Filters & Tabs state
-  const [activeTab, setActiveTab] = useState("all"); // all, new_unread, open, pending, payment, complaints, resolved
+  const [activeTab, setActiveTab] = useState("all"); // SUPPORT_TABS ids
   const [searchQuery, setSearchQuery] = useState("");
   const [filterPriority, setFilterPriority] = useState("all");
   const [filterCategory, setFilterCategory] = useState("all");
@@ -102,20 +121,17 @@ export default function SupportInboxPage() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      // Build query string
-      let statusParam = "all";
-      if (activeTab === "new_unread") statusParam = "unread";
-      else if (activeTab === "open") statusParam = "open";
-      else if (activeTab === "pending") statusParam = "pending";
-      else if (activeTab === "resolved") statusParam = "resolved";
-      else if (activeTab === "archived") statusParam = "archived";
+      const tab = SUPPORT_TABS.find((item) => item.id === activeTab);
+      const tabQuery = tab?.query ?? {};
+      const statusParam = tabQuery.status ?? "all";
+      const tabCategory = tabQuery.category ?? "all";
+      const tabUnreadOnly = tabQuery.unreadOnly ?? "false";
 
-      let categoryParam = filterCategory;
-      if (activeTab === "payment") categoryParam = "payment_issue";
-      if (activeTab === "complaints") categoryParam = "complaint";
+      const categoryParam = tabCategory !== "all" ? tabCategory : filterCategory;
 
       const queryParams = new URLSearchParams();
       if (statusParam !== "all") queryParams.append("status", statusParam);
+      if (tabUnreadOnly === "true") queryParams.append("unreadOnly", "true");
       if (categoryParam !== "all") queryParams.append("category", categoryParam);
       if (filterPriority !== "all") queryParams.append("priority", filterPriority);
       if (searchQuery) queryParams.append("search", searchQuery);
@@ -167,7 +183,7 @@ export default function SupportInboxPage() {
   // 2. Fetch admins / employees list
   const fetchAdmins = async () => {
     try {
-      const res = await fetch("/api/backend/admin/users?limit=100");
+      const res = await fetch("/api/v1/admin/users?limit=100");
       const data = await res.json();
       const userList = data.data || [];
       // Filter for admins and employees
@@ -314,7 +330,8 @@ export default function SupportInboxPage() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-7xl space-y-6 px-4 py-6">
+    <div className="min-h-screen bg-slate-50">
+      <div className="mx-auto w-full max-w-screen-2xl space-y-6 px-4 py-6 sm:px-6 xl:px-8">
       
       {/* SUCCESS TOAST POPUP */}
       {successToast && (
@@ -329,97 +346,59 @@ export default function SupportInboxPage() {
       )}
 
       {/* HEADER SECTION */}
-      <div className="flex flex-col justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-5 md:flex-row md:items-center">
-        <div>
-          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-blue-600 dark:text-blue-400">
-            <Inbox className="h-4 w-4" />
-            System Support
-          </div>
-          <h1 className="mt-1 font-heading text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">
-            Support Inbox
-          </h1>
-          <p className="mt-2 text-sm text-slate-500 dark:text-slate-400 max-w-2xl">
-            Manage customer emails, support messages, complaints, order questions, payment issues, and replies from one place.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
+      <AdminPageHeader
+        pageId="support-inbox"
+        onRefresh={fetchData}
+        isRefreshing={loading}
+        primaryAction={
           <button
-            onClick={fetchData}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 shadow-sm"
-          >
-            <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
-            Refresh
-          </button>
-          <button
+            type="button"
             onClick={handleSeedDemo}
             disabled={seeding}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-transparent bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 px-3 py-2 text-xs font-medium hover:bg-slate-800 dark:hover:bg-white shadow-sm disabled:opacity-50"
+            className="inline-flex h-9 items-center gap-2 rounded-lg border border-border bg-white px-3 text-sm font-medium shadow-sm transition hover:bg-secondary disabled:opacity-60"
           >
-            <Database className="h-3.5 w-3.5" />
+            <Database className="h-4 w-4" />
             {seeding ? "Loading..." : "Seed Demo Tickets"}
           </button>
-        </div>
-      </div>
+        }
+      />
 
       {/* COMPACT KPI CARDS */}
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4 lg:grid-cols-8">
-        {[
-          { label: "Total", value: kpis.total, color: "border-blue-500 bg-blue-50/40 dark:bg-blue-950/10 text-blue-600 dark:text-blue-400" },
-          { label: "New", value: kpis.new, color: "border-sky-500 bg-sky-50/40 dark:bg-sky-950/10 text-sky-600 dark:text-sky-400" },
-          { label: "Unread", value: kpis.unread, color: "border-purple-500 bg-purple-50/40 dark:bg-purple-950/10 text-purple-600 dark:text-purple-400" },
-          { label: "Open", value: kpis.open, color: "border-emerald-500 bg-emerald-50/40 dark:bg-emerald-950/10 text-emerald-600 dark:text-emerald-400" },
-          { label: "Pending", value: kpis.pending, color: "border-amber-500 bg-amber-50/40 dark:bg-amber-950/10 text-amber-600 dark:text-amber-400" },
-          { label: "Resolved", value: kpis.resolved, color: "border-slate-400 bg-slate-50/40 dark:bg-slate-900/10 text-slate-600 dark:text-slate-400" },
-          { label: "Complaints", value: kpis.complaints, color: "border-red-500 bg-red-50/40 dark:bg-red-950/10 text-red-600 dark:text-red-400" },
-          { label: "Urgent", value: kpis.urgent, color: "border-rose-600 bg-rose-50/40 dark:bg-rose-950/10 text-rose-600 dark:text-rose-400 animate-pulse font-bold" }
-        ].map((card, i) => (
-          <div
-            key={i}
-            className={`rounded-xl border-l-4 p-3 shadow-sm flex flex-col justify-between h-20 transition-all ${card.color} border-y border-r border-slate-200 dark:border-slate-800 bg-white`}
-          >
-            <span className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-medium">
-              {card.label}
-            </span>
-            <span className="text-xl font-extrabold tracking-tight">
-              {card.value}
-            </span>
-          </div>
-        ))}
-      </div>
+      <KPIGrid
+        metrics={[
+          { id: "total", title: "Total Messages", value: String(kpis.total), description: "All support messages", color: "blue", icon: Mail, changePercent: 0, positiveIsGood: true, status: "ready" },
+          { id: "new", title: "New Messages", value: String(kpis.new), description: "Newly received", color: "purple", icon: Inbox, changePercent: 0, positiveIsGood: true, status: "ready" },
+          { id: "unread", title: "Unread Messages", value: String(kpis.unread), description: "Needs review", color: "yellow", icon: AlertCircle, changePercent: 0, positiveIsGood: false, status: "ready" },
+          { id: "open", title: "Open Tickets", value: String(kpis.open), description: "Active conversations", color: "blue", icon: Clock, changePercent: 0, positiveIsGood: true, status: "ready" },
+          { id: "pending", title: "Pending Replies", value: String(kpis.pending), description: "Awaiting response", color: "yellow", icon: MessageSquare, changePercent: 0, positiveIsGood: false, status: "ready" },
+          { id: "resolved", title: "Resolved Tickets", value: String(kpis.resolved), description: "Closed successfully", color: "green", icon: CheckCircle2, changePercent: 0, positiveIsGood: true, status: "ready" },
+          { id: "complaints", title: "Complaints", value: String(kpis.complaints), description: "Customer complaints", color: "red", icon: AlertTriangle, changePercent: 0, positiveIsGood: false, status: "ready" },
+          { id: "urgent", title: "Urgent Messages", value: String(kpis.urgent), description: "Requires attention", color: "red", icon: AlertTriangle, changePercent: 0, positiveIsGood: false, status: "ready" },
+        ]}
+      />
 
       {/* ADVANCED FILTER TABS (BLUE/WHITE HIGHLIGHT SYSTEM) */}
-      <div className="flex flex-wrap gap-2 border-b border-slate-200 dark:border-slate-800 pb-3">
-        {[
-          { id: "all", label: "All Messages", icon: Mail },
-          { id: "new_unread", label: "New & Unread", icon: AlertCircle, count: kpis.unread },
-          { id: "open", label: "Open Tickets", icon: Clock },
-          { id: "pending", label: "Pending Reply", icon: MessageSquare },
-          { id: "payment", label: "Payment Issues", icon: CreditCard },
-          { id: "complaints", label: "Complaints", icon: AlertTriangle, count: kpis.complaints },
-          { id: "resolved", label: "Resolved & Archived", icon: CheckCircle2 }
-        ].map((tab) => {
-          const Icon = tab.icon;
-          const isActive = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 rounded-lg px-4 py-2 text-xs font-semibold transition-all ${
-                isActive
-                  ? "bg-blue-600 text-white font-semibold shadow-md shadow-blue-500/20"
-                  : "bg-white dark:bg-slate-850 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-850 hover:bg-slate-55 dark:hover:bg-slate-800"
-              }`}
-            >
-              <Icon className="h-3.5 w-3.5" />
-              <span>{tab.label}</span>
-              {tab.count > 0 && (
-                <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ${isActive ? "bg-white text-blue-600" : "bg-blue-100 text-blue-600 dark:bg-blue-900/40 dark:text-blue-300"}`}>
-                  {tab.count}
-                </span>
-              )}
-            </button>
-          );
-        })}
+      <div className="rounded-2xl border border-blue-100 bg-blue-50/60 p-2 shadow-sm">
+        <div className="flex flex-wrap gap-2">
+          {SUPPORT_TABS.map((tab) => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold transition-all ${
+                  isActive
+                    ? "bg-blue-600 text-white shadow-md shadow-blue-500/20"
+                    : "bg-white text-slate-800 border border-blue-100 hover:bg-blue-50"
+                }`}
+              >
+                <Icon className={`h-3.5 w-3.5 ${isActive ? "text-white" : "text-blue-600"}`} />
+                <span>{tab.label}</span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* SEARCH AND FILTERS BAR */}
@@ -985,6 +964,7 @@ export default function SupportInboxPage() {
         </div>
       )}
 
+      </div>
     </div>
   );
 }

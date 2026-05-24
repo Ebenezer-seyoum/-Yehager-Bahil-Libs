@@ -1,28 +1,46 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
+import Link from "next/link";
 import { TableHeadCell, TableHeadRow, TableHeader } from "@/components/admin/table-header";
+import type { AdminWorkspaceData } from "@/lib/admin/types";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { CustomerDetailClient } from "@/components/admin/customer-detail-client";
 
-type Customer = {
+const TypedDialogContent = DialogContent as any;
+const TypedDialogTitle = DialogTitle as any;
+
+type CustomerRow = {
   id: string;
   name?: string | null;
   email: string;
-  status: string;
-  totalOrders: number;
-  totalSpent: number;
+  phone?: string | null;
+  country?: string | null;
+  city?: string | null;
+  customerType?: string | null;
+  accountStatus?: string | null;
+  avatarUrl?: string | null;
+  profilePhotoUrl?: string | null;
+  profile_photo_url?: string | null;
+  createdAt?: string | null;
+  totalOrders?: number | null;
+  totalSpent?: number | null;
+  lastOrderAt?: string | null;
 };
 
-function formatCurrency(value: number | string | null | undefined) {
-  const n = Number(value);
-  if (!Number.isFinite(n)) return "$0.00";
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
+function formatDate(value?: string | null) {
+  if (!value) return "Not provided";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "Not provided";
+  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(d);
 }
 
-function statusTone(status: string) {
-  if (status === "active") return "bg-emerald-100 text-emerald-800";
-  if (status === "suspended") return "bg-rose-100 text-rose-800";
-  return "bg-amber-100 text-amber-800";
+function accountTone(status?: string | null) {
+  const s = String(status ?? "").toLowerCase();
+  if (s === "active") return "bg-emerald-100 text-emerald-800";
+  if (s === "invited") return "bg-blue-100 text-blue-800";
+  if (s === "inactive" || s === "blocked" || s === "suspended") return "bg-slate-100 text-slate-800";
+  return "bg-slate-100 text-slate-800";
 }
 
 function initials(name: string | null | undefined, email: string) {
@@ -38,91 +56,157 @@ function initials(name: string | null | undefined, email: string) {
 }
 
 export function AdminCustomersDirectory({
-  customers,
-  query: externalQuery,
+  tab,
+  data,
+  query,
 }: {
-  customers: Customer[];
-  query?: string;
+  tab: string;
+  data: AdminWorkspaceData;
+  query: string;
 }) {
-  const [localSearch, setLocalSearch] = useState("");
-  const search = externalQuery ?? localSearch;
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const filtered = customers.filter((customer) =>
-    [customer.name, customer.email, customer.status].some((value) =>
-      String(value ?? "").toLowerCase().includes(search.trim().toLowerCase()),
-    ),
-  );
-  const allSelected = filtered.length > 0 && filtered.every((customer) => selectedIds.includes(customer.id));
+  const customers = (data.users ?? []) as CustomerRow[];
+  const orders = (data.orders ?? []) as Array<Record<string, unknown>>;
 
-  function toggleCustomer(customerId: string) {
-    setSelectedIds((current) => (current.includes(customerId) ? current.filter((id) => id !== customerId) : [...current, customerId]));
-  }
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [detailBusy, setDetailBusy] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const [detailCustomer, setDetailCustomer] = useState<CustomerRow | null>(null);
 
-  function toggleAll() {
-    setSelectedIds(allSelected ? [] : filtered.map((customer) => customer.id));
+  async function openCustomerDetail(customerId: string) {
+    setDetailOpen(true);
+    setDetailBusy(true);
+    setDetailError(null);
+    const quick = customers.find((c) => c.id === customerId) ?? null;
+    if (quick) setDetailCustomer(quick);
+    try {
+      const res = await fetch(`/api/backend/admin/users/${customerId}`, { method: "GET" });
+      const json = (await res.json().catch(() => null)) as any;
+      if (!res.ok) throw new Error(String(json?.message ?? "Unable to load customer details. Please try again."));
+      const user = json?.data?.user ?? json?.data ?? null;
+      setDetailCustomer(user);
+    } catch (e) {
+      setDetailError(e instanceof Error ? e.message : "Unable to load customer details. Please try again.");
+    } finally {
+      setDetailBusy(false);
+    }
   }
 
   return (
     <div className="space-y-6">
       <section className="overflow-hidden rounded-2xl border border-border bg-card">
-        <div className="flex flex-col gap-4 border-b border-border p-5">
-          <div>
-            <h2 className="text-lg font-semibold">All Customers</h2>
-            <p className="text-sm text-muted-foreground">Click a customer to open the full profile and management actions.</p>
-          </div>
-
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            {externalQuery === undefined ? (
-              <input
-                value={localSearch}
-                onChange={(event) => setLocalSearch(event.target.value)}
-                placeholder="Search customers..."
-                className="h-11 w-full rounded-xl border border-input bg-background px-4 text-sm lg:max-w-sm"
-              />
-            ) : null}
-            <div className="flex flex-wrap gap-2">
-              <button type="button" className="rounded-xl border border-border px-4 py-2 text-sm font-medium">Actions</button>
-              <button type="button" className="rounded-xl border border-border px-4 py-2 text-sm font-medium">Columns</button>
-            </div>
-          </div>
-        </div>
-
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[840px] border-collapse text-left">
+          <table className="w-full min-w-[860px] border-collapse text-left">
             <TableHeader>
               <TableHeadRow>
-                <TableHeadCell>
-                  <input type="checkbox" aria-label="Select all customers" checked={allSelected} onChange={toggleAll} />
-                </TableHeadCell>
-                <TableHeadCell>No.</TableHeadCell>
-                <TableHeadCell>Customer</TableHeadCell>
-                <TableHeadCell>Status</TableHeadCell>
-                <TableHeadCell>Orders</TableHeadCell>
-                <TableHeadCell>Total Spent</TableHeadCell>
+                <TableHeadCell>Profile Picture</TableHeadCell>
+                <TableHeadCell>Customer Name</TableHeadCell>
+                <TableHeadCell>Email</TableHeadCell>
+                <TableHeadCell>Account Status</TableHeadCell>
+                <TableHeadCell>Created Date</TableHeadCell>
+                <TableHeadCell>Actions</TableHeadCell>
               </TableHeadRow>
             </TableHeader>
             <tbody>
-              {filtered.length === 0 ? (
-                <tr><td colSpan={6} className="px-4 py-10 text-center text-sm text-muted-foreground">No customers found.</td></tr>
-              ) : filtered.map((customer, index) => (
-                <tr key={customer.id} className={selectedIds.includes(customer.id) ? "bg-primary/5" : ""}>
-                  <td className="px-4 py-4"><input type="checkbox" checked={selectedIds.includes(customer.id)} onChange={() => toggleCustomer(customer.id)} /></td>
-                  <td className="px-4 py-4 text-sm text-muted-foreground">{index + 1}</td>
-                  <td className="px-4 py-4">
-                    <Link href={`/admin/customers/${customer.id}`} className="flex items-center gap-3">
-                      <span className="flex h-10 w-10 items-center justify-center rounded-full bg-secondary text-sm font-semibold">{initials(customer.name, customer.email)}</span>
-                      <span><span className="block font-medium">{customer.name ?? "Unnamed customer"}</span><span className="block text-sm text-muted-foreground">{customer.email}</span></span>
-                    </Link>
+              {customers.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-4 py-10 text-center text-sm text-muted-foreground">
+                    {tab === "active"
+                      ? "No active customers found."
+                      : tab === "inactive"
+                        ? "No inactive customers found."
+                        : tab === "new"
+                          ? "No new customers found for this period."
+                          : tab === "top"
+                            ? "No top customers found for this period."
+                            : "No customers found."}
                   </td>
-                  <td className="px-4 py-4"><span className={`rounded-full px-2.5 py-1 text-xs font-medium ${statusTone(customer.status)}`}>{customer.status}</span></td>
-                  <td className="px-4 py-4 font-medium">{customer.totalOrders}</td>
-                  <td className="px-4 py-4 font-medium text-primary">{formatCurrency(customer.totalSpent)}</td>
                 </tr>
-              ))}
+              ) : (
+                customers.map((customer) => {
+                  const viewHref = `/admin/customers/${customer.id}?tab=${encodeURIComponent(tab)}`;
+                  const photoUrl =
+                    customer.profile_photo_url ?? customer.profilePhotoUrl ?? customer.avatarUrl ?? null;
+                  return (
+                    <tr key={customer.id} className="border-b border-border last:border-b-0 hover:bg-blue-50/40">
+                      <td className="px-4 py-4">
+                        <Link href={viewHref} className="flex items-center gap-3">
+                          {photoUrl ? (
+                            <img
+                              src={String(photoUrl)}
+                              alt={customer.name ?? customer.email}
+                              className="h-10 w-10 rounded-xl border border-border object-cover"
+                            />
+                          ) : (
+                            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-secondary text-sm font-semibold">
+                              {initials(customer.name, customer.email)}
+                            </span>
+                          )}
+                        </Link>
+                      </td>
+                      <td className="px-4 py-4">
+                        <Link href={viewHref} className="block font-medium">
+                          {customer.name ?? "Unnamed customer"}
+                        </Link>
+                      </td>
+                      <td className="px-4 py-4 text-sm text-slate-700">{customer.email}</td>
+                      <td className="px-4 py-4">
+                        <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${accountTone(customer.accountStatus)}`}>
+                          {String(customer.accountStatus ?? "—")}
+                        </span>
+                      </td>
+                      <td className="px-4 py-4 text-sm text-slate-700">{formatDate(customer.createdAt)}</td>
+                      <td className="px-4 py-4">
+                        <button
+                          type="button"
+                          onClick={() => void openCustomerDetail(customer.id)}
+                          className="inline-flex items-center rounded-xl bg-blue-900 px-3 py-2 text-sm font-semibold text-white shadow-sm shadow-blue-900/20 hover:bg-blue-950"
+                        >
+                          View
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>
       </section>
+
+      <Dialog
+        open={detailOpen}
+        onOpenChange={(next) => {
+          if (!next) {
+            setDetailCustomer(null);
+            setDetailError(null);
+          }
+          setDetailOpen(next);
+        }}
+      >
+        <TypedDialogContent className="max-w-5xl">
+          <TypedDialogTitle className="sr-only">Customer details</TypedDialogTitle>
+          <div className="max-h-[78vh] overflow-y-auto pr-1">
+            {detailError ? (
+              <div className="rounded-2xl border border-rose-200 bg-rose-50 p-6 text-sm text-rose-900">{detailError}</div>
+            ) : detailCustomer ? (
+              <div className="space-y-3">
+                {detailBusy ? (
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-center text-xs font-medium text-slate-700">
+                    Loading latest details…
+                  </div>
+                ) : null}
+                <CustomerDetailClient
+                  initialCustomer={detailCustomer}
+                  orders={orders}
+                  backTab={tab}
+                  embedded
+                  onClose={() => setDetailOpen(false)}
+                />
+              </div>
+            ) : null}
+          </div>
+        </TypedDialogContent>
+      </Dialog>
     </div>
   );
 }

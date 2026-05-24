@@ -2,22 +2,27 @@ import type { KpiColor } from "./types";
 
 /** Compact KPI: icon badge backgrounds */
 export const KPI_ICON_BG: Record<KpiColor, string> = {
-  green: "bg-emerald-100 text-emerald-700",
-  blue: "bg-blue-100 text-blue-700",
-  yellow: "bg-amber-100 text-amber-700",
-  red: "bg-rose-100 text-rose-700",
-  purple: "bg-violet-100 text-violet-700",
-  gray: "bg-slate-100 text-slate-600",
+  green: "bg-white/20 text-white backdrop-blur-sm",
+  blue: "bg-white/20 text-white backdrop-blur-sm",
+  purple: "bg-white/20 text-white backdrop-blur-sm",
+  teal: "bg-white/20 text-white backdrop-blur-sm",
+  yellow: "bg-white/20 text-white backdrop-blur-sm",
+  red: "bg-white/20 text-white backdrop-blur-sm",
+  gray: "bg-white/20 text-white backdrop-blur-sm",
 };
 
-export const KPI_BORDER: Record<KpiColor, string> = {
-  green: "border-l-emerald-500",
-  blue: "border-l-blue-500",
-  yellow: "border-l-amber-500",
-  red: "border-l-rose-500",
-  purple: "border-l-violet-500",
-  gray: "border-l-slate-400",
+/** Compact KPI: card background gradients */
+export const KPI_BG: Record<KpiColor, string> = {
+  green: "bg-gradient-to-br from-emerald-500 to-emerald-700 shadow-emerald-200/60",
+  blue: "bg-gradient-to-br from-blue-500 to-blue-700 shadow-blue-200/60",
+  purple: "bg-gradient-to-br from-violet-500 to-purple-700 shadow-purple-200/60",
+  teal: "bg-gradient-to-br from-cyan-500 to-teal-700 shadow-cyan-200/60",
+  yellow: "bg-gradient-to-br from-amber-500 to-orange-600 shadow-amber-200/60",
+  red: "bg-gradient-to-br from-rose-500 to-red-700 shadow-rose-200/60",
+  gray: "bg-gradient-to-br from-slate-500 to-slate-700 shadow-slate-200/60",
 };
 
-export const KPI_TREND_GOOD = "text-emerald-600";
-export const KPI_TREND_BAD = "text-rose-600";
+export const KPI_TEXT_MUTED = "text-white/85";
+export const KPI_TREND_GOOD = "text-white";
+export const KPI_TREND_BAD = "text-white";
+export const KPI_TREND_BADGE = "rounded-md border border-white/20 bg-white/15 px-1.5 py-0.5";

@@ -13,6 +13,7 @@ export default async function EmployeeOrdersPage() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) redirect("/signin?callbackUrl=/employee/orders");
   if (session.user.role !== "employee" && session.user.role !== "admin") redirect("/");
+  if (session.user.role === "employee" && session.user.roleStatus === "unassigned") redirect("/employee/access-pending");
 
   let orders: any[] = [];
   try {

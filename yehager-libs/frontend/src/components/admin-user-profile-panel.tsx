@@ -249,8 +249,8 @@ export function AdminUserProfilePanel({
                   {editing ? (
                     <form id="user-profile-edit-form" action={updateProfileAction} className="mt-5 grid gap-4 md:grid-cols-2">
                       <label className="block text-sm font-semibold">First Name<input name="firstName" defaultValue={nameParts.first} className="mt-1 h-11 w-full rounded-xl border border-input bg-background px-3" /></label>
-                      <label className="block text-sm font-semibold">Father's Name<input name="fatherName" defaultValue={nameParts.father} className="mt-1 h-11 w-full rounded-xl border border-input bg-background px-3" /></label>
-                      <label className="block text-sm font-semibold">Grandfather's Name<input name="grandfatherName" defaultValue={nameParts.grandfather} className="mt-1 h-11 w-full rounded-xl border border-input bg-background px-3" /></label>
+                      <label className="block text-sm font-semibold">Father&apos;s Name<input name="fatherName" defaultValue={nameParts.father} className="mt-1 h-11 w-full rounded-xl border border-input bg-background px-3" /></label>
+                      <label className="block text-sm font-semibold">Grandfather&apos;s Name<input name="grandfatherName" defaultValue={nameParts.grandfather} className="mt-1 h-11 w-full rounded-xl border border-input bg-background px-3" /></label>
                       <label className="block text-sm font-semibold">Gender<select className="mt-1 h-11 w-full rounded-xl border border-input bg-background px-3"><option>Male</option><option>Female</option></select></label>
                       <label className="block text-sm font-semibold">Date of Birth<input className="mt-1 h-11 w-full rounded-xl border border-input bg-background px-3" placeholder="mm/dd/yyyy" /></label>
                       <label className="block text-sm font-semibold">Marital Status<select className="mt-1 h-11 w-full rounded-xl border border-input bg-background px-3"><option>Single</option><option>Married</option></select></label>
@@ -296,7 +296,7 @@ export function AdminUserProfilePanel({
                       <label className="block text-sm font-semibold">Status<input readOnly defaultValue={user.status} className="mt-1 h-11 w-full rounded-xl border border-input bg-secondary px-3 capitalize" /></label>
                     </form>
                   ) : (
-                    <div className="mt-5 grid gap-4 md:grid-cols-2">{[["Username", user.email], ["Role", user.role], ["Status", user.status], ["Registration Date", formatDate(user.createdAt)], ["Last Login", formatDate(user.lastLoginAt)], ["Last Modified Date", "-"]].map(([label, value]) => <div key={label} className="rounded-2xl border border-border bg-card p-4 transition hover:border-blue-200 hover:bg-blue-50"><p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">{label}</p><p className="mt-1 text-sm font-extrabold text-foreground capitalize">{value}</p></div>)}</div>
+                    <div className="mt-5 grid gap-4 md:grid-cols-2">{[["Username", user.email], ["Password", "Hidden for security"], ["Role", user.role], ["Status", user.status], ["Registration Date", formatDate(user.createdAt)], ["Last Login", formatDate(user.lastLoginAt)], ["Last Modified Date", "-"]].map(([label, value]) => <div key={label} className="rounded-2xl border border-border bg-card p-4 transition hover:border-blue-200 hover:bg-blue-50"><p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">{label}</p><p className="mt-1 text-sm font-extrabold text-foreground capitalize">{value}</p></div>)}</div>
                   )}
                 </div>
               ) : null}

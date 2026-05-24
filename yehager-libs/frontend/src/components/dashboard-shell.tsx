@@ -79,10 +79,16 @@ export function DashboardShell({
   const [profileOpen, setProfileOpen] = useState(false);
   const [refreshedPermissions, setRefreshedPermissions] = useState<string[] | null>(null);
   const permissions = refreshedPermissions ?? session?.user?.permissions ?? [];
+  const isUnassignedEmployee =
+    variant === "employee" &&
+    session?.user?.role === "employee" &&
+    (session.user.roleStatus === "unassigned" || permissions.length === 0);
   const visibleGroups =
     variant === "admin"
       ? navigation
-      : navigation
+      : isUnassignedEmployee
+        ? []
+        : navigation
           .map((group) => ({
             ...group,
             items: group.items.filter((item) => can(permissions, item.permission)),
@@ -227,6 +233,12 @@ export function DashboardShell({
       </div>
 
       <nav className="flex-1 space-y-5 overflow-y-auto p-3">
+        {isUnassignedEmployee ? (
+          <section className="rounded-2xl border border-sidebar-border bg-sidebar-accent/30 p-4">
+            <p className="text-xs font-bold uppercase tracking-[0.2em] text-sidebar-foreground/70">Access Pending</p>
+            <p className="mt-2 text-sm text-sidebar-foreground/80">No role assigned yet.</p>
+          </section>
+        ) : null}
         {visibleGroups.map((group) => (
           <section key={group.label}>
             <button
@@ -513,7 +525,36 @@ export function DashboardShell({
               <p className="text-sm text-muted-foreground">{subtitle}</p>
             </div>
           ) : null}
-          {children}
+          {isUnassignedEmployee ? (
+            <div className="mx-auto w-full max-w-3xl">
+              <div className="overflow-hidden rounded-2xl border border-border bg-card">
+                <div className="border-b border-border p-6">
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Employee</p>
+                  <h1 className="mt-2 text-3xl font-semibold">Access Pending</h1>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    Your employee account has been created successfully, but no role or permissions have been assigned yet. Please wait until an administrator assigns your access level.
+                  </p>
+                  <p className="mt-3 text-sm text-muted-foreground">
+                    Once your role is assigned, your dashboard menu and available tools will appear automatically.
+                  </p>
+                </div>
+                <div className="flex flex-col gap-3 p-6 sm:flex-row sm:items-center sm:justify-between">
+                  <button
+                    type="button"
+                    onClick={() => window.location.reload()}
+                    className="inline-flex h-11 items-center justify-center rounded-xl bg-primary px-5 text-sm font-semibold text-primary-foreground"
+                  >
+                    Refresh Access
+                  </button>
+                  <p className="text-xs text-muted-foreground">
+                    If you believe this is a mistake, please contact the system administrator.
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : (
+            children
+          )}
         </main>
       </div>
     </div>

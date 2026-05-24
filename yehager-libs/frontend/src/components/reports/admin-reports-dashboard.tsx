@@ -6,7 +6,6 @@ import { Grid2X2, List, Search } from "lucide-react";
 import { ReportsCategorySidebar, firstReportInCategory } from "@/components/reports/reports-category-sidebar";
 import { ReportsFilterPanel } from "@/components/reports/reports-filter-panel";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
-import { ReportsCategoryTabs } from "@/components/reports/reports-category-tabs";
 import { ReportsKpiRow } from "@/components/reports/reports-kpi-row";
 import { ReportsReportCardGrid } from "@/components/reports/reports-report-card-grid";
 import { ReportsResults, type ResultsTab } from "@/components/reports/reports-results";
@@ -365,11 +364,6 @@ export function AdminReportsDashboard({
         />
 
         <ReportsKpiRow metrics={metrics} comparisonLabel={comparisonLabel} />
-
-        <ReportsCategoryTabs
-          selectedCategory={selectedCategory}
-          onSelectCategory={handleSelectCategory}
-        />
 
         <section className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
           <ReportsSectionHeader

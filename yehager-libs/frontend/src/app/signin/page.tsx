@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Home } from "lucide-react";
-import { getProviders, getSession, signIn } from "next-auth/react";
+import { getProviders, getSession, signIn, signOut } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { getPostLoginRedirect } from "@/lib/auth-redirect";
@@ -15,6 +15,7 @@ type Feedback = {
 const authErrorMessages: Record<string, string> = {
   AccessDenied: "Google sign-in was cancelled or denied.",
   CredentialsSignin: "Invalid email or password.",
+  AccountBlocked: "Your account has been blocked. Please contact your administrator for assistance.",
   OAuthAccountNotLinked: "Please sign in with the same method you used before.",
   OAuthCallback: "Google sign-in could not be completed. Please try again.",
   OAuthSignin: "Google sign-in could not be started. Please try again.",
@@ -165,6 +166,17 @@ function SignInForm() {
       });
 
       const session = await getSession();
+      const accountStatus = String((session?.user as any)?.accountStatus ?? "active").toLowerCase();
+      if (accountStatus === "inactive" || accountStatus === "blocked" || accountStatus === "pending") {
+        await signOut({ redirect: false });
+        setFeedback({
+          type: "error",
+          message: "Your account has been blocked. Please contact your administrator for assistance.",
+        });
+        setSubmitting(false);
+        return;
+      }
+
       window.setTimeout(() => {
         window.location.href = getPostLoginRedirect(session?.user?.role, callbackUrl);
       }, 650);

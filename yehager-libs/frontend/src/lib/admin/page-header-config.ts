@@ -17,6 +17,7 @@ export const PAGE_HEADER_CONFIG: Record<
   documents: { theme: "orange", section: "Operations" },
   "exchange-rate": { theme: "green", section: "Operations" },
   reports: { theme: "indigo", section: "Reports" },
+  "support-inbox": { theme: "slate", section: "System" },
   settings: { theme: "slate", section: "System" },
   "activity-logs": { theme: "slate", section: "System" },
 };

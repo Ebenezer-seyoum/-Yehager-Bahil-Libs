@@ -13,6 +13,7 @@ export default async function EmployeeProductsPage() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) redirect("/signin?callbackUrl=/employee/products");
   if (session.user.role !== "employee" && session.user.role !== "admin") redirect("/");
+  if (session.user.role === "employee" && session.user.roleStatus === "unassigned") redirect("/employee/access-pending");
 
   let products: any[] = [];
   try {

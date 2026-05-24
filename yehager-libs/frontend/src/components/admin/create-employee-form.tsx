@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Briefcase, Loader2, Shield, UserRound } from "lucide-react";
+import { Briefcase, Eye, EyeOff, Loader2, Shield, UserRound } from "lucide-react";
 import { createEmployeeAction } from "@/lib/admin/actions/user-actions";
 import { useFormStatus } from "react-dom";
 
@@ -62,6 +62,7 @@ export function CreateEmployeeForm({
   const router = useRouter();
   const searchParams = useSearchParams();
   const error = searchParams.get("error");
+  const [showPassword, setShowPassword] = useState(false);
 
   const errorMessage = useMemo(() => {
     if (error === "validation") return "Please fill in all required fields.";
@@ -75,7 +76,7 @@ export function CreateEmployeeForm({
         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-200">Users</p>
         <h2 className="mt-1 font-heading text-2xl font-semibold">Register New Employee</h2>
         <p className="mt-2 max-w-2xl text-sm text-blue-100">
-          Create a staff account with role, department, and access. This is separate from customer registration.
+          Create a staff account with role-based access. This is separate from customer registration.
         </p>
       </div>
 
@@ -123,43 +124,31 @@ export function CreateEmployeeForm({
             </label>
             <label className="block text-sm md:col-span-2">
               <span className="mb-1.5 block font-medium text-slate-700">Initial password *</span>
-              <input
-                name="password"
-                type="password"
-                minLength={8}
-                required
-                disabled={!canCreate}
-                className="h-11 w-full rounded-xl border border-blue-100 px-3 text-sm outline-none focus:border-blue-800 focus:ring-2 focus:ring-blue-800/20 disabled:opacity-50"
-              />
+              <div className="relative">
+                <input
+                  name="password"
+                  type={showPassword ? "text" : "password"}
+                  minLength={8}
+                  required
+                  disabled={!canCreate}
+                  className="h-11 w-full rounded-xl border border-blue-100 px-3 pr-11 text-sm outline-none focus:border-blue-800 focus:ring-2 focus:ring-blue-800/20 disabled:opacity-50"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((current) => !current)}
+                  className="absolute inset-y-0 right-0 inline-flex w-11 items-center justify-center rounded-r-xl text-slate-500 hover:text-slate-900"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
               <span className="mt-1 block text-xs text-slate-500">Minimum 8 characters</span>
             </label>
           </div>
         </FormSection>
 
-        <FormSection
-          title="Employment Details"
-          description="Department, job title, and work contact information."
-          icon={Briefcase}
-        >
+        <FormSection title="Notes" description="Internal note for admins (optional)." icon={Briefcase}>
           <div className="grid gap-4 md:grid-cols-2">
-            <label className="block text-sm">
-              <span className="mb-1.5 block font-medium text-slate-700">Department</span>
-              <input
-                name="department"
-                disabled={!canCreate}
-                placeholder="Operations, tailoring, finance…"
-                className="h-11 w-full rounded-xl border border-blue-100 px-3 text-sm outline-none focus:border-blue-800 focus:ring-2 focus:ring-blue-800/20 disabled:opacity-50"
-              />
-            </label>
-            <label className="block text-sm">
-              <span className="mb-1.5 block font-medium text-slate-700">Job title</span>
-              <input
-                name="jobTitle"
-                disabled={!canCreate}
-                placeholder="Store manager, tailor lead…"
-                className="h-11 w-full rounded-xl border border-blue-100 px-3 text-sm outline-none focus:border-blue-800 focus:ring-2 focus:ring-blue-800/20 disabled:opacity-50"
-              />
-            </label>
             <label className="block text-sm md:col-span-2">
               <span className="mb-1.5 block font-medium text-slate-700">Notes</span>
               <textarea

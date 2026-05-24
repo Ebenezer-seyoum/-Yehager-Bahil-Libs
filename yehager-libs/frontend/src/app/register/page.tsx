@@ -107,8 +107,12 @@ export default function RegisterPage() {
       });
 
       if (!response.ok) {
-        const payload = (await response.json().catch(() => null)) as { error?: string; message?: string } | null;
-        throw new Error(payload?.message ?? payload?.error ?? "Could not create account");
+        const payload = (await response.json().catch(() => null)) as
+          | { error?: { message?: string } | string; message?: string }
+          | null;
+        const nestedError =
+          typeof payload?.error === "string" ? payload.error : payload?.error?.message;
+        throw new Error(payload?.message ?? nestedError ?? "Could not create account");
       }
 
       setFeedback({

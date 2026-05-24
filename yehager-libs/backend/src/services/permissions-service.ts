@@ -1,6 +1,11 @@
 import { listPermissionKeysForUser, listPermissions, replaceUserPermissions, userHasAnyPermission } from "../repositories/permissions-repository.js";
+import { getUserById } from "../repositories/users-repository.js";
 
 export async function getEffectivePermissionsForUser(userId: string) {
+  const user = await getUserById(userId);
+  if (user?.role === "employee" && user.roleStatus === "unassigned") {
+    return [];
+  }
   return listPermissionKeysForUser(userId);
 }
 

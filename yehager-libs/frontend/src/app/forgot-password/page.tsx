@@ -37,8 +37,9 @@ function FeedbackBanner({ feedback }: { feedback: Feedback }) {
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
   const [feedback, setFeedback] = useState<Feedback>(null);
+  const [submitting, setSubmitting] = useState(false);
 
-  function onSubmit(event: React.FormEvent<HTMLFormElement>) {
+  async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setFeedback(null);
 
@@ -50,10 +51,32 @@ export default function ForgotPasswordPage() {
       return;
     }
 
-    setFeedback({
-      type: "error",
-      message: "Password reset email is not configured yet.",
-    });
+    setSubmitting(true);
+
+    try {
+      const response = await fetch("/api/backend/auth/password-reset", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(String(payload?.error ?? payload?.message ?? "Unable to send reset link."));
+      }
+
+      setFeedback({
+        type: "success",
+        message: "If an account exists for this email, a reset link has been sent.",
+      });
+    } catch (error) {
+      setFeedback({
+        type: "error",
+        message: error instanceof Error ? error.message : "Unable to send reset link.",
+      });
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -67,9 +90,10 @@ export default function ForgotPasswordPage() {
             </Link>
 
             <div className="mt-6 text-center">
-              <h1 className="text-[28px] font-extrabold tracking-[-0.03em] text-[#11182d]">
+              <h1 className="text-[28px] font-extrabold tracking-[-0.03em] text-[#0b1224]">
                 Reset your password
               </h1>
+              <FeedbackBanner feedback={feedback} />
               <p className="mx-auto mt-4 max-w-[360px] text-[17px] leading-8 text-[#526682]">
                 Enter your email and we&apos;ll send you a link to reset your password
               </p>
@@ -85,18 +109,18 @@ export default function ForgotPasswordPage() {
                     value={email}
                     onChange={(event) => setEmail(event.target.value)}
                     placeholder="you@example.com"
+                    disabled={submitting}
                     className="h-full w-full bg-transparent text-base text-[#34435c] outline-none placeholder:text-[#9badc5] sm:text-lg"
                   />
                 </span>
               </label>
 
-              <FeedbackBanner feedback={feedback} />
-
               <button
                 type="submit"
-                className="mt-6 h-14 w-full rounded-[16px] bg-[#10172d] text-lg font-medium text-white transition hover:bg-[#18213b]"
+                disabled={submitting}
+                className="mt-6 h-14 w-full rounded-[16px] bg-[#10172d] text-lg font-medium text-white transition hover:bg-[#18213b] disabled:cursor-not-allowed disabled:opacity-70"
               >
-                Send reset link
+                {submitting ? "Sending…" : "Send reset link"}
               </button>
             </form>
           </div>

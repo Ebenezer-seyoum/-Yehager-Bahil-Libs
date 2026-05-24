@@ -28,6 +28,11 @@ const providers: NonNullable<NextAuthOptions["providers"]> = [
         return null;
       }
 
+      // Safe debug (never log password)
+      console.log("[auth] credentials authorize", {
+        email: String(credentials.email).trim().toLowerCase(),
+      });
+
       const response = await fetch(`${requiredEnv("BACKEND_API_URL")}/api/v1/auth/login`, {
         method: "POST",
         headers: {
@@ -41,6 +46,11 @@ const providers: NonNullable<NextAuthOptions["providers"]> = [
       });
 
       if (!response.ok) {
+        const errorPayload = await response.json().catch(() => null);
+        console.warn("[auth] backend login failed", {
+          status: response.status,
+          error: errorPayload?.error?.message ?? errorPayload?.error ?? errorPayload ?? null,
+        });
         return null;
       }
 
@@ -51,11 +61,19 @@ const providers: NonNullable<NextAuthOptions["providers"]> = [
           name?: string | null;
           role?: "admin" | "customer" | "employee";
           permissions?: string[];
+          roleStatus?: "unassigned" | "assigned";
+          accountStatus?: string;
         };
       };
       const user = payload.data;
       if (!user?.id || !user.email || !user.role) {
+        console.warn("[auth] backend login payload missing fields", { user });
         return null;
+      }
+
+      const status = String(user.accountStatus ?? "active").toLowerCase();
+      if (status === "inactive" || status === "blocked" || status === "pending" || status === "suspended") {
+        throw new Error("AccountBlocked");
       }
 
       return {
@@ -64,6 +82,8 @@ const providers: NonNullable<NextAuthOptions["providers"]> = [
         name: user.name ?? undefined,
         role: user.role,
         permissions: user.permissions ?? [],
+        roleStatus: user.roleStatus ?? "assigned",
+        accountStatus: user.accountStatus ?? "active",
       };
     },
   }),
@@ -90,11 +110,15 @@ export const authConfig = {
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
-        const authUser = user as { role?: unknown; permissions?: unknown };
+        const authUser = user as { role?: unknown; permissions?: unknown; roleStatus?: unknown; accountStatus?: unknown };
         token.role = normalizeRole(authUser.role);
         token.permissions = Array.isArray(authUser.permissions)
           ? authUser.permissions
           : [];
+        token.roleStatus = authUser.roleStatus === "unassigned" || authUser.roleStatus === "assigned"
+          ? authUser.roleStatus
+          : "assigned";
+        token.accountStatus = String(authUser.accountStatus ?? "active");
       }
 
       return token;
@@ -105,6 +129,10 @@ export const authConfig = {
         session.user.email = token.email ?? session.user.email ?? null;
         session.user.role = normalizeRole(token.role);
         session.user.permissions = Array.isArray(token.permissions) ? token.permissions : [];
+        session.user.roleStatus = token.roleStatus === "unassigned" || token.roleStatus === "assigned"
+          ? token.roleStatus
+          : "assigned";
+        session.user.accountStatus = String(token.accountStatus ?? "active");
       }
       return session;
     },

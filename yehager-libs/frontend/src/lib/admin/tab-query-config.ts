@@ -100,17 +100,24 @@ function filterProducts(products: Row[], tabId: string): Row[] {
 }
 
 function filterUsers(users: Row[], tabId: string, kind: "employee" | "customer"): Row[] {
-  if (tabId === "create") return [];
   const base = users.filter(kind === "employee" ? isEmployee : isCustomer);
   switch (tabId) {
     case "active":
-      return base.filter((u) => norm(u.status) === "active");
+      return base.filter((u) => norm(u.accountStatus ?? u.status) === "active");
     case "inactive":
-      return base.filter((u) => norm(u.status) !== "active");
+      return base.filter((u) => {
+        const s = norm(u.accountStatus ?? u.status);
+        return s !== "active";
+      });
     case "new":
       return base.filter((u) => isRecent(u.createdAt, 30));
-    case "returning":
-      return base.filter((u) => Number(u.orderCount ?? 0) > 1);
+    case "unassigned":
+      if (kind !== "employee") return base;
+      return base.filter((u) => {
+        const roleStatus = norm(u.roleStatus);
+        const assignedRoleId = norm(u.assignedRoleId);
+        return roleStatus === "unassigned" || !assignedRoleId || assignedRoleId === "null" || assignedRoleId === "undefined";
+      });
     case "top":
       return [...base].sort((a, b) => Number(b.totalSpent ?? 0) - Number(a.totalSpent ?? 0));
     default:

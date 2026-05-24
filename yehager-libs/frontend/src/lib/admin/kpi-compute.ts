@@ -250,18 +250,39 @@ function buildEmployeesKpis(data: AdminWorkspaceData): KpiCardModel[] {
 
 function buildCustomersKpis(data: AdminWorkspaceData): KpiCardModel[] {
   const customers = (data.users ?? []).filter((u) => norm(u.role) === "customer");
-  const returning = customers.filter((u) => Number(u.orderCount ?? 0) > 1);
-  const top = [...customers].sort((a, b) => Number(b.totalSpent ?? 0) - Number(a.totalSpent ?? 0))[0];
-  const withOrders = customers.filter((u) => Number(u.orderCount ?? 0) > 0);
-  const pendingSupport = (data.alerts ?? []).filter((a) => !a.isResolved).length;
+  const active = customers.filter((u) => norm(u.accountStatus ?? u.status) === "active");
+  const inactive = customers.filter((u) => norm(u.accountStatus ?? u.status) !== "active");
+
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const newThisMonth = customers.filter((u) => {
+    const raw = u.createdAt ?? u.created_at;
+    if (!raw) return false;
+    const d = new Date(String(raw));
+    return !Number.isNaN(d.getTime()) && d >= monthStart;
+  });
+
+  const returning = customers.filter((u) => Number(u.orderCount ?? u.totalOrders ?? 0) > 1);
+  const withOrders = customers.filter((u) => Number(u.orderCount ?? u.totalOrders ?? 0) > 0);
+
+  const orders = data.orders ?? [];
+  const measurementOrders = orders.filter((o) => Boolean((o as any).measurementStatus) || Boolean((o as any).measurementId));
+  const withMeasurements = customers.filter((u) => {
+    const email = String(u.email ?? "").toLowerCase();
+    return measurementOrders.some((o) => String((o as any).userEmail ?? (o as any).email ?? "").toLowerCase() === email);
+  });
+
+  const supportIssues = (data.alerts ?? []).filter((a) => !a.isResolved).length;
 
   return [
-    kpi({ id: "total", title: "Total Customers", value: String(customers.length), description: "Registered shoppers", color: "purple", icon: Users, changePercent: 0, positiveIsGood: true }),
-    kpi({ id: "new", title: "New Customers", value: String(customers.filter((u) => u.createdAt).length), description: "In current view", color: "blue", icon: UserPlus, changePercent: 0, positiveIsGood: true }),
-    kpi({ id: "returning", title: "Returning Customers", value: String(returning.length), description: "Repeat buyers", color: "green", icon: RotateCcw, changePercent: 0, positiveIsGood: true }),
-    kpi({ id: "top", title: "Top Spending Customer", value: String(top?.name ?? top?.email ?? "—"), description: "Highest lifetime value", color: "purple", icon: Star, changePercent: 0, positiveIsGood: true }),
-    kpi({ id: "orders", title: "Customers With Orders", value: String(withOrders.length), description: "Converted shoppers", color: "blue", icon: ShoppingCart, changePercent: 0, positiveIsGood: true }),
-    kpi({ id: "support", title: "Pending Support", value: String(pendingSupport), description: "Open issues", color: "yellow", icon: AlertTriangle, changePercent: 0, positiveIsGood: false }),
+    kpi({ id: "total", title: "Total Customers", value: String(customers.length), description: "All customer accounts", color: "purple", icon: Users, changePercent: 0, positiveIsGood: true }),
+    kpi({ id: "active", title: "Active Customers", value: String(active.length), description: "Can sign in", color: "green", icon: CheckCircle2, changePercent: 0, positiveIsGood: true }),
+    kpi({ id: "inactive", title: "Inactive Customers", value: String(inactive.length), description: "Disabled or blocked", color: "gray", icon: UserRound, changePercent: 0, positiveIsGood: false }),
+    kpi({ id: "new_month", title: "New Customers This Month", value: String(newThisMonth.length), description: "Created this month", color: "blue", icon: UserPlus, changePercent: 0, positiveIsGood: true }),
+    kpi({ id: "returning", title: "Returning Customers", value: String(returning.length), description: "More than 1 order", color: "green", icon: RotateCcw, changePercent: 0, positiveIsGood: true }),
+    kpi({ id: "with_orders", title: "Customers With Orders", value: String(withOrders.length), description: "Converted shoppers", color: "blue", icon: ShoppingCart, changePercent: 0, positiveIsGood: true }),
+    kpi({ id: "with_measurements", title: "Customers With Measurements", value: String(withMeasurements.length), description: "Saved tailoring profiles", color: "teal", icon: FileText, changePercent: 0, positiveIsGood: true }),
+    kpi({ id: "support", title: "Customers With Support Issues", value: String(supportIssues), description: "Open issues", color: "red", icon: AlertTriangle, changePercent: 0, positiveIsGood: false }),
   ];
 }
 

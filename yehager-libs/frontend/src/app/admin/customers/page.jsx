@@ -13,27 +13,33 @@ export default async function AdminCustomersPage({ searchParams }) {
 
   let users = [];
   let orders = [];
+  let alerts = [];
   try {
-    const [usersResponse, ordersResponse] = await Promise.all([
+    const [usersResponse, ordersResponse, alertsResponse] = await Promise.all([
       apiRequest("/api/v1/admin/users?limit=200"),
       apiRequest("/api/v1/orders?limit=200"),
+      apiRequest("/api/v1/admin/alerts?limit=200"),
     ]);
     users = Array.isArray(usersResponse?.data) ? usersResponse.data : [];
     orders = Array.isArray(ordersResponse?.data) ? ordersResponse.data : [];
+    alerts = Array.isArray(alertsResponse?.data) ? alertsResponse.data : [];
   } catch {
     users = [];
     orders = [];
+    alerts = [];
   }
 
   const customers = users
     .filter((user) => user.role === "customer")
     .map((customer) => {
       const customerOrders = orders.filter((order) => order.userEmail === customer.email);
+      const lastOrder = [...customerOrders].sort((a, b) => new Date(String(b.createdAt ?? b.orderDate ?? 0)).getTime() - new Date(String(a.createdAt ?? a.orderDate ?? 0)).getTime())[0] ?? null;
       return {
         ...customer,
         totalOrders: customerOrders.length,
         totalSpent: customerOrders.reduce((sum, order) => sum + Number(order.totalUsd ?? 0), 0),
         orderCount: customerOrders.length,
+        lastOrderAt: lastOrder?.createdAt ?? lastOrder?.orderDate ?? null,
       };
     });
 
@@ -60,7 +66,7 @@ export default async function AdminCustomersPage({ searchParams }) {
         </div>
       ) : null}
 
-      <AdminCustomersWorkspace data={{ users: customers, orders, alerts: [] }} />
+      <AdminCustomersWorkspace data={{ users: customers, orders, alerts }} />
     </div>
   );
 }

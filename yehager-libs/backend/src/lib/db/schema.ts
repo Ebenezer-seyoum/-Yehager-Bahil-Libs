@@ -21,6 +21,19 @@ const timestamps = {
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 };
 
+export const roles = pgTable(
+  "roles",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    key: varchar("key", { length: 100 }).notNull(),
+    name: varchar("name", { length: 255 }).notNull(),
+    description: text("description"),
+    isSystem: boolean("is_system").default(false).notNull(),
+    ...timestamps,
+  },
+  (table) => [uniqueIndex("roles_key_unique").on(table.key)],
+);
+
 export const users = pgTable(
   "users",
   {
@@ -30,26 +43,68 @@ export const users = pgTable(
     passwordHash: text("password_hash"),
     role: varchar("role", { length: 32 }).$type<UserRole>().default("customer").notNull(),
     status: varchar("status", { length: 32 }).default("active").notNull(),
+    phone: text("phone"),
+    department: text("department"),
+    jobTitle: text("job_title"),
+    accountStatus: varchar("account_status", { length: 32 }).default("active").notNull(),
+    roleStatus: varchar("role_status", { length: 32 }).default("assigned").notNull(),
+    assignedRoleId: uuid("assigned_role_id").references(() => roles.id, { onDelete: "set null" }),
     avatarUrl: text("avatar_url"),
     lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
     mustChangePassword: boolean("must_change_password").default(false).notNull(),
+    passwordStatus: varchar("password_status", { length: 40 }).default("never_reset").notNull(),
+    lastPasswordResetRequestedAt: timestamp("last_password_reset_requested_at", { withTimezone: true }),
+    lastPasswordResetAt: timestamp("last_password_reset_at", { withTimezone: true }),
+    lastPasswordResetMethod: varchar("last_password_reset_method", { length: 40 }),
     ...timestamps,
   },
   (table) => [
     uniqueIndex("users_email_unique").on(table.email),
     check("users_role_check", sql`${table.role} in ('admin', 'customer', 'employee')`),
     check("users_status_check", sql`${table.status} in ('active', 'inactive', 'suspended')`),
+    check("users_account_status_check", sql`${table.accountStatus} in ('active', 'invited', 'pending')`),
+    check("users_role_status_check", sql`${table.roleStatus} in ('unassigned', 'assigned')`),
   ],
 );
 
-export const roles = pgTable("roles", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  key: varchar("key", { length: 100 }).notNull(),
-  name: varchar("name", { length: 255 }).notNull(),
-  description: text("description"),
-  isSystem: boolean("is_system").default(false).notNull(),
-  ...timestamps,
-}, (table) => [uniqueIndex("roles_key_unique").on(table.key)]);
+export const passwordResetRequests = pgTable(
+  "password_reset_requests",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    tokenHash: text("token_hash").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    usedAt: timestamp("used_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [index("password_reset_requests_user_id_idx").on(table.userId), index("password_reset_requests_expires_at_idx").on(table.expiresAt)],
+);
+
+export const employeeProfiles = pgTable(
+  "employee_profiles",
+  {
+    userId: uuid("user_id")
+      .primaryKey()
+      .references(() => users.id, { onDelete: "cascade" }),
+    firstName: varchar("first_name", { length: 120 }).notNull(),
+    fatherName: varchar("father_name", { length: 120 }).notNull(),
+    grandfatherName: varchar("grandfather_name", { length: 120 }),
+    gender: varchar("gender", { length: 20 }).notNull(),
+    dateOfBirth: timestamp("date_of_birth", { withTimezone: true }),
+    maritalStatus: varchar("marital_status", { length: 30 }),
+    country: varchar("country", { length: 120 }),
+    city: varchar("city", { length: 120 }),
+    address: text("address"),
+    employmentType: varchar("employment_type", { length: 30 }),
+    startDate: timestamp("start_date", { withTimezone: true }),
+    inviteStatus: varchar("invite_status", { length: 30 }).default("none").notNull(),
+    notes: text("notes"),
+    ...timestamps,
+  },
+  (table) => [index("employee_profiles_user_id_idx").on(table.userId)],
+);
 
 export const permissions = pgTable("permissions", {
   id: uuid("id").defaultRandom().primaryKey(),

@@ -12,6 +12,9 @@ export default async function AdminUsersPage({ searchParams }) {
 
   const query = (await searchParams) ?? {};
   const canCreate = can(session.user.permissions, "employees.create");
+  const canEdit = can(session.user.permissions, "employees.edit");
+  const canDelete = can(session.user.permissions, "employees.delete");
+  const canAssignRole = can(session.user.permissions, "roles.assign");
 
   let users = [];
   let roles = [];
@@ -54,7 +57,14 @@ export default async function AdminUsersPage({ searchParams }) {
         </div>
       ) : null}
 
-      <AdminEmployeesWorkspace data={{ users: employees }} roles={roles} canCreate={canCreate} />
+      <AdminEmployeesWorkspace
+        data={{ users: employees }}
+        roles={roles}
+        canCreate={canCreate}
+        canEdit={canEdit}
+        canDelete={canDelete}
+        canAssignRole={canAssignRole}
+      />
     </div>
   );
 }

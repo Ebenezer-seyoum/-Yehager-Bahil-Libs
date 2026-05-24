@@ -9,7 +9,7 @@ import type { DateRangeKey } from "@/lib/reports/utils";
 import { cn } from "@/lib/utils";
 import { ExportButton } from "./export-button";
 
-const DATE_RANGES: DateRangeKey[] = ["Today", "Last 7 Days", "Last 30 Days", "This Month", "This Year"];
+const DATE_RANGES: DateRangeKey[] = ["Today", "Yesterday", "Last 7 Days", "Last 30 Days", "This Month", "Last Month", "This Year"];
 
 export function AdminPageHeader({
   pageId,

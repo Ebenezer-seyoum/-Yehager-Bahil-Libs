@@ -12,6 +12,7 @@ export const FILTER_PLACEHOLDERS: Record<AdminPageId, string> = {
   documents: "Search documents by order or customer...",
   "exchange-rate": "Search currencies...",
   reports: "Search reports...",
+  "support-inbox": "Search by ticket #, customer, email, subject, or order id...",
   settings: "Search settings...",
   "activity-logs": "Search activity logs...",
 };

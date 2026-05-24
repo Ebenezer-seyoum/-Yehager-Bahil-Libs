@@ -1,27 +1,34 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { mintBackendAccessToken } from "@/lib/backend-token";
 
-export async function GET(request: Request, { params }: { params: { path: string[] } }) {
-  return handleProxy(request, params.path);
+type RouteContext = { params: Promise<{ path: string[] }> };
+
+export async function GET(request: NextRequest, context: RouteContext) {
+  const { path } = await context.params;
+  return handleProxy(request, path);
 }
 
-export async function POST(request: Request, { params }: { params: { path: string[] } }) {
-  return handleProxy(request, params.path);
+export async function POST(request: NextRequest, context: RouteContext) {
+  const { path } = await context.params;
+  return handleProxy(request, path);
 }
 
-export async function PATCH(request: Request, { params }: { params: { path: string[] } }) {
-  return handleProxy(request, params.path);
+export async function PATCH(request: NextRequest, context: RouteContext) {
+  const { path } = await context.params;
+  return handleProxy(request, path);
 }
 
-export async function PUT(request: Request, { params }: { params: { path: string[] } }) {
-  return handleProxy(request, params.path);
+export async function PUT(request: NextRequest, context: RouteContext) {
+  const { path } = await context.params;
+  return handleProxy(request, path);
 }
 
-export async function DELETE(request: Request, { params }: { params: { path: string[] } }) {
-  return handleProxy(request, params.path);
+export async function DELETE(request: NextRequest, context: RouteContext) {
+  const { path } = await context.params;
+  return handleProxy(request, path);
 }
 
-async function handleProxy(request: Request, pathParts: string[]) {
+async function handleProxy(request: NextRequest, pathParts: string[]) {
   try {
     const backendUrl = process.env.BACKEND_API_URL;
     if (!backendUrl) {

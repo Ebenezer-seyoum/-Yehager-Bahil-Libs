@@ -20,6 +20,9 @@ export default async function EmployeePage() {
   if (session.user.role !== "employee" && session.user.role !== "admin") {
     redirect("/");
   }
+  if (session.user.role === "employee" && session.user.roleStatus === "unassigned") {
+    redirect("/employee/access-pending");
+  }
 
   let orders = [];
   try {

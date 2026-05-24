@@ -2,9 +2,10 @@
 
 import { useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Loader2, UserPlus } from "lucide-react";
+import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { createCustomerAction } from "@/lib/admin/actions/user-actions";
 import { useFormStatus } from "react-dom";
+import { useState } from "react";
 
 function SubmitButton() {
   const { pending } = useFormStatus();
@@ -25,6 +26,7 @@ export function CreateCustomerForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const error = searchParams.get("error");
+  const [showPassword, setShowPassword] = useState(false);
 
   const errorMessage = useMemo(() => {
     if (error === "validation") return "Please fill in all required fields.";
@@ -78,13 +80,23 @@ export function CreateCustomerForm() {
           </label>
           <label className="block text-sm sm:col-span-2">
             <span className="mb-1.5 block font-medium text-slate-700">Password *</span>
-            <input
-              name="password"
-              type="password"
-              minLength={8}
-              required
-              className="h-11 w-full rounded-xl border border-blue-100 px-3 text-sm outline-none focus:border-blue-800 focus:ring-2 focus:ring-blue-800/20"
-            />
+            <div className="relative">
+              <input
+                name="password"
+                type={showPassword ? "text" : "password"}
+                minLength={8}
+                required
+                className="h-11 w-full rounded-xl border border-blue-100 px-3 pr-11 text-sm outline-none focus:border-blue-800 focus:ring-2 focus:ring-blue-800/20"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((current) => !current)}
+                className="absolute inset-y-0 right-0 inline-flex w-11 items-center justify-center rounded-r-xl text-slate-500 hover:text-slate-900"
+                aria-label={showPassword ? "Hide password" : "Show password"}
+              >
+                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
           </label>
         </div>
 

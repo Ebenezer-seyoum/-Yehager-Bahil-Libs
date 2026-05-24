@@ -34,7 +34,7 @@ export async function fetchAdminWorkspaceData(keys: Array<keyof AdminWorkspaceDa
 
   if (keys.includes("users")) {
     tasks.push(
-      fetch("/api/backend/admin/users?limit=200")
+      fetch("/api/v1/admin/users?limit=200")
         .then((r) => (r.ok ? r.json() : { data: [] }))
         .then((payload) => {
           data.users = Array.isArray(payload?.data) ? payload.data : [];

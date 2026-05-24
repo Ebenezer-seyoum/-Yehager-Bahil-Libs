@@ -56,14 +56,19 @@ export function AdminRevenueCharts({ orders }: { orders: Order[] }) {
   return (
     <div className="grid gap-6 lg:grid-cols-2">
       <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
-        <h2 className="font-heading text-xl font-semibold">Revenue</h2>
-        <p className="mt-1 text-sm text-muted-foreground">Paid order value over the last 14 days.</p>
+        <h2 className="font-heading text-xl font-semibold text-slate-950">Revenue</h2>
+        <p className="mt-1 text-sm text-slate-700">Paid order value over the last 14 days.</p>
         <div className="mt-4 h-56">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={data}>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-              <XAxis dataKey="date" tickFormatter={formatShortDay} tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
-              <YAxis tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
+              <XAxis
+                dataKey="date"
+                tickFormatter={formatShortDay}
+                tick={{ fontSize: 10, fill: "#334155" }}
+                stroke="#334155"
+              />
+              <YAxis tick={{ fontSize: 10, fill: "#334155" }} stroke="#334155" />
               <Tooltip formatter={(value) => [formatCurrency(Number(value)), "Revenue"]} />
               <Bar dataKey="revenue" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
             </BarChart>
@@ -72,14 +77,19 @@ export function AdminRevenueCharts({ orders }: { orders: Order[] }) {
       </div>
 
       <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
-        <h2 className="font-heading text-xl font-semibold">Orders</h2>
-        <p className="mt-1 text-sm text-muted-foreground">Daily order volume over the last 14 days.</p>
+        <h2 className="font-heading text-xl font-semibold text-slate-950">Orders</h2>
+        <p className="mt-1 text-sm text-slate-700">Daily order volume over the last 14 days.</p>
         <div className="mt-4 h-56">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={data}>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-              <XAxis dataKey="date" tickFormatter={formatShortDay} tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
-              <YAxis tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
+              <XAxis
+                dataKey="date"
+                tickFormatter={formatShortDay}
+                tick={{ fontSize: 10, fill: "#334155" }}
+                stroke="#334155"
+              />
+              <YAxis tick={{ fontSize: 10, fill: "#334155" }} stroke="#334155" />
               <Tooltip />
               <Line type="monotone" dataKey="orders" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
             </LineChart>

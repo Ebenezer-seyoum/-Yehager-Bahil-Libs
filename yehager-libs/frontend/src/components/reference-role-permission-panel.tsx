@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { TableHeadCell, TableHeadRow, TableHeader } from "@/components/admin/table-header";
+import { employeeNavigation } from "@/lib/dashboard-navigation";
 
 type User = {
   id: string;
@@ -9,6 +10,7 @@ type User = {
   email: string;
   role: string;
   status: string;
+  roleStatus?: "unassigned" | "assigned";
 };
 
 type Permission = {
@@ -25,6 +27,7 @@ type Role = {
   name: string;
   description: string | null;
   isSystem: boolean;
+  permissions?: string[];
   createdAt: string;
   updatedAt: string;
 };
@@ -49,6 +52,7 @@ export function ReferenceRolePermissionPanel({
   const [activeTab, setActiveTab] = useState<"assign" | "create">("assign");
   const [selectedUserId, setSelectedUserId] = useState(users[0]?.id ?? "");
   const [selectedPermissions, setSelectedPermissions] = useState<string[]>([]);
+  const [selectedRoleId, setSelectedRoleId] = useState<string>("");
   const [loadedFor, setLoadedFor] = useState<string | null>(null);
   const [filter, setFilter] = useState("");
   const [busy, setBusy] = useState(false);
@@ -109,6 +113,40 @@ export function ReferenceRolePermissionPanel({
     }
   }
 
+  async function assignRoleAccess() {
+    if (!selectedUserId) {
+      setMessage("Please select an employee.");
+      return;
+    }
+    if (!selectedRoleId && selectedPermissions.length === 0) {
+      setMessage("Please select at least one role or permission.");
+      return;
+    }
+
+    setBusy(true);
+    setMessage(null);
+    try {
+      const response = await fetch(`/api/backend/admin/users/${selectedUserId}/access`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          roleId: selectedRoleId || null,
+          permissions: selectedPermissions,
+        }),
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        setMessage(payload?.error ?? "Could not assign role.");
+        return;
+      }
+      setMessage("Role assigned successfully.");
+    } catch {
+      setMessage("Could not assign role.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function createRole() {
     if (!roleName.trim()) return;
     setRoleBusy(true);
@@ -152,6 +190,16 @@ export function ReferenceRolePermissionPanel({
   const allVisibleChecked =
     filteredPermissions.length > 0 &&
     filteredPermissions.every((permission) => selectedPermissions.includes(permission.key));
+
+  const selectedRole = roleItems.find((role) => role.id === selectedRoleId);
+  const effectivePermissions = useMemo(() => {
+    const fromRole = Array.isArray(selectedRole?.permissions) ? selectedRole!.permissions! : [];
+    return Array.from(new Set([...(fromRole ?? []), ...selectedPermissions]));
+  }, [selectedPermissions, selectedRole]);
+  const accessPreview = useMemo(() => {
+    const items = employeeNavigation.flatMap((group) => group.items);
+    return items.filter((item) => effectivePermissions.includes(item.permission));
+  }, [effectivePermissions]);
 
   return (
     <div className="mx-auto w-full max-w-7xl space-y-5">
@@ -199,8 +247,31 @@ export function ReferenceRolePermissionPanel({
                 </option>
               ))}
             </select>
-            <button type="button" onClick={() => void savePermissions()} disabled={!selectedUserId || busy} className="mt-5 w-full rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground disabled:opacity-50">
+            <label className="mt-5 block text-sm">
+              <span className="mb-2 block font-semibold">Role</span>
+              <select value={selectedRoleId} onChange={(event) => setSelectedRoleId(event.target.value)} className="h-12 w-full rounded-xl border border-input bg-background px-4 text-sm">
+                <option value="">Custom / no role</option>
+                {roleItems.filter((role) => !role.isSystem).map((role) => (
+                  <option key={role.id} value={role.id}>
+                    {role.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button type="button" onClick={() => void assignRoleAccess()} disabled={!selectedUserId || busy} className="mt-5 w-full rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground disabled:opacity-50">
               Assign Roles
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedRoleId("");
+                setSelectedPermissions([]);
+                setMessage(null);
+              }}
+              disabled={busy}
+              className="mt-3 w-full rounded-xl border border-border px-4 py-3 text-sm font-semibold disabled:opacity-50"
+            >
+              Reset
             </button>
           </section>
 
@@ -214,6 +285,20 @@ export function ReferenceRolePermissionPanel({
                 Load permissions
               </button>
             ) : null}
+
+            <div className="mt-5 rounded-2xl border border-border bg-background p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Assigned Access Preview</p>
+              {accessPreview.length === 0 ? (
+                <p className="mt-2 text-sm text-muted-foreground">No sidebar links will be visible.</p>
+              ) : (
+                <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">
+                  {accessPreview.map((item) => (
+                    <li key={item.href}>{item.label}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
             <div className="mt-5 overflow-hidden rounded-2xl border border-border">
               <div className="grid grid-cols-[52px_220px_minmax(0,1fr)] border-b border-blue-100 bg-gradient-to-r from-white to-blue-50 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-700">
                 <label className="flex items-center">
