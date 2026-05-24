@@ -3,9 +3,10 @@
 import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Loader2, Lock, Pencil, Trash2, Unlock, X } from "lucide-react";
+import { FileText, Loader2, Lock, MapPin, NotebookPen, Pencil, ShoppingBag, Trash2, Unlock, User2, X } from "lucide-react";
 import { dashboardConfirm, dashboardError, dashboardSuccess } from "@/lib/dashboard-swal";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
 
 type Customer = Record<string, any>;
 
@@ -98,6 +99,7 @@ export function CustomerDetailClient({
   const [editMode, setEditMode] = useState(false);
   const [busy, setBusy] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
+  const [activeSection, setActiveSection] = useState<"personal" | "contact" | "account" | "orders" | "notes">("personal");
 
   const originalRef = useRef<Customer>(initialCustomer);
 
@@ -424,9 +426,52 @@ export function CustomerDetailClient({
         </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-12">
-        <main className="space-y-4 lg:col-span-12">
-          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className={embedded ? "grid gap-4 lg:grid-cols-[260px_1fr]" : "grid gap-4 lg:grid-cols-12"}>
+        {embedded ? (
+          <aside className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+            <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Profile Overview</div>
+            <nav className="mt-3 space-y-1">
+              {[
+                { id: "personal", label: "Personal Information", icon: User2, hint: "Name, gender, birth" },
+                { id: "contact", label: "Address Information", icon: MapPin, hint: "Email, phone, city" },
+                { id: "account", label: "Account Information", icon: FileText, hint: "Status and invite" },
+                { id: "orders", label: "Orders", icon: ShoppingBag, hint: "Totals and last order" },
+                { id: "notes", label: "Notes", icon: NotebookPen, hint: "Internal notes" },
+              ].map((item) => {
+                const Icon = item.icon;
+                const selected = activeSection === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => setActiveSection(item.id as any)}
+                    className={cn(
+                      "flex w-full items-center gap-3 rounded-2xl border px-3 py-3 text-left",
+                      selected ? "border-blue-200 bg-blue-50 shadow-sm" : "border-transparent hover:border-blue-100 hover:bg-blue-50",
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "flex h-10 w-10 items-center justify-center rounded-2xl",
+                        selected ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-700",
+                      )}
+                    >
+                      <Icon className="h-5 w-5" />
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block text-sm font-bold text-slate-900">{item.label}</span>
+                      <span className="block text-xs text-slate-600">{item.hint}</span>
+                    </span>
+                  </button>
+                );
+              })}
+            </nav>
+          </aside>
+        ) : null}
+
+        <main className={embedded ? "space-y-4" : "space-y-4 lg:col-span-12"}>
+          {embedded && activeSection !== "personal" ? null : (
+          <section id="personal" className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <h2 className="text-base font-bold text-slate-900">Personal Information</h2>
             {!editMode ? (
               <div className="mt-4 grid gap-3 md:grid-cols-3">
@@ -467,8 +512,10 @@ export function CustomerDetailClient({
               </div>
             )}
           </section>
+          )}
 
-          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          {embedded && activeSection !== "contact" ? null : (
+          <section id="contact" className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <h2 className="text-base font-bold text-slate-900">Contact Information</h2>
             {!editMode ? (
               <div className="mt-4 grid gap-3 md:grid-cols-3">
@@ -488,8 +535,10 @@ export function CustomerDetailClient({
               </div>
             )}
           </section>
+          )}
 
-          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          {embedded && activeSection !== "contact" ? null : (
+          <section id="address" className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <h2 className="text-base font-bold text-slate-900">Address Information</h2>
             {!editMode ? (
               <div className="mt-4 grid gap-3 md:grid-cols-3">
@@ -514,8 +563,10 @@ export function CustomerDetailClient({
               </div>
             )}
           </section>
+          )}
 
-          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          {embedded && activeSection !== "account" ? null : (
+          <section id="account" className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <h2 className="text-base font-bold text-slate-900">Account Information</h2>
             {!editMode ? (
               <div className="mt-4 grid gap-3 md:grid-cols-3">
@@ -550,8 +601,10 @@ export function CustomerDetailClient({
               </div>
             )}
           </section>
+          )}
 
-          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          {embedded && activeSection !== "orders" ? null : (
+          <section id="orders" className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <h2 className="text-base font-bold text-slate-900">Orders</h2>
             <div className="mt-4 grid gap-3 md:grid-cols-3">
               <Field label="Total Orders" value={String(stats.totalOrders)} />
@@ -559,8 +612,10 @@ export function CustomerDetailClient({
               <Field label="Last Order Date" value={stats.lastOrderAt ? formatDate(stats.lastOrderAt) : "Not provided"} />
             </div>
           </section>
+          )}
 
-          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          {embedded && activeSection !== "notes" ? null : (
+          <section id="notes" className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <h2 className="text-base font-bold text-slate-900">Notes</h2>
             {!editMode ? (
               <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
@@ -573,6 +628,7 @@ export function CustomerDetailClient({
               </label>
             )}
           </section>
+          )}
         </main>
       </div>
 
@@ -614,4 +670,3 @@ export function CustomerDetailClient({
     </div>
   );
 }
-
