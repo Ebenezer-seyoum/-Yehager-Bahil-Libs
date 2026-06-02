@@ -13,6 +13,7 @@ import { productsRouter } from "./products.js";
 import { uploadsRouter } from "./uploads.js";
 import { usersRouter } from "./users.js";
 import { supportRouter } from "./support.js";
+import { uploadedDesignsRouter } from "./uploaded-designs.js";
 
 export const v1Router = new Hono<AppBindings>();
 
@@ -29,3 +30,4 @@ v1Router.route("/payments", paymentsRouter);
 v1Router.route("/uploads", uploadsRouter);
 v1Router.route("/admin", adminRouter);
 v1Router.route("/admin/support", supportRouter);
+v1Router.route("/uploaded-designs", uploadedDesignsRouter);

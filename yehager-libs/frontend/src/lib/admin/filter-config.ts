@@ -10,6 +10,7 @@ export const FILTER_PLACEHOLDERS: Record<AdminPageId, string> = {
   orders: "Search by order #, customer, or email...",
   payments: "Search payments by order, customer, or reference...",
   documents: "Search documents by order or customer...",
+  "uploaded-designs": "Search uploaded designs by submission #, title, customer, or status...",
   "exchange-rate": "Search currencies...",
   reports: "Search reports...",
   "support-inbox": "Search by ticket #, customer, email, subject, or order id...",

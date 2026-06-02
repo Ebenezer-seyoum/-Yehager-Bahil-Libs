@@ -506,8 +506,47 @@ export const adminNotifications = pgTable(
   ]
 );
 
+export const uploadedDesigns = pgTable(
+  "uploaded_designs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    submissionNumber: text("submission_number").notNull(),
+    userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
+    userEmail: varchar("user_email", { length: 320 }).notNull(),
+    customerName: text("customer_name").notNull(),
+    designTitle: text("design_title").notNull(),
+    inspirationNote: text("inspiration_note"),
+    frontImageUrl: text("front_image_url").notNull(),
+    sideImageUrl: text("side_image_url"),
+    backImageUrl: text("back_image_url"),
+    fabricType: text("fabric_type"),
+    embroideryStyle: text("embroidery_style"),
+    colorPreference: text("color_preference"),
+    measurementSnapshot: jsonb("measurement_snapshot").$type<Record<string, unknown>>().default({}).notNull(),
+    contactPhone: text("contact_phone"),
+    contactTelegram: text("contact_telegram"),
+    contactAddress: jsonb("contact_address").$type<Record<string, unknown>>(),
+    status: varchar("status", { length: 32 }).default("submitted").notNull(),
+    reviewedBy: text("reviewed_by"),
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+    reviewReason: text("review_reason"),
+    submittedAt: timestamp("submitted_at", { withTimezone: true }),
+    approvedOrderId: uuid("approved_order_id").references(() => orders.id, { onDelete: "set null" }),
+    emailPlaceholderStatus: varchar("email_placeholder_status", { length: 40 }),
+    emailPlaceholderNote: text("email_placeholder_note"),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("uploaded_designs_submission_number_unique").on(table.submissionNumber),
+    index("uploaded_designs_user_email_idx").on(table.userEmail),
+    index("uploaded_designs_status_idx").on(table.status),
+    index("uploaded_designs_created_at_idx").on(table.createdAt),
+  ],
+);
+
 export const usersRelations = relations(users, ({ many }) => ({
   cartItems: many(cartItems),
   orders: many(orders),
   measurements: many(measurements),
+  uploadedDesigns: many(uploadedDesigns),
 }));

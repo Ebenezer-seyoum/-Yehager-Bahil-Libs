@@ -1,0 +1,21 @@
+import { redirect } from "next/navigation";
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/auth-options";
+import { apiRequest } from "@/lib/api-client";
+import { AdminUploadedDesignsWorkspace } from "@/components/admin/pages/admin-uploaded-designs-workspace";
+
+export default async function AdminUploadedDesignsPage() {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) redirect("/signin?callbackUrl=/admin/uploaded-designs");
+  if (session.user.role !== "admin") redirect("/");
+
+  let uploadedDesigns = [];
+  try {
+    const response = await apiRequest("/api/v1/uploaded-designs/admin?limit=200");
+    uploadedDesigns = Array.isArray(response?.data) ? response.data : [];
+  } catch {
+    uploadedDesigns = [];
+  }
+
+  return <AdminUploadedDesignsWorkspace data={{ uploadedDesigns }} />;
+}

@@ -185,6 +185,11 @@ function filterAudit(rows: Row[], tabId: string): Row[] {
   }
 }
 
+function filterUploadedDesigns(rows: Row[], tabId: string): Row[] {
+  if (tabId === "all") return rows;
+  return rows.filter((row) => norm(row.status) === norm(tabId));
+}
+
 function filterDashboard(data: AdminWorkspaceData, tabId: string): AdminWorkspaceData {
   const orders = data.orders ?? [];
   const users = data.users ?? [];
@@ -226,6 +231,7 @@ export function applyTabQuery(
   const products = data.products ?? [];
   const users = data.users ?? [];
   const audit = data.audit ?? [];
+  const uploadedDesigns = data.uploadedDesigns ?? [];
 
   switch (pageId) {
     case "dashboard":
@@ -242,6 +248,8 @@ export function applyTabQuery(
       return { ...data, users: filterUsers(users, tabId, "customer") };
     case "activity-logs":
       return { ...data, audit: filterAudit(audit, tabId) };
+    case "uploaded-designs":
+      return { ...data, uploadedDesigns: filterUploadedDesigns(uploadedDesigns, tabId) };
     default:
       return data;
   }

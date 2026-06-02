@@ -51,6 +51,9 @@ export function SiteNavbar() {
             <Link href="/" className="rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground">
               Home
             </Link>
+            <Link href="/upload-your-design" className="rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground">
+              Upload Your Design
+            </Link>
             {REGIONS.map((region) => {
               const subs = TAXONOMY[region] ?? [];
               return (
@@ -149,6 +152,9 @@ export function SiteNavbar() {
             </div>
             <Link href="/" onClick={() => setOpen(false)} className="flex h-11 items-center rounded-lg px-3 text-sm font-semibold hover:bg-secondary">
               Home
+            </Link>
+            <Link href="/upload-your-design" onClick={() => setOpen(false)} className="flex h-11 items-center rounded-lg px-3 text-sm font-semibold hover:bg-secondary">
+              Upload Your Design
             </Link>
             {REGIONS.map((region) => {
               const subs = TAXONOMY[region] ?? [];

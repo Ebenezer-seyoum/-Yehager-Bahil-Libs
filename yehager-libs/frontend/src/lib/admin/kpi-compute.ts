@@ -387,6 +387,7 @@ export function computePageKpis(pageId: AdminPageId, data: AdminWorkspaceData): 
     case "settings":
       return buildSettingsKpis();
     case "documents":
+    case "uploaded-designs":
     case "sections":
     case "exchange-rate":
       return buildGenericKpis(data);
