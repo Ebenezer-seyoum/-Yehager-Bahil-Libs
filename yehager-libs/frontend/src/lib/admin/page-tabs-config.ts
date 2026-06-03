@@ -149,6 +149,13 @@ export const PAGE_TABS: Record<AdminPageId, AdminTabConfig[]> = {
     { id: "uploaded", label: "Uploaded Files", icon: Archive },
     { id: "missing", label: "Missing Documents", icon: AlertTriangle },
   ),
+  "uploaded-designs": tabs(
+    { id: "all", label: "Uploaded Design", icon: Image },
+    { id: "submitted", label: "Submitted", icon: Clock },
+    { id: "in_review", label: "In Review", icon: RefreshCw },
+    { id: "approved", label: "Approved", icon: CheckCircle2 },
+    { id: "rejected", label: "Rejected", icon: XCircle },
+  ),
   "exchange-rate": tabs(
     { id: "current", label: "Current Rates", icon: DollarSign },
     { id: "currencies", label: "Currency List", icon: Globe },
@@ -263,6 +270,14 @@ export const PAGE_META: Record<AdminPageId, Omit<AdminPageMeta, "tabs">> = {
     icon: FileText,
     title: "Order Documents",
     subtitle: "Invoices, receipts, tailoring notes, measurement files, and delivery proofs.",
+    defaultTab: "all",
+  },
+  "uploaded-designs": {
+    id: "uploaded-designs",
+    section: "Operations",
+    icon: Image,
+    title: "Uploaded Design",
+    subtitle: "Review customer-uploaded design requests and approve/reject for order conversion.",
     defaultTab: "all",
   },
   "exchange-rate": {

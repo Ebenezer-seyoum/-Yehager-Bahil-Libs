@@ -29,6 +29,8 @@ export const PERMISSIONS = {
   DOCUMENTS_VIEW: "documents.view",
   DOCUMENTS_UPLOAD: "documents.upload",
   DOCUMENTS_APPROVE: "documents.approve",
+  UPLOADED_DESIGNS_VIEW: "uploaded_designs.view",
+  UPLOADED_DESIGNS_REVIEW: "uploaded_designs.review",
   EXCHANGE_VIEW: "exchange.view",
   EXCHANGE_EDIT: "exchange.edit",
   REPORTS_VIEW: "reports.view",

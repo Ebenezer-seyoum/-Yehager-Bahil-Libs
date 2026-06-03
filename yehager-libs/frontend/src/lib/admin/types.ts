@@ -12,6 +12,7 @@ export type AdminPageId =
   | "orders"
   | "payments"
   | "documents"
+  | "uploaded-designs"
   | "exchange-rate"
   | "support-inbox"
   | "settings"
@@ -76,6 +77,7 @@ export type AdminWorkspaceData = {
   roles?: Record<string, unknown>[];
   permissions?: Record<string, unknown>[];
   documents?: Record<string, unknown>[];
+  uploadedDesigns?: Record<string, unknown>[];
   exchangeRates?: Record<string, unknown>[];
   settings?: Record<string, unknown>;
   sections?: Record<string, unknown>[];

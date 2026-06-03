@@ -60,6 +60,7 @@ export const adminNavigation: readonly NavigationGroup[] = [
       { href: "/admin/orders", label: "Orders", icon: "orders", permission: "orders.view" },
       { href: "/admin/payments", label: "Payments", icon: "payments", permission: "payments.view" },
       { href: "/admin/orders/documents", label: "Order Documents", icon: "documents", permission: "documents.view" },
+      { href: "/admin/uploaded-designs", label: "Uploaded Design", icon: "documents", permission: "uploaded_designs.view" },
       { href: "/admin/exchange-rate", label: "Exchange Rate", icon: "exchange", permission: "exchange.view" },
     ],
   },
