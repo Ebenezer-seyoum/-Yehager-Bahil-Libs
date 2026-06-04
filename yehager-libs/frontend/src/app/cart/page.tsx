@@ -11,6 +11,7 @@ type CartItem = {
   productImage?: string | null;
   priceUsd?: number | null;
   quantity?: number | null;
+  itemType?: string | null;
   eventName?: string | null;
     measurementSnapshot?: {
       chest?: number | string | null;

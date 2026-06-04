@@ -4,20 +4,27 @@ import { authOptions } from "@/auth-options";
 import { apiRequest } from "@/lib/api-client";
 import { AdminOrdersWorkspace } from "@/components/admin/pages/admin-orders-workspace";
 
-export default async function AdminOrdersPage({ searchParams }) {
+export default async function AdminGroupOrdersPage({ searchParams }) {
   const session = await getServerSession(authOptions);
-  if (!session?.user?.id) redirect("/signin?callbackUrl=/admin/orders");
+  if (!session?.user?.id) redirect("/signin?callbackUrl=/admin/group-orders");
   if (session.user.role !== "admin") redirect("/");
+
   const selectedOrderId = typeof searchParams?.order === "string" ? searchParams.order : null;
-  const initialOrderType = typeof searchParams?.type === "string" ? searchParams.type : null;
 
   let orders = [];
   try {
     const response = await apiRequest("/api/v1/orders?limit=200");
-    orders = Array.isArray(response?.data) ? response.data : [];
+    const allOrders = Array.isArray(response?.data) ? response.data : [];
+    orders = allOrders.filter((order) => order?.orderType === "group_order");
   } catch {
     orders = [];
   }
 
-  return <AdminOrdersWorkspace data={{ orders }} initialSelectedOrderId={selectedOrderId} initialOrderType={initialOrderType} />;
+  return (
+    <AdminOrdersWorkspace
+      data={{ orders }}
+      initialSelectedOrderId={selectedOrderId}
+      initialOrderType="group_order"
+    />
+  );
 }

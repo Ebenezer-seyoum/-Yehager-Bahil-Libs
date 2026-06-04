@@ -51,6 +51,7 @@ type Order = {
   userEmail?: string | null;
   totalUsd?: number | string | null;
   totalEtb?: number | string | null;
+  orderType?: string | null;
   status?: string | null;
   paymentStatus?: string | null;
   paymentMethod?: string | null;
@@ -73,6 +74,7 @@ type Order = {
 
 const ORDER_STATUSES = ["pending", "tailoring", "quality_check", "shipped", "delivered", "ready_for_pickup", "picked_up"];
 const PAYMENT_STATUSES = ["pending", "awaiting_verification", "paid", "failed", "refunded", "unpaid"];
+const ORDER_TYPES = ["catalog_order", "custom_design_order", "group_order"] as const;
 
 const STATUS_STYLES: Record<string, string> = {
   pending: "bg-yellow-100 text-yellow-900 border-yellow-200",
@@ -129,6 +131,18 @@ function itemTitle(item: OrderItem, index: number) {
   return item.productName ?? item.name ?? `Item ${index + 1}`;
 }
 
+function orderTypeLabel(value?: string | null) {
+  if (value === "custom_design_order") return "Custom Design";
+  if (value === "group_order") return "Group Order";
+  return "Catalog";
+}
+
+function orderTypeClass(value?: string | null) {
+  if (value === "custom_design_order") return "border-primary/40 bg-primary/10 text-primary";
+  if (value === "group_order") return "border-blue-500/30 bg-blue-500/10 text-blue-400";
+  return "border-border bg-secondary text-muted-foreground";
+}
+
 function itemImage(item: OrderItem) {
   return item.imageUrl ?? item.image_url ?? null;
 }
@@ -145,11 +159,13 @@ function needsAttention(order: Order) {
 export function AdminOrdersTable({
   initialOrders,
   initialSelectedOrderId,
+  initialOrderType,
   externalSearch,
   hideToolbar,
 }: {
   initialOrders: Order[];
   initialSelectedOrderId?: string | null;
+  initialOrderType?: string | null;
   externalSearch?: string;
   hideToolbar?: boolean;
 }) {
@@ -157,6 +173,7 @@ export function AdminOrdersTable({
   const [search, setSearch] = useState("");
   const effectiveSearch = externalSearch ?? search;
   const [fulfillmentFilter, setFulfillmentFilter] = useState("all");
+  const [orderTypeFilter, setOrderTypeFilter] = useState(initialOrderType ?? "all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [paymentFilter, setPaymentFilter] = useState("all");
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(initialSelectedOrderId ?? null);
@@ -175,6 +192,10 @@ export function AdminOrdersTable({
       setSelectedOrderId(initialSelectedOrderId);
     }
   }, [initialSelectedOrderId]);
+
+  useEffect(() => {
+    setOrderTypeFilter(initialOrderType ?? "all");
+  }, [initialOrderType]);
 
   useEffect(() => {
     const key = "admin-viewed-order-notifications";
@@ -215,11 +236,12 @@ export function AdminOrdersTable({
           .some((value) => String(value).toLowerCase().includes(needle));
       const isPickup = order.fulfillmentType === "pickup";
       const matchesFulfillment = fulfillmentFilter === "all" || (fulfillmentFilter === "pickup" ? isPickup : !isPickup);
+      const matchesOrderType = orderTypeFilter === "all" || (order.orderType ?? "catalog_order") === orderTypeFilter;
       const matchesStatus = statusFilter === "all" || order.status === statusFilter;
       const matchesPayment = paymentFilter === "all" || order.paymentStatus === paymentFilter;
-      return matchesSearch && matchesFulfillment && matchesStatus && matchesPayment;
+      return matchesSearch && matchesFulfillment && matchesOrderType && matchesStatus && matchesPayment;
     });
-  }, [effectiveSearch, fulfillmentFilter, orders, paymentFilter, statusFilter]);
+  }, [effectiveSearch, fulfillmentFilter, orderTypeFilter, orders, paymentFilter, statusFilter]);
 
   async function updateOrder(orderId: string, patch: Partial<Pick<Order, "status" | "paymentStatus">>) {
     const key = `${orderId}-${Object.keys(patch).join("-")}`;
@@ -248,7 +270,7 @@ export function AdminOrdersTable({
   return (
     <div className="space-y-4">
       <div className="rounded-xl border border-border bg-card p-3 shadow-sm">
-        <div className={`grid gap-2 ${hideToolbar ? "sm:grid-cols-3" : "lg:grid-cols-[minmax(260px,1.4fr)_repeat(3,minmax(150px,1fr))_auto]"}`}>
+        <div className={`grid gap-2 ${hideToolbar ? "sm:grid-cols-3" : "lg:grid-cols-[minmax(260px,1.4fr)_repeat(4,minmax(150px,1fr))_auto]"}`}>
           {!hideToolbar ? (
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -268,6 +290,10 @@ export function AdminOrdersTable({
             <option value="all">All Payments</option>
             {PAYMENT_STATUSES.map((status) => <option key={status} value={status}>{prettyLabel(status)}</option>)}
           </select>
+          <select value={orderTypeFilter} onChange={(event) => setOrderTypeFilter(event.target.value)} className="h-9 rounded-lg border border-input bg-background px-3 text-sm font-medium">
+            <option value="all">All Order Types</option>
+            {ORDER_TYPES.map((type) => <option key={type} value={type}>{orderTypeLabel(type)}</option>)}
+          </select>
           <select value={fulfillmentFilter} onChange={(event) => setFulfillmentFilter(event.target.value)} className="h-9 rounded-lg border border-input bg-background px-3 text-sm font-medium">
             <option value="all">All Types</option>
             <option value="mail">Mail / EMS</option>
@@ -280,23 +306,24 @@ export function AdminOrdersTable({
 
       <div className={ADMIN_TABLE_WRAPPER}>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1180px] text-sm">
+          <table className="w-full min-w-[1280px] text-sm">
             <TableHeader>
               <TableHeadRow>
                 <TableHeadCell>Order #</TableHeadCell>
+                <TableHeadCell>Type</TableHeadCell>
                 <TableHeadCell>Customer</TableHeadCell>
                 <TableHeadCell>Clothing Items</TableHeadCell>
                 <TableHeadCell>Total</TableHeadCell>
                 <TableHeadCell>Fulfillment</TableHeadCell>
                 <TableHeadCell>Order Status</TableHeadCell>
                 <TableHeadCell>Payment</TableHeadCell>
-                <TableHeadCell aria-label="Open details" />
+                <TableHeadCell aria-label="Open details">Details</TableHeadCell>
               </TableHeadRow>
             </TableHeader>
             <tbody>
               {filteredOrders.length === 0 ? (
                 <tr>
-                  <td className="px-4 py-12 text-center text-muted-foreground" colSpan={8}>No orders found.</td>
+                  <td className="px-4 py-12 text-center text-muted-foreground" colSpan={9}>No orders found.</td>
                 </tr>
               ) : (
                 filteredOrders.map((order) => {
@@ -319,6 +346,11 @@ export function AdminOrdersTable({
                           </div>
                           <p className="mt-1 text-xs text-muted-foreground">{order.createdAt ? new Date(order.createdAt).toLocaleDateString() : "-"}</p>
                         </button>
+                      </td>
+                      <td className="px-4 py-5 align-middle">
+                        <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-black ${orderTypeClass(order.orderType)}`}>
+                          {orderTypeLabel(order.orderType)}
+                        </span>
                       </td>
                       <td className="px-4 py-5 align-middle">
                         <p className="font-bold">{order.customerName ?? "-"}</p>
@@ -414,6 +446,9 @@ function OrderDetailDrawer({
           <div>
             <p className="text-sm tracking-[0.18em] text-muted-foreground">Order</p>
             <h2 className="mt-2 text-3xl font-black text-primary">#{shortOrderNumber(order.orderNumber ?? order.id)}</h2>
+            <span className={`mt-3 inline-flex rounded-full border px-3 py-1 text-xs font-black ${orderTypeClass(order.orderType)}`}>
+              {orderTypeLabel(order.orderType)}
+            </span>
           </div>
           <div className="flex items-center gap-3">
             <span className={`rounded-full px-4 py-2 text-sm font-black capitalize ${STATUS_STYLES[order.status ?? "pending"] ?? STATUS_STYLES.pending}`}>{prettyLabel(order.status)}</span>
@@ -445,6 +480,7 @@ function OrderDetailDrawer({
             <DetailRow label="Email" value={order.userEmail ?? "-"} />
             <DetailRow label="Order Date" value={formatDate(order.createdAt)} />
             <DetailRow label="Order Number" value={`#${shortOrderNumber(order.orderNumber ?? order.id)}`} highlight />
+            <DetailRow label="Order Type" value={orderTypeLabel(order.orderType)} />
           </DarkSection>
 
           <DarkSection icon={CreditCard} title="Payment Details">

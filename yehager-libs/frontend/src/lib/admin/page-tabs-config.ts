@@ -150,11 +150,11 @@ export const PAGE_TABS: Record<AdminPageId, AdminTabConfig[]> = {
     { id: "missing", label: "Missing Documents", icon: AlertTriangle },
   ),
   "uploaded-designs": tabs(
-    { id: "all", label: "Uploaded Design", icon: Image },
-    { id: "submitted", label: "Submitted", icon: Clock },
-    { id: "in_review", label: "In Review", icon: RefreshCw },
-    { id: "approved", label: "Approved", icon: CheckCircle2 },
-    { id: "rejected", label: "Rejected", icon: XCircle },
+    { id: "all", label: "Custom Designs", icon: Image },
+    { id: "pending_review", label: "Pending Review", icon: Clock },
+    { id: "awaiting_payment", label: "Awaiting Payment", icon: CreditCard },
+    { id: "completed_request", label: "Completed Requests", icon: CheckCircle2 },
+    { id: "rejected", label: "Declined", icon: XCircle },
   ),
   "exchange-rate": tabs(
     { id: "current", label: "Current Rates", icon: DollarSign },
@@ -274,10 +274,10 @@ export const PAGE_META: Record<AdminPageId, Omit<AdminPageMeta, "tabs">> = {
   },
   "uploaded-designs": {
     id: "uploaded-designs",
-    section: "Operations",
+    section: "Catalog",
     icon: Image,
-    title: "Uploaded Design",
-    subtitle: "Review customer-uploaded design requests and approve/reject for order conversion.",
+    title: "Custom Designs",
+    subtitle: "Review customer custom design requests and approve/reject before checkout.",
     defaultTab: "all",
   },
   "exchange-rate": {

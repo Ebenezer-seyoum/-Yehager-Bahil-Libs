@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ChevronDown, ChevronRight, Menu, ShoppingBag, X } from "lucide-react";
+import { ChevronDown, ChevronRight, Menu, ShoppingBag, Sparkles, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { signOut, useSession } from "next-auth/react";
 import { LanguageSwitcher } from "@/components/language-switcher";
@@ -17,6 +17,7 @@ export function SiteNavbar() {
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { data: session } = useSession();
   const isAuthed = Boolean(session?.user?.id);
+  const uploadDesignHref = isAuthed ? "/upload-your-design" : "/signin?callbackUrl=/upload-your-design";
 
   useEffect(() => {
     if (!isAuthed) return;
@@ -51,11 +52,9 @@ export function SiteNavbar() {
             <Link href="/" className="rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground">
               Home
             </Link>
-            <Link href="/upload-your-design" className="rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground">
-              Upload Your Design
-            </Link>
             {REGIONS.map((region) => {
               const subs = TAXONOMY[region] ?? [];
+              const label = region === "Mila's Choice" ? "Designer's Choice" : region;
               return (
                 <div key={region} className="relative" onMouseEnter={() => handleMouseEnter(region)} onMouseLeave={handleMouseLeave}>
                   <Link
@@ -63,7 +62,7 @@ export function SiteNavbar() {
                     onClick={() => setActiveMenu(null)}
                     className="flex items-center gap-1 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
                   >
-                    {region}
+                    {label}
                     {subs.length > 0 ? <ChevronDown className="h-3 w-3" /> : null}
                   </Link>
                   {activeMenu === region && subs.length > 0 ? (
@@ -92,10 +91,17 @@ export function SiteNavbar() {
                 </div>
               );
             })}
+            <Link
+              href={uploadDesignHref}
+              className="inline-flex min-h-20 items-center justify-center gap-1 rounded-md border-2 border-primary bg-primary/10 px-3 py-2 text-center text-sm font-black leading-tight text-primary transition-colors hover:bg-primary hover:text-primary-foreground"
+            >
+              <Sparkles className="h-4 w-4 shrink-0" />
+              <span className="max-w-[72px]">Upload Your Design</span>
+            </Link>
             <button
               type="button"
               onClick={() => setGroupOrderOpen(true)}
-              className="inline-flex items-center justify-center rounded-md bg-primary px-3 py-2 text-center text-sm font-medium leading-tight text-primary-foreground transition-colors hover:bg-primary/90"
+              className="inline-flex min-h-20 items-center justify-center rounded-md bg-primary px-4 py-2 text-center text-sm font-medium leading-tight text-primary-foreground transition-colors hover:bg-primary/90"
             >
               Our Home Cart
             </button>
@@ -153,13 +159,11 @@ export function SiteNavbar() {
             <Link href="/" onClick={() => setOpen(false)} className="flex h-11 items-center rounded-lg px-3 text-sm font-semibold hover:bg-secondary">
               Home
             </Link>
-            <Link href="/upload-your-design" onClick={() => setOpen(false)} className="flex h-11 items-center rounded-lg px-3 text-sm font-semibold hover:bg-secondary">
-              Upload Your Design
-            </Link>
             {REGIONS.map((region) => {
               const subs = TAXONOMY[region] ?? [];
               const hasSubs = subs.length > 0;
               const isOpen = openRegion === region;
+              const label = region === "Mila's Choice" ? "Designer's Choice" : region;
               return (
                 <div key={region}>
                   {hasSubs ? (
@@ -168,12 +172,12 @@ export function SiteNavbar() {
                       onClick={() => setOpenRegion(isOpen ? null : region)}
                       className="flex h-11 w-full items-center justify-between rounded-lg px-3 text-sm font-semibold hover:bg-secondary"
                     >
-                      <span>{region}</span>
+                      <span>{label}</span>
                       {isOpen ? <ChevronDown className="h-4 w-4 text-primary" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
                     </button>
                   ) : (
                     <Link href={`/catalog?region=${encodeURIComponent(region)}`} onClick={() => setOpen(false)} className="flex h-11 items-center rounded-lg px-3 text-sm font-semibold hover:bg-secondary">
-                      {region}
+                      {label}
                     </Link>
                   )}
                   {isOpen && hasSubs ? (
@@ -197,6 +201,14 @@ export function SiteNavbar() {
               );
             })}
             <div className="my-2 border-t border-border" />
+            <Link
+              href={uploadDesignHref}
+              onClick={() => setOpen(false)}
+              className="mb-2 flex min-h-12 items-center gap-2 rounded-lg border-2 border-primary bg-primary/10 px-3 text-sm font-black text-primary hover:bg-primary hover:text-primary-foreground"
+            >
+              <Sparkles className="h-4 w-4" />
+              Upload Your Design
+            </Link>
             <button
               type="button"
               onClick={() => {

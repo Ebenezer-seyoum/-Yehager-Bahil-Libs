@@ -50,7 +50,9 @@ export const adminNavigation: readonly NavigationGroup[] = [
   {
     label: "Catalog",
     items: [
-      { href: "/admin/inventory", label: "Products", icon: "products", permission: "products.view" },
+      { href: "/admin/inventory", label: "Catalog", icon: "products", permission: "products.view" },
+      { href: "/admin/uploaded-designs", label: "Custom Orders", icon: "documents", permission: "uploaded_designs.view" },
+      { href: "/admin/group-orders", label: "Group Orders", icon: "orders", permission: "orders.view" },
       { href: "/admin/sections", label: "Sections", icon: "sections", permission: "products.view" },
     ],
   },
@@ -60,7 +62,6 @@ export const adminNavigation: readonly NavigationGroup[] = [
       { href: "/admin/orders", label: "Orders", icon: "orders", permission: "orders.view" },
       { href: "/admin/payments", label: "Payments", icon: "payments", permission: "payments.view" },
       { href: "/admin/orders/documents", label: "Order Documents", icon: "documents", permission: "documents.view" },
-      { href: "/admin/uploaded-designs", label: "Uploaded Design", icon: "documents", permission: "uploaded_designs.view" },
       { href: "/admin/exchange-rate", label: "Exchange Rate", icon: "exchange", permission: "exchange.view" },
     ],
   },

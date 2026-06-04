@@ -32,9 +32,11 @@ import { can } from "@/lib/permissions";
 type NotificationCounts = {
   orders?: number;
   orderIds?: Array<string | null | undefined>;
+  groupOrders?: number;
   payments?: number;
   alerts?: number;
   support?: number;
+  customDesigns?: number;
 };
 
 const icons = {
@@ -139,11 +141,13 @@ export function DashboardShell({
   const visibleOrderCount = activeOrderIds.length > 0
     ? activeOrderIds.filter((id) => !viewedOrderIds.includes(id)).length
     : Math.max((counts.orders ?? 0) - viewedOrderIds.length, 0);
-  const totalNotifications = visibleOrderCount + (counts.payments ?? 0);
+  const totalNotifications = visibleOrderCount + (counts.payments ?? 0) + (counts.customDesigns ?? 0);
   const badgeForHref = (href: string) => {
     if (variant !== "admin") return 0;
     if (href === "/admin/orders") return visibleOrderCount;
+    if (href === "/admin/group-orders") return counts.groupOrders ?? 0;
     if (href === "/admin/payments") return counts.payments ?? 0;
+    if (href === "/admin/uploaded-designs") return counts.customDesigns ?? 0;
     if (href === "/admin/alerts") return counts.alerts ?? 0;
     if (href === "/admin/support-inbox") return counts.support ?? 0;
     return 0;

@@ -10,7 +10,7 @@ export function AdminUploadedDesignsWorkspace({ data }: { data: AdminWorkspaceDa
       pageId="uploaded-designs"
       initialData={data}
       showExport
-      filterPlaceholder="Search uploaded design requests..."
+      filterPlaceholder="Search custom design requests..."
     >
       {({ filteredData, search }) => (
         <AdminUploadedDesignsTable

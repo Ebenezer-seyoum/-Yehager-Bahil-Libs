@@ -22,12 +22,12 @@ export default async function AdminUploadedDesignDetailPage({ params }) {
   if (!design) {
     return (
       <div className="mx-auto max-w-5xl p-6">
-        <p className="text-sm text-muted-foreground">Uploaded design not found.</p>
+        <p className="text-sm text-muted-foreground">Custom design not found.</p>
       </div>
     );
   }
 
-  const imageUrls = [design.frontImageUrl, design.sideImageUrl, design.backImageUrl].filter(Boolean);
+  const imageUrls = [design.frontImageUrl, design.sideImageUrl, design.backImageUrl, design.detailImageUrl].filter(Boolean);
   const measurement = design.measurementSnapshot ?? {};
   const contactAddress = design.contactAddress ?? {};
 
@@ -50,7 +50,7 @@ export default async function AdminUploadedDesignDetailPage({ params }) {
             <div className="mt-3 grid gap-3 sm:grid-cols-3">
               {imageUrls.map((url) => (
                 <a key={url} href={url} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-lg border border-border">
-                  <img src={url} alt="Uploaded design reference" className="h-48 w-full object-cover" />
+                  <img src={url} alt="Custom design reference" className="h-48 w-full object-cover" />
                 </a>
               ))}
             </div>
@@ -63,8 +63,11 @@ export default async function AdminUploadedDesignDetailPage({ params }) {
               <Field label="Embroidery Style" value={design.embroideryStyle} />
               <Field label="Color Preference" value={design.colorPreference} />
               <Field label="Status" value={design.status} />
+              <Field label="Quoted Price" value={design.quotedPriceUsd ? `$${Number(design.quotedPriceUsd).toFixed(2)}` : "—"} />
               <Field label="Customer" value={design.customerName} />
               <Field label="Email" value={design.userEmail} />
+              <Field label="Cart Item" value={design.approvedCartItemId} />
+              <Field label="Order" value={design.approvedOrderId} />
             </div>
             <Field label="Tailor Notes" value={design.inspirationNote} multiline />
           </section>

@@ -5,6 +5,9 @@ export type CheckoutLineInput = {
   quantity: number;
   trustedUnitPriceUsd: string;
   measurementId?: string | null;
+  itemType?: string | null;
+  uploadedDesignId?: string | null;
+  itemMetadata?: Record<string, unknown> | null;
 };
 
 export type CheckoutLine = {
@@ -15,6 +18,9 @@ export type CheckoutLine = {
   unitPriceUsd: number;
   lineTotalUsd: number;
   measurementId?: string | null;
+  itemType?: string | null;
+  uploadedDesignId?: string | null;
+  itemMetadata?: Record<string, unknown> | null;
 };
 
 export function moneyToNumber(value: string | number) {
@@ -38,6 +44,9 @@ export function buildCheckoutLines(inputs: CheckoutLineInput[]) {
       unitPriceUsd,
       lineTotalUsd: unitPriceUsd * quantity,
       measurementId: item.measurementId,
+      itemType: item.itemType,
+      uploadedDesignId: item.uploadedDesignId,
+      itemMetadata: item.itemMetadata,
     } satisfies CheckoutLine;
   });
 }

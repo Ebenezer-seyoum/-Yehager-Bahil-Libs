@@ -1,8 +1,8 @@
 import { and, desc, eq, sql } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
 import { db } from "../lib/db/drizzle.js";
-import { auditLogs, orders, systemAlerts, uploadedDesigns } from "../lib/db/schema.js";
-import { generateOrderNumber, numberToMoney } from "./checkout-utils.js";
+import { auditLogs, cartItems, systemAlerts, uploadedDesigns } from "../lib/db/schema.js";
+import { numberToMoney } from "./checkout-utils.js";
 import { getUserByEmail } from "../repositories/users-repository.js";
 
 function makeSubmissionNumber(date = new Date(), randomPart = Math.floor(1000 + Math.random() * 9000)) {
@@ -20,6 +20,7 @@ export async function createUploadedDesignSubmission(payload: {
   frontImageUrl: string;
   sideImageUrl?: string;
   backImageUrl?: string;
+  detailImageUrl?: string;
   fabricType?: string;
   embroideryStyle?: string;
   colorPreference?: string;
@@ -47,6 +48,7 @@ export async function createUploadedDesignSubmission(payload: {
       frontImageUrl: payload.frontImageUrl,
       sideImageUrl: payload.sideImageUrl,
       backImageUrl: payload.backImageUrl,
+      detailImageUrl: payload.detailImageUrl,
       fabricType: payload.fabricType,
       embroideryStyle: payload.embroideryStyle,
       colorPreference: payload.colorPreference,
@@ -66,7 +68,7 @@ export async function createUploadedDesignSubmission(payload: {
     entityType: "uploaded_design",
     entityId: submission.id,
     performedBy: payload.userEmail,
-    details: "Customer submitted upload-your-design request",
+    details: "Customer submitted custom design request",
     metadata: {
       submission_number: submission.submissionNumber,
       design_title: submission.designTitle,
@@ -74,8 +76,8 @@ export async function createUploadedDesignSubmission(payload: {
   });
 
   await db.insert(systemAlerts).values({
-    title: `Uploaded design submitted: ${submission.submissionNumber}`,
-    message: `${submission.userEmail} submitted a design for review`,
+    title: `Custom design submitted: ${submission.submissionNumber}`,
+    message: `${submission.userEmail} submitted a custom design for review`,
     type: "design_review",
     severity: "info",
     entityId: submission.id,
@@ -103,7 +105,7 @@ export async function getUploadedDesignForCurrentUser(payload: { designId: strin
     where: and(eq(uploadedDesigns.id, payload.designId), eq(uploadedDesigns.userEmail, payload.userEmail)),
   });
   if (!row) {
-    throw new HTTPException(404, { message: "Uploaded design not found" });
+    throw new HTTPException(404, { message: "Custom design not found" });
   }
   return row;
 }
@@ -127,8 +129,16 @@ export async function getUploadedDesignForAdmin(designId: string) {
     where: eq(uploadedDesigns.id, designId),
   });
   if (!row) {
-    throw new HTTPException(404, { message: "Uploaded design not found" });
+    throw new HTTPException(404, { message: "Custom design not found" });
   }
+  await db
+    .update(systemAlerts)
+    .set({
+      isResolved: true,
+      resolvedBy: "admin_viewed_custom_design",
+      updatedAt: new Date(),
+    })
+    .where(and(eq(systemAlerts.type, "design_review"), eq(systemAlerts.entityId, designId)));
   return row;
 }
 
@@ -146,51 +156,52 @@ export async function reviewUploadedDesign(payload: {
 
   if (payload.decision === "approve") {
     return db.transaction(async (tx) => {
-      const customerName = submission.customerName || submission.userEmail.split("@")[0];
-      const orderNumber = generateOrderNumber();
       const quotedPrice = Number.isFinite(payload.quotedPriceUsd) ? Math.max(payload.quotedPriceUsd ?? 0, 0) : 0;
+      if (quotedPrice <= 0) {
+        throw new HTTPException(400, { message: "Quoted price is required before approving a custom design" });
+      }
 
-      const [order] = await tx
-        .insert(orders)
+      const [cartItem] = await tx
+        .insert(cartItems)
         .values({
-          orderNumber,
           userId: submission.userId,
           userEmail: submission.userEmail,
-          customerName,
-          items: [
-            {
-              type: "uploaded_design",
-              uploaded_design_id: submission.id,
-              submission_number: submission.submissionNumber,
-              design_title: submission.designTitle,
-              front_image_url: submission.frontImageUrl,
-              side_image_url: submission.sideImageUrl,
-              back_image_url: submission.backImageUrl,
-              fabric_type: submission.fabricType,
-              embroidery_style: submission.embroideryStyle,
-              color_preference: submission.colorPreference,
-              measurement_snapshot: submission.measurementSnapshot,
-              contact_address: submission.contactAddress,
-            },
-          ],
-          totalUsd: numberToMoney(quotedPrice),
-          shippingCostUsd: numberToMoney(0),
-          status: "pending",
-          paymentStatus: "pending",
-          paymentMethod: "manual_review",
-          paymentCurrency: "USD",
-          fulfillmentType: "mail",
+          productName: `Custom Design - ${submission.designTitle}`,
+          productImage: submission.frontImageUrl,
+          priceUsd: numberToMoney(quotedPrice),
+          quantity: 1,
+          itemType: "custom_design",
+          uploadedDesignId: submission.id,
+          measurementSnapshot: submission.measurementSnapshot,
+          itemMetadata: {
+            type: "custom_design",
+            submission_number: submission.submissionNumber,
+            design_title: submission.designTitle,
+            front_image_url: submission.frontImageUrl,
+            side_image_url: submission.sideImageUrl,
+            back_image_url: submission.backImageUrl,
+            detail_image_url: submission.detailImageUrl,
+            fabric_type: submission.fabricType,
+            embroidery_style: submission.embroideryStyle,
+            color_preference: submission.colorPreference,
+            contact_address: submission.contactAddress,
+            admin_note: payload.reason,
+          },
         })
         .returning();
 
       const [updated] = await tx
         .update(uploadedDesigns)
         .set({
-          status: "approved",
+          status: "awaiting_payment",
           reviewedBy: payload.performedBy ?? "admin",
           reviewedAt: new Date(),
           reviewReason: payload.reason,
-          approvedOrderId: order.id,
+          approvedCartItemId: cartItem.id,
+          quotedPriceUsd: numberToMoney(quotedPrice),
+          emailPlaceholderStatus: "approval_pending_manual_delivery",
+          emailPlaceholderNote:
+            "Customer should be emailed that their custom design was approved and added to cart.",
           updatedAt: new Date(),
         })
         .where(eq(uploadedDesigns.id, payload.designId))
@@ -203,15 +214,23 @@ export async function reviewUploadedDesign(payload: {
         entityType: "uploaded_design",
         entityId: updated.id,
         performedBy: payload.performedBy ?? "admin",
-        details: "Uploaded design approved and converted to order",
+        details: "Custom design approved and added to cart",
         metadata: {
-          order_id: order.id,
-          order_number: order.orderNumber,
+          cart_item_id: cartItem.id,
           quoted_price_usd: quotedPrice,
+          email_placeholder_status: "approval_pending_manual_delivery",
         },
       });
 
-      return { submission: updated, order };
+      await tx.insert(systemAlerts).values({
+        title: `Custom design approved: ${submission.submissionNumber}`,
+        message: `${submission.userEmail}'s custom design was added to cart and is awaiting payment.`,
+        type: "custom_design_awaiting_payment",
+        severity: "info",
+        entityId: submission.id,
+      });
+
+      return { submission: updated, cartItem };
     });
   }
 
@@ -222,9 +241,9 @@ export async function reviewUploadedDesign(payload: {
       reviewedBy: payload.performedBy ?? "admin",
       reviewedAt: new Date(),
       reviewReason: payload.reason,
-      emailPlaceholderStatus: "pending_manual_delivery",
+      emailPlaceholderStatus: "rejection_pending_manual_delivery",
       emailPlaceholderNote:
-        "TODO: send rejection email to customer when email integration is enabled.",
+        "Customer should be emailed that their custom design request was rejected.",
       updatedAt: new Date(),
     })
     .where(eq(uploadedDesigns.id, payload.designId))
@@ -237,14 +256,14 @@ export async function reviewUploadedDesign(payload: {
     entityType: "uploaded_design",
     entityId: updated.id,
     performedBy: payload.performedBy ?? "admin",
-    details: "Uploaded design rejected by admin review",
+    details: "Custom design rejected by admin review",
     metadata: {
       reason: payload.reason ?? null,
-      email_placeholder_status: "pending_manual_delivery",
+      email_placeholder_status: "rejection_pending_manual_delivery",
     },
   });
 
-  return { submission: updated, order: null };
+  return { submission: updated, cartItem: null };
 }
 
 export async function setUploadedDesignInReview(payload: { designId: string; performedBy?: string }) {

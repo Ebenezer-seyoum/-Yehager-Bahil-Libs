@@ -1,7 +1,7 @@
 import { HTTPException } from "hono/http-exception";
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "../lib/db/drizzle.js";
-import { auditLogs, eventParticipants, events, orders, products, systemAlerts } from "../lib/db/schema.js";
+import { auditLogs, eventParticipants, events, orders, products, systemAlerts, uploadedDesigns } from "../lib/db/schema.js";
 import { deleteCartItemsByIdsForUser, listCartItemsByIdsForUser } from "../repositories/cart-repository.js";
 import {
   getOrderById,
@@ -210,10 +210,18 @@ export async function createCheckoutIntent(payload: {
         quantity: row.quantity,
         trustedUnitPriceUsd,
         measurementId: row.measurementId,
+        itemType: row.itemType,
+        uploadedDesignId: row.uploadedDesignId,
+        itemMetadata: row.itemMetadata,
       };
     });
 
     const lines = buildCheckoutLines(lineInputs);
+    const orderType = lines.some((line) => line.itemType === "custom_design" || line.uploadedDesignId)
+      ? "custom_design_order"
+      : lines.some((line) => line.itemType === "group_order") || primaryEventId
+        ? "group_order"
+        : "catalog_order";
     const totalItems = lines.reduce((sum, line) => sum + line.quantity, 0);
     const fulfillmentType = payload.fulfillmentType ?? "mail";
     const carrier = fulfillmentType === "pickup" ? "pickup" : payload.carrier ?? "Ethiopian Mail Service";
@@ -258,9 +266,13 @@ export async function createCheckoutIntent(payload: {
           unit_price_usd: line.unitPriceUsd,
           line_total_usd: line.lineTotalUsd,
           measurement_id: line.measurementId,
+          item_type: line.itemType ?? "product",
+          uploaded_design_id: line.uploadedDesignId,
+          item_metadata: line.itemMetadata,
         })),
         totalUsd: numberToMoney(totals.totalUsd),
         shippingCostUsd: numberToMoney(totals.shippingCostUsd),
+        orderType,
         totalEtb,
         etbExchangeRate,
         status: "pending",
@@ -279,6 +291,19 @@ export async function createCheckoutIntent(payload: {
       })
       .returning();
 
+    const uploadedDesignIds = lines
+      .map((line) => line.uploadedDesignId)
+      .filter((id): id is string => Boolean(id));
+    if (uploadedDesignIds.length) {
+      await tx
+        .update(uploadedDesigns)
+        .set({
+          approvedOrderId: order.id,
+          updatedAt: new Date(),
+        })
+        .where(inArray(uploadedDesigns.id, uploadedDesignIds));
+    }
+
     await tx.insert(auditLogs).values({
       action: "checkout_intent_created",
       category: "order",
@@ -289,6 +314,7 @@ export async function createCheckoutIntent(payload: {
       details: `Checkout intent created with ${lines.length} item(s)`,
       metadata: {
         order_number: order.orderNumber,
+        order_type: orderType,
         cart_item_ids: payload.cartItemIds,
         total_usd: totals.totalUsd,
         total_etb: totalEtb,

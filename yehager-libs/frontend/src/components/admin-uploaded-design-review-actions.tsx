@@ -38,10 +38,10 @@ export function AdminUploadedDesignReviewActions({
       }
       const payload = await response.json();
       if (decision === "approve") {
-        const orderId = payload?.data?.order?.id;
-        setMessage(orderId ? `Approved and converted to order ${orderId}.` : "Approved successfully.");
+        const cartItemId = payload?.data?.cartItem?.id;
+        setMessage(cartItemId ? "Approved and added to the customer's cart." : "Approved successfully.");
       } else {
-        setMessage("Rejected successfully. Dummy email placeholder has been recorded.");
+        setMessage("Rejected successfully. Customer email delivery has been queued for manual setup.");
       }
       router.refresh();
     } catch (error) {
@@ -63,7 +63,7 @@ export function AdminUploadedDesignReviewActions({
     <div className="space-y-3 rounded-xl border border-border bg-card p-4">
       <h3 className="text-sm font-semibold">Admin decision</h3>
       <label className="block text-sm">
-        <span className="text-muted-foreground">Quoted price in USD (optional when approving)</span>
+        <span className="text-muted-foreground">Quoted price in USD (required when approving)</span>
         <input
           value={quotedPrice}
           onChange={(e) => setQuotedPrice(e.target.value)}
@@ -88,7 +88,7 @@ export function AdminUploadedDesignReviewActions({
           className="inline-flex items-center gap-2 rounded-md bg-green-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
         >
           {busy === "approve" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-          Approve and create order
+          Approve and add to cart
         </button>
         <button
           type="button"

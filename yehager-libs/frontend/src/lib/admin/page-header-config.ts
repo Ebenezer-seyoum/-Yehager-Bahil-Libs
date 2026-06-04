@@ -15,7 +15,7 @@ export const PAGE_HEADER_CONFIG: Record<
   orders: { theme: "orange", section: "Operations" },
   payments: { theme: "green", section: "Operations" },
   documents: { theme: "orange", section: "Operations" },
-  "uploaded-designs": { theme: "orange", section: "Operations" },
+  "uploaded-designs": { theme: "teal", section: "Catalog" },
   "exchange-rate": { theme: "green", section: "Operations" },
   reports: { theme: "indigo", section: "Reports" },
   "support-inbox": { theme: "slate", section: "System" },

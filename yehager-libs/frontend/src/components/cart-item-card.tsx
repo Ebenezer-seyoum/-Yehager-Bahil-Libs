@@ -7,6 +7,7 @@ type CartItemCardProps = {
     productImage?: string | null;
     priceUsd?: number | null;
     quantity?: number | null;
+    itemType?: string | null;
     eventName?: string | null;
     measurementSnapshot?: {
       chest?: number | string | null;
@@ -24,6 +25,7 @@ const DEFAULT_IMAGE = "https://images.unsplash.com/photo-1594938298603-c8148c4da
 
 export function CartItemCard({ item, removeItem }: CartItemCardProps) {
   const quantity = Number(item.quantity ?? 1);
+  const isCustomDesign = item.itemType === "custom_design" || item.productName.toLowerCase().includes("custom design");
   const measurements = [
     ["Chest", item.measurementSnapshot?.chest],
     ["Waist", item.measurementSnapshot?.waist],
@@ -42,7 +44,14 @@ export function CartItemCard({ item, removeItem }: CartItemCardProps) {
       />
 
       <div className="min-w-0 flex-1">
-        <h3 className="font-heading text-sm font-semibold">{item.productName}</h3>
+        <div className="flex flex-wrap items-center gap-2">
+          <h3 className="font-heading text-sm font-semibold">{item.productName}</h3>
+          {isCustomDesign ? (
+            <span className="rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-primary">
+              Custom Design
+            </span>
+          ) : null}
+        </div>
         <p className="mt-1 font-bold text-primary">${Number(item.priceUsd ?? 0).toFixed(2)}</p>
 
         {item.eventName ? (
@@ -58,7 +67,7 @@ export function CartItemCard({ item, removeItem }: CartItemCardProps) {
             {measurements.map(([label, value], index) => (
               <span key={label}>
                 {index > 0 ? " | " : ""}
-                {label} {value}&quot;
+                {label} {value} cm
               </span>
             ))}
           </p>

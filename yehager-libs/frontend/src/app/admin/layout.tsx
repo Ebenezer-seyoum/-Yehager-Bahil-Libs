@@ -5,6 +5,7 @@ import { apiRequest } from "@/lib/api-client";
 
 type Order = {
   id?: string | null;
+  orderType?: string | null;
   status?: string | null;
   paymentStatus?: string | null;
 };
@@ -15,24 +16,28 @@ type Alert = {
 
 async function getAdminNotificationCounts() {
   try {
-    const [ordersResponse, alertsResponse, supportResponse] = await Promise.all([
+    const [ordersResponse, alertsResponse, supportResponse, customDesignsResponse] = await Promise.all([
       apiRequest<{ data?: Order[] }>("/api/v1/orders?limit=200"),
       apiRequest<{ data?: Alert[] }>("/api/v1/admin/alerts?limit=200"),
       apiRequest<{ count?: number }>("/api/v1/admin/support/unread-count").catch(() => ({ count: 0 })),
+      apiRequest<{ counts?: Record<string, number> }>("/api/v1/uploaded-designs/admin?limit=1").catch(() => ({ counts: {} as Record<string, number> })),
     ]);
     const orders = Array.isArray(ordersResponse?.data) ? ordersResponse.data : [];
     const alerts = Array.isArray(alertsResponse?.data) ? alertsResponse.data : [];
 
     const orderNotifications = orders.filter((order) => ["pending", "processing"].includes(order.status ?? "pending"));
+    const groupOrderNotifications = orderNotifications.filter((order) => order.orderType === "group_order");
     return {
       orders: orderNotifications.length,
       orderIds: orderNotifications.map((order) => order.id).filter(Boolean),
+      groupOrders: groupOrderNotifications.length,
       payments: orders.filter((order) => order.paymentStatus === "awaiting_verification").length,
       alerts: alerts.filter((alert) => !alert.isResolved).length,
       support: supportResponse?.count ?? 0,
+      customDesigns: Number((customDesignsResponse?.counts ?? {}).submitted ?? 0) + Number((customDesignsResponse?.counts ?? {}).in_review ?? 0),
     };
   } catch {
-    return { orders: 0, orderIds: [], payments: 0, alerts: 0, support: 0 };
+    return { orders: 0, orderIds: [], groupOrders: 0, payments: 0, alerts: 0, support: 0, customDesigns: 0 };
   }
 }
 

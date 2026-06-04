@@ -17,6 +17,9 @@ export async function createCartItem(payload: {
   productImage?: string;
   priceUsd: string;
   quantity: number;
+  itemType?: string;
+  uploadedDesignId?: string;
+  itemMetadata?: Record<string, unknown>;
   measurementId?: string;
   measurementSnapshot?: Record<string, unknown>;
   eventId?: string;
@@ -32,6 +35,9 @@ export async function createCartItem(payload: {
       productImage: payload.productImage,
       priceUsd: payload.priceUsd,
       quantity: payload.quantity,
+      itemType: payload.itemType,
+      uploadedDesignId: payload.uploadedDesignId,
+      itemMetadata: payload.itemMetadata,
       measurementId: payload.measurementId,
       measurementSnapshot: payload.measurementSnapshot,
       eventId: payload.eventId,

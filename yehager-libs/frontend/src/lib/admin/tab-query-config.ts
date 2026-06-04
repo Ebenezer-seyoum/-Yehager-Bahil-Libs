@@ -187,6 +187,12 @@ function filterAudit(rows: Row[], tabId: string): Row[] {
 
 function filterUploadedDesigns(rows: Row[], tabId: string): Row[] {
   if (tabId === "all") return rows;
+  if (tabId === "pending_review") {
+    return rows.filter((row) => ["submitted", "in_review"].includes(norm(row.status)));
+  }
+  if (tabId === "completed_request") {
+    return rows.filter((row) => ["completed_request", "approved"].includes(norm(row.status)));
+  }
   return rows.filter((row) => norm(row.status) === norm(tabId));
 }
 

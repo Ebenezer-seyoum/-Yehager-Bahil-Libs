@@ -1,8 +1,8 @@
 import Stripe from "stripe";
 import { HTTPException } from "hono/http-exception";
 import { db } from "../lib/db/drizzle.js";
-import { and, eq } from "drizzle-orm";
-import { auditLogs, eventParticipants, systemAlerts } from "../lib/db/schema.js";
+import { and, eq, inArray } from "drizzle-orm";
+import { auditLogs, eventParticipants, systemAlerts, uploadedDesigns } from "../lib/db/schema.js";
 import { env } from "../config/env.js";
 import { getOrderById, getOrderByIdForUser, updateOrderPaymentState } from "../repositories/orders-repository.js";
 import {
@@ -20,6 +20,7 @@ type OrderItem = {
   quantity?: number;
   unit_price_usd?: number;
   line_total_usd?: number;
+  uploaded_design_id?: string;
 };
 
 function toNumber(value: unknown, fallback = 0) {
@@ -174,6 +175,22 @@ export async function processStripeWebhook(payload: { body: string; signature?: 
               .filter((id): id is string => typeof id === "string")
           : [];
         await deleteCartItemsByIdsForUser({ ids: cartItemIds, userEmail: order.userEmail });
+
+        const uploadedDesignIds = Array.isArray(order.items)
+          ? order.items
+              .map((item) => (typeof item === "object" && item ? (item as OrderItem).uploaded_design_id : undefined))
+              .filter((id): id is string => typeof id === "string")
+          : [];
+        if (uploadedDesignIds.length) {
+          await db
+            .update(uploadedDesigns)
+            .set({
+              status: "completed_request",
+              approvedOrderId: order.id,
+              updatedAt: new Date(),
+            })
+            .where(inArray(uploadedDesigns.id, uploadedDesignIds));
+        }
 
         if (order.eventId) {
           await db

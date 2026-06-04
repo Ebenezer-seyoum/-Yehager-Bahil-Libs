@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { CheckCircle2, Eye, RefreshCw, XCircle } from "lucide-react";
 
 type UploadedDesignRow = {
   id: string;
@@ -9,79 +10,106 @@ type UploadedDesignRow = {
   customerName?: string | null;
   userEmail?: string | null;
   status?: string | null;
+  fabricType?: string | null;
   createdAt?: string | null;
-  approvedOrderId?: string | null;
 };
 
+function normalizedStatus(status?: string | null) {
+  const key = String(status ?? "submitted").toLowerCase();
+  if (key === "submitted" || key === "in_review") return "pending review";
+  if (key === "awaiting_payment") return "awaiting payment";
+  if (key === "completed_request") return "completed request";
+  if (key === "approved") return "completed request";
+  if (key === "rejected") return "declined";
+  return key.replaceAll("_", " ");
+}
+
 function statusClass(status?: string | null) {
-  const key = String(status ?? "").toLowerCase();
-  if (key === "approved") return "bg-green-500/15 text-green-600 border-green-500/30";
-  if (key === "rejected") return "bg-red-500/15 text-red-600 border-red-500/30";
-  if (key === "in_review") return "bg-blue-500/15 text-blue-600 border-blue-500/30";
-  return "bg-amber-500/15 text-amber-600 border-amber-500/30";
+  const key = normalizedStatus(status);
+  if (key === "completed request") return "bg-green-500/15 text-green-400 border-green-500/30";
+  if (key === "awaiting payment") return "bg-blue-500/15 text-blue-300 border-blue-500/30";
+  if (key === "declined") return "bg-red-500/15 text-red-300 border-red-500/30";
+  return "bg-yellow-100 text-yellow-800 border-yellow-100";
 }
 
 export function AdminUploadedDesignsTable({ rows, search }: { rows: UploadedDesignRow[]; search: string }) {
   const term = search.trim().toLowerCase();
   const filtered = term
     ? rows.filter((row) =>
-        [row.submissionNumber, row.designTitle, row.customerName, row.userEmail, row.status]
-          .map((v) => String(v ?? "").toLowerCase())
+        [row.submissionNumber, row.designTitle, row.customerName, row.userEmail, row.status, row.fabricType]
+          .map((value) => String(value ?? "").toLowerCase())
           .some((value) => value.includes(term)),
       )
     : rows;
 
+  const pendingCount = rows.filter((row) => ["submitted", "in_review"].includes(String(row.status ?? "submitted"))).length;
+  const awaitingCount = rows.filter((row) => row.status === "awaiting_payment").length;
+  const completedCount = rows.filter((row) => ["approved", "completed_request"].includes(String(row.status))).length;
+  const declinedCount = rows.filter((row) => row.status === "rejected").length;
+
+  const chips = [
+    ["Pending Review", pendingCount, true],
+    ["Awaiting Payment", awaitingCount, false],
+    ["Completed Requests", completedCount, false],
+    ["Declined", declinedCount, false],
+    ["All", rows.length, false],
+  ] as const;
+
   return (
-    <div className="overflow-hidden rounded-2xl border border-border bg-card">
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[900px] text-sm">
-          <thead className="bg-secondary/50">
-            <tr className="text-left text-xs uppercase tracking-wide text-muted-foreground">
-              <th className="px-4 py-3">Submission</th>
-              <th className="px-4 py-3">Design</th>
-              <th className="px-4 py-3">Customer</th>
-              <th className="px-4 py-3">Status</th>
-              <th className="px-4 py-3">Created</th>
-              <th className="px-4 py-3">Order</th>
-              <th className="px-4 py-3">Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((row) => (
-              <tr key={row.id} className="border-t border-border/70">
-                <td className="px-4 py-3 font-mono text-xs">{row.submissionNumber ?? "—"}</td>
-                <td className="px-4 py-3 font-medium">{row.designTitle ?? "Untitled design"}</td>
-                <td className="px-4 py-3">
-                  <div>{row.customerName ?? "—"}</div>
-                  <div className="text-xs text-muted-foreground">{row.userEmail ?? "—"}</div>
-                </td>
-                <td className="px-4 py-3">
-                  <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${statusClass(row.status)}`}>
-                    {String(row.status ?? "submitted")}
-                  </span>
-                </td>
-                <td className="px-4 py-3 text-muted-foreground">
-                  {row.createdAt ? new Date(row.createdAt).toLocaleString() : "—"}
-                </td>
-                <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
-                  {row.approvedOrderId ?? "—"}
-                </td>
-                <td className="px-4 py-3">
-                  <Link href={`/admin/uploaded-designs/${row.id}`} className="rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground">
-                    View details
-                  </Link>
-                </td>
-              </tr>
-            ))}
-            {filtered.length === 0 ? (
-              <tr>
-                <td className="px-4 py-8 text-center text-sm text-muted-foreground" colSpan={7}>
-                  No uploaded designs found for this filter.
-                </td>
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-center gap-2">
+        {chips.map(([label, count, active]) => (
+          <span
+            key={label}
+            className={`rounded-full border px-4 py-2 text-sm ${
+              active ? "border-primary bg-primary text-black" : "border-border bg-background text-muted-foreground"
+            }`}
+          >
+            {label}{count ? ` (${count})` : ""}
+          </span>
+        ))}
+        <button type="button" className="ml-auto inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-xs text-muted-foreground hover:text-foreground">
+          <RefreshCw className="h-3.5 w-3.5" />
+          Refresh
+        </button>
+      </div>
+
+      <div className="space-y-3">
+        {filtered.map((row) => (
+          <div key={row.id} className="flex flex-col gap-4 rounded-xl border border-border bg-card p-4 lg:flex-row lg:items-center">
+            <div className="min-w-0 flex-1">
+              <p className="font-mono text-xs font-black text-primary">#{row.submissionNumber ?? "YBL-CD"}</p>
+              <p className="mt-1 truncate text-base font-black text-foreground">{row.customerName ?? row.userEmail ?? "Customer"}</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {row.designTitle ?? "Custom Design"} · {row.fabricType ?? "Fabric pending"}
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3">
+              <span className={`rounded-full border px-3 py-1 text-xs font-bold ${statusClass(row.status)}`}>
+                {normalizedStatus(row.status)}
+              </span>
+              <Link href={`/admin/uploaded-designs/${row.id}`} className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
+                <Eye className="h-4 w-4" />
+                Details
+              </Link>
+              <Link href={`/admin/uploaded-designs/${row.id}`} className="inline-flex h-9 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-medium text-black hover:bg-primary/90">
+                <CheckCircle2 className="h-4 w-4" />
+                Approve & Quote
+              </Link>
+              <Link href={`/admin/uploaded-designs/${row.id}`} className="inline-flex h-9 items-center gap-2 rounded-lg bg-red-500 px-4 text-sm font-bold text-white hover:bg-red-600">
+                <XCircle className="h-4 w-4" />
+                Decline
+              </Link>
+            </div>
+          </div>
+        ))}
+
+        {filtered.length === 0 ? (
+          <div className="rounded-xl border border-border bg-card p-10 text-center text-sm text-muted-foreground">
+            No custom designs found for this filter.
+          </div>
+        ) : null}
       </div>
     </div>
   );

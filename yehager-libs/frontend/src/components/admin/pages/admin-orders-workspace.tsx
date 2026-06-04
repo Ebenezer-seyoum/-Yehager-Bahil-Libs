@@ -7,9 +7,11 @@ import type { AdminWorkspaceData } from "@/lib/admin/types";
 export function AdminOrdersWorkspace({
   data,
   initialSelectedOrderId,
+  initialOrderType,
 }: {
   data: AdminWorkspaceData;
   initialSelectedOrderId?: string | null;
+  initialOrderType?: string | null;
 }) {
   return (
     <AdminWorkspace
@@ -23,6 +25,7 @@ export function AdminOrdersWorkspace({
         <AdminOrdersTable
           initialOrders={(filteredData.orders ?? []) as Parameters<typeof AdminOrdersTable>[0]["initialOrders"]}
           initialSelectedOrderId={initialSelectedOrderId}
+          initialOrderType={initialOrderType}
           externalSearch={search}
           hideToolbar
         />
