@@ -294,3 +294,14 @@ export async function getUploadedDesignSummaryCounts() {
     return acc;
   }, {});
 }
+
+export async function getUnreadUploadedDesignReviewCount() {
+  const [row] = await db
+    .select({
+      count: sql<number>`count(*)::int`,
+    })
+    .from(systemAlerts)
+    .where(and(eq(systemAlerts.type, "design_review"), eq(systemAlerts.isResolved, false)));
+
+  return row?.count ?? 0;
+}

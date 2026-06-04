@@ -10,6 +10,7 @@ import {
   getUploadedDesignForAdmin,
   getUploadedDesignForCurrentUser,
   getUploadedDesignSummaryCounts,
+  getUnreadUploadedDesignReviewCount,
   listUploadedDesignsForAdmin,
   listUploadedDesignsForCurrentUser,
   reviewUploadedDesign,
@@ -95,7 +96,8 @@ uploadedDesignsRouter.get(
     const { status, limit } = c.req.valid("query");
     const data = await listUploadedDesignsForAdmin({ status, limit: limit ?? 100 });
     const counts = await getUploadedDesignSummaryCounts();
-    return c.json({ data, counts });
+    const unreadCount = await getUnreadUploadedDesignReviewCount();
+    return c.json({ data, counts, unreadCount });
   },
 );
 

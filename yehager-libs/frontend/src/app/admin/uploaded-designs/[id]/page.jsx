@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/auth-options";
 import { apiRequest } from "@/lib/api-client";
 import { AdminUploadedDesignReviewActions } from "@/components/admin-uploaded-design-review-actions";
+import { AdminUploadedDesignViewedRefresh } from "@/components/admin-uploaded-design-viewed-refresh";
 
 export default async function AdminUploadedDesignDetailPage({ params }) {
   const session = await getServerSession(authOptions);
@@ -33,6 +34,7 @@ export default async function AdminUploadedDesignDetailPage({ params }) {
 
   return (
     <div className="mx-auto max-w-6xl space-y-5 p-6">
+      <AdminUploadedDesignViewedRefresh />
       <div className="flex items-center justify-between">
         <div>
           <p className="text-xs uppercase tracking-wide text-muted-foreground">{design.submissionNumber}</p>
