@@ -9,15 +9,17 @@ export function AdminRolesWorkspace({
   users,
   roles,
   permissions,
+  audit,
 }: {
   data: AdminWorkspaceData;
-  users: Parameters<typeof ReferenceRolePermissionPanel>[0]["users"];
-  roles: Parameters<typeof ReferenceRolePermissionPanel>[0]["roles"];
-  permissions: Parameters<typeof ReferenceRolePermissionPanel>[0]["permissions"];
+  users: Omit<Parameters<typeof ReferenceRolePermissionPanel>[0], "activeTab">["users"];
+  roles: Omit<Parameters<typeof ReferenceRolePermissionPanel>[0], "activeTab">["roles"];
+  permissions: Omit<Parameters<typeof ReferenceRolePermissionPanel>[0], "activeTab">["permissions"];
+  audit: Omit<Parameters<typeof ReferenceRolePermissionPanel>[0], "activeTab">["audit"];
 }) {
   return (
     <AdminWorkspace pageId="roles" initialData={data} hideFilters>
-      {() => <ReferenceRolePermissionPanel users={users} roles={roles} permissions={permissions} />}
+      {({ activeTab }) => <ReferenceRolePermissionPanel users={users} roles={roles} permissions={permissions} audit={audit} activeTab={activeTab} />}
     </AdminWorkspace>
   );
 }

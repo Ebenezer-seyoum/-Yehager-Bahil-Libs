@@ -4,6 +4,7 @@ export const PERMISSIONS = {
   EMPLOYEES_CREATE: "employees.create",
   EMPLOYEES_EDIT: "employees.edit",
   EMPLOYEES_DELETE: "employees.delete",
+  EMPLOYEES_ASSIGN: "roles.assign",
   ROLES_VIEW: "roles.view",
   ROLES_CREATE: "roles.create",
   ROLES_EDIT: "roles.edit",

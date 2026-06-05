@@ -53,6 +53,29 @@ describe("checkout utils", () => {
     expect(out.etbExchangeRate).toBe("150.2500");
   });
 
+  it("preserves custom-design identity and quote metadata through checkout lines", () => {
+    const [line] = buildCheckoutLines([
+      {
+        cartItemId: "custom-cart-item",
+        productId: null,
+        productName: "Custom Design - Habesha Kemis",
+        quantity: 1,
+        trustedUnitPriceUsd: "180.00",
+        itemType: "custom_design",
+        uploadedDesignId: "design-id",
+        itemMetadata: {
+          submission_number: "YBL-CD-1001",
+          estimated_delivery_label: "30-40 days",
+        },
+      },
+    ]);
+
+    expect(line?.itemType).toBe("custom_design");
+    expect(line?.uploadedDesignId).toBe("design-id");
+    expect(line?.itemMetadata?.estimated_delivery_label).toBe("30-40 days");
+    expect(line?.lineTotalUsd).toBe(180);
+  });
+
   it("computes legacy EMS shipping by package size", () => {
     expect(computeEmsShipping(0)).toBe(0);
     expect(computeEmsShipping(1)).toBe(45);

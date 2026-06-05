@@ -12,6 +12,7 @@ type CartItem = {
   priceUsd?: number | null;
   quantity?: number | null;
   itemType?: string | null;
+  itemMetadata?: Record<string, unknown> | null;
   eventName?: string | null;
     measurementSnapshot?: {
       chest?: number | string | null;
@@ -30,16 +31,6 @@ export default async function CartPage({
 }) {
   const query = await searchParams;
   const authHint = query?.auth === "required";
-
-  async function updateItemQuantity(formData: FormData) {
-    "use server";
-    await ensureBackendUserSynced();
-    const itemId = String(formData.get("itemId") ?? "");
-    const quantity = Number(formData.get("quantity") ?? 1);
-    if (!itemId || !Number.isFinite(quantity) || quantity <= 0) return;
-    await apiRequest(`/api/v1/cart/${itemId}`, { method: "PATCH", body: { quantity } });
-    revalidatePath("/cart");
-  }
 
   async function removeItem(formData: FormData) {
     "use server";
@@ -93,24 +84,24 @@ export default async function CartPage({
   const renderItem = (item: CartItem) => <CartItemCard key={item.id} item={item} removeItem={removeItem} />;
 
   return (
-    <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
-      <h1 className="font-heading text-3xl font-bold mb-8">Your Cart</h1>
+    <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6 sm:py-16">
+      <h1 className="mb-10 font-heading text-5xl font-bold">Your Cart</h1>
 
       <div className="space-y-4">
         <div className="space-y-3">{items.map(renderItem)}</div>
 
-        <aside className="mt-8 rounded-2xl border border-border bg-card p-6">
+        <aside className="mt-12 rounded-3xl border border-border bg-card p-8">
           <div className="mb-2 flex items-center justify-between">
             <div>
               <span className="text-muted-foreground">
                 Subtotal ({itemCount} item{itemCount === 1 ? "" : "s"})
               </span>
             </div>
-            <span className="text-2xl font-bold">${total.toFixed(2)}</span>
+            <span className="text-4xl font-bold">${total.toFixed(2)}</span>
           </div>
           <p className="text-xs text-muted-foreground mb-4">Shipping calculated at checkout</p>
 
-          <Link href="/checkout" className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90">
+          <Link href="/checkout" className="inline-flex h-14 w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 text-lg font-semibold text-black hover:bg-primary/90">
             Proceed to Checkout <ArrowRight className="h-5 w-5" />
           </Link>
         </aside>

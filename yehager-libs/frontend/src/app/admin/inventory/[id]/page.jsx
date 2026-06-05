@@ -11,7 +11,7 @@ function productId(product) {
 export default async function AdminProductDetailPage({ params }) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) redirect("/signin?callbackUrl=/admin/inventory");
-  if (session.user.role !== "admin") redirect("/");
+  if (session.user.role !== "admin" && session.user.role !== "employee") redirect("/");
 
   const { id } = await params;
   let product = null;

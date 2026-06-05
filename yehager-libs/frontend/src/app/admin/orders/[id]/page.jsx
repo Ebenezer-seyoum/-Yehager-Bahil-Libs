@@ -76,7 +76,7 @@ function InfoCard({ icon: Icon, label, value, helper }) {
 export default async function AdminOrderDetailPage({ params, searchParams }) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) redirect("/signin?callbackUrl=/admin");
-  if (session.user.role !== "admin") redirect("/");
+  if (session.user.role !== "admin" && session.user.role !== "employee") redirect("/");
 
   const { id } = await params;
   const query = (await searchParams) ?? {};

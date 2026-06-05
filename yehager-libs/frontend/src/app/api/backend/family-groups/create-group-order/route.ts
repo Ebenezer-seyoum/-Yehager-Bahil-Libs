@@ -25,35 +25,26 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Please enter a group name." }, { status: 400 });
     }
 
-    let event: EventRecord | null = null;
-
     if (eventCode) {
       const eventsRes = await backendPublicRequest("/api/v1/events?limit=200");
       const events = Array.isArray(eventsRes?.data) ? (eventsRes.data as EventRecord[]) : [];
-      event = events.find((item) => String(item.eventCode ?? "").toUpperCase() === eventCode) ?? null;
+      const event = events.find((item) => String(item.eventCode ?? "").toUpperCase() === eventCode) ?? null;
 
       if (!event) {
         return NextResponse.json({ error: "Event code not found. Please check and try again." }, { status: 404 });
       }
 
       await apiRequest(`/api/v1/events/${event.id}/join`, { method: "POST" }).catch(() => null);
-    } else {
-      const eventRes = await apiRequest<{ data: EventRecord }>("/api/v1/events", {
+      const groupRes = await apiRequest<{ data: FamilyGroupRecord }>("/api/v1/family-groups", {
         method: "POST",
-        body: {
-          name: groupName,
-          message: "Family group order created from Our Home Cart.",
-        },
+        body: { groupName, eventId: event.id, groupType: "event_group" },
       });
-      event = eventRes.data;
+      return NextResponse.json({ data: { id: groupRes.data.id } });
     }
 
     const groupRes = await apiRequest<{ data: FamilyGroupRecord }>("/api/v1/family-groups", {
       method: "POST",
-      body: {
-        groupName,
-        eventId: event.id,
-      },
+      body: { groupName, groupType: "family_group" },
     });
 
     return NextResponse.json({

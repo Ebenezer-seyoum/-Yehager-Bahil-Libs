@@ -76,23 +76,19 @@ export default async function MyAccountPage() {
   let profile = null;
   let measurements = [];
   let orders = [];
-  let events = [];
   try {
-    const [userRes, measurementRes, ordersRes, eventsRes] = await Promise.all([
+    const [userRes, measurementRes, ordersRes] = await Promise.all([
       apiRequest("/api/v1/users/me"),
       apiRequest("/api/v1/measurements"),
       apiRequest("/api/v1/orders/me?limit=50"),
-      apiRequest("/api/v1/events/mine?limit=50"),
     ]);
     profile = userRes?.data ?? null;
     measurements = Array.isArray(measurementRes?.data) ? measurementRes.data : [];
     orders = Array.isArray(ordersRes?.data) ? ordersRes.data : [];
-    events = Array.isArray(eventsRes?.data) ? eventsRes.data : [];
   } catch {
     profile = null;
     measurements = [];
     orders = [];
-    events = [];
   }
 
   return (
@@ -104,7 +100,6 @@ export default async function MyAccountPage() {
         role: session?.user?.role ?? profile?.role ?? "customer",
       }}
       orders={orders}
-      events={events}
       measurements={measurements}
       createMeasurement={createMeasurement}
       updateMeasurement={updateMeasurement}

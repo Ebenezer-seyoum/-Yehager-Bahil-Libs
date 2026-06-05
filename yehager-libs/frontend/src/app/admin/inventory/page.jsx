@@ -7,7 +7,7 @@ import { AdminProductsWorkspace } from "@/components/admin/pages/admin-products-
 export default async function AdminInventoryPage() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) redirect("/signin?callbackUrl=/admin/inventory");
-  if (session.user.role !== "admin") redirect("/");
+  if (session.user.role !== "admin" && session.user.role !== "employee") redirect("/");
 
   let products = [];
   try {

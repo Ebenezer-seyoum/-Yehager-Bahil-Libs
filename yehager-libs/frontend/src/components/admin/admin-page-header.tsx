@@ -9,8 +9,6 @@ import type { DateRangeKey } from "@/lib/reports/utils";
 import { cn } from "@/lib/utils";
 import { ExportButton } from "./export-button";
 
-const DATE_RANGES: DateRangeKey[] = ["Today", "Yesterday", "Last 7 Days", "Last 30 Days", "This Month", "Last Month", "This Year"];
-
 export function AdminPageHeader({
   pageId,
   title,
@@ -19,9 +17,6 @@ export function AdminPageHeader({
   isRefreshing,
   showExport,
   onExport,
-  dateRange,
-  onDateRangeChange,
-  showDateRange,
   primaryAction,
   notice,
 }: {
@@ -81,20 +76,6 @@ export function AdminPageHeader({
         </div>
 
         <div className="flex flex-wrap items-center gap-2 lg:justify-end">
-          {showDateRange && onDateRangeChange ? (
-            <select
-              value={dateRange ?? "Last 30 Days"}
-              onChange={(event) => onDateRangeChange(event.target.value as DateRangeKey)}
-              aria-label="Date range"
-              className="h-9 rounded-lg border border-border bg-white px-3 text-sm shadow-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
-            >
-              {DATE_RANGES.map((range) => (
-                <option key={range} value={range}>
-                  {range}
-                </option>
-              ))}
-            </select>
-          ) : null}
           {primaryAction}
           {onRefresh ? (
             <button

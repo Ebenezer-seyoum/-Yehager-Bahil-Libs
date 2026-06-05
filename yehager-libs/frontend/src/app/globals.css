@@ -321,13 +321,22 @@
   }
 
   .dashboard-swal-title,
-  .payment-swal-title {
+  .payment-swal-title,
+  .dashboard-swal-popup .swal2-title,
+  .payment-swal-popup .swal2-title {
+    display: block !important;
+    width: auto !important;
+    background: transparent !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
     color: #171717 !important;
     font-size: 1.5rem !important;
     font-weight: 600 !important;
     line-height: 2rem !important;
     padding: 0 !important;
     margin: 0 !important;
+    text-align: center !important;
   }
 
   .dashboard-swal-text,

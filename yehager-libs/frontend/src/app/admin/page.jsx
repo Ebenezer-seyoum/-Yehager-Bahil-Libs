@@ -3,11 +3,15 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/auth-options";
 import { apiRequest } from "@/lib/api-client";
 import { AdminDashboardWorkspace } from "@/components/admin/pages/admin-dashboard-workspace";
+import { can } from "@/lib/permissions";
 
 export default async function AdminPage() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) redirect("/signin?callbackUrl=/admin");
-  if (session.user.role !== "admin") redirect("/");
+  if (session.user.role !== "admin" && session.user.role !== "employee") redirect("/");
+  if (session.user.role === "employee" && !can(session.user.permissions, "dashboard.view")) {
+    return <div />;
+  }
 
   let orders = [];
   let alerts = [];

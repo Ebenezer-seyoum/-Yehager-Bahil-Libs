@@ -47,6 +47,25 @@ export async function listPermissions() {
   });
 }
 
+export async function updatePermission(permissionId: string, payload: { key: string; resource: string; action: string; description?: string | null }) {
+  const [updated] = await db
+    .update(permissions)
+    .set({
+      key: payload.key,
+      resource: payload.resource,
+      action: payload.action,
+      description: payload.description ?? null,
+    })
+    .where(eq(permissions.id, permissionId))
+    .returning();
+  return updated ?? null;
+}
+
+export async function deletePermission(permissionId: string) {
+  const [deleted] = await db.delete(permissions).where(eq(permissions.id, permissionId)).returning();
+  return deleted ?? null;
+}
+
 export async function replaceUserPermissions(userId: string, permissionKeys: string[]) {
   const permissionRows =
     permissionKeys.length === 0

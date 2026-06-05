@@ -30,7 +30,6 @@ export function dashboardSwalOptions(options: SweetAlertOptions = {}): SweetAler
     customClass: {
       popup: "dashboard-swal-popup",
       icon: "dashboard-swal-icon",
-      title: "dashboard-swal-title",
       htmlContainer: "dashboard-swal-text",
       actions: "dashboard-swal-actions",
       confirmButton: "dashboard-swal-confirm dashboard-swal-confirm-success",
@@ -74,7 +73,6 @@ export async function dashboardConfirm({
       customClass: {
         popup: isPayment ? "payment-swal-popup" : "dashboard-swal-popup",
         icon: isPayment ? "dashboard-swal-icon dashboard-swal-icon-warning" : iconClass(icon),
-        title: isPayment ? "payment-swal-title" : "dashboard-swal-title",
         htmlContainer: isPayment ? "payment-swal-text" : "dashboard-swal-text",
         actions: isPayment ? "payment-swal-popup swal2-actions" : "dashboard-swal-actions",
         confirmButton: confirmClass(tone),
@@ -101,7 +99,6 @@ export function dashboardSuccess(
       customClass: {
         popup: "dashboard-swal-popup",
         icon: "dashboard-swal-icon dashboard-swal-icon-success",
-        title: "dashboard-swal-title",
         htmlContainer: "dashboard-swal-text",
         actions: "dashboard-swal-actions",
         confirmButton: "dashboard-swal-confirm dashboard-swal-confirm-success",
@@ -122,7 +119,6 @@ export function dashboardError(title: string, text?: string, options?: { target?
       customClass: {
         popup: "dashboard-swal-popup",
         icon: "dashboard-swal-icon dashboard-swal-icon-danger",
-        title: "dashboard-swal-title",
         htmlContainer: "dashboard-swal-text",
         actions: "dashboard-swal-actions",
         confirmButton: "dashboard-swal-confirm dashboard-swal-confirm-danger",
@@ -147,7 +143,6 @@ export function dashboardLoading(title: string, text?: string, options?: { targe
       },
       customClass: {
         popup: "dashboard-swal-popup",
-        title: "dashboard-swal-title",
         htmlContainer: "dashboard-swal-text",
       },
     }),

@@ -166,7 +166,7 @@ function SignInForm() {
       });
 
       const session = await getSession();
-      const accountStatus = String((session?.user as any)?.accountStatus ?? "active").toLowerCase();
+      const accountStatus = String(session?.user?.accountStatus ?? "active").toLowerCase();
       if (accountStatus === "inactive" || accountStatus === "blocked" || accountStatus === "pending") {
         await signOut({ redirect: false });
         setFeedback({
@@ -249,6 +249,8 @@ function SignInForm() {
               <span className="h-px flex-1 bg-[#dce5f0]" />
             </div>
 
+            <FeedbackBanner feedback={feedback} />
+
             <form onSubmit={onSubmit} noValidate className="mt-8">
               <label className="block text-center">
                 <span className="mb-3 block text-base font-medium text-[#34435c]">Email</span>
@@ -279,8 +281,6 @@ function SignInForm() {
                   />
                 </span>
               </label>
-
-              <FeedbackBanner feedback={feedback} />
 
               <button
                 type="submit"

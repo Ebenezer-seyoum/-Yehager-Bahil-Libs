@@ -7,7 +7,7 @@ import { AdminPaymentsWorkspace } from "@/components/admin/pages/admin-payments-
 export default async function AdminPaymentsPage() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) redirect("/signin?callbackUrl=/admin/payments");
-  if (session.user.role !== "admin") redirect("/");
+  if (session.user.role !== "admin" && session.user.role !== "employee") redirect("/");
 
   let orders = [];
   let alerts = [];

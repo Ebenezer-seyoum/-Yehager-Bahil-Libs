@@ -117,6 +117,26 @@ export async function updateOrderAdminState(payload: {
     .where(eq(orders.id, payload.orderId))
     .returning();
 
+  if (nextPayment === "paid" && order.paymentStatus !== "paid" && Array.isArray(order.items)) {
+    const uploadedDesignIds = order.items
+      .map((item) =>
+        typeof item === "object" && item
+          ? (item as Record<string, unknown>).uploaded_design_id
+          : undefined,
+      )
+      .filter((id): id is string => typeof id === "string");
+    if (uploadedDesignIds.length) {
+      await db
+        .update(uploadedDesigns)
+        .set({
+          status: "completed_request",
+          approvedOrderId: order.id,
+          updatedAt: new Date(),
+        })
+        .where(inArray(uploadedDesigns.id, uploadedDesignIds));
+    }
+  }
+
   await db.insert(auditLogs).values({
     action: "order_admin_state_updated",
     category: "order",

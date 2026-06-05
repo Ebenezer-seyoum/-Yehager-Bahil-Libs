@@ -167,6 +167,8 @@ export default function RegisterPage() {
               Create your account
             </h1>
 
+            <FeedbackBanner feedback={feedback} />
+
             <form onSubmit={onSubmit} noValidate className="mt-8">
               <label className="block text-center">
                 <span className="mb-3 block text-base font-medium text-[#34435c]">Email</span>
@@ -214,8 +216,6 @@ export default function RegisterPage() {
                   />
                 </span>
               </label>
-
-              <FeedbackBanner feedback={feedback} />
 
               <button
                 type="submit"

@@ -193,9 +193,12 @@ export function AdminUsersDirectory({
       </section>
 
       <Dialog open={detailOpen} onOpenChange={(next) => { if (!next) { setDetailPayload(null); setDetailError(null); setDetailEmployeeId(null); } setDetailOpen(next); }}>
-        <DialogContent className="max-w-5xl">
-          <DialogTitle className="sr-only">Employee details</DialogTitle>
-          <div className="max-h-[78vh] overflow-y-auto pr-1">
+        <DialogContent className="max-w-5xl overflow-hidden p-0">
+          <div className="bg-blue-950 px-6 py-4 pr-16 text-white">
+            <DialogTitle className="text-lg font-bold text-white">Employee Detail</DialogTitle>
+            <p className="mt-1 text-sm text-blue-100">View profile, assigned access, contact information, and employee activity.</p>
+          </div>
+          <div className="max-h-[78vh] overflow-y-auto bg-slate-50 p-5">
             {detailError ? (
               <div className="rounded-2xl border border-rose-200 bg-rose-50 p-6 text-sm text-rose-900">
                 {detailError}

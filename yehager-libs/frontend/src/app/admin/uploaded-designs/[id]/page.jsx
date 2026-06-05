@@ -9,7 +9,7 @@ import { AdminUploadedDesignViewedRefresh } from "@/components/admin-uploaded-de
 export default async function AdminUploadedDesignDetailPage({ params }) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) redirect("/signin?callbackUrl=/admin/uploaded-designs");
-  if (session.user.role !== "admin") redirect("/");
+  if (session.user.role !== "admin" && session.user.role !== "employee") redirect("/");
 
   const { id } = await params;
   let design = null;
@@ -66,6 +66,7 @@ export default async function AdminUploadedDesignDetailPage({ params }) {
               <Field label="Color Preference" value={design.colorPreference} />
               <Field label="Status" value={design.status} />
               <Field label="Quoted Price" value={design.quotedPriceUsd ? `$${Number(design.quotedPriceUsd).toFixed(2)}` : "—"} />
+              <Field label="Estimated Delivery" value={design.estimatedDeliveryLabel} />
               <Field label="Customer" value={design.customerName} />
               <Field label="Email" value={design.userEmail} />
               <Field label="Cart Item" value={design.approvedCartItemId} />

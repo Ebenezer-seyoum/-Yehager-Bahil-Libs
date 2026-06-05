@@ -3,7 +3,7 @@
 import { Check, Copy, Mail, MessageCircle, Send, Share2, X } from "lucide-react";
 import { useState } from "react";
 
-export function ShareLinks({ url, title }: { url: string; title: string }) {
+export function ShareLinks({ url, title, inline = false }: { url: string; title: string; inline?: boolean }) {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const encodedUrl = encodeURIComponent(url);
@@ -26,6 +26,25 @@ export function ShareLinks({ url, title }: { url: string; title: string }) {
     await navigator.clipboard.writeText(url);
     setCopied(true);
     setTimeout(() => setCopied(false), 1800);
+  }
+
+  if (inline) {
+    return (
+      <div>
+        <div className="mb-5 flex items-center gap-3 rounded-xl bg-secondary px-4 py-4">
+          <span className="min-w-0 flex-1 truncate font-mono text-sm text-muted-foreground">{url}</span>
+          <button type="button" onClick={() => void copy()} className="rounded-lg p-1.5 hover:bg-border" aria-label="Copy share link">
+            {copied ? <Check className="h-5 w-5 text-green-500" /> : <Copy className="h-5 w-5" />}
+          </button>
+        </div>
+        <div className="flex flex-wrap gap-3">
+          {links.map((link) => {
+            const Icon = link.icon;
+            return <a key={link.label} href={link.href} target="_blank" rel="noreferrer" className={`inline-flex h-11 items-center gap-2 rounded-xl px-4 text-sm font-bold hover:opacity-90 ${link.className}`}><Icon className="h-4 w-4" />{link.label}</a>;
+          })}
+        </div>
+      </div>
+    );
   }
 
   return (

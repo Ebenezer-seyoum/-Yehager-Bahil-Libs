@@ -7,7 +7,7 @@ import { AdminCustomersWorkspace } from "@/components/admin/pages/admin-customer
 export default async function AdminCustomersPage({ searchParams }) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) redirect("/signin?callbackUrl=/admin/customers");
-  if (session.user.role !== "admin") redirect("/");
+  if (session.user.role !== "admin" && session.user.role !== "employee") redirect("/");
 
   const query = (await searchParams) ?? {};
 

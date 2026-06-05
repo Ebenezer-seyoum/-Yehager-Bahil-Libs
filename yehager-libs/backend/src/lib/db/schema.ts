@@ -234,6 +234,8 @@ export const events = pgTable(
     ownerName: text("owner_name").notNull(),
     productId: uuid("product_id").references(() => products.id, { onDelete: "set null" }),
     productName: text("product_name"),
+    selectionType: text("selection_type"),
+    uploadedDesignId: uuid("uploaded_design_id"),
     eventCode: text("event_code").notNull(),
     shippingAddress: jsonb("shipping_address").$type<Record<string, unknown>>(),
     eventDate: timestamp("event_date", { withTimezone: false }),
@@ -248,9 +250,14 @@ export const familyGroups = pgTable("family_groups", {
   id: uuid("id").defaultRandom().primaryKey(),
   groupName: text("group_name").notNull(),
   eventId: uuid("event_id")
-    .notNull()
     .references(() => events.id, { onDelete: "cascade" }),
   eventName: text("event_name"),
+  groupType: text("group_type").default("family_group").notNull(),
+  selectionType: text("selection_type"),
+  productId: uuid("product_id").references(() => products.id, { onDelete: "set null" }),
+  productName: text("product_name"),
+  productImage: text("product_image"),
+  uploadedDesignId: uuid("uploaded_design_id"),
   leadEmail: varchar("lead_email", { length: 320 }).notNull(),
   leadName: text("lead_name").notNull(),
   ...timestamps,
@@ -264,12 +271,14 @@ export const familyMembers = pgTable(
       .notNull()
       .references(() => familyGroups.id, { onDelete: "cascade" }),
     eventId: uuid("event_id")
-      .notNull()
       .references(() => events.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
     relation: text("relation"),
     gender: text("gender").notNull(),
     measurements: jsonb("measurements").$type<Record<string, unknown>>(),
+    measurementId: uuid("measurement_id").references(() => measurements.id, { onDelete: "set null" }),
+    selectionType: text("selection_type"),
+    uploadedDesignId: uuid("uploaded_design_id"),
     productId: uuid("product_id").references(() => products.id, { onDelete: "set null" }),
     productName: text("product_name"),
     productImage: text("product_image"),
@@ -299,7 +308,12 @@ export const cartItems = pgTable(
     eventName: text("event_name"),
     ...timestamps,
   },
-  (table) => [index("cart_items_user_email_idx").on(table.userEmail)],
+  (table) => [
+    index("cart_items_user_email_idx").on(table.userEmail),
+    uniqueIndex("cart_items_unique_direct_custom_design_idx")
+      .on(table.uploadedDesignId)
+      .where(sql`${table.uploadedDesignId} is not null and ${table.itemType} = 'custom_design'`),
+  ],
 );
 
 export const orders = pgTable(
@@ -542,7 +556,12 @@ export const uploadedDesigns = pgTable(
   submittedAt: timestamp("submitted_at", { withTimezone: true }),
   approvedOrderId: uuid("approved_order_id").references(() => orders.id, { onDelete: "set null" }),
   approvedCartItemId: uuid("approved_cart_item_id"),
-  quotedPriceUsd: numeric("quoted_price_usd", { precision: 12, scale: 2 }),
+    quotedPriceUsd: numeric("quoted_price_usd", { precision: 12, scale: 2 }),
+    familyGroupId: uuid("family_group_id").references(() => familyGroups.id, { onDelete: "set null" }),
+    eventId: uuid("event_id").references(() => events.id, { onDelete: "set null" }),
+  estimatedDeliveryLabel: text("estimated_delivery_label"),
+  estimatedDeliveryDaysMin: integer("estimated_delivery_days_min"),
+  estimatedDeliveryDaysMax: integer("estimated_delivery_days_max"),
   emailPlaceholderStatus: varchar("email_placeholder_status", { length: 40 }),
     emailPlaceholderNote: text("email_placeholder_note"),
     ...timestamps,

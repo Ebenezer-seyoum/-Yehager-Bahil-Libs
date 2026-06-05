@@ -147,7 +147,7 @@ export default async function ProductDetailPage({
     "use server";
     const productId = String(formData.get("productId") ?? "");
     const productName = String(formData.get("productName") ?? "");
-    const name = String(formData.get("eventName") ?? "").trim();
+    const name = String(formData.get("groupName") ?? formData.get("eventName") ?? "").trim();
     if (!name) return;
     await ensureBackendUserSynced();
 
@@ -165,6 +165,38 @@ export default async function ProductDetailPage({
     const eventId = response?.data?.id;
     if (!eventId) signinRedirect(`/product/${productId}`);
     redirect(`/event/${eventId}`);
+  }
+
+  async function createGroupFromProduct(formData: FormData) {
+    "use server";
+    await ensureBackendUserSynced();
+    const productId = String(formData.get("productId") ?? "");
+    const groupName = String(formData.get("groupName") ?? "").trim();
+    if (!groupName) return;
+    const response = await apiRequest<{ data: { id: string } }>("/api/v1/family-groups", {
+      method: "POST",
+      body: { groupName, groupType: "family_group", productId },
+    });
+    redirect(`/family-group/${response.data.id}`);
+  }
+
+  async function selectForSharedOrder(formData: FormData) {
+    "use server";
+    await ensureBackendUserSynced();
+    const productId = String(formData.get("productId") ?? "");
+    const selectionMode = String(formData.get("selectionMode") ?? "");
+    const groupId = String(formData.get("groupId") ?? "");
+    const eventId = String(formData.get("eventId") ?? "");
+    if (selectionMode === "group" && groupId) {
+      await apiRequest(`/api/v1/family-groups/${groupId}`, { method: "PATCH", body: { productId } });
+      revalidatePath(`/family-group/${groupId}`);
+      redirect(`/family-group/${groupId}?selected=catalog`);
+    }
+    if (selectionMode === "event" && eventId) {
+      await apiRequest(`/api/v1/events/${eventId}`, { method: "PATCH", body: { productId } });
+      revalidatePath(`/event/${eventId}`);
+      redirect(`/event/${eventId}?selected=catalog`);
+    }
   }
 
   let product: Product | null = null;
@@ -198,6 +230,9 @@ export default async function ProductDetailPage({
   }
 
   const eventId = typeof query?.event === "string" ? query.event : "";
+  const selectionMode = typeof query?.selectionMode === "string" ? query.selectionMode : "";
+  const selectionGroupId = typeof query?.groupId === "string" ? query.groupId : "";
+  const selectionEventId = typeof query?.eventId === "string" ? query.eventId : "";
   if (eventId) {
     try {
       const response = await backendPublicRequest(`/api/v1/events/${eventId}`);
@@ -257,6 +292,22 @@ export default async function ProductDetailPage({
         </div>
       ) : null}
 
+      {selectionMode ? (
+        <form action={selectForSharedOrder} className="mb-6 flex flex-col gap-3 rounded-xl border border-blue-900/20 bg-blue-50 p-4 text-slate-900 sm:flex-row sm:items-center sm:justify-between">
+          <input type="hidden" name="productId" value={product.id} />
+          <input type="hidden" name="selectionMode" value={selectionMode} />
+          <input type="hidden" name="groupId" value={selectionGroupId} />
+          <input type="hidden" name="eventId" value={selectionEventId} />
+          <div>
+            <p className="font-semibold">Use this catalog product for your {selectionMode === "event" ? "Event Match-Up" : "Group Order"}?</p>
+            <p className="text-sm text-slate-600">This selection becomes the shared outfit for every member.</p>
+          </div>
+          <button type="submit" className="rounded-lg bg-blue-950 px-5 py-3 text-sm font-semibold text-white hover:bg-blue-800">
+            Select This Product
+          </button>
+        </form>
+      ) : null}
+
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-2 lg:gap-16 xl:gap-24">
         <ProductDetailGallery images={images} alt={product.name} />
 
@@ -275,6 +326,7 @@ export default async function ProductDetailPage({
           addToCartAction={addToCart}
           createMeasurementAction={createMeasurement}
           createEventAction={createEventFromProduct}
+          createGroupAction={createGroupFromProduct}
         />
       </div>
     </div>

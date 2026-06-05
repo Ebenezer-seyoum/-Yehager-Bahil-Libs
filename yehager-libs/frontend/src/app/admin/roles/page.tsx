@@ -11,6 +11,8 @@ type User = {
   email: string;
   role: string;
   status: string;
+  roleStatus?: "unassigned" | "assigned";
+  assignedRoleId?: string | null;
 };
 
 type Permission = {
@@ -27,8 +29,21 @@ type Role = {
   name: string;
   description: string | null;
   isSystem: boolean;
+  permissions?: string[];
   createdAt: string;
   updatedAt: string;
+};
+
+type AuditLog = {
+  id: string;
+  action: string;
+  category: string;
+  severity: string;
+  entityType?: string | null;
+  entityId?: string | null;
+  performedBy?: string | null;
+  details?: string | null;
+  createdAt?: string | null;
 };
 
 export default async function AdminRolesPage() {
@@ -39,27 +54,34 @@ export default async function AdminRolesPage() {
   let users: User[] = [];
   let permissions: Permission[] = [];
   let roles: Role[] = [];
+  let audit: AuditLog[] = [];
   try {
-    const [usersResponse, permissionsResponse, rolesResponse] = await Promise.all([
+    const [usersResponse, permissionsResponse, rolesResponse, auditResponse] = await Promise.all([
       apiRequest<{ data: User[] }>("/api/v1/admin/users?limit=200"),
       apiRequest<{ data: Permission[] }>("/api/v1/admin/permissions"),
       apiRequest<{ data: Role[] }>("/api/v1/admin/roles"),
+      apiRequest<{ data: AuditLog[] }>("/api/v1/admin/audit?limit=200").catch(() => ({ data: [] })),
     ]);
-    users = usersResponse.data ?? [];
+    users = (usersResponse.data ?? []).filter((user) => user.role === "employee");
     permissions = permissionsResponse.data ?? [];
     roles = rolesResponse.data ?? [];
+    audit = (auditResponse.data ?? []).filter((log) =>
+      ["role_created", "role_permissions_updated", "employee_access_assigned", "user_permissions_updated", "user_role_updated"].includes(log.action),
+    );
   } catch {
     users = [];
     permissions = [];
     roles = [];
+    audit = [];
   }
 
   return (
     <AdminRolesWorkspace
-      data={{ users, roles, permissions }}
+      data={{ users, roles, permissions, audit }}
       users={users}
       roles={roles}
       permissions={permissions}
+      audit={audit}
     />
   );
 }

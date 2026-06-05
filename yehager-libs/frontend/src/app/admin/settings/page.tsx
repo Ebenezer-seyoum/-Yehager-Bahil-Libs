@@ -8,7 +8,7 @@ import { AdminSettingsChrome } from "@/components/admin/pages/admin-settings-chr
 export default async function AdminSettingsPage() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) redirect("/signin?callbackUrl=/admin/settings");
-  if (session.user.role !== "admin") redirect("/");
+  if (session.user.role !== "admin" && session.user.role !== "employee") redirect("/");
 
   return (
     <Suspense fallback={<div className="p-6 text-sm text-muted-foreground">Loading settings…</div>}>

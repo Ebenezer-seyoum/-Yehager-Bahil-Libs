@@ -7,7 +7,7 @@ import { AdminUploadedDesignsWorkspace } from "@/components/admin/pages/admin-up
 export default async function AdminUploadedDesignsPage() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) redirect("/signin?callbackUrl=/admin/uploaded-designs");
-  if (session.user.role !== "admin") redirect("/");
+  if (session.user.role !== "admin" && session.user.role !== "employee") redirect("/");
 
   let uploadedDesigns = [];
   try {

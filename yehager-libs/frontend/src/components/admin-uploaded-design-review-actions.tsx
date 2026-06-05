@@ -30,6 +30,9 @@ export function AdminUploadedDesignReviewActions({
           decision,
           reason: reason || undefined,
           quotedPriceUsd: quotedPrice ? Number(quotedPrice) : undefined,
+          estimatedDeliveryLabel: decision === "approve" ? "30-40 days" : undefined,
+          estimatedDeliveryDaysMin: decision === "approve" ? 30 : undefined,
+          estimatedDeliveryDaysMax: decision === "approve" ? 40 : undefined,
         }),
       });
       if (!response.ok) {

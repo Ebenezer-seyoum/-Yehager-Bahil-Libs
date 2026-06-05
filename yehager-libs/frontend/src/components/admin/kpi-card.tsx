@@ -19,19 +19,19 @@ export function KPICard({ metric, className }: { metric: KpiCardModel; className
 
   if (loading) {
     return (
-      <div className={cn("rounded-lg border border-border bg-white p-2.5 shadow-sm", className)}>
-        <Skeleton className="h-3 w-16" />
-        <Skeleton className="mt-1.5 h-5 w-12" />
-        <Skeleton className="mt-1.5 h-2.5 w-20" />
+      <div className={cn("rounded-2xl border border-border bg-white p-4 shadow-sm", className)}>
+        <Skeleton className="h-4 w-24" />
+        <Skeleton className="mt-2 h-7 w-16" />
+        <Skeleton className="mt-2 h-3 w-28" />
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className={cn("rounded-lg border border-rose-200 bg-rose-50 p-2.5", className)}>
-        <p className="text-[10px] font-semibold text-rose-700">{metric.title}</p>
-        <p className="mt-0.5 text-[11px] text-rose-600">Unable to load</p>
+      <div className={cn("rounded-2xl border border-rose-200 bg-rose-50 p-4", className)}>
+        <p className="text-xs font-semibold text-rose-700">{metric.title}</p>
+        <p className="mt-1 text-sm text-rose-600">Unable to load</p>
       </div>
     );
   }
@@ -39,39 +39,39 @@ export function KPICard({ metric, className }: { metric: KpiCardModel; className
   return (
     <div
       className={cn(
-        "rounded-lg p-2.5 text-white shadow-sm transition hover:shadow-md",
+        "rounded-2xl p-4 text-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg",
         KPI_BG[metric.color],
         className,
       )}
     >
-      <div className="flex items-start justify-between gap-2">
+      <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <p className={cn("truncate text-[10px] font-semibold uppercase tracking-wide", KPI_TEXT_MUTED)}>
+          <p className={cn("truncate text-xs font-semibold uppercase tracking-[0.16em]", KPI_TEXT_MUTED)}>
             {metric.title}
           </p>
-          <p className="mt-0.5 text-lg font-bold leading-tight tracking-tight text-white">
+          <p className="mt-1 text-2xl font-black leading-tight tracking-tight text-white">
             {empty ? "—" : metric.value}
           </p>
         </div>
         <span
           className={cn(
-            "flex h-7 w-7 shrink-0 items-center justify-center rounded-xl",
+            "flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ring-1 ring-white/20",
             KPI_ICON_BG[metric.color],
           )}
         >
-          <Icon className="h-3.5 w-3.5" />
+          <Icon className="h-6 w-6" />
         </span>
       </div>
-      <p className={cn("mt-1 line-clamp-1 text-[10px]", KPI_TEXT_MUTED)}>{metric.description}</p>
+      <p className={cn("mt-2 line-clamp-2 text-xs leading-5", KPI_TEXT_MUTED)}>{metric.description}</p>
       {showTrend ? (
         <div
           className={cn(
-            "mt-1 inline-flex items-center gap-0.5 text-[10px] font-semibold",
+            "mt-3 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold",
             KPI_TREND_BADGE,
             good ? KPI_TREND_GOOD : KPI_TREND_BAD,
           )}
         >
-          {increased ? <TrendingUp className="h-2.5 w-2.5" /> : <TrendingDown className="h-2.5 w-2.5" />}
+          {increased ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
           <span>
             {formatChange(safeChange)} {increased ? "up" : "down"}
           </span>

@@ -10,6 +10,7 @@ import { auditLogs, orders, products, systemAlerts } from "../../lib/db/schema.j
 import { USER_ROLES } from "../../lib/auth/roles.js";
 import { PERMISSIONS } from "../../lib/auth/permissions.js";
 import {
+  assignEmployeeAccessForAdmin,
   createEmployeeForAdmin,
   createCustomerForAdmin,
   deleteUserForAdmin,
@@ -18,11 +19,11 @@ import {
   resetUserPasswordForAdmin,
   sendPasswordResetLinkForAdmin,
   updateUserProfileForAdminService,
-  updateRoleForAdmin,
+  updateRoleForAdmin as updateUserRoleForAdmin,
   updateUserStatusForAdmin,
 } from "../../services/users-service.js";
-import { createRoleForAdmin, listRolesForAdmin, updateRolePermissionsForAdmin } from "../../services/roles-service.js";
-import { getEffectivePermissionsForUser, listPermissionsForAdmin, updateUserPermissionsForAdmin } from "../../services/permissions-service.js";
+import { createRoleForAdmin, deleteRoleForAdmin, listRolesForAdmin, updateRoleForAdmin, updateRolePermissionsForAdmin } from "../../services/roles-service.js";
+import { deletePermissionForAdmin, getEffectivePermissionsForUser, listPermissionsForAdmin, updatePermissionForAdmin, updateUserPermissionsForAdmin } from "../../services/permissions-service.js";
 import { getOrderReport, toOrderReportCsv } from "../../services/reports-service.js";
 import { getReportsCenterPayload } from "../../services/reports-center-service.js";
 import type { AppBindings } from "../../types/hono.js";
@@ -189,8 +190,25 @@ const userPasswordResetSchema = z.object({
 const roleIdParamSchema = z.object({
   roleId: z.string().uuid(),
 });
+const permissionIdParamSchema = z.object({
+  permissionId: z.string().uuid(),
+});
+const roleUpdateSchema = z.object({
+  name: z.string().trim().min(1).max(255),
+  description: z.string().trim().max(500).optional().nullable(),
+});
 const rolePermissionsPatchSchema = z.object({
   permissions: z.array(z.string().trim().min(1)).max(100),
+});
+const employeeAccessPatchSchema = z.object({
+  roleId: z.string().uuid().nullable().optional(),
+  permissions: z.array(z.string().trim().min(1)).max(100).optional(),
+});
+const permissionUpdateSchema = z.object({
+  key: z.string().trim().min(1).max(150),
+  resource: z.string().trim().min(1).max(100),
+  action: z.string().trim().min(1).max(100),
+  description: z.string().trim().max(500).optional().nullable(),
 });
 const orderReportQuerySchema = z.object({
   status: z.string().optional(),
@@ -310,6 +328,111 @@ adminRouter.get("/permissions", requirePermission(PERMISSIONS.ROLES_VIEW), async
   return c.json({ data });
 });
 
+adminRouter.patch(
+  "/roles/:roleId",
+  requirePermission(PERMISSIONS.ROLES_EDIT),
+  zValidator("param", roleIdParamSchema),
+  zValidator("json", roleUpdateSchema),
+  async (c) => {
+    const authUser = c.get("authUser");
+    const { roleId } = c.req.valid("param");
+    const body = c.req.valid("json");
+    const data = await updateRoleForAdmin(roleId, body);
+    if (!data) throw new HTTPException(404, { message: "Role not found" });
+
+    await db.insert(auditLogs).values({
+      action: "role_updated",
+      category: "admin",
+      severity: "info",
+      entityType: "role",
+      entityId: roleId,
+      performedBy: authUser?.email ?? "admin",
+      details: "Admin updated role",
+      metadata: { name: data.name },
+    });
+
+    return c.json({ data });
+  },
+);
+
+adminRouter.delete(
+  "/roles/:roleId",
+  requirePermission(PERMISSIONS.ROLES_DELETE),
+  zValidator("param", roleIdParamSchema),
+  async (c) => {
+    const authUser = c.get("authUser");
+    const { roleId } = c.req.valid("param");
+    const result = await deleteRoleForAdmin(roleId);
+    if (!result) throw new HTTPException(404, { message: "Role not found" });
+    if (result.blocked) throw new HTTPException(409, { message: "System roles cannot be deleted" });
+
+    await db.insert(auditLogs).values({
+      action: "role_deleted",
+      category: "admin",
+      severity: "warning",
+      entityType: "role",
+      entityId: roleId,
+      performedBy: authUser?.email ?? "admin",
+      details: "Admin deleted role",
+      metadata: { name: result.role.name },
+    });
+
+    return c.json({ data: result.role });
+  },
+);
+
+adminRouter.patch(
+  "/permissions/:permissionId",
+  requirePermission(PERMISSIONS.ROLES_MANAGE),
+  zValidator("param", permissionIdParamSchema),
+  zValidator("json", permissionUpdateSchema),
+  async (c) => {
+    const authUser = c.get("authUser");
+    const { permissionId } = c.req.valid("param");
+    const body = c.req.valid("json");
+    const data = await updatePermissionForAdmin(permissionId, body);
+    if (!data) throw new HTTPException(404, { message: "Permission not found" });
+
+    await db.insert(auditLogs).values({
+      action: "permission_updated",
+      category: "admin",
+      severity: "info",
+      entityType: "permission",
+      entityId: permissionId,
+      performedBy: authUser?.email ?? "admin",
+      details: "Admin updated permission",
+      metadata: { key: data.key },
+    });
+
+    return c.json({ data });
+  },
+);
+
+adminRouter.delete(
+  "/permissions/:permissionId",
+  requirePermission(PERMISSIONS.ROLES_MANAGE),
+  zValidator("param", permissionIdParamSchema),
+  async (c) => {
+    const authUser = c.get("authUser");
+    const { permissionId } = c.req.valid("param");
+    const data = await deletePermissionForAdmin(permissionId);
+    if (!data) throw new HTTPException(404, { message: "Permission not found" });
+
+    await db.insert(auditLogs).values({
+      action: "permission_deleted",
+      category: "admin",
+      severity: "warning",
+      entityType: "permission",
+      entityId: permissionId,
+      performedBy: authUser?.email ?? "admin",
+      details: "Admin deleted permission",
+      metadata: { key: data.key },
+    });
+
+    return c.json({ data });
+  },
+);
+
 adminRouter.get(
   "/reports",
   requirePermission(PERMISSIONS.REPORTS_VIEW),
@@ -426,7 +549,7 @@ adminRouter.patch(
     const authUser = c.get("authUser");
     const { userId } = c.req.valid("param");
     const { role } = c.req.valid("json");
-    const data = await updateRoleForAdmin({
+    const data = await updateUserRoleForAdmin({
       userId,
       role,
       performedBy: authUser?.email,
@@ -459,6 +582,25 @@ adminRouter.put(
       performedBy: authUser?.email ?? "admin",
       details: "Admin updated user permissions",
       metadata: { permissions: permissionKeys },
+    });
+    return c.json({ data });
+  },
+);
+
+adminRouter.put(
+  "/users/:userId/access",
+  requirePermission(PERMISSIONS.EMPLOYEES_ASSIGN),
+  zValidator("param", userParamSchema),
+  zValidator("json", employeeAccessPatchSchema),
+  async (c) => {
+    const authUser = c.get("authUser");
+    const { userId } = c.req.valid("param");
+    const body = c.req.valid("json");
+    const data = await assignEmployeeAccessForAdmin({
+      userId,
+      roleId: body.roleId ?? null,
+      permissionKeys: body.permissions ?? [],
+      performedBy: authUser?.email,
     });
     return c.json({ data });
   },

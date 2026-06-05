@@ -18,9 +18,10 @@ import {
   ShieldCheck,
   ShoppingBag,
   User,
+  Users,
   X,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 type Profile = {
   id?: string | null;
@@ -52,14 +53,6 @@ type Order = {
   createdAt?: string | null;
   shippingAddress?: { city?: string | null; country?: string | null } | null;
   items?: OrderItem[] | null;
-};
-
-type Event = {
-  id: string;
-  name?: string | null;
-  eventCode?: string | null;
-  eventDate?: string | null;
-  productName?: string | null;
 };
 
 type Measurement = {
@@ -106,7 +99,6 @@ function orderItemPrice(item: OrderItem) {
 export function CustomerAccountDashboard({
   profile,
   orders,
-  events,
   measurements,
   createMeasurement,
   updateMeasurement,
@@ -114,28 +106,23 @@ export function CustomerAccountDashboard({
 }: {
   profile: Profile;
   orders: Order[];
-  events: Event[];
   measurements: Measurement[];
   createMeasurement: ServerAction;
   updateMeasurement: ServerAction;
   deleteMeasurement: ServerAction;
 }) {
-  const [tab, setTab] = useState("profile");
+  const mustChangePassword = Boolean(profile.mustChangePassword);
+  const [tab, setTab] = useState(mustChangePassword ? "security" : "profile");
   const [editingProfile, setEditingProfile] = useState(false);
   const displayName = profile.name ?? "Customer";
   const email = profile.email ?? "";
   const initials = displayName.charAt(0).toUpperCase() || email.charAt(0).toUpperCase() || "?";
-  const mustChangePassword = Boolean(profile.mustChangePassword);
-
-  useEffect(() => {
-    if (mustChangePassword) setTab("security");
-  }, [mustChangePassword]);
 
   const tabs = [
     { key: "profile", label: "My Profile", icon: User },
     { key: "orders", label: "My Orders", icon: ShoppingBag },
     { key: "status", label: "My Status", icon: Scissors },
-    { key: "events", label: "My Events", icon: CalendarDays },
+    { key: "events", label: "Events & Groups", icon: CalendarDays },
     { key: "measurements", label: "Measurements", icon: Ruler },
     { key: "security", label: "Security", icon: Lock },
   ];
@@ -259,7 +246,7 @@ export function CustomerAccountDashboard({
               {[
                 { href: "/catalog", icon: ShoppingBag, title: "Browse & Order", desc: "Explore new collections" },
                 { href: "/tailoring-status", icon: Scissors, title: "Track Tailoring", desc: "Live production updates" },
-                { href: "/events", icon: CalendarDays, title: "Event Groups", desc: "Manage group orders" },
+                { href: "/events", icon: CalendarDays, title: "Events & Groups", desc: "Manage shared ordering" },
               ].map(({ href, icon: Icon, title, desc }) => (
                 <Link key={href} href={href} className="group flex items-center gap-3 rounded-xl border border-border p-4 transition-all hover:border-primary/40 hover:bg-secondary/30">
                   <Icon className="h-5 w-5 text-primary" />
@@ -285,7 +272,7 @@ export function CustomerAccountDashboard({
 
       {tab === "orders" ? <OrdersPanel orders={orders} /> : null}
       {tab === "status" ? <StatusPanel orders={orders} /> : null}
-      {tab === "events" ? <EventsPanel events={events} /> : null}
+      {tab === "events" ? <EventsPanel /> : null}
       {tab === "measurements" ? (
         <MeasurementsPanel measurements={measurements} createMeasurement={createMeasurement} updateMeasurement={updateMeasurement} deleteMeasurement={deleteMeasurement} />
       ) : null}
@@ -393,39 +380,43 @@ function StatusPanel({ orders }: { orders: Order[] }) {
   );
 }
 
-function EventsPanel({ events }: { events: Event[] }) {
+function EventsPanel() {
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">Your event groups and participation</p>
+        <div>
+          <h2 className="font-heading text-2xl font-bold">Events & Group Orders</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Choose the shared-order experience that fits your needs.</p>
+        </div>
         <Link href="/events" className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground">
-          <CalendarDays className="h-3.5 w-3.5" /> Browse Events
+          <CalendarDays className="h-3.5 w-3.5" /> Manage Events
         </Link>
       </div>
-      {events.length === 0 ? (
-        <Link href="/events" className="group flex items-center gap-3 rounded-xl border border-border bg-card p-4 transition-all hover:border-primary/40 hover:bg-secondary/30">
-          <CalendarDays className="h-5 w-5 text-primary" />
+
+      <div className="space-y-4">
+        <Link href="/events" className="group flex items-center gap-4 rounded-2xl border border-border bg-card p-6 transition-all hover:border-primary/60 hover:bg-secondary/30">
+          <div className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-primary/10">
+            <CalendarDays className="h-6 w-6 text-primary" />
+          </div>
           <div>
-            <p className="text-sm font-medium">Event Groups</p>
-            <p className="text-xs text-muted-foreground">View and manage your event participations</p>
+            <p className="text-base font-semibold">Event Match-Up</p>
+            <p className="mt-1 text-sm text-muted-foreground">Create a shareable event link. Guests join, add their own family, and place their own orders.</p>
           </div>
           <ChevronRight className="ml-auto h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
         </Link>
-      ) : (
-        events.map((event) => (
-          <Link key={event.id} href={`/event/${event.id}`} className="group flex items-center justify-between rounded-xl border border-border bg-card p-5 transition-colors hover:border-primary/30">
-            <div>
-              <h3 className="font-heading font-semibold">{event.name}</h3>
-              <div className="mt-1 flex items-center gap-3 text-xs text-muted-foreground">
-                {event.eventCode ? <span className="font-mono">{event.eventCode}</span> : null}
-                {event.eventDate ? <span>{formatDate(event.eventDate)}</span> : null}
-                {event.productName ? <span>{event.productName}</span> : null}
-              </div>
-            </div>
-            <span className="text-xs text-primary group-hover:underline">View Dashboard -&gt;</span>
-          </Link>
-        ))
-      )}
+
+        <Link href="/group-orders" className="group flex w-full items-center gap-4 rounded-2xl border border-primary/60 bg-card p-6 text-left transition-all hover:bg-primary/5">
+          <div className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-primary/10">
+            <Users className="h-6 w-6 text-primary" />
+          </div>
+          <div>
+            <p className="text-base font-semibold">Private Group Order</p>
+            <p className="mt-1 text-sm text-muted-foreground">Add family members and measurements yourself, then pay for everyone in one checkout.</p>
+          </div>
+          <ChevronRight className="ml-auto h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+        </Link>
+      </div>
+
     </div>
   );
 }

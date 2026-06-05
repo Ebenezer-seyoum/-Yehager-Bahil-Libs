@@ -38,20 +38,20 @@ export const ADMIN_TAB_BUTTON_BASE =
 
 /* Tables */
 export const ADMIN_TABLE_WRAPPER =
-  "overflow-hidden rounded-xl border border-blue-100 bg-white shadow-sm";
+  "overflow-hidden rounded-2xl border border-blue-100 bg-white shadow-sm";
 
 export const TABLE_HEAD_CLASS =
-  "sticky top-0 z-10 bg-gradient-to-r from-white to-blue-50 border-b border-blue-100";
+  "sticky top-0 z-10 border-b border-blue-100 bg-[#eef0fb]";
 
 export const TABLE_HEAD_ROW_CLASS = "text-left";
 
 export const TABLE_HEAD_CELL_CLASS =
-  "px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-700";
+  "px-4 py-4 text-left text-sm font-bold text-blue-900";
 
 export const TABLE_HEAD_CELL_SORTABLE_CLASS =
-  "cursor-pointer transition-colors hover:bg-blue-50 hover:text-blue-700";
+  "cursor-pointer transition-colors hover:bg-blue-100/70 hover:text-blue-950";
 
-export const TABLE_HEAD_CELL_SORTED_CLASS = "bg-blue-50 text-blue-700";
+export const TABLE_HEAD_CELL_SORTED_CLASS = "bg-blue-100/70 text-blue-950";
 
 export const ADMIN_TABLE_BODY_ROW =
   "border-b border-blue-50/80 transition hover:bg-blue-50/40";

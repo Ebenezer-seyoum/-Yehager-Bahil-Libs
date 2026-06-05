@@ -1,8 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { BookOpen, Check, CheckCircle2, ChevronDown, Loader2, Mail, Palette, Phone, Play, Ruler, Upload } from "lucide-react";
+import { BookOpen, Check, CheckCircle2, ChevronDown, Loader2, Mail, Palette, Phone, Play, Ruler } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 type SignedUpload = {
   cloudName: string;
@@ -222,7 +223,8 @@ function PageHeader({ step, setStep }: { step: number; setStep: (step: number) =
   );
 }
 
-export function UploadDesignWizard() {
+export function UploadDesignWizard({ familyGroupId, eventId }: { familyGroupId?: string; eventId?: string }) {
+  const router = useRouter();
   const [step, setStep] = useState(0);
   const [busy, setBusy] = useState<null | UploadKey | "submit">(null);
   const [error, setError] = useState<string | null>(null);
@@ -303,6 +305,8 @@ export function UploadDesignWizard() {
             tailorNote: measurementNote,
           },
           contactPhone,
+          familyGroupId,
+          eventId,
         }),
       });
       if (!res.ok) {
@@ -310,6 +314,16 @@ export function UploadDesignWizard() {
         throw new Error(message || "Could not submit design");
       }
       const payload = await res.json();
+      if (familyGroupId) {
+        router.push(`/family-group/${familyGroupId}?selected=custom-design`);
+        router.refresh();
+        return;
+      }
+      if (eventId) {
+        router.push(`/event/${eventId}?selected=custom-design`);
+        router.refresh();
+        return;
+      }
       setSubmittedNumber(payload?.data?.submissionNumber ?? "YBL-CD");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Submission failed");
@@ -339,6 +353,16 @@ export function UploadDesignWizard() {
             <p>5. Your finished garment is shipped worldwide with tracking.</p>
           </div>
           <div className="mt-6 flex justify-center gap-3">
+            {familyGroupId ? (
+              <Link href={`/family-group/${familyGroupId}`} className="rounded-lg bg-primary px-5 py-2 text-sm font-bold text-black hover:bg-primary/90">
+                Return to Group Order
+              </Link>
+            ) : null}
+            {eventId ? (
+              <Link href={`/event/${eventId}`} className="rounded-lg bg-primary px-5 py-2 text-sm font-bold text-black hover:bg-primary/90">
+                Return to Event Match-Up
+              </Link>
+            ) : null}
             <Link href="/catalog" className="rounded-lg border border-border px-5 py-2 text-sm font-bold hover:bg-secondary">
               Browse Collection
             </Link>
@@ -478,7 +502,7 @@ export function UploadDesignWizard() {
               </div>
 
               <button type="button" className="mt-5 flex h-12 w-full items-center justify-between rounded-xl border border-border px-4 text-left text-sm font-black">
-                <span>👖 Add Men's Pants Measurements</span>
+                <span>👖 Add Men&apos;s Pants Measurements</span>
                 <ChevronDown className="h-4 w-4" />
               </button>
 
@@ -490,7 +514,7 @@ export function UploadDesignWizard() {
                   <div>
                     <h3 className="font-black">A Message to Our Tailors</h3>
                     <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                      Is there anything specific you'd like our tailors to know? Share any fit preferences, design details, or special instructions.
+                      Is there anything specific you&apos;d like our tailors to know? Share any fit preferences, design details, or special instructions.
                     </p>
                   </div>
                 </div>
@@ -538,7 +562,7 @@ export function UploadDesignWizard() {
               <Phone className="h-5 w-5 text-primary" />
               Contact for Follow-Up
             </h2>
-            <p className="mt-4 text-xs text-muted-foreground">We'll send your quote and production updates via WhatsApp.</p>
+            <p className="mt-4 text-xs text-muted-foreground">We&apos;ll send your quote and production updates via WhatsApp.</p>
             <label className="mt-4 block text-xs text-muted-foreground">
               Mobile Phone Number (WhatsApp Preferred) <span className="text-primary">*</span>
               <div className="mt-1 flex gap-2">

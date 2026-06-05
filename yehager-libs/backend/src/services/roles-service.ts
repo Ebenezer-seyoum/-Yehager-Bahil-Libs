@@ -3,10 +3,12 @@ import {
   assignSystemRoleToUser,
   assignRoleToUser,
   createRole,
+  deleteRole,
   listRolesWithPermissionKeys,
   replaceNonSystemRolesForUser,
   replaceRolePermissions,
   replaceSystemRoleForUser,
+  updateRole,
 } from "../repositories/roles-repository.js";
 
 export async function ensureSystemRoleAssignment(userId: string, role: UserRole) {
@@ -23,6 +25,14 @@ export async function listRolesForAdmin() {
 
 export async function createRoleForAdmin(payload: { key: string; name: string; description?: string | null }) {
   return createRole(payload);
+}
+
+export async function updateRoleForAdmin(roleId: string, payload: { name: string; description?: string | null }) {
+  return updateRole(roleId, payload);
+}
+
+export async function deleteRoleForAdmin(roleId: string) {
+  return deleteRole(roleId);
 }
 
 export async function assignAdditionalRoleToUser(userId: string, roleId: string) {

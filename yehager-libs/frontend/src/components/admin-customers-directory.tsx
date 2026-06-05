@@ -7,9 +7,6 @@ import type { AdminWorkspaceData } from "@/lib/admin/types";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { CustomerDetailClient } from "@/components/admin/customer-detail-client";
 
-const TypedDialogContent = DialogContent as any;
-const TypedDialogTitle = DialogTitle as any;
-
 type CustomerRow = {
   id: string;
   name?: string | null;
@@ -26,6 +23,11 @@ type CustomerRow = {
   totalOrders?: number | null;
   totalSpent?: number | null;
   lastOrderAt?: string | null;
+};
+
+type CustomerDetailResponse = {
+  message?: string;
+  data?: CustomerRow | { user?: CustomerRow | null };
 };
 
 function formatDate(value?: string | null) {
@@ -80,9 +82,9 @@ export function AdminCustomersDirectory({
     if (quick) setDetailCustomer(quick);
     try {
       const res = await fetch(`/api/backend/admin/users/${customerId}`, { method: "GET" });
-      const json = (await res.json().catch(() => null)) as any;
+      const json = (await res.json().catch(() => null)) as CustomerDetailResponse | null;
       if (!res.ok) throw new Error(String(json?.message ?? "Unable to load customer details. Please try again."));
-      const user = json?.data?.user ?? json?.data ?? null;
+      const user = json?.data && "user" in json.data ? json.data.user ?? null : json?.data ?? null;
       setDetailCustomer(user);
     } catch (e) {
       setDetailError(e instanceof Error ? e.message : "Unable to load customer details. Please try again.");
@@ -183,9 +185,12 @@ export function AdminCustomersDirectory({
           setDetailOpen(next);
         }}
       >
-        <TypedDialogContent className="max-w-5xl">
-          <TypedDialogTitle className="sr-only">Customer details</TypedDialogTitle>
-          <div className="max-h-[78vh] overflow-y-auto pr-1">
+        <DialogContent className="max-w-5xl overflow-hidden p-0">
+          <div className="bg-blue-950 px-6 py-4 pr-16 text-white">
+            <DialogTitle className="text-lg font-bold text-white">Customer Detail</DialogTitle>
+            <p className="mt-1 text-sm text-blue-100">View profile, address, account information, and customer order history.</p>
+          </div>
+          <div className="max-h-[78vh] overflow-y-auto bg-slate-50 p-5">
             {detailError ? (
               <div className="rounded-2xl border border-rose-200 bg-rose-50 p-6 text-sm text-rose-900">{detailError}</div>
             ) : detailCustomer ? (
@@ -205,7 +210,7 @@ export function AdminCustomersDirectory({
               </div>
             ) : null}
           </div>
-        </TypedDialogContent>
+        </DialogContent>
       </Dialog>
     </div>
   );

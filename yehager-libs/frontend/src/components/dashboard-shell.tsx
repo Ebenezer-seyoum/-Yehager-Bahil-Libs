@@ -25,7 +25,7 @@ import {
   UserRound,
   UsersRound,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { NavigationGroup, NavigationItem } from "@/lib/dashboard-navigation";
 import { can } from "@/lib/permissions";
 
@@ -80,32 +80,34 @@ export function DashboardShell({
   const [mobileOpen, setMobileOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [refreshedPermissions, setRefreshedPermissions] = useState<string[] | null>(null);
-  const permissions = refreshedPermissions ?? session?.user?.permissions ?? [];
+  const [refreshedRoleStatus, setRefreshedRoleStatus] = useState<"unassigned" | "assigned" | null>(null);
+  const permissions = useMemo(
+    () => refreshedPermissions ?? session?.user?.permissions ?? [],
+    [refreshedPermissions, session?.user?.permissions],
+  );
   const isUnassignedEmployee =
-    variant === "employee" &&
     session?.user?.role === "employee" &&
-    (session.user.roleStatus === "unassigned" || permissions.length === 0);
-  const visibleGroups =
-    variant === "admin"
-      ? navigation
-      : isUnassignedEmployee
+    ((refreshedRoleStatus ?? session.user.roleStatus) === "unassigned" || permissions.length === 0);
+  const showPendingAccess = isUnassignedEmployee && pathname !== "/admin/profile";
+  const isFullAdmin = session?.user?.role === "admin";
+  const visibleGroups = useMemo(
+    () =>
+      isFullAdmin
+        ? navigation
+        : isUnassignedEmployee
         ? []
         : navigation
-          .map((group) => ({
-            ...group,
-            items: group.items.filter((item) => can(permissions, item.permission)),
-          }))
-          .filter((group) => group.items.length > 0);
+            .map((group) => ({
+              ...group,
+              items: group.items.filter((item) => can(permissions, item.permission)),
+            }))
+            .filter((group) => group.items.length > 0),
+    [isFullAdmin, isUnassignedEmployee, navigation, permissions],
+  );
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
   const [expandedNavItems, setExpandedNavItems] = useState<Record<string, boolean>>({
     "/admin/reports": true,
   });
-
-  useEffect(() => {
-    if (isReportsRoute) {
-      setExpandedNavItems((current) => ({ ...current, "/admin/reports": true }));
-    }
-  }, [isReportsRoute]);
 
   function isReportChildActive(href: string) {
     if (!isReportsRoute) return false;
@@ -122,7 +124,7 @@ export function DashboardShell({
 
   function isNavItemActive(item: NavigationItem) {
     if (item.children?.length) {
-      return isReportsRoute;
+      return pathname === item.href || pathname.startsWith(`${item.href}/`);
     }
     return (
       pathname === item.href ||
@@ -132,7 +134,20 @@ export function DashboardShell({
         !(item.href === "/admin/orders" && pathname.startsWith("/admin/orders/documents")))
     );
   }
-  const profileHref = variant === "admin" ? "/admin/settings" : "/employee/settings";
+
+  function isChildActive(href: string) {
+    const queryIndex = href.indexOf("?");
+    const childPath = queryIndex === -1 ? href : href.slice(0, queryIndex);
+    if (pathname !== childPath) return false;
+    if (queryIndex === -1) return true;
+
+    const params = new URLSearchParams(href.slice(queryIndex + 1));
+    for (const [key, value] of params.entries()) {
+      if (searchParams.get(key) !== value) return false;
+    }
+    return true;
+  }
+  const profileHref = session?.user?.role === "employee" ? "/admin/profile" : "/admin/settings";
   const adminTopBar = variant === "admin";
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const counts = notificationCounts ?? {};
@@ -161,24 +176,34 @@ export function DashboardShell({
       .toUpperCase() ||
     session?.user?.email?.slice(0, 2).toUpperCase() ||
     "U";
+  const profileImage =
+    (session?.user as { image?: string | null; avatarUrl?: string | null } | undefined)?.image ||
+    (session?.user as { image?: string | null; avatarUrl?: string | null } | undefined)?.avatarUrl ||
+    null;
 
   useEffect(() => {
-    if (!session?.user?.id || (session.user.permissions?.length ?? 0) > 0) {
-      return;
-    }
+    if (!session?.user?.id) return;
 
-    fetch("/api/backend/session")
-      .then((response) => (response.ok ? response.json() : null))
-      .then((payload) => {
-        const permissions = payload?.profile?.permissions;
-        if (Array.isArray(permissions)) {
-          setRefreshedPermissions(permissions);
-        }
-      })
-      .catch(() => {
-        setRefreshedPermissions([]);
-      });
-  }, [session?.user?.id, session?.user?.permissions]);
+    const refreshAccess = () => {
+      fetch("/api/backend/session")
+        .then((response) => (response.ok ? response.json() : null))
+        .then((payload) => {
+          const nextPermissions = payload?.profile?.permissions;
+          const nextRoleStatus = payload?.profile?.roleStatus;
+          if (Array.isArray(nextPermissions)) setRefreshedPermissions(nextPermissions);
+          if (nextRoleStatus === "assigned" || nextRoleStatus === "unassigned") setRefreshedRoleStatus(nextRoleStatus);
+        })
+        .catch(() => undefined);
+    };
+
+    refreshAccess();
+    const intervalId = window.setInterval(refreshAccess, 15000);
+    window.addEventListener("focus", refreshAccess);
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", refreshAccess);
+    };
+  }, [session?.user?.id]);
 
   useEffect(() => {
     if (variant !== "admin") return;
@@ -231,7 +256,9 @@ export function DashboardShell({
           />
           <div>
             <p className="text-[15px] font-bold tracking-tight text-white">Yehager Bahil Libs</p>
-            <p className="text-xs font-medium text-sidebar-foreground/65">{variant === "admin" ? "Admin Console" : "Employee Console"}</p>
+            <p className="text-xs font-medium text-sidebar-foreground/65">
+              {session?.user?.role === "employee" ? "Employee Console" : "Admin Console"}
+            </p>
           </div>
         </Link>
       </div>
@@ -322,7 +349,7 @@ export function DashboardShell({
                       {hasChildren && childrenOpen ? (
                         <ul className="mb-2 ml-4 mt-1 space-y-0.5 border-l border-sidebar-border/80 pl-2">
                           {item.children?.map((child) => {
-                            const childActive = isReportChildActive(child.href);
+                            const childActive = child.kind === "report" || child.kind === "category" ? isReportChildActive(child.href) : isChildActive(child.href);
                             return (
                               <li key={child.href}>
                                 <Link
@@ -466,15 +493,19 @@ export function DashboardShell({
                   : "flex items-center gap-2 rounded-xl border border-border px-2 py-1.5"
                 }
               >
-                <span
-                  className={
-                    adminTopBar
-                      ? "flex h-9 w-9 items-center justify-center rounded-full bg-sidebar-primary text-xs font-bold text-sidebar-primary-foreground"
-                      : "flex h-9 w-9 items-center justify-center rounded-full bg-muted text-xs font-semibold"
-                  }
-                >
-                  {initials}
-                </span>
+                {profileImage ? (
+                  <img src={profileImage} alt={session?.user?.name ?? "Account"} className="h-9 w-9 rounded-full object-cover ring-2 ring-white/20" />
+                ) : (
+                  <span
+                    className={
+                      adminTopBar
+                        ? "flex h-9 w-9 items-center justify-center rounded-full bg-sidebar-primary text-xs font-bold text-sidebar-primary-foreground"
+                        : "flex h-9 w-9 items-center justify-center rounded-full bg-muted text-xs font-semibold"
+                    }
+                  >
+                    {initials}
+                  </span>
+                )}
                 <span className={adminTopBar ? "hidden max-w-[120px] truncate text-sm font-medium text-white sm:block" : "hidden max-w-[120px] truncate text-sm sm:block"}>
                   {session?.user?.name ?? "Account"}
                 </span>
@@ -492,6 +523,9 @@ export function DashboardShell({
                     <p className="text-sm font-medium">{session?.user?.name ?? "Account"}</p>
                     <p className={adminTopBar ? "truncate text-xs text-sidebar-foreground/65" : "truncate text-xs text-muted-foreground"}>
                       {session?.user?.email}
+                    </p>
+                    <p className={adminTopBar ? "mt-1 text-[11px] font-bold uppercase tracking-wider text-sidebar-primary" : "mt-1 text-[11px] font-bold uppercase tracking-wider text-primary"}>
+                      {session?.user?.role ?? variant}
                     </p>
                   </div>
                   <div className={adminTopBar ? "my-1 h-px bg-sidebar-border" : "my-1 h-px bg-border"} />
@@ -529,12 +563,12 @@ export function DashboardShell({
               <p className="text-sm text-muted-foreground">{subtitle}</p>
             </div>
           ) : null}
-          {isUnassignedEmployee ? (
+          {showPendingAccess ? (
             <div className="mx-auto w-full max-w-3xl">
               <div className="overflow-hidden rounded-2xl border border-border bg-card">
                 <div className="border-b border-border p-6">
-                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Employee</p>
-                  <h1 className="mt-2 text-3xl font-semibold">Access Pending</h1>
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Employee access</p>
+                  <h1 className="mt-2 text-3xl font-semibold">Access setup is pending</h1>
                   <p className="mt-2 text-sm text-muted-foreground">
                     Your employee account has been created successfully, but no role or permissions have been assigned yet. Please wait until an administrator assigns your access level.
                   </p>

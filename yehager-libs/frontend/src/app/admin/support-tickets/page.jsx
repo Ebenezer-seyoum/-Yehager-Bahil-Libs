@@ -9,7 +9,7 @@ export default async function AdminSupportTicketsPage() {
   if (!session?.user?.id) {
     redirect("/signin?callbackUrl=/admin/support-tickets");
   }
-  if (session.user.role !== "admin") {
+  if (session.user.role !== "admin" && session.user.role !== "employee") {
     redirect("/");
   }
 

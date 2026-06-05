@@ -72,7 +72,7 @@ export function CreateGroupOrderModal({ onClose }: CreateGroupOrderModalProps) {
             </div>
             <div>
               <h2 className="font-heading text-lg font-bold">Create Group Order</h2>
-              <p className="text-xs text-muted-foreground">Dress your whole family together</p>
+              <p className="text-xs text-muted-foreground">Create a private family or household order</p>
             </div>
           </div>
           <button type="button" onClick={onClose} className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-secondary" aria-label="Close">
@@ -117,12 +117,12 @@ export function CreateGroupOrderModal({ onClose }: CreateGroupOrderModalProps) {
               />
             </div>
             <p className="mt-1.5 text-xs text-muted-foreground">
-              Enter an event code if you&apos;re ordering for a wedding, graduation, or group event.
+              Enter an event code only when joining an existing Event Match-Up.
             </p>
           </div>
 
           <div className="rounded-xl bg-secondary/40 p-4 text-xs leading-relaxed text-muted-foreground">
-            <strong className="text-foreground">How it works:</strong> After creating your group, you&apos;ll add each family member with their name, gender, and measurements. Then browse and assign outfits, and checkout together in one order.
+            <strong className="text-foreground">How it works:</strong> Create your private group, choose a catalog outfit or custom design, add members and measurements, then checkout together.
           </div>
 
           {error ? <p className="rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-xs font-medium text-destructive">{error}</p> : null}

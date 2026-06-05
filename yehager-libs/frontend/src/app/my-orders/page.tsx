@@ -9,6 +9,10 @@ type OrderItem = {
   quantity?: number;
   price?: number;
   priceUsd?: number;
+  unit_price_usd?: number;
+  item_type?: string;
+  uploaded_design_id?: string;
+  item_metadata?: Record<string, unknown>;
 };
 
 type Order = {
@@ -163,11 +167,21 @@ export default async function MyOrdersPage({
 
                   <div className="mt-3 space-y-1">
                     {(order.items ?? []).map((item, idx) => (
-                      <p key={`${order.id}-${idx}`} className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <div key={`${order.id}-${idx}`} className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                         <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
-                        {item.product_name ?? item.productName ?? "Item"}
-                        {Number(item.price ?? item.priceUsd ?? 0) > 0 ? ` — $${Number(item.price ?? item.priceUsd ?? 0).toFixed(2)}` : ` x${Number(item.quantity ?? 1)}`}
-                      </p>
+                        <span>{item.product_name ?? item.productName ?? "Item"}</span>
+                        {item.item_type === "custom_design" || item.uploaded_design_id ? (
+                          <span className="rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-bold uppercase text-primary">Custom Design</span>
+                        ) : null}
+                        <span>
+                          {Number(item.unit_price_usd ?? item.price ?? item.priceUsd ?? 0) > 0
+                            ? ` - $${Number(item.unit_price_usd ?? item.price ?? item.priceUsd ?? 0).toFixed(2)}`
+                            : ` x${Number(item.quantity ?? 1)}`}
+                        </span>
+                        {item.item_metadata?.estimated_delivery_label ? (
+                          <span>Estimate: {String(item.item_metadata.estimated_delivery_label)}</span>
+                        ) : null}
+                      </div>
                     ))}
                   </div>
 

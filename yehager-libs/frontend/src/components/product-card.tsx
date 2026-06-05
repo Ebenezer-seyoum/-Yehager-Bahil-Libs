@@ -22,6 +22,8 @@ type Product = {
 type ProductCardProps = {
   product: Product;
   eventId?: string | null;
+  groupId?: string | null;
+  selectionMode?: string | null;
   etbRate?: number | null;
 };
 
@@ -34,11 +36,15 @@ const REGION_BADGE: Record<string, string> = {
   "Mila's Choice": "bg-purple-100 text-purple-800",
 };
 
-export function ProductCard({ product, eventId, etbRate }: ProductCardProps) {
+export function ProductCard({ product, eventId, groupId, selectionMode, etbRate }: ProductCardProps) {
   const [wished, setWished] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [copied, setCopied] = useState(false);
-  const href = eventId ? `/product/${product.id}?event=${encodeURIComponent(eventId)}` : `/product/${product.id}`;
+  const context = new URLSearchParams();
+  if (eventId) context.set(selectionMode === "event" ? "eventId" : "event", eventId);
+  if (groupId) context.set("groupId", groupId);
+  if (selectionMode) context.set("selectionMode", selectionMode);
+  const href = `/product/${product.id}${context.size ? `?${context}` : ""}`;
   const image = product.images?.[0] ?? DEFAULT_IMAGE;
   const basePrice = Number(product.priceUsd ?? 0);
   const explicitRolePrices = product.familyRoles?.map((role) => Number(role.price ?? 0)).filter((price) => price > 0) ?? [];

@@ -7,7 +7,7 @@ import { CustomerDetailClient } from "@/components/admin/customer-detail-client"
 export default async function AdminCustomerDetailPage({ params, searchParams }) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) redirect("/signin?callbackUrl=/admin/customers");
-  if (session.user.role !== "admin") redirect("/");
+  if (session.user.role !== "admin" && session.user.role !== "employee") redirect("/");
 
   const { id } = await params;
   const query = (await searchParams) ?? {};

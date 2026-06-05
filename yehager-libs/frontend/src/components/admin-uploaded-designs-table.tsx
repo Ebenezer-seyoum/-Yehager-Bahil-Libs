@@ -1,18 +1,8 @@
 "use client";
 
-import Link from "next/link";
-import { CheckCircle2, Eye, RefreshCw, XCircle } from "lucide-react";
-
-type UploadedDesignRow = {
-  id: string;
-  submissionNumber?: string | null;
-  designTitle?: string | null;
-  customerName?: string | null;
-  userEmail?: string | null;
-  status?: string | null;
-  fabricType?: string | null;
-  createdAt?: string | null;
-};
+import { useState } from "react";
+import { Eye } from "lucide-react";
+import { AdminUploadedDesignDialogs, type UploadedDesign } from "@/components/admin-uploaded-design-dialogs";
 
 function normalizedStatus(status?: string | null) {
   const key = String(status ?? "submitted").toLowerCase();
@@ -26,13 +16,15 @@ function normalizedStatus(status?: string | null) {
 
 function statusClass(status?: string | null) {
   const key = normalizedStatus(status);
-  if (key === "completed request") return "bg-green-500/15 text-green-400 border-green-500/30";
-  if (key === "awaiting payment") return "bg-blue-500/15 text-blue-300 border-blue-500/30";
-  if (key === "declined") return "bg-red-500/15 text-red-300 border-red-500/30";
-  return "bg-yellow-100 text-yellow-800 border-yellow-100";
+  if (key === "completed request") return "border-emerald-200 bg-emerald-50 text-emerald-700 before:bg-emerald-500";
+  if (key === "awaiting payment") return "border-blue-200 bg-blue-50 text-blue-800 before:bg-blue-500";
+  if (key === "declined") return "border-rose-200 bg-rose-50 text-rose-700 before:bg-rose-500";
+  return "border-amber-200 bg-amber-50 text-amber-800 before:bg-amber-500";
 }
 
-export function AdminUploadedDesignsTable({ rows, search }: { rows: UploadedDesignRow[]; search: string }) {
+export function AdminUploadedDesignsTable({ rows, search }: { rows: UploadedDesign[]; search: string }) {
+  const [selected, setSelected] = useState<UploadedDesign | null>(null);
+  const [dialog, setDialog] = useState<"view" | null>(null);
   const term = search.trim().toLowerCase();
   const filtered = term
     ? rows.filter((row) =>
@@ -42,75 +34,55 @@ export function AdminUploadedDesignsTable({ rows, search }: { rows: UploadedDesi
       )
     : rows;
 
-  const pendingCount = rows.filter((row) => ["submitted", "in_review"].includes(String(row.status ?? "submitted"))).length;
-  const awaitingCount = rows.filter((row) => row.status === "awaiting_payment").length;
-  const completedCount = rows.filter((row) => ["approved", "completed_request"].includes(String(row.status))).length;
-  const declinedCount = rows.filter((row) => row.status === "rejected").length;
-
-  const chips = [
-    ["Pending Review", pendingCount, true],
-    ["Awaiting Payment", awaitingCount, false],
-    ["Completed Requests", completedCount, false],
-    ["Declined", declinedCount, false],
-    ["All", rows.length, false],
-  ] as const;
+  function open(row: UploadedDesign) {
+    setSelected(row);
+    setDialog("view");
+  }
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-center gap-2">
-        {chips.map(([label, count, active]) => (
-          <span
-            key={label}
-            className={`rounded-full border px-4 py-2 text-sm ${
-              active ? "border-primary bg-primary text-black" : "border-border bg-background text-muted-foreground"
-            }`}
-          >
-            {label}{count ? ` (${count})` : ""}
-          </span>
-        ))}
-        <button type="button" className="ml-auto inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-xs text-muted-foreground hover:text-foreground">
-          <RefreshCw className="h-3.5 w-3.5" />
-          Refresh
-        </button>
+    <div className="space-y-4">
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[760px] border-collapse text-left">
+            <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-600">
+              <tr className="border-b border-slate-200">
+                <th className="px-4 py-4 font-bold">Request ID</th>
+                <th className="px-4 py-4 font-bold">Customer</th>
+                <th className="px-4 py-4 font-bold">Submitted</th>
+                <th className="px-4 py-4 font-bold">Status</th>
+                <th className="px-4 py-4 text-right font-bold">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((row, index) => (
+                <tr key={row.id} className={`border-b border-slate-200 last:border-b-0 hover:bg-blue-50/70 ${index % 2 === 0 ? "bg-white" : "bg-slate-50/50"}`}>
+                  <td className="px-4 py-4 font-mono text-xs font-black text-blue-900">#{row.submissionNumber ?? "YBL-CD"}</td>
+                  <td className="px-4 py-4">
+                    <p className="font-semibold text-slate-950">{row.customerName ?? "Customer"}</p>
+                    <p className="mt-0.5 text-xs text-slate-500">{row.userEmail ?? "No email"}</p>
+                  </td>
+                  <td className="px-4 py-4 text-sm text-slate-700">{row.submittedAt || row.createdAt ? new Date(String(row.submittedAt ?? row.createdAt)).toLocaleDateString() : "Not provided"}</td>
+                  <td className="px-4 py-4">
+                    <span className={`inline-flex min-w-32 items-center justify-center gap-2 rounded-full border px-3 py-1.5 text-xs font-bold capitalize shadow-sm before:h-2 before:w-2 before:rounded-full before:content-[''] ${statusClass(row.status)}`}>
+                      {normalizedStatus(row.status)}
+                    </span>
+                  </td>
+                  <td className="px-4 py-4 text-right">
+                    <button type="button" onClick={() => open(row)} className="inline-flex h-10 items-center gap-2 rounded-xl bg-blue-900 px-4 text-sm font-bold text-white shadow-sm shadow-blue-900/20 hover:bg-blue-950">
+                      <Eye className="h-4 w-4" />
+                      View
+                    </button>
+                  </td>
+                </tr>
+              ))}
+              {filtered.length === 0 ? (
+                <tr><td colSpan={5} className="px-4 py-12 text-center text-sm text-slate-500">No custom designs found for this filter.</td></tr>
+              ) : null}
+            </tbody>
+          </table>
+        </div>
       </div>
-
-      <div className="space-y-3">
-        {filtered.map((row) => (
-          <div key={row.id} className="flex flex-col gap-4 rounded-xl border border-border bg-card p-4 lg:flex-row lg:items-center">
-            <div className="min-w-0 flex-1">
-              <p className="font-mono text-xs font-black text-primary">#{row.submissionNumber ?? "YBL-CD"}</p>
-              <p className="mt-1 truncate text-base font-black text-foreground">{row.customerName ?? row.userEmail ?? "Customer"}</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {row.designTitle ?? "Custom Design"} · {row.fabricType ?? "Fabric pending"}
-              </p>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-3">
-              <span className={`rounded-full border px-3 py-1 text-xs font-bold ${statusClass(row.status)}`}>
-                {normalizedStatus(row.status)}
-              </span>
-              <Link href={`/admin/uploaded-designs/${row.id}`} className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
-                <Eye className="h-4 w-4" />
-                Details
-              </Link>
-              <Link href={`/admin/uploaded-designs/${row.id}`} className="inline-flex h-9 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-medium text-black hover:bg-primary/90">
-                <CheckCircle2 className="h-4 w-4" />
-                Approve & Quote
-              </Link>
-              <Link href={`/admin/uploaded-designs/${row.id}`} className="inline-flex h-9 items-center gap-2 rounded-lg bg-red-500 px-4 text-sm font-bold text-white hover:bg-red-600">
-                <XCircle className="h-4 w-4" />
-                Decline
-              </Link>
-            </div>
-          </div>
-        ))}
-
-        {filtered.length === 0 ? (
-          <div className="rounded-xl border border-border bg-card p-10 text-center text-sm text-muted-foreground">
-            No custom designs found for this filter.
-          </div>
-        ) : null}
-      </div>
+      <AdminUploadedDesignDialogs design={selected} kind={dialog} onClose={() => { setDialog(null); setSelected(null); }} />
     </div>
   );
 }

@@ -6,7 +6,7 @@ import { AdminSectionsWorkspace } from "@/components/admin/pages/admin-sections-
 export default async function AdminSectionsPage() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) redirect("/signin?callbackUrl=/admin/sections");
-  if (session.user.role !== "admin") redirect("/");
+  if (session.user.role !== "admin" && session.user.role !== "employee") redirect("/");
 
   return <AdminSectionsWorkspace data={{}} />;
 }

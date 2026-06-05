@@ -346,6 +346,24 @@ function buildActivityKpis(data: AdminWorkspaceData): KpiCardModel[] {
   ];
 }
 
+function buildUploadedDesignKpis(data: AdminWorkspaceData): KpiCardModel[] {
+  const rows = data.uploadedDesigns ?? [];
+  const pending = rows.filter((row) => ["submitted", "in_review"].includes(norm(row.status)));
+  const awaiting = rows.filter((row) => norm(row.status) === "awaiting_payment");
+  const completed = rows.filter((row) => ["completed_request", "approved"].includes(norm(row.status)));
+  const declined = rows.filter((row) => norm(row.status) === "rejected");
+  const quotedValue = rows.reduce((sum, row) => sum + (Number(row.quotedPriceUsd ?? 0) || 0), 0);
+
+  return [
+    kpi({ id: "total", title: "Total Requests", value: String(rows.length), description: "All custom design requests", color: "blue", icon: ClipboardList, changePercent: 0, positiveIsGood: true }),
+    kpi({ id: "pending", title: "Pending Review", value: String(pending.length), description: "Requests needing a decision", color: "yellow", icon: Clock, changePercent: 0, positiveIsGood: false }),
+    kpi({ id: "awaiting", title: "Awaiting Payment", value: String(awaiting.length), description: "Approved quotes in customer carts", color: "blue", icon: CreditCard, changePercent: 0, positiveIsGood: true }),
+    kpi({ id: "completed", title: "Completed Requests", value: String(completed.length), description: "Paid custom design requests", color: "green", icon: CheckCircle2, changePercent: 0, positiveIsGood: true }),
+    kpi({ id: "declined", title: "Declined Requests", value: String(declined.length), description: "Requests not approved", color: "red", icon: XCircle, changePercent: 0, positiveIsGood: false }),
+    kpi({ id: "quoted", title: "Total Quoted Value", value: money(quotedValue), description: "Value of issued custom quotes", color: "purple", icon: DollarSign, changePercent: 0, positiveIsGood: true }),
+  ];
+}
+
 function buildSettingsKpis(): KpiCardModel[] {
   return [
     kpi({ id: "store", title: "Store Status", value: "Online", description: "Storefront availability", color: "green", icon: CheckCircle2, changePercent: 0, positiveIsGood: true }),
@@ -387,10 +405,11 @@ export function computePageKpis(pageId: AdminPageId, data: AdminWorkspaceData): 
     case "settings":
       return buildSettingsKpis();
     case "documents":
-    case "uploaded-designs":
     case "sections":
     case "exchange-rate":
       return buildGenericKpis(data);
+    case "uploaded-designs":
+      return buildUploadedDesignKpis(data);
     default:
       return buildGenericKpis(data);
   }

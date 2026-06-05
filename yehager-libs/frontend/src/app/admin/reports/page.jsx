@@ -19,7 +19,7 @@ function ReportsLoading() {
 export default async function AdminReportsPage() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) redirect("/signin?callbackUrl=/admin/reports");
-  if (session.user.role !== "admin") redirect("/");
+  if (session.user.role !== "admin" && session.user.role !== "employee") redirect("/");
 
   let reportsPayload = null;
 

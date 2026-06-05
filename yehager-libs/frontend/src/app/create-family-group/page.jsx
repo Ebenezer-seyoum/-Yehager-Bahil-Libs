@@ -23,7 +23,7 @@ export default async function CreateFamilyGroupPage({ searchParams }) {
       <div className="mx-auto max-w-xl px-4 py-20 text-center">
         <Users className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
         <h1 className="font-heading text-2xl font-bold">Missing group details</h1>
-        <p className="mt-2 text-muted-foreground">Open Our Home Cart to create a group order.</p>
+        <p className="mt-2 text-muted-foreground">Use Create Group Order to start a private shared checkout.</p>
       </div>
     );
   }
@@ -48,23 +48,14 @@ export default async function CreateFamilyGroupPage({ searchParams }) {
       resolvedEventId = event.id;
       resolvedEventName = event.name ?? "Event";
       await apiRequest(`/api/v1/events/${resolvedEventId}/join`, { method: "POST" }).catch(() => null);
-    } else {
-      const eventRes = await apiRequest("/api/v1/events", {
-        method: "POST",
-        body: {
-          name: groupName,
-          message: "Family group order created from Our Home Cart.",
-        },
-      });
-      resolvedEventId = eventRes?.data?.id;
-      resolvedEventName = eventRes?.data?.name ?? groupName;
     }
 
     const groupRes = await apiRequest("/api/v1/family-groups", {
       method: "POST",
       body: {
         groupName: groupName || `${resolvedEventName} Family`,
-        eventId: resolvedEventId,
+        eventId: resolvedEventId || undefined,
+        groupType: resolvedEventId ? "event_group" : "family_group",
       },
     });
     const groupId = groupRes?.data?.id;

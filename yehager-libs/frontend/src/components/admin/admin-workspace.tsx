@@ -90,7 +90,8 @@ export function AdminWorkspace({
     [pageId, activeTab, dateFilteredData],
   );
 
-  const kpis = useMemo(() => computePageKpis(pageId, tabFilteredData), [pageId, tabFilteredData]);
+  const kpiData = pageId === "uploaded-designs" ? dateFilteredData : tabFilteredData;
+  const kpis = useMemo(() => computePageKpis(pageId, kpiData), [pageId, kpiData]);
   const showKpis = !hideKpisOnTabs?.includes(activeTab);
   const showFilters = !hideFilters && !hideFiltersOnTabs?.includes(activeTab);
 

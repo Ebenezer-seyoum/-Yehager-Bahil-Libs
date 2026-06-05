@@ -1,6 +1,6 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "../lib/db/drizzle.js";
-import { permissions, rolePermissions, roles, userRoles } from "../lib/db/schema.js";
+import { permissions, rolePermissions, roles, userRoles, users } from "../lib/db/schema.js";
 import type { UserRole } from "../lib/auth/roles.js";
 
 export async function findRoleByKey(key: string) {
@@ -20,6 +20,37 @@ export async function createRole(payload: { key: string; name: string; descripti
     })
     .returning();
   return created;
+}
+
+export async function updateRole(roleId: string, payload: { name: string; description?: string | null }) {
+  const [updated] = await db
+    .update(roles)
+    .set({
+      name: payload.name,
+      description: payload.description ?? null,
+      updatedAt: new Date(),
+    })
+    .where(eq(roles.id, roleId))
+    .returning();
+  return updated ?? null;
+}
+
+export async function deleteRole(roleId: string) {
+  const existingRole = await db.query.roles.findFirst({ where: eq(roles.id, roleId) });
+  if (!existingRole) return null;
+  if (existingRole.isSystem) return { blocked: true as const, role: existingRole };
+
+  await db
+    .update(users)
+    .set({
+      assignedRoleId: null,
+      roleStatus: "unassigned",
+      updatedAt: new Date(),
+    })
+    .where(eq(users.assignedRoleId, roleId));
+
+  const [deleted] = await db.delete(roles).where(eq(roles.id, roleId)).returning();
+  return { blocked: false as const, role: deleted };
 }
 
 export async function assignRoleToUser(userId: string, roleId: string) {

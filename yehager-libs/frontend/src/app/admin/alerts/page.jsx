@@ -9,7 +9,7 @@ export default async function AdminAlertsPage() {
   if (!session?.user?.id) {
     redirect("/signin?callbackUrl=/admin/alerts");
   }
-  if (session.user.role !== "admin") {
+  if (session.user.role !== "admin" && session.user.role !== "employee") {
     redirect("/");
   }
 

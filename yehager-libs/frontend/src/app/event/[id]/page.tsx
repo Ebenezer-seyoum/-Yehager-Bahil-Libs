@@ -15,6 +15,8 @@ type Event = {
   message?: string | null;
   productId?: string | null;
   productName?: string | null;
+  selectionType?: string | null;
+  uploadedDesignId?: string | null;
 };
 
 type Participant = {
@@ -45,6 +47,12 @@ type Order = {
   paymentStatus?: string | null;
   status?: string | null;
 };
+type SelectedDesign = {
+  status?: string | null;
+  submissionNumber?: string | null;
+  quotedPriceUsd?: number | string | null;
+  estimatedDeliveryLabel?: string | null;
+};
 
 const STATUS_STYLES: Record<string, string> = {
   browsing: "bg-gray-100 text-gray-700",
@@ -60,8 +68,15 @@ const PAYMENT_STYLES: Record<string, string> = {
   paid: "bg-green-100 text-green-800",
 };
 
-export default async function EventDashboardPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function EventDashboardPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const { id } = await params;
+  const query = await searchParams;
 
   let event: Event | null = null;
   let participants: Participant[] = [];
@@ -69,6 +84,7 @@ export default async function EventDashboardPage({ params }: { params: Promise<{
   let familyMembers: FamilyMember[] = [];
   let orders: Order[] = [];
   let authRequired = false;
+  let selectedDesign: SelectedDesign | null = null;
 
   try {
     const eventRes = await backendPublicRequest(`/api/v1/events/${id}`);
@@ -85,12 +101,14 @@ export default async function EventDashboardPage({ params }: { params: Promise<{
         familyGroups: FamilyGroup[];
         familyMembers: FamilyMember[];
         orders: Order[];
+        selectedDesign?: SelectedDesign | null;
       };
     }>(`/api/v1/events/${id}/dashboard`);
     participants = Array.isArray(dashboardRes?.data?.participants) ? dashboardRes.data.participants : [];
     familyGroups = Array.isArray(dashboardRes?.data?.familyGroups) ? dashboardRes.data.familyGroups : [];
     familyMembers = Array.isArray(dashboardRes?.data?.familyMembers) ? dashboardRes.data.familyMembers : [];
     orders = Array.isArray(dashboardRes?.data?.orders) ? dashboardRes.data.orders : [];
+    selectedDesign = dashboardRes?.data?.selectedDesign ?? null;
   } catch {
     authRequired = true;
     participants = [];
@@ -104,7 +122,7 @@ export default async function EventDashboardPage({ params }: { params: Promise<{
     );
   }
 
-  const eventLink = event.productId ? `/product/${event.productId}?event=${event.id}` : `/catalog?event=${event.id}`;
+  const eventLink = `/join/${event.id}`;
   const publicEventUrl = `${process.env.NEXTAUTH_URL ?? ""}${eventLink}`;
   const ordered = participants.filter((p) => ["ordered", "tailoring", "shipped", "delivered"].includes(p.orderStatus ?? "")).length;
   const paid = participants.filter((p) => p.paymentStatus === "paid").length;
@@ -114,17 +132,17 @@ export default async function EventDashboardPage({ params }: { params: Promise<{
   });
 
   return (
-    <div className="mx-auto max-w-4xl space-y-8 px-4 py-8 sm:px-6 sm:py-12">
-      <div className="rounded-2xl bg-foreground p-6 text-background sm:p-8">
+    <div className="mx-auto max-w-6xl space-y-10 px-4 py-10 sm:px-6 sm:py-16">
+      <div className="rounded-3xl bg-[#f4f4f4] p-8 text-black sm:p-12">
         <p className="mb-2 text-xs font-medium uppercase tracking-[0.3em] text-primary">Event Dashboard</p>
-        <h1 className="font-heading text-3xl font-bold sm:text-4xl">{event.name}</h1>
-        <div className="mt-3 flex flex-wrap gap-4 text-sm text-background/60">
+        <h1 className="font-heading text-4xl font-bold sm:text-6xl">{event.name}</h1>
+        <div className="mt-5 flex flex-wrap gap-6 text-sm text-slate-600">
           {event.eventCode ? <span className="rounded bg-white/10 px-2 py-1 font-mono text-xs">{event.eventCode}</span> : null}
           {event.eventDate ? <span>{new Date(event.eventDate).toLocaleDateString()}</span> : null}
           <span>{participants.length} joined</span>
         </div>
         {event.productName && event.productId ? (
-          <p className="mt-3 text-sm text-background/70">
+          <p className="mt-5 text-lg text-slate-700">
             Featured:{" "}
             <Link href={`/product/${event.productId}`} className="font-medium text-primary hover:underline">
               {event.productName}
@@ -138,25 +156,78 @@ export default async function EventDashboardPage({ params }: { params: Promise<{
         <RefreshLink />
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid gap-4 rounded-3xl bg-[#f4f4f4] p-7 text-black sm:grid-cols-4">
+        {[
+          ["1", "Choose outfit", Boolean(event.productId || event.uploadedDesignId)],
+          ["2", "Share invite link", Boolean(event.productId || event.uploadedDesignId)],
+          ["3", "Members join", participants.length > 0],
+          ["4", "Track orders", ordered > 0],
+        ].map(([number, label, complete]) => (
+          <div key={String(label)} className={`rounded-xl px-3 py-4 text-center text-sm ${complete ? "bg-primary/15 text-black" : "bg-white text-slate-500"}`}>
+            <span className="mx-auto mb-2 grid h-10 w-10 place-items-center rounded-full bg-primary text-sm font-bold text-black">{number}</span>
+            {label}
+          </div>
+        ))}
+      </div>
+
+      <div id="event-outfit" className="scroll-mt-24 rounded-xl border border-blue-950/15 bg-white p-5 text-slate-900 shadow-sm">
+        {typeof query?.selected === "string" ? (
+          <div className="mb-5 rounded-xl border border-emerald-500/40 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">
+            {query.selected === "custom-design" ? "Custom design submitted successfully." : "Catalog product selected successfully."}
+          </div>
+        ) : null}
+        <p className="text-xs font-bold uppercase tracking-widest text-blue-950">Event Match-Up Outfit</p>
+        <h2 className="mt-1 text-xl font-semibold">{event.productName ?? "Choose what everyone will order"}</h2>
+        <p className="mt-1 text-sm text-slate-600">
+          {event.selectionType === "custom_design"
+            ? selectedDesign?.status === "awaiting_payment"
+              ? "Custom design approved and ready for participant payments."
+              : "Custom design selected and awaiting admin review and price quote."
+            : event.productId
+              ? "Catalog product selected successfully. Participants who join inherit this selection automatically."
+              : "Choose one catalog product or submit a custom design. Participants who join inherit this selection automatically."}
+        </p>
+        {event.productId || event.uploadedDesignId ? (
+          <span className="mt-4 inline-flex rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">
+            {event.selectionType === "custom_design" ? "Custom Design Submitted Successfully" : "Catalog Product Selected Successfully"}
+          </span>
+        ) : null}
+        {selectedDesign ? (
+          <div className="mt-4 flex flex-wrap gap-2 text-xs">
+            <span className={`rounded-full px-3 py-1 font-semibold ${selectedDesign.status === "awaiting_payment" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
+              {selectedDesign.status === "awaiting_payment" ? "Ready for Payment" : "Awaiting Design Review"}
+            </span>
+            {selectedDesign.submissionNumber ? <span className="rounded-full bg-slate-100 px-3 py-1">{selectedDesign.submissionNumber}</span> : null}
+            {selectedDesign.quotedPriceUsd ? <span className="rounded-full bg-slate-100 px-3 py-1">${Number(selectedDesign.quotedPriceUsd).toFixed(2)} per member</span> : null}
+            {selectedDesign.estimatedDeliveryLabel ? <span className="rounded-full bg-slate-100 px-3 py-1">{selectedDesign.estimatedDeliveryLabel}</span> : null}
+          </div>
+        ) : null}
+        <div className="mt-4 flex flex-wrap gap-3">
+          <Link href={`/catalog?selectionMode=event&eventId=${event.id}`} className="rounded-lg bg-blue-950 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-800">
+            Select Catalog Product
+          </Link>
+          <Link href={`/upload-your-design?eventId=${event.id}`} className="rounded-lg border border-blue-950 px-4 py-2.5 text-sm font-semibold text-blue-950 hover:bg-blue-50">
+            Submit Custom Design
+          </Link>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-6">
         {[
           ["Participants", participants.length],
           ["Orders Placed", ordered],
           ["Paid", paid],
         ].map(([label, value]) => (
-          <div key={label} className="rounded-xl border border-border bg-card p-4 text-center">
-            <p className="font-heading text-2xl font-bold">{value}</p>
-            <p className="mt-1 text-xs text-muted-foreground">{label}</p>
+          <div key={label} className="rounded-2xl border border-border bg-card p-8 text-center">
+            <p className="font-heading text-3xl font-bold">{value}</p>
+            <p className="mt-2 text-sm text-muted-foreground">{label}</p>
           </div>
         ))}
       </div>
 
-      <div className="rounded-xl border border-border bg-card p-5">
-        <h3 className="font-heading text-lg font-semibold">Share Your Event</h3>
-        <p className="mt-1 text-sm text-muted-foreground">Invite participants with this link:</p>
-        <p className="mt-2 rounded-lg bg-secondary px-3 py-2 font-mono text-xs">{eventLink}</p>
-        <p className="mt-2 text-xs text-muted-foreground">Public invite route: /join/{event.id}</p>
-        <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-start">
+      <div id="share-event" className="scroll-mt-24 rounded-2xl border border-border bg-card p-7">
+        <h3 className="font-heading text-2xl font-semibold">Share Your Event</h3>
+        <div className="mt-6 flex flex-col gap-6 sm:flex-row sm:items-start">
           <div className="rounded-xl bg-white p-3">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
@@ -166,7 +237,7 @@ export default async function EventDashboardPage({ params }: { params: Promise<{
             />
           </div>
           <div className="flex-1">
-            <ShareLinks url={publicEventUrl} title={`Join ${event.name}`} />
+            <ShareLinks url={publicEventUrl} title={`Join ${event.name}`} inline />
           </div>
         </div>
       </div>
@@ -232,8 +303,8 @@ export default async function EventDashboardPage({ params }: { params: Promise<{
         </div>
       ) : null}
 
-      <div className="rounded-xl border border-border bg-card p-5">
-        <h3 className="font-heading text-lg font-semibold">Member Tracking</h3>
+      <div id="member-tracking" className="scroll-mt-24 rounded-2xl border border-border bg-card p-7">
+        <h3 className="font-heading text-2xl font-semibold">Member Tracking</h3>
         {authRequired ? (
           <p className="mt-2 text-sm text-muted-foreground">Sign in to see participant details.</p>
         ) : participants.length === 0 ? (

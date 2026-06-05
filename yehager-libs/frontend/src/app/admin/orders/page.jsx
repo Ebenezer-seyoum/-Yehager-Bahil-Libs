@@ -7,7 +7,7 @@ import { AdminOrdersWorkspace } from "@/components/admin/pages/admin-orders-work
 export default async function AdminOrdersPage({ searchParams }) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) redirect("/signin?callbackUrl=/admin/orders");
-  if (session.user.role !== "admin") redirect("/");
+  if (session.user.role !== "admin" && session.user.role !== "employee") redirect("/");
   const selectedOrderId = typeof searchParams?.order === "string" ? searchParams.order : null;
   const initialOrderType = typeof searchParams?.type === "string" ? searchParams.type : null;
 

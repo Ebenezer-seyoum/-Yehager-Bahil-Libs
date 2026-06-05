@@ -2,6 +2,8 @@ import { Suspense } from "react";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { adminNavigation } from "@/lib/dashboard-navigation";
 import { apiRequest } from "@/lib/api-client";
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/auth-options";
 
 type Order = {
   id?: string | null;
@@ -42,7 +44,8 @@ async function getAdminNotificationCounts() {
 }
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
-  const notificationCounts = await getAdminNotificationCounts();
+  const session = await getServerSession(authOptions);
+  const notificationCounts = session?.user?.role === "admin" ? await getAdminNotificationCounts() : {};
 
   return (
     <Suspense

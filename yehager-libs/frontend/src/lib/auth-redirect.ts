@@ -6,7 +6,7 @@ export function getPostLoginRedirect(role: string | null | undefined, callbackUr
   }
 
   if (role === "employee") {
-    return callbackUrl?.startsWith("/employee") ? callbackUrl : "/employee";
+    return callbackUrl?.startsWith("/admin") ? callbackUrl : "/admin";
   }
 
   if (callbackUrl && !callbackUrl.startsWith("/admin") && !callbackUrl.startsWith("/employee")) {

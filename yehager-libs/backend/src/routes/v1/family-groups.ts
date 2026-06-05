@@ -1,23 +1,28 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import { zValidator } from "@hono/zod-validator";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
 import { requireAuth } from "../../middleware/auth.js";
 import { db } from "../../lib/db/drizzle.js";
-import { cartItems, events, familyGroups, familyMembers, products } from "../../lib/db/schema.js";
+import { cartItems, events, familyGroups, familyMembers, measurements, orders, products, uploadedDesigns } from "../../lib/db/schema.js";
 import type { AppBindings } from "../../types/hono.js";
 
 const createGroupSchema = z.object({
   groupName: z.string().min(1).max(160),
-  eventId: z.string().uuid(),
+  eventId: z.string().uuid().optional(),
+  groupType: z.enum(["family_group", "event_group"]).optional(),
+  productId: z.string().uuid().optional(),
+  uploadedDesignId: z.string().uuid().optional(),
 });
 
 const groupIdParam = z.object({
   groupId: z.string().uuid(),
 });
 const updateGroupSchema = z.object({
-  groupName: z.string().min(1).max(160),
+  groupName: z.string().min(1).max(160).optional(),
+  productId: z.string().uuid().nullable().optional(),
+  uploadedDesignId: z.string().uuid().nullable().optional(),
 });
 
 const createMemberSchema = z.object({
@@ -25,6 +30,7 @@ const createMemberSchema = z.object({
   relation: z.string().optional(),
   gender: z.enum(["male", "female", "unisex"]),
   measurements: z.record(z.string(), z.unknown()).optional(),
+  measurementId: z.string().uuid().optional(),
 });
 
 const memberParam = z.object({
@@ -37,10 +43,12 @@ const updateMemberSchema = z.object({
   relation: z.string().optional(),
   gender: z.enum(["male", "female", "unisex"]).optional(),
   measurements: z.record(z.string(), z.unknown()).optional(),
+  measurementId: z.string().uuid().nullable().optional(),
   productId: z.string().uuid().nullable().optional(),
 });
 
 export const familyGroupsRouter = new Hono<AppBindings>();
+const requiredMeasurements = ["chest", "waist", "hips", "shoulderWidth", "armLength", "torsoLength"];
 
 familyGroupsRouter.post("/", requireAuth, zValidator("json", createGroupSchema), async (c) => {
   const authUser = c.get("authUser");
@@ -49,15 +57,23 @@ familyGroupsRouter.post("/", requireAuth, zValidator("json", createGroupSchema),
   }
   const body = c.req.valid("json");
 
-  const event = await db.query.events.findFirst({
+  const event = body.eventId ? await db.query.events.findFirst({
     where: and(eq(events.id, body.eventId), eq(events.isActive, true)),
-  });
-  if (!event) {
-    throw new HTTPException(404, { message: "Event not found" });
-  }
+  }) : null;
+  if (body.eventId && !event) throw new HTTPException(404, { message: "Event not found" });
+  const product = body.productId ? await db.query.products.findFirst({
+    where: and(eq(products.id, body.productId), eq(products.isActive, true)),
+  }) : null;
+  if (body.productId && !product) throw new HTTPException(404, { message: "Product not found" });
+  const design = body.uploadedDesignId ? await db.query.uploadedDesigns.findFirst({
+    where: and(eq(uploadedDesigns.id, body.uploadedDesignId), eq(uploadedDesigns.userEmail, authUser.email)),
+  }) : null;
+  if (body.uploadedDesignId && !design) throw new HTTPException(404, { message: "Custom design not found" });
 
   const existing = await db.query.familyGroups.findFirst({
-    where: and(eq(familyGroups.eventId, body.eventId), eq(familyGroups.leadEmail, authUser.email)),
+    where: body.eventId
+      ? and(eq(familyGroups.eventId, body.eventId), eq(familyGroups.leadEmail, authUser.email))
+      : and(eq(familyGroups.groupName, body.groupName), eq(familyGroups.leadEmail, authUser.email)),
   });
   if (existing) {
     return c.json({ data: existing });
@@ -68,13 +84,55 @@ familyGroupsRouter.post("/", requireAuth, zValidator("json", createGroupSchema),
     .values({
       groupName: body.groupName,
       eventId: body.eventId,
-      eventName: event.name,
+      eventName: event?.name,
+      groupType: body.groupType ?? (body.eventId ? "event_group" : "family_group"),
+      selectionType: body.productId ? "catalog_product" : body.uploadedDesignId ? "custom_design" : event?.selectionType,
+      productId: body.productId ?? event?.productId,
+      uploadedDesignId: body.uploadedDesignId ?? event?.uploadedDesignId,
+      productName: product?.name ?? design?.designTitle ?? event?.productName,
+      productImage: product?.images?.[0] ?? design?.frontImageUrl,
       leadEmail: authUser.email,
       leadName: authUser.email.split("@")[0],
     })
     .returning();
 
   return c.json({ data: group }, 201);
+});
+
+familyGroupsRouter.get("/mine", requireAuth, async (c) => {
+  const authUser = c.get("authUser");
+  if (!authUser?.email) throw new HTTPException(401, { message: "Unauthorized" });
+  const [groups, members, userCart, userOrders] = await Promise.all([
+    db.query.familyGroups.findMany({
+      where: and(eq(familyGroups.leadEmail, authUser.email), eq(familyGroups.groupType, "family_group")),
+      orderBy: [desc(familyGroups.updatedAt)],
+    }),
+    db.query.familyMembers.findMany({ orderBy: [desc(familyMembers.createdAt)] }),
+    db.query.cartItems.findMany({ where: eq(cartItems.userEmail, authUser.email) }),
+    db.query.orders.findMany({ where: eq(orders.userEmail, authUser.email), orderBy: [desc(orders.createdAt)] }),
+  ]);
+
+  const data = groups.map((group) => {
+    const groupMembers = members.filter((member) => member.familyGroupId === group.id);
+    const readyMembers = groupMembers.filter((member) => requiredMeasurements.every((field) => {
+      const value = member.measurements?.[field];
+      return value !== null && value !== undefined && String(value).trim() !== "";
+    })).length;
+    const inCart = userCart.some((item) => item.itemMetadata?.group_id === group.id);
+    const ordered = userOrders.some((order) => order.items.some((item) => {
+      const metadata = item.item_metadata as Record<string, unknown> | undefined;
+      return metadata?.group_id === group.id;
+    }));
+    const paid = userOrders.some((order) => order.paymentStatus === "paid" && order.items.some((item) => {
+      const metadata = item.item_metadata as Record<string, unknown> | undefined;
+      return metadata?.group_id === group.id;
+    }));
+    const hasOutfit = Boolean(group.productId || group.uploadedDesignId);
+    const allReady = groupMembers.length > 0 && readyMembers === groupMembers.length;
+    const currentStep = paid || ordered ? 4 : allReady || inCart ? 3 : hasOutfit ? 2 : 1;
+    return { ...group, memberCount: groupMembers.length, readyMemberCount: readyMembers, inCart, ordered, paid, currentStep };
+  });
+  return c.json({ data });
 });
 
 familyGroupsRouter.get("/:groupId", requireAuth, zValidator("param", groupIdParam), async (c) => {
@@ -92,8 +150,11 @@ familyGroupsRouter.get("/:groupId", requireAuth, zValidator("param", groupIdPara
     where: eq(familyMembers.familyGroupId, groupId),
     orderBy: [desc(familyMembers.createdAt)],
   });
+  const selectedDesign = group.uploadedDesignId ? await db.query.uploadedDesigns.findFirst({
+    where: eq(uploadedDesigns.id, group.uploadedDesignId),
+  }) : null;
 
-  return c.json({ data: { group, members } });
+  return c.json({ data: { group, members, selectedDesign } });
 });
 
 familyGroupsRouter.patch("/:groupId", requireAuth, zValidator("param", groupIdParam), zValidator("json", updateGroupSchema), async (c) => {
@@ -101,10 +162,21 @@ familyGroupsRouter.patch("/:groupId", requireAuth, zValidator("param", groupIdPa
   const { groupId } = c.req.valid("param");
   const body = c.req.valid("json");
 
+  let sourcePatch: Record<string, unknown> = {};
+  if (body.productId) {
+    const product = await db.query.products.findFirst({ where: and(eq(products.id, body.productId), eq(products.isActive, true)) });
+    if (!product) throw new HTTPException(404, { message: "Product not found" });
+    sourcePatch = { selectionType: "catalog_product", productId: product.id, productName: product.name, productImage: product.images?.[0], uploadedDesignId: null };
+  } else if (body.uploadedDesignId) {
+    const design = await db.query.uploadedDesigns.findFirst({ where: and(eq(uploadedDesigns.id, body.uploadedDesignId), eq(uploadedDesigns.userEmail, authUser?.email ?? "")) });
+    if (!design) throw new HTTPException(404, { message: "Custom design not found" });
+    sourcePatch = { selectionType: "custom_design", uploadedDesignId: design.id, productId: null, productName: design.designTitle, productImage: design.frontImageUrl };
+  }
   const [row] = await db
     .update(familyGroups)
     .set({
       groupName: body.groupName,
+      ...sourcePatch,
       updatedAt: new Date(),
     })
     .where(and(eq(familyGroups.id, groupId), eq(familyGroups.leadEmail, authUser?.email ?? "")))
@@ -129,6 +201,18 @@ familyGroupsRouter.post("/:groupId/members", requireAuth, zValidator("param", gr
     throw new HTTPException(404, { message: "Family group not found" });
   }
 
+  let measurementSnapshot = body.measurements;
+  if (body.measurementId) {
+    const saved = await db.query.measurements.findFirst({
+      where: and(eq(measurements.id, body.measurementId), eq(measurements.userEmail, authUser?.email ?? "")),
+    });
+    if (!saved) throw new HTTPException(404, { message: "Saved measurement not found" });
+    measurementSnapshot = {
+      chest: saved.chest, waist: saved.waist, hips: saved.hips, shoulderWidth: saved.shoulderWidth,
+      armLength: saved.armLength, torsoLength: saved.torsoLength, inseam: saved.inseam, neck: saved.neck,
+    };
+  }
+
   const [member] = await db
     .insert(familyMembers)
     .values({
@@ -137,7 +221,8 @@ familyGroupsRouter.post("/:groupId/members", requireAuth, zValidator("param", gr
       name: body.name,
       relation: body.relation,
       gender: body.gender,
-      measurements: body.measurements,
+      measurements: measurementSnapshot,
+      measurementId: body.measurementId,
     })
     .returning();
 
@@ -203,13 +288,25 @@ familyGroupsRouter.patch(
       priceUsd = null;
     }
 
+    let measurementSnapshot = body.measurements;
+    if (body.measurementId) {
+      const saved = await db.query.measurements.findFirst({
+        where: and(eq(measurements.id, body.measurementId), eq(measurements.userEmail, authUser?.email ?? "")),
+      });
+      if (!saved) throw new HTTPException(404, { message: "Saved measurement not found" });
+      measurementSnapshot = {
+        chest: saved.chest, waist: saved.waist, hips: saved.hips, shoulderWidth: saved.shoulderWidth,
+        armLength: saved.armLength, torsoLength: saved.torsoLength, inseam: saved.inseam, neck: saved.neck,
+      };
+    }
     const [row] = await db
       .update(familyMembers)
       .set({
         name: body.name,
         relation: body.relation,
         gender: body.gender,
-        measurements: body.measurements,
+        measurements: measurementSnapshot,
+        measurementId: body.measurementId === undefined ? undefined : body.measurementId,
         productId: body.productId === undefined ? undefined : body.productId,
         productName,
         productImage,
@@ -248,28 +345,31 @@ familyGroupsRouter.post("/:groupId/add-to-cart", requireAuth, zValidator("param"
     throw new HTTPException(400, { message: "No family members to add" });
   }
 
-  const fallbackEventProduct = await db.query.events.findFirst({
+  const fallbackEventProduct = group.eventId ? await db.query.events.findFirst({
     where: eq(events.id, group.eventId),
-  });
+  }) : null;
 
   const rowsToInsert = [];
   for (const member of members) {
-    const memberProductId = member.productId ?? fallbackEventProduct?.productId ?? null;
-    if (!memberProductId) continue;
+    const memberProductId = member.productId ?? group.productId ?? fallbackEventProduct?.productId ?? null;
+    const designId = member.uploadedDesignId ?? group.uploadedDesignId ?? fallbackEventProduct?.uploadedDesignId ?? null;
+    if (!memberProductId && !designId) continue;
 
-    const product = await db.query.products.findFirst({
+    const product = memberProductId ? await db.query.products.findFirst({
       where: and(eq(products.id, memberProductId), eq(products.isActive, true)),
-    });
-    if (!product) continue;
+    }) : null;
+    const design = designId ? await db.query.uploadedDesigns.findFirst({ where: eq(uploadedDesigns.id, designId) }) : null;
+    if (!product && (!design || design.status !== "awaiting_payment" || !design.quotedPriceUsd)) continue;
 
     rowsToInsert.push({
       userEmail: authUser.email,
-      productId: product.id,
-      productName: `${product.name} — ${member.name}`,
-      productImage: member.productImage ?? product.images?.[0],
-      priceUsd: product.priceUsd,
+      productId: product?.id,
+      productName: `${product?.name ?? design?.designTitle ?? "Custom Design"} — ${member.name}`,
+      productImage: member.productImage ?? product?.images?.[0] ?? design?.frontImageUrl,
+      priceUsd: product ? product.priceUsd : design!.quotedPriceUsd!,
       quantity: 1,
       itemType: "group_order",
+      uploadedDesignId: design?.id,
       itemMetadata: {
         type: "group_order",
         group_id: group.id,
@@ -277,6 +377,8 @@ familyGroupsRouter.post("/:groupId/add-to-cart", requireAuth, zValidator("param"
         member_id: member.id,
         member_name: member.name,
         member_gender: member.gender,
+        selection_type: design ? "custom_design" : "catalog_product",
+        uploaded_design_id: design?.id,
       },
       measurementSnapshot: member.measurements ?? {},
       eventId: group.eventId,
@@ -288,6 +390,13 @@ familyGroupsRouter.post("/:groupId/add-to-cart", requireAuth, zValidator("param"
     throw new HTTPException(400, { message: "No valid product assignments found on family members" });
   }
 
+  await db
+    .delete(cartItems)
+    .where(and(
+      eq(cartItems.userEmail, authUser.email),
+      eq(cartItems.itemType, "group_order"),
+      sql`${cartItems.itemMetadata}->>'group_id' = ${group.id}`,
+    ));
   await db.insert(cartItems).values(rowsToInsert);
 
   return c.json({ data: { added: rowsToInsert.length } }, 201);

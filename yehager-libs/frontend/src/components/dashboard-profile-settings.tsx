@@ -68,28 +68,26 @@ export async function DashboardProfileSettings({
         </p>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[0.8fr_1.2fr]">
-        <section className="rounded-2xl border border-border bg-card p-5">
-          <p className="text-xs uppercase tracking-widest text-primary">Account</p>
-          <div className="mt-4 space-y-3 text-sm">
-            <div>
-              <p className="text-muted-foreground">Email</p>
-              <p className="font-medium">{session?.user?.email ?? profile?.email ?? "—"}</p>
-            </div>
-            <div>
-              <p className="text-muted-foreground">Role</p>
-              <p className="font-medium capitalize">{session?.user?.role ?? profile?.role ?? variant}</p>
-            </div>
-            <div>
-              <p className="text-muted-foreground">Workspace</p>
-              <p className="font-medium capitalize">{variant} dashboard</p>
-            </div>
-          </div>
-        </section>
+      <div className="grid gap-6 lg:grid-cols-[320px_minmax(0,1fr)]">
+        <aside className="h-fit rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Profile overview</p>
+          <nav className="mt-4 space-y-2">
+            {[
+              ["#personal-information", "Personal Information", "Name and dashboard identity"],
+              ["#account-information", "Account Information", "Email, role, and workspace"],
+              ["#security", "Security", "Password and account protection"],
+            ].map(([href, label, description], index) => (
+              <a key={href} href={href} className={`block rounded-2xl border p-4 transition hover:border-blue-300 hover:bg-blue-50 ${index === 0 ? "border-blue-200 bg-blue-50" : "border-transparent bg-slate-50"}`}>
+                <p className="text-sm font-bold text-slate-950">{label}</p>
+                <p className="mt-1 text-xs text-slate-600">{description}</p>
+              </a>
+            ))}
+          </nav>
+        </aside>
 
         <div className="space-y-6">
-          <section className="rounded-2xl border border-border bg-card p-5">
-            <p className="text-xs uppercase tracking-widest text-primary">Personal Information</p>
+          <section id="personal-information" className="scroll-mt-28 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <p className="text-xs font-bold uppercase tracking-widest text-blue-700">Personal Information</p>
             <form action={updateProfile} className="mt-4 space-y-4">
               <label className="block text-sm">
                 <span className="mb-1 block text-muted-foreground">Display name</span>
@@ -106,8 +104,25 @@ export async function DashboardProfileSettings({
             </form>
           </section>
 
-          <section className="rounded-2xl border border-border bg-card p-5">
-            <p className="text-xs uppercase tracking-widest text-primary">Security</p>
+          <section id="account-information" className="scroll-mt-28 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <p className="text-xs font-bold uppercase tracking-widest text-blue-700">Account Information</p>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              {[
+                ["Email", session?.user?.email ?? profile?.email ?? "Not provided"],
+                ["Role", session?.user?.role ?? profile?.role ?? variant],
+                ["Workspace", `${variant} dashboard`],
+                ["Last Login", profile?.lastLoginAt ? new Date(profile.lastLoginAt).toLocaleString() : "Not provided"],
+              ].map(([label, value]) => (
+                <div key={label} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <p className="text-xs font-bold uppercase tracking-wider text-slate-500">{label}</p>
+                  <p className="mt-2 text-sm font-bold capitalize text-slate-950">{value}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section id="security" className="scroll-mt-28 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <p className="text-xs font-bold uppercase tracking-widest text-blue-700">Security</p>
             <form action={changePassword} className="mt-4 space-y-4">
               <label className="block text-sm">
                 <span className="mb-1 block text-muted-foreground">Current password</span>

@@ -93,7 +93,7 @@ export function SiteNavbar() {
             })}
             <Link
               href={uploadDesignHref}
-              className="inline-flex min-h-20 items-center justify-center gap-1 rounded-md border-2 border-primary bg-primary/10 px-3 py-2 text-center text-sm font-black leading-tight text-primary transition-colors hover:bg-primary hover:text-primary-foreground"
+              className="inline-flex h-11 items-center justify-center gap-1 rounded-md border-2 border-primary bg-primary/10 px-3 text-center text-xs font-black leading-tight text-primary transition-colors hover:bg-primary hover:text-primary-foreground"
             >
               <Sparkles className="h-4 w-4 shrink-0" />
               <span className="max-w-[72px]">Upload Your Design</span>
@@ -101,9 +101,9 @@ export function SiteNavbar() {
             <button
               type="button"
               onClick={() => setGroupOrderOpen(true)}
-              className="inline-flex min-h-20 items-center justify-center rounded-md bg-primary px-4 py-2 text-center text-sm font-medium leading-tight text-primary-foreground transition-colors hover:bg-primary/90"
+              className="inline-flex h-11 items-center justify-center rounded-md bg-primary px-4 text-center text-xs font-semibold leading-tight text-primary-foreground transition-colors hover:bg-primary/90"
             >
-              Our Home Cart
+              Create Group Order
             </button>
           </nav>
 
@@ -217,7 +217,7 @@ export function SiteNavbar() {
               }}
               className="flex h-11 w-full items-center rounded-lg bg-primary px-3 text-left text-sm font-semibold text-primary-foreground hover:bg-primary/90"
             >
-              Our Home Cart
+              Create Group Order
             </button>
             {isAuthed ? (
               <>

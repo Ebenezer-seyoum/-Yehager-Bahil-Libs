@@ -7,7 +7,7 @@ import { AdminExchangeWorkspace } from "@/components/admin/pages/admin-exchange-
 export default async function AdminExchangeRatePage() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) redirect("/signin?callbackUrl=/admin/exchange-rate");
-  if (session.user.role !== "admin") redirect("/");
+  if (session.user.role !== "admin" && session.user.role !== "employee") redirect("/");
 
   let exchangeRate = null;
   try {

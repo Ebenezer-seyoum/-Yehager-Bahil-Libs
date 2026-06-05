@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { BookOpen, ChevronDown, Clock, Mail, Pencil, Play, Ruler, ShoppingBag, Users, X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { ShareLinks } from "@/components/share-links";
 import { MeasurementVideoModal } from "@/components/measurement-help";
 
@@ -56,6 +56,7 @@ type ProductPurchasePanelProps = {
     torsoLength?: number | null;
   } | null | void>;
   createEventAction: (formData: FormData) => void | Promise<void>;
+  createGroupAction: (formData: FormData) => void | Promise<void>;
 };
 
 type SavedMeasurement = NonNullable<ProductPurchasePanelProps["latestMeasurement"]>;
@@ -177,6 +178,7 @@ export function ProductPurchasePanel({
   addToCartAction,
   createMeasurementAction,
   createEventAction,
+  createGroupAction,
 }: ProductPurchasePanelProps) {
   const [selectedRoleIndex, setSelectedRoleIndex] = useState(0);
   const [eventOpen, setEventOpen] = useState(false);
@@ -201,13 +203,6 @@ export function ProductPurchasePanel({
     ["Arm", savedMeasurement?.armLength],
     ["Torso", savedMeasurement?.torsoLength],
   ] as const;
-
-  useEffect(() => {
-    if (latestMeasurement?.id) {
-      setSavedMeasurement(latestMeasurement);
-      setIsMeasurementEditorOpen(false);
-    }
-  }, [latestMeasurement]);
 
   const detailItems = useMemo(
     () =>
@@ -818,21 +813,24 @@ export function ProductPurchasePanel({
           <div className="w-full max-w-lg rounded-xl border border-border bg-background p-6">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h2 className="font-heading text-2xl font-bold">Create Event Group</h2>
-                <p className="mt-2 text-sm text-muted-foreground">Invite friends and family to order together for your celebration.</p>
+                <h2 className="font-heading text-2xl font-bold">Start a Shared Order</h2>
+                  <p className="mt-2 text-sm text-muted-foreground">Create a private group order, or a shareable Event Match-Up with an invite link.</p>
               </div>
               <button type="button" onClick={() => setEventOpen(false)} className="rounded-full p-1 text-muted-foreground hover:bg-secondary" aria-label="Close group order modal">
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <form action={createEventAction} className="mt-5 space-y-3">
-              <input type="hidden" name="productId" value={product.id} />
-              <input type="hidden" name="productName" value={product.name} />
-              <input name="eventName" required placeholder="e.g. Tigist's Wedding 2025" className="h-14 w-full rounded-lg border border-input bg-background px-4 text-base focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/40" />
-              <div className="flex gap-3">
-                <button type="submit" className="h-14 flex-1 rounded-md bg-primary px-4 text-base font-bold text-primary-foreground hover:bg-primary/90">
-                  Create & Get Invite Link
-                </button>
+              <form className="mt-5 space-y-3">
+                <input type="hidden" name="productId" value={product.id} />
+                <input type="hidden" name="productName" value={product.name} />
+                <input name="groupName" required placeholder="e.g. Abebe Family Order" className="h-14 w-full rounded-lg border border-input bg-background px-4 text-base focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/40" />
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <button formAction={createGroupAction} type="submit" className="h-14 rounded-md bg-blue-950 px-4 text-base font-bold text-white hover:bg-blue-800">
+                    Create Group Order
+                  </button>
+                  <button formAction={createEventAction} type="submit" name="eventName" value="Event Match-Up" className="h-14 rounded-md bg-primary px-4 text-base font-bold text-primary-foreground hover:bg-primary/90">
+                    Create Event Match-Up
+                  </button>
               </div>
             </form>
           </div>

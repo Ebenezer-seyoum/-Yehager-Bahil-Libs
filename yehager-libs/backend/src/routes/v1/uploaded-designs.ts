@@ -40,12 +40,17 @@ const createSchema = z.object({
   contactPhone: z.string().max(40).optional(),
   contactTelegram: z.string().max(80).optional(),
   contactAddress: z.record(z.string(), z.unknown()).optional(),
+  familyGroupId: z.string().uuid().optional(),
+  eventId: z.string().uuid().optional(),
 });
 
 const reviewSchema = z.object({
   decision: z.enum(["approve", "reject"]),
   reason: z.string().max(2000).optional(),
   quotedPriceUsd: z.number().nonnegative().optional(),
+  estimatedDeliveryLabel: z.string().max(120).optional(),
+  estimatedDeliveryDaysMin: z.number().int().positive().max(365).optional(),
+  estimatedDeliveryDaysMax: z.number().int().positive().max(365).optional(),
 });
 
 export const uploadedDesignsRouter = new Hono<AppBindings>();
@@ -69,6 +74,8 @@ uploadedDesignsRouter.post("/", requireAuth, zValidator("json", createSchema), a
     contactPhone: body.contactPhone,
     contactTelegram: body.contactTelegram,
     contactAddress: body.contactAddress,
+    familyGroupId: body.familyGroupId,
+    eventId: body.eventId,
   });
   return c.json({ data }, 201);
 });
@@ -141,6 +148,9 @@ uploadedDesignsRouter.patch(
       decision: body.decision,
       reason: body.reason,
       quotedPriceUsd: body.quotedPriceUsd,
+      estimatedDeliveryLabel: body.estimatedDeliveryLabel,
+      estimatedDeliveryDaysMin: body.estimatedDeliveryDaysMin,
+      estimatedDeliveryDaysMax: body.estimatedDeliveryDaysMax,
       performedBy: authUser?.email,
     });
     return c.json({ data });

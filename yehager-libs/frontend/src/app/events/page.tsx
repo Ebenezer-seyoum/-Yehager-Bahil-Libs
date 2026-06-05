@@ -16,6 +16,10 @@ type Event = {
   eventDate?: string | null;
   productName?: string | null;
   ownerEmail?: string | null;
+  participantCount?: number;
+  orderCount?: number;
+  paidCount?: number;
+  currentStep?: number;
 };
 
 const EVENT_TYPES = ["Wedding", "Baptism", "Graduation", "Holiday", "Birthday", "Other"];
@@ -67,12 +71,12 @@ export default async function EventsPage() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 sm:py-12">
+    <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-16">
       <div className="mb-10 flex items-center justify-between">
         <div>
           <p className="mb-2 text-xs font-medium uppercase tracking-[0.4em] text-primary">Proprietary Feature</p>
-          <h1 className="font-heading text-4xl font-bold">Event Match-Up</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Coordinate matching outfits for weddings, baptisms & celebrations</p>
+          <h1 className="font-heading text-5xl font-bold sm:text-6xl">Event Match-Up</h1>
+          <p className="mt-2 text-lg text-muted-foreground">Coordinate matching outfits for weddings, baptisms & celebrations</p>
         </div>
         {authRequired ? (
           <Link href="/signin?callbackUrl=/events" className="shrink-0 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90">
@@ -81,14 +85,14 @@ export default async function EventsPage() {
         ) : (
           <Dialog>
             <DialogTrigger asChild>
-              <button type="button" className="inline-flex shrink-0 items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90">
+              <button type="button" className="inline-flex h-12 shrink-0 items-center gap-2 rounded-xl bg-primary px-6 text-base font-semibold text-black hover:bg-primary/90">
                 <Plus className="h-4 w-4" />
                 Create Event
               </button>
             </DialogTrigger>
             <EventDialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
               <EventDialogHeader>
-                <EventDialogTitle className="font-heading text-2xl">Create Event Group</EventDialogTitle>
+                <EventDialogTitle className="font-heading text-2xl">Create Event Match-Up</EventDialogTitle>
               </EventDialogHeader>
               <form action={createEvent} className="mt-2 space-y-4">
                 <div>
@@ -131,7 +135,7 @@ export default async function EventsPage() {
         )}
       </div>
 
-      <div className="mb-10 grid grid-cols-2 gap-3 rounded-2xl bg-foreground p-6 sm:grid-cols-4">
+      <div className="mb-14 grid grid-cols-2 gap-6 rounded-3xl bg-[#f4f4f4] px-8 py-9 text-black sm:grid-cols-4">
         {[
           ["1", "Select an outfit"],
           ["2", "Create an event"],
@@ -139,8 +143,8 @@ export default async function EventsPage() {
           ["4", "Track everyone"],
         ].map(([n, label]) => (
           <div key={n} className="text-center">
-            <div className="mx-auto mb-2 flex h-9 w-9 items-center justify-center rounded-full bg-primary text-sm font-bold text-primary-foreground">{n}</div>
-            <p className="text-xs text-white/70">{label}</p>
+            <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-lg font-bold text-black">{n}</div>
+            <p className="text-sm text-slate-500">{label}</p>
           </div>
         ))}
       </div>
@@ -161,15 +165,18 @@ export default async function EventsPage() {
           <p className="text-sm text-muted-foreground">Create your first event group to get started</p>
         </div>
       ) : (
-        <div className="space-y-3">
-          {events.map((event) => (
+        <div className="space-y-5">
+          {events.map((event) => {
+            const currentStep = Math.max(1, Number(event.currentStep ?? 1));
+            const resumeTarget = currentStep === 1 ? "event-outfit" : currentStep === 2 ? "share-event" : "member-tracking";
+            return (
             <Link
               key={event.id}
-              href={`/event/${event.id}`}
-              className="group flex items-center justify-between rounded-xl border border-border bg-card p-5 transition-colors hover:border-primary/30"
+              href={`/event/${event.id}#${resumeTarget}`}
+              className="group block rounded-3xl border border-border bg-card p-6 transition-colors hover:border-primary/50 sm:p-8"
             >
               <div className="flex items-center gap-4">
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary/10">
+                <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-primary/10">
                   <Users className="h-6 w-6 text-primary" />
                 </div>
                 <div>
@@ -183,12 +190,25 @@ export default async function EventsPage() {
                       </span>
                     ) : null}
                     {event.productName ? <span>· {event.productName}</span> : null}
+                    <span>· {event.participantCount ?? 0} participants</span>
+                    <span>· {event.orderCount ?? 0} orders</span>
+                    <span>· {event.paidCount ?? 0} paid</span>
                   </div>
                 </div>
+                <span className="ml-auto inline-flex h-10 items-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-black">
+                  Continue Event <ArrowRight className="h-4 w-4" />
+                </span>
               </div>
-              <ArrowRight className="h-5 w-5 text-muted-foreground transition-colors group-hover:text-primary" />
+              <div className="mt-6 grid grid-cols-4 gap-2">
+                {["Choose outfit", "Share event", "Participants join", "Orders & payment"].map((label, index) => (
+                  <div key={label}>
+                    <div className={`h-1.5 rounded-full ${index < currentStep ? "bg-primary" : "bg-border"}`} />
+                    <p className="mt-2 hidden text-[10px] text-muted-foreground sm:block">{label}</p>
+                  </div>
+                ))}
+              </div>
             </Link>
-          ))}
+          );})}
         </div>
       )}
     </div>

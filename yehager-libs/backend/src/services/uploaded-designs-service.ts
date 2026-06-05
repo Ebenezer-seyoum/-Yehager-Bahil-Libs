@@ -1,7 +1,7 @@
 import { and, desc, eq, sql } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
 import { db } from "../lib/db/drizzle.js";
-import { auditLogs, cartItems, systemAlerts, uploadedDesigns } from "../lib/db/schema.js";
+import { auditLogs, cartItems, events, familyGroups, systemAlerts, uploadedDesigns } from "../lib/db/schema.js";
 import { numberToMoney } from "./checkout-utils.js";
 import { getUserByEmail } from "../repositories/users-repository.js";
 
@@ -28,6 +28,8 @@ export async function createUploadedDesignSubmission(payload: {
   contactPhone?: string;
   contactTelegram?: string;
   contactAddress?: Record<string, unknown>;
+  familyGroupId?: string;
+  eventId?: string;
 }) {
   if (!payload.userEmail) {
     throw new HTTPException(400, { message: "Authenticated token must include email" });
@@ -35,6 +37,18 @@ export async function createUploadedDesignSubmission(payload: {
 
   const user = await getUserByEmail(payload.userEmail);
   const customerName = user?.name ?? payload.userEmail.split("@")[0];
+  if (payload.familyGroupId) {
+    const group = await db.query.familyGroups.findFirst({
+      where: and(eq(familyGroups.id, payload.familyGroupId), eq(familyGroups.leadEmail, payload.userEmail)),
+    });
+    if (!group) throw new HTTPException(404, { message: "Group order not found" });
+  }
+  if (payload.eventId) {
+    const event = await db.query.events.findFirst({
+      where: and(eq(events.id, payload.eventId), eq(events.ownerEmail, payload.userEmail)),
+    });
+    if (!event) throw new HTTPException(404, { message: "Event Match-Up not found" });
+  }
 
   const [submission] = await db
     .insert(uploadedDesigns)
@@ -56,10 +70,49 @@ export async function createUploadedDesignSubmission(payload: {
       contactPhone: payload.contactPhone,
       contactTelegram: payload.contactTelegram,
       contactAddress: payload.contactAddress,
+      familyGroupId: payload.familyGroupId,
+      eventId: payload.eventId,
       status: "submitted",
       submittedAt: new Date(),
     })
     .returning();
+
+  if (payload.familyGroupId) {
+    await db
+      .update(familyGroups)
+      .set({
+        selectionType: "custom_design",
+        uploadedDesignId: submission.id,
+        productId: null,
+        productName: submission.designTitle,
+        productImage: submission.frontImageUrl,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(familyGroups.id, payload.familyGroupId), eq(familyGroups.leadEmail, payload.userEmail)));
+  }
+  if (payload.eventId) {
+    await db
+      .update(events)
+      .set({
+        selectionType: "custom_design",
+        uploadedDesignId: submission.id,
+        productId: null,
+        productName: submission.designTitle,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(events.id, payload.eventId), eq(events.ownerEmail, payload.userEmail)));
+    await db
+      .update(familyGroups)
+      .set({
+        selectionType: "custom_design",
+        uploadedDesignId: submission.id,
+        productId: null,
+        productName: submission.designTitle,
+        productImage: submission.frontImageUrl,
+        updatedAt: new Date(),
+      })
+      .where(eq(familyGroups.eventId, payload.eventId));
+  }
 
   await db.insert(auditLogs).values({
     action: "uploaded_design_submitted",
@@ -148,6 +201,9 @@ export async function reviewUploadedDesign(payload: {
   performedBy?: string;
   reason?: string;
   quotedPriceUsd?: number;
+  estimatedDeliveryLabel?: string;
+  estimatedDeliveryDaysMin?: number;
+  estimatedDeliveryDaysMax?: number;
 }) {
   const submission = await getUploadedDesignForAdmin(payload.designId);
   if (!["submitted", "in_review"].includes(submission.status)) {
@@ -160,8 +216,14 @@ export async function reviewUploadedDesign(payload: {
       if (quotedPrice <= 0) {
         throw new HTTPException(400, { message: "Quoted price is required before approving a custom design" });
       }
+      const deliveryMin = payload.estimatedDeliveryDaysMin;
+      const deliveryMax = payload.estimatedDeliveryDaysMax;
+      if (!payload.estimatedDeliveryLabel || !deliveryMin || !deliveryMax || deliveryMax < deliveryMin) {
+        throw new HTTPException(400, { message: "A valid estimated completion and delivery time is required" });
+      }
 
-      const [cartItem] = await tx
+      const isSharedSource = Boolean(submission.familyGroupId || submission.eventId);
+      const [cartItem] = isSharedSource ? [null] : await tx
         .insert(cartItems)
         .values({
           userId: submission.userId,
@@ -186,6 +248,9 @@ export async function reviewUploadedDesign(payload: {
             color_preference: submission.colorPreference,
             contact_address: submission.contactAddress,
             admin_note: payload.reason,
+            estimated_delivery_label: payload.estimatedDeliveryLabel,
+            estimated_delivery_days_min: deliveryMin,
+            estimated_delivery_days_max: deliveryMax,
           },
         })
         .returning();
@@ -197,8 +262,11 @@ export async function reviewUploadedDesign(payload: {
           reviewedBy: payload.performedBy ?? "admin",
           reviewedAt: new Date(),
           reviewReason: payload.reason,
-          approvedCartItemId: cartItem.id,
+          approvedCartItemId: cartItem?.id,
           quotedPriceUsd: numberToMoney(quotedPrice),
+          estimatedDeliveryLabel: payload.estimatedDeliveryLabel,
+          estimatedDeliveryDaysMin: deliveryMin,
+          estimatedDeliveryDaysMax: deliveryMax,
           emailPlaceholderStatus: "approval_pending_manual_delivery",
           emailPlaceholderNote:
             "Customer should be emailed that their custom design was approved and added to cart.",
@@ -214,17 +282,22 @@ export async function reviewUploadedDesign(payload: {
         entityType: "uploaded_design",
         entityId: updated.id,
         performedBy: payload.performedBy ?? "admin",
-        details: "Custom design approved and added to cart",
+        details: isSharedSource ? "Shared custom design approved for group ordering" : "Custom design approved and added to cart",
         metadata: {
-          cart_item_id: cartItem.id,
+          cart_item_id: cartItem?.id ?? null,
           quoted_price_usd: quotedPrice,
+          estimated_delivery_label: payload.estimatedDeliveryLabel,
+          estimated_delivery_days_min: deliveryMin,
+          estimated_delivery_days_max: deliveryMax,
           email_placeholder_status: "approval_pending_manual_delivery",
         },
       });
 
       await tx.insert(systemAlerts).values({
         title: `Custom design approved: ${submission.submissionNumber}`,
-        message: `${submission.userEmail}'s custom design was added to cart and is awaiting payment.`,
+        message: isSharedSource
+          ? `${submission.userEmail}'s shared custom design is ready for group checkout.`
+          : `${submission.userEmail}'s custom design was added to cart and is awaiting payment.`,
         type: "custom_design_awaiting_payment",
         severity: "info",
         entityId: submission.id,

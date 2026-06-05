@@ -7,7 +7,5 @@ export default async function EmployeeSettingsPage() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) redirect("/signin?callbackUrl=/employee/settings");
   if (session.user.role !== "employee" && session.user.role !== "admin") redirect("/");
-  if (session.user.role === "employee" && session.user.roleStatus === "unassigned") redirect("/employee/access-pending");
-
   return <DashboardProfileSettings variant="employee" returnPath="/employee/settings" />;
 }

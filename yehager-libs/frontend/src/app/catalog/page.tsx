@@ -2,7 +2,6 @@ import Link from "next/link";
 import { backendPublicRequest } from "@/lib/backend-public";
 import { ProductCard } from "@/components/product-card";
 import { REGIONS, TAXONOMY } from "@/lib/taxonomy";
-import { ChevronRight } from "lucide-react";
 import { CatalogLabels } from "@/components/catalog-labels";
 
 type SearchParams = Record<string, string | string[] | undefined>;
@@ -23,12 +22,15 @@ function asString(value: string | string[] | undefined): string | null {
   return null;
 }
 
-function makeHref(region: string | null, sub: string | null, gender: string | null, eventId: string | null) {
+function makeHref(region: string | null, sub: string | null, gender: string | null, eventId: string | null, groupId: string | null, selectionMode: string | null) {
   const q = new URLSearchParams();
   if (region) q.set("region", region);
   if (sub) q.set("sub", sub);
   if (gender && gender !== "all") q.set("gender", gender);
   if (eventId) q.set("event", eventId);
+  if (groupId) q.set("groupId", groupId);
+  if (selectionMode) q.set("selectionMode", selectionMode);
+  if (selectionMode === "event" && eventId) q.set("eventId", eventId);
   const qs = q.toString();
   return qs ? `/catalog?${qs}` : "/catalog";
 }
@@ -39,6 +41,10 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
   const activeSub = asString(params.sub);
   const activeGender = asString(params.gender) ?? "all";
   const eventId = asString(params.event);
+  const selectionEventId = asString(params.eventId);
+  const groupId = asString(params.groupId);
+  const selectionMode = asString(params.selectionMode);
+  const activeEventId = selectionEventId ?? eventId;
 
   const query = new URLSearchParams();
   if (activeRegion) query.set("region", activeRegion);
@@ -70,7 +76,7 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
               <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Region</p>
               <div className="space-y-1">
                 <Link
-                  href={makeHref(null, null, activeGender, eventId)}
+                  href={makeHref(null, null, activeGender, activeEventId, groupId, selectionMode)}
                   className={`block rounded-lg px-3 py-1.5 text-sm transition-colors ${!activeRegion ? "bg-primary font-medium text-primary-foreground" : "text-muted-foreground hover:bg-secondary hover:text-foreground"}`}
                 >
                   All Regions
@@ -78,7 +84,7 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
                 {REGIONS.map((region) => (
                   <Link
                     key={region}
-                    href={makeHref(region, null, activeGender, eventId)}
+                    href={makeHref(region, null, activeGender, activeEventId, groupId, selectionMode)}
                     className={`block rounded-lg px-3 py-1.5 text-sm transition-colors ${activeRegion === region ? "bg-primary font-medium text-primary-foreground" : "text-muted-foreground hover:bg-secondary hover:text-foreground"}`}
                   >
                     {region}
@@ -94,7 +100,7 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
                   {subs.map((sub) => (
                     <Link
                       key={sub}
-                      href={makeHref(activeRegion, sub, activeGender, eventId)}
+                      href={makeHref(activeRegion, sub, activeGender, activeEventId, groupId, selectionMode)}
                       className={`block rounded-lg px-3 py-1.5 text-sm transition-colors ${activeSub === sub ? "bg-secondary font-medium text-foreground" : "text-muted-foreground hover:bg-secondary hover:text-foreground"}`}
                     >
                       {sub}
@@ -110,7 +116,7 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
                 {["all", "female", "male", "unisex"].map((gender) => (
                   <Link
                     key={gender}
-                    href={makeHref(activeRegion, activeSub, gender, eventId)}
+                    href={makeHref(activeRegion, activeSub, gender, activeEventId, groupId, selectionMode)}
                     className={`block rounded-lg px-3 py-1.5 text-sm capitalize transition-colors ${activeGender === gender ? "bg-secondary font-medium text-foreground" : "text-muted-foreground hover:bg-secondary hover:text-foreground"}`}
                   >
                     {gender === "all" ? "All" : gender}
@@ -126,7 +132,7 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
             {REGIONS.map((region) => (
               <Link
                 key={region}
-                href={makeHref(region, null, activeGender, eventId)}
+                href={makeHref(region, null, activeGender, activeEventId, groupId, selectionMode)}
                 className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${activeRegion === region ? "border-primary bg-primary text-primary-foreground" : "border-border text-muted-foreground"}`}
               >
                 {region}
@@ -144,7 +150,7 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
           ) : (
             <div className="grid grid-cols-2 gap-4 sm:gap-5 xl:grid-cols-3">
               {products.map((product) => (
-                <ProductCard key={product.id} product={product} etbRate={etbRate} eventId={eventId} />
+                <ProductCard key={product.id} product={product} etbRate={etbRate} eventId={activeEventId} groupId={groupId} selectionMode={selectionMode} />
               ))}
             </div>
           )}

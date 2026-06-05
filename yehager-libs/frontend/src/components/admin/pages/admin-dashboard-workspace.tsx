@@ -295,10 +295,10 @@ export function AdminDashboardWorkspace({ data }: { data: AdminWorkspaceData }) 
             <Dialog open={open} onOpenChange={setOpen}>
               <DialogContent className="max-w-5xl">
                 <DialogHeader>
-                  <DialogTitle className="text-slate-950">{modalTitle}</DialogTitle>
-                  <DialogDescription className="text-slate-700">
-                    Total: <span className="font-semibold text-slate-900">{modalValue}</span>
-                    {modalRangeLabel ? <span className="ml-2 text-slate-600">• {modalRangeLabel}</span> : null}
+                  <DialogTitle>{modalTitle}</DialogTitle>
+                  <DialogDescription>
+                    Total: <span className="font-semibold text-white">{modalValue}</span>
+                    {modalRangeLabel ? <span className="ml-2 text-blue-100">• {modalRangeLabel}</span> : null}
                   </DialogDescription>
                 </DialogHeader>
 
@@ -373,4 +373,3 @@ export function AdminDashboardWorkspace({ data }: { data: AdminWorkspaceData }) 
     </AdminWorkspace>
   );
 }
-
