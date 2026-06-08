@@ -3,11 +3,13 @@
 import Swal, { type SweetAlertIcon, type SweetAlertOptions } from "sweetalert2";
 import "sweetalert2/dist/sweetalert2.min.css";
 
-type ConfirmTone = "danger" | "success" | "warning";
+type ConfirmTone = "danger" | "success" | "warning" | "primary";
+type NoticeTone = "success" | "error" | "warning" | "info";
 
 function confirmClass(tone: ConfirmTone) {
   if (tone === "danger") return "dashboard-swal-confirm dashboard-swal-confirm-danger";
   if (tone === "success") return "dashboard-swal-confirm dashboard-swal-confirm-success";
+  if (tone === "primary") return "dashboard-swal-confirm dashboard-swal-confirm-primary";
   return "dashboard-swal-confirm dashboard-swal-confirm-warning";
 }
 
@@ -16,6 +18,18 @@ function iconClass(icon?: SweetAlertIcon) {
   if (icon === "error") return "dashboard-swal-icon dashboard-swal-icon-danger";
   if (icon === "warning") return "dashboard-swal-icon dashboard-swal-icon-warning";
   return "dashboard-swal-icon";
+}
+
+function noticeClass(tone: NoticeTone) {
+  if (tone === "success") return "dashboard-notice dashboard-notice-success";
+  if (tone === "error") return "dashboard-notice dashboard-notice-error";
+  if (tone === "warning") return "dashboard-notice dashboard-notice-warning";
+  return "dashboard-notice dashboard-notice-info";
+}
+
+function noticeTitle(prefix: string, text?: string) {
+  if (!text) return prefix;
+  return `${prefix}! ${text}`;
 }
 
 export function dashboardSwalOptions(options: SweetAlertOptions = {}): SweetAlertOptions {
@@ -90,19 +104,18 @@ export function dashboardSuccess(
 ) {
   return Swal.fire(
     dashboardSwalOptions({
-      icon: "success",
-      iconHtml: options?.iconHtml,
-      title,
-      text,
-      confirmButtonText: "OK",
+      toast: true,
+      position: "top-end",
+      title: noticeTitle(title, text),
+      timer: 30000,
+      timerProgressBar: true,
+      showConfirmButton: false,
+      showCloseButton: true,
       target: options?.target,
       customClass: {
-        popup: "dashboard-swal-popup",
-        icon: "dashboard-swal-icon dashboard-swal-icon-success",
-        htmlContainer: "dashboard-swal-text",
-        actions: "dashboard-swal-actions",
-        confirmButton: "dashboard-swal-confirm dashboard-swal-confirm-success",
-        cancelButton: "dashboard-swal-cancel",
+        popup: noticeClass("success"),
+        title: "dashboard-notice-title",
+        closeButton: "dashboard-notice-close",
       },
     }),
   );
@@ -111,18 +124,83 @@ export function dashboardSuccess(
 export function dashboardError(title: string, text?: string, options?: { target?: HTMLElement | string }) {
   return Swal.fire(
     dashboardSwalOptions({
-      icon: "error",
+      toast: true,
+      position: "top-end",
+      title: noticeTitle(title, text),
+      timer: 30000,
+      timerProgressBar: true,
+      showConfirmButton: false,
+      showCloseButton: true,
+      target: options?.target,
+      customClass: {
+        popup: noticeClass("error"),
+        title: "dashboard-notice-title",
+        closeButton: "dashboard-notice-close",
+      },
+    }),
+  );
+}
+
+export function dashboardWarning(title: string, text?: string, options?: { target?: HTMLElement | string }) {
+  return Swal.fire(
+    dashboardSwalOptions({
+      toast: true,
+      position: "top-end",
+      title: noticeTitle(title, text),
+      timer: 3000,
+      timerProgressBar: false,
+      showConfirmButton: false,
+      showCloseButton: true,
+      target: options?.target,
+      customClass: {
+        popup: noticeClass("warning"),
+        title: "dashboard-notice-title",
+        closeButton: "dashboard-notice-close",
+      },
+    }),
+  );
+}
+
+export function dashboardInfo(title: string, text?: string, options?: { target?: HTMLElement | string }) {
+  return Swal.fire(
+    dashboardSwalOptions({
+      toast: true,
+      position: "top-end",
+      title: noticeTitle(title, text),
+      timer: 3000,
+      timerProgressBar: false,
+      showConfirmButton: false,
+      showCloseButton: true,
+      target: options?.target,
+      customClass: {
+        popup: noticeClass("info"),
+        title: "dashboard-notice-title",
+        closeButton: "dashboard-notice-close",
+      },
+    }),
+  );
+}
+
+export function dashboardAlert(
+  title: string,
+  text?: string,
+  options?: { target?: HTMLElement | string; icon?: SweetAlertIcon; confirmButtonText?: string; tone?: ConfirmTone },
+) {
+  return Swal.fire(
+    dashboardSwalOptions({
+      icon: options?.icon ?? "info",
       title,
       text,
-      confirmButtonText: "OK",
+      showCancelButton: false,
+      showConfirmButton: true,
+      confirmButtonText: options?.confirmButtonText ?? "OK",
       target: options?.target,
       customClass: {
         popup: "dashboard-swal-popup",
-        icon: "dashboard-swal-icon dashboard-swal-icon-danger",
+        icon: iconClass(options?.icon),
         htmlContainer: "dashboard-swal-text",
         actions: "dashboard-swal-actions",
-        confirmButton: "dashboard-swal-confirm dashboard-swal-confirm-danger",
-        cancelButton: "dashboard-swal-cancel",
+        confirmButton: options?.tone ? confirmClass(options.tone) : "dashboard-swal-confirm dashboard-swal-confirm-primary",
       },
     }),
   );
@@ -152,3 +230,47 @@ export function dashboardLoading(title: string, text?: string, options?: { targe
 dashboardLoading.close = () => {
   Swal.close();
 };
+
+export function dashboardValidationError(
+  target: HTMLElement | string,
+  message: string,
+  options?: { persistent?: boolean; id?: string },
+) {
+  if (typeof window === "undefined") return null;
+  const el = typeof target === "string" ? document.querySelector(target) : target;
+  if (!el || !(el instanceof HTMLElement)) return null;
+
+  // remove existing with same id
+  if (options?.id) {
+    const prev = el.parentElement?.querySelector(`#${options.id}`);
+    if (prev) prev.remove();
+  }
+
+  const wrapper = document.createElement("div");
+  if (options?.id) wrapper.id = options.id;
+  wrapper.className = "dashboard-validation-error";
+  wrapper.textContent = message;
+
+  // insert just after the target element
+  if (el.nextSibling) el.parentElement?.insertBefore(wrapper, el.nextSibling);
+  else el.parentElement?.appendChild(wrapper);
+
+  if (!options?.persistent) {
+    setTimeout(() => wrapper.remove(), 5000);
+  }
+
+  return wrapper;
+}
+
+export function dashboardClearValidationError(target: HTMLElement | string, id?: string) {
+  if (typeof window === "undefined") return;
+  const el = typeof target === "string" ? document.querySelector(target) : target;
+  if (!el || !(el instanceof HTMLElement)) return;
+  if (id) {
+    const prev = el.parentElement?.querySelector(`#${id}`);
+    if (prev) prev.remove();
+    return;
+  }
+  const next = el.parentElement?.querySelector(".dashboard-validation-error");
+  if (next) next.remove();
+}

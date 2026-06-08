@@ -105,6 +105,11 @@ export default async function MyOrdersPage({
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 sm:py-12">
+      <div className="mb-6">
+        <Link href="/my-account" className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-1.5 text-sm font-semibold text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground">
+          &larr; Back to Account
+        </Link>
+      </div>
       <h1 className="mb-2 font-heading text-3xl font-bold">My Orders</h1>
       <p className="mb-8 text-sm text-muted-foreground">Track your orders and event groups in one place.</p>
 

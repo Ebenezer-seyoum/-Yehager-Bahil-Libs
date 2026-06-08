@@ -1,11 +1,20 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import Swal from "sweetalert2";
-import { Edit3, Eye, Plus, Search, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Edit3, Eye, Trash2 } from "lucide-react";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
+import {
+  DashboardModalFooter,
+  DashboardModalFooterButton,
+  DashboardModalScrollBody,
+  DashboardModalTitleBar,
+  dashboardModalPresets,
+} from "@/components/admin/dashboard-modal";
 import { TableHeadCell, TableHeadRow, TableHeader } from "@/components/admin/table-header";
 import { employeeNavigation } from "@/lib/dashboard-navigation";
-import { dashboardConfirm, dashboardError, dashboardLoading, dashboardSuccess, dashboardSwalOptions } from "@/lib/dashboard-swal";
+import { dashboardConfirm, dashboardError, dashboardLoading, dashboardSuccess } from "@/lib/dashboard-swal";
+
+const ADMIN_ROLE_CREATE_EVENT = "admin-roles:create-role";
 
 type User = {
   id: string;
@@ -48,6 +57,33 @@ type AuditLog = {
   createdAt?: string | null;
 };
 
+type RoleModalState = {
+  mode: "create" | "edit";
+  role?: Role;
+  name: string;
+  description: string;
+};
+
+type PermissionModalState = {
+  permission: Permission;
+  key: string;
+  resource: string;
+  action: string;
+  description: string;
+};
+
+type EmployeeRoleModalState = {
+  user: User;
+  roleId: string;
+};
+
+type EmployeePermissionsModalState = {
+  user: User;
+  permissions: string[];
+  loading: boolean;
+  error: string | null;
+};
+
 function titleCase(value: string) {
   return value
     .split(/[._-]/g)
@@ -62,60 +98,63 @@ export function ReferenceRolePermissionPanel({
   roles,
   audit,
   activeTab,
+  search = "",
 }: {
   users: User[];
   permissions: Permission[];
   roles: Role[];
   audit: AuditLog[];
   activeTab: string;
+  search?: string;
 }) {
   const [selectedUserId, setSelectedUserId] = useState(users[0]?.id ?? "");
   const [selectedPermissions, setSelectedPermissions] = useState<string[]>([]);
   const [selectedRoleId, setSelectedRoleId] = useState<string>(users[0]?.assignedRoleId ?? "");
   const [loadedFor, setLoadedFor] = useState<string | null>(null);
-  const [filter, setFilter] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  const [roleFilter, setRoleFilter] = useState("");
   const [userItems, setUserItems] = useState(users);
   const [roleItems, setRoleItems] = useState(roles);
   const [permissionItems, setPermissionItems] = useState(permissions);
-  const [roleSearch, setRoleSearch] = useState("");
-  const [securitySearch, setSecuritySearch] = useState("");
+  const [roleModal, setRoleModal] = useState<RoleModalState | null>(null);
+  const [permissionModal, setPermissionModal] = useState<PermissionModalState | null>(null);
+  const [employeeRoleModal, setEmployeeRoleModal] = useState<EmployeeRoleModalState | null>(null);
+  const [employeePermissionsModal, setEmployeePermissionsModal] = useState<EmployeePermissionsModalState | null>(null);
+  const workspaceSearch = search.trim().toLowerCase();
 
   const filteredPermissions = useMemo(() => {
-    const query = filter.trim().toLowerCase();
+    const query = workspaceSearch;
     if (!query) return permissionItems;
     return permissionItems.filter((permission) =>
       [permission.key, permission.resource, permission.action, permission.description]
         .some((value) => String(value ?? "").toLowerCase().includes(query)),
     );
-  }, [filter, permissionItems]);
+  }, [permissionItems, workspaceSearch]);
 
   const filteredRoles = useMemo(() => {
-    const query = roleSearch.trim().toLowerCase();
+    const query = workspaceSearch;
     if (!query) return roleItems;
     return roleItems.filter((role) =>
       [role.name, role.key, role.description].some((value) => String(value ?? "").toLowerCase().includes(query)),
     );
-  }, [roleItems, roleSearch]);
+  }, [roleItems, workspaceSearch]);
 
   const filteredUsers = useMemo(() => {
-    const query = roleFilter.trim().toLowerCase();
+    const query = workspaceSearch;
     if (!query) return userItems;
     return userItems.filter((user) =>
       [user.name, user.email, user.status, user.roleStatus].some((value) => String(value ?? "").toLowerCase().includes(query)),
     );
-  }, [roleFilter, userItems]);
+  }, [userItems, workspaceSearch]);
 
   const filteredAudit = useMemo(() => {
-    const query = securitySearch.trim().toLowerCase();
+    const query = workspaceSearch;
     if (!query) return audit;
     return audit.filter((log) =>
       [log.action, log.category, log.severity, log.entityType, log.entityId, log.performedBy, log.details]
         .some((value) => String(value ?? "").toLowerCase().includes(query)),
     );
-  }, [audit, securitySearch]);
+  }, [audit, workspaceSearch]);
 
   function selectEmployee(userId: string) {
     setSelectedUserId(userId);
@@ -196,105 +235,54 @@ export function ReferenceRolePermissionPanel({
     }
   }
 
-  async function createRole() {
-    const result = await Swal.fire(
-      dashboardSwalOptions({
-        title: "Create New Role",
-        html: `
-          <div class="space-y-3 text-left">
-            <label class="block text-sm font-semibold text-slate-700">Role Name</label>
-            <input id="create-role-name" class="swal2-input" placeholder="e.g. Custom Design Reviewer" />
-            <label class="block text-sm font-semibold text-slate-700">Description</label>
-            <textarea id="create-role-description" class="swal2-textarea" placeholder="What should this employee role manage?"></textarea>
-          </div>
-        `,
-        showCancelButton: true,
-        confirmButtonText: "Create Role",
-        cancelButtonText: "Cancel",
-        customClass: {
-          confirmButton: "dashboard-swal-confirm dashboard-swal-confirm-success",
-          cancelButton: "dashboard-swal-cancel",
-        },
-        preConfirm: () => {
-          const name = String((document.getElementById("create-role-name") as HTMLInputElement | null)?.value ?? "").trim();
-          const description = String((document.getElementById("create-role-description") as HTMLTextAreaElement | null)?.value ?? "").trim();
-          if (!name) {
-            Swal.showValidationMessage("Role name is required.");
-            return false;
-          }
-          return { name, description };
-        },
-      }),
-    );
-    if (!result.isConfirmed || !result.value) return;
+  function createRole() {
+    setRoleModal({ mode: "create", name: "", description: "" });
+  }
+
+  useEffect(() => {
+    const openCreateRole = () => createRole();
+    window.addEventListener(ADMIN_ROLE_CREATE_EVENT, openCreateRole);
+    return () => window.removeEventListener(ADMIN_ROLE_CREATE_EVENT, openCreateRole);
+  }, []);
+
+  async function saveRoleModal() {
+    if (!roleModal) return;
+    const value = {
+      name: roleModal.name.trim(),
+      description: roleModal.description.trim(),
+    };
+    if (!value.name) {
+      await dashboardError("Validation Error", "Role name is required.");
+      return;
+    }
     setMessage(null);
     try {
-      dashboardLoading("Creating role…", "Please wait a moment.");
-      const response = await fetch("/api/backend/admin/roles", {
-        method: "POST",
+      dashboardLoading(roleModal.mode === "edit" ? "Updating role..." : "Creating role...", "Please wait a moment.");
+      const response = await fetch(roleModal.mode === "edit" && roleModal.role ? `/api/backend/admin/roles/${roleModal.role.id}` : "/api/backend/admin/roles", {
+        method: roleModal.mode === "edit" ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(result.value),
+        body: JSON.stringify(value),
       });
       const payload = await response.json();
-      if (!response.ok) throw new Error(payload?.error ?? "Role creation failed");
-      setRoleItems((current) => [...current, payload.data].sort((a, b) => a.name.localeCompare(b.name)));
-      setMessage("Role created successfully.");
+      if (!response.ok) throw new Error(payload?.error ?? (roleModal.mode === "edit" ? "Could not update role." : "Role creation failed"));
+      setRoleItems((current) =>
+        roleModal.mode === "edit" && roleModal.role
+          ? current.map((item) => (item.id === roleModal.role?.id ? { ...item, ...payload.data } : item))
+          : [...current, payload.data].sort((a, b) => a.name.localeCompare(b.name)),
+      );
+      setMessage(roleModal.mode === "edit" ? "Role updated successfully." : "Role created successfully.");
+      setRoleModal(null);
       dashboardLoading.close();
-      await dashboardSuccess("Role Created", "New employee role has been created successfully.");
+      await dashboardSuccess(roleModal.mode === "edit" ? "Role Updated" : "Role Created", roleModal.mode === "edit" ? "Role information has been updated successfully." : "New employee role has been created successfully.");
     } catch (error) {
       dashboardLoading.close();
-      setMessage("Could not create role.");
-      await dashboardError("Create Failed", error instanceof Error ? error.message : "Could not create role.");
+      setMessage(roleModal.mode === "edit" ? "Could not update role." : "Could not create role.");
+      await dashboardError(roleModal.mode === "edit" ? "Update Failed" : "Create Failed", error instanceof Error ? error.message : roleModal.mode === "edit" ? "Could not update role." : "Could not create role.");
     }
   }
 
-  async function editRole(role: Role) {
-    const result = await Swal.fire(
-      dashboardSwalOptions({
-        title: "Edit Role",
-        html: `
-          <div class="space-y-3 text-left">
-            <label class="block text-sm font-semibold text-slate-700">Role Name</label>
-            <input id="role-name" class="swal2-input" value="${role.name.replace(/"/g, "&quot;")}" />
-            <label class="block text-sm font-semibold text-slate-700">Description</label>
-            <textarea id="role-description" class="swal2-textarea">${role.description ?? ""}</textarea>
-          </div>
-        `,
-        showCancelButton: true,
-        confirmButtonText: "Save Changes",
-        cancelButtonText: "Cancel",
-        customClass: {
-          confirmButton: "dashboard-swal-confirm dashboard-swal-confirm-success",
-          cancelButton: "dashboard-swal-cancel",
-        },
-        preConfirm: () => {
-          const name = String((document.getElementById("role-name") as HTMLInputElement | null)?.value ?? "").trim();
-          const description = String((document.getElementById("role-description") as HTMLTextAreaElement | null)?.value ?? "").trim();
-          if (!name) {
-            Swal.showValidationMessage("Role name is required.");
-            return false;
-          }
-          return { name, description };
-        },
-      }),
-    );
-    if (!result.isConfirmed || !result.value) return;
-    try {
-      dashboardLoading("Updating role…", "Please wait a moment.");
-      const response = await fetch(`/api/backend/admin/roles/${role.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(result.value),
-      });
-      const payload = await response.json();
-      if (!response.ok) throw new Error(payload?.error ?? "Could not update role.");
-      setRoleItems((current) => current.map((item) => (item.id === role.id ? { ...item, ...payload.data } : item)));
-      dashboardLoading.close();
-      await dashboardSuccess("Role Updated", "Role information has been updated successfully.");
-    } catch (error) {
-      dashboardLoading.close();
-      await dashboardError("Update Failed", error instanceof Error ? error.message : "Could not update role.");
-    }
+  function editRole(role: Role) {
+    setRoleModal({ mode: "edit", role, name: role.name, description: role.description ?? "" });
   }
 
   async function deleteRole(role: Role) {
@@ -327,60 +315,46 @@ export function ReferenceRolePermissionPanel({
     }
   }
 
-  async function editPermission(permission: Permission) {
-    const result = await Swal.fire(
-      dashboardSwalOptions({
-        title: "Edit Permission",
-        html: `
-          <div class="space-y-3 text-left">
-            <label class="block text-sm font-semibold text-slate-700">Permission Key</label>
-            <input id="permission-key" class="swal2-input" value="${permission.key.replace(/"/g, "&quot;")}" />
-            <label class="block text-sm font-semibold text-slate-700">Resource</label>
-            <input id="permission-resource" class="swal2-input" value="${permission.resource.replace(/"/g, "&quot;")}" />
-            <label class="block text-sm font-semibold text-slate-700">Action</label>
-            <input id="permission-action" class="swal2-input" value="${permission.action.replace(/"/g, "&quot;")}" />
-            <label class="block text-sm font-semibold text-slate-700">Description</label>
-            <textarea id="permission-description" class="swal2-textarea">${permission.description ?? ""}</textarea>
-          </div>
-        `,
-        showCancelButton: true,
-        confirmButtonText: "Save Changes",
-        cancelButtonText: "Cancel",
-        customClass: {
-          confirmButton: "dashboard-swal-confirm dashboard-swal-confirm-success",
-          cancelButton: "dashboard-swal-cancel",
-        },
-        preConfirm: () => {
-          const key = String((document.getElementById("permission-key") as HTMLInputElement | null)?.value ?? "").trim();
-          const resource = String((document.getElementById("permission-resource") as HTMLInputElement | null)?.value ?? "").trim();
-          const action = String((document.getElementById("permission-action") as HTMLInputElement | null)?.value ?? "").trim();
-          const description = String((document.getElementById("permission-description") as HTMLTextAreaElement | null)?.value ?? "").trim();
-          if (!key || !resource || !action) {
-            Swal.showValidationMessage("Key, resource, and action are required.");
-            return false;
-          }
-          return { key, resource, action, description };
-        },
-      }),
-    );
-    if (!result.isConfirmed || !result.value) return;
+  function editPermission(permission: Permission) {
+    setPermissionModal({
+      permission,
+      key: permission.key,
+      resource: permission.resource,
+      action: permission.action,
+      description: permission.description ?? "",
+    });
+  }
+
+  async function savePermissionModal() {
+    if (!permissionModal) return;
+    const value = {
+      key: permissionModal.key.trim(),
+      resource: permissionModal.resource.trim(),
+      action: permissionModal.action.trim(),
+      description: permissionModal.description.trim(),
+    };
+    if (!value.key || !value.resource || !value.action) {
+      await dashboardError("Validation Error", "Key, resource, and action are required.");
+      return;
+    }
     try {
-      dashboardLoading("Updating permission…", "Please wait a moment.");
-      const response = await fetch(`/api/backend/admin/permissions/${permission.id}`, {
+      dashboardLoading("Updating permission...", "Please wait a moment.");
+      const response = await fetch(`/api/backend/admin/permissions/${permissionModal.permission.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(result.value),
+        body: JSON.stringify(value),
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload?.error ?? "Could not update permission.");
-      setPermissionItems((current) => current.map((item) => (item.id === permission.id ? payload.data : item)));
+      setPermissionItems((current) => current.map((item) => (item.id === permissionModal.permission.id ? payload.data : item)));
       setRoleItems((current) =>
         current.map((role) => ({
           ...role,
-          permissions: role.permissions?.map((key) => (key === permission.key ? payload.data.key : key)),
+          permissions: role.permissions?.map((key) => (key === permissionModal.permission.key ? payload.data.key : key)),
         })),
       );
-      setSelectedPermissions((current) => current.map((key) => (key === permission.key ? payload.data.key : key)));
+      setSelectedPermissions((current) => current.map((key) => (key === permissionModal.permission.key ? payload.data.key : key)));
+      setPermissionModal(null);
       dashboardLoading.close();
       await dashboardSuccess("Permission Updated", "Permission information has been updated successfully.");
     } catch (error) {
@@ -420,35 +394,16 @@ export function ReferenceRolePermissionPanel({
     }
   }
 
-  async function editEmployeeRole(user: User) {
-    const options = roleItems
-      .filter((role) => !role.isSystem)
-      .map((role) => `<option value="${role.id}" ${role.id === user.assignedRoleId ? "selected" : ""}>${role.name}</option>`)
-      .join("");
-    const result = await Swal.fire(
-      dashboardSwalOptions({
-        title: "Edit Employee Role",
-        html: `
-          <div class="text-left">
-            <p class="mb-3 text-sm text-slate-600">${user.name ?? user.email}</p>
-            <select id="employee-role" class="swal2-select">
-              <option value="">No role / access pending</option>
-              ${options}
-            </select>
-          </div>
-        `,
-        showCancelButton: true,
-        confirmButtonText: "Save Role",
-        cancelButtonText: "Cancel",
-        customClass: {
-          confirmButton: "dashboard-swal-confirm dashboard-swal-confirm-success",
-          cancelButton: "dashboard-swal-cancel",
-        },
-        preConfirm: () => ({ roleId: String((document.getElementById("employee-role") as HTMLSelectElement | null)?.value ?? "") }),
-      }),
-    );
-    if (!result.isConfirmed || !result.value) return;
-    await saveEmployeeAccess(user.id, result.value.roleId || null, []);
+  function editEmployeeRole(user: User) {
+    setEmployeeRoleModal({ user, roleId: user.assignedRoleId ?? "" });
+  }
+
+  async function saveEmployeeRoleModal() {
+    if (!employeeRoleModal) return;
+    const userId = employeeRoleModal.user.id;
+    const nextRoleId = employeeRoleModal.roleId || null;
+    setEmployeeRoleModal(null);
+    await saveEmployeeAccess(userId, nextRoleId, []);
   }
 
   async function saveEmployeeAccess(userId: string, roleId: string | null, permissions: string[]) {
@@ -499,20 +454,20 @@ export function ReferenceRolePermissionPanel({
   }
 
   async function viewEmployeePermissions(user: User) {
+    setEmployeePermissionsModal({ user, permissions: [], loading: true, error: null });
     try {
       const response = await fetch(`/api/backend/admin/users/${user.id}/permissions`);
       const payload = await response.json();
       if (!response.ok) throw new Error(payload?.error ?? "Could not load permissions.");
       const items = Array.isArray(payload?.data) ? payload.data : [];
-      await Swal.fire(
-        dashboardSwalOptions({
-          title: "Employee Permissions",
-          html: `<div class="max-h-80 overflow-y-auto text-left">${items.length ? items.map((item: string) => `<div class="mb-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-800">${item}</div>`).join("") : "<p class='text-sm text-slate-600'>No permissions assigned.</p>"}</div>`,
-          confirmButtonText: "Close",
-        }),
-      );
+      setEmployeePermissionsModal({ user, permissions: items, loading: false, error: null });
     } catch (error) {
-      await dashboardError("Permission Load Failed", error instanceof Error ? error.message : "Could not load permissions.");
+      setEmployeePermissionsModal({
+        user,
+        permissions: [],
+        loading: false,
+        error: error instanceof Error ? error.message : "Could not load permissions.",
+      });
     }
   }
 
@@ -547,7 +502,8 @@ export function ReferenceRolePermissionPanel({
     return items.filter((item) => effectivePermissions.includes(item.permission));
   }, [effectivePermissions]);
   return (
-    <div className="mx-auto w-full max-w-7xl space-y-5">
+    <>
+    <div className="w-full space-y-5">
       {message ? <div className="rounded-xl border border-border bg-secondary/40 p-3 text-sm">{message}</div> : null}
 
       {activeTab === "access" ? (
@@ -592,12 +548,11 @@ export function ReferenceRolePermissionPanel({
           </section>
 
           <section className="rounded-2xl border border-border bg-card p-5">
-            <div className="flex flex-col gap-4 border-b border-border pb-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="border-b border-border pb-4">
               <div>
                 <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Optional exception access</p>
                 <h2 className="mt-1 text-xl font-semibold">Direct Permissions</h2>
               </div>
-              <input value={filter} onChange={(event) => setFilter(event.target.value)} placeholder="Search permissions..." className="h-12 w-full rounded-xl border border-input bg-background px-4 text-sm lg:w-[360px]" />
             </div>
             {selectedUserId && loadedFor !== selectedUserId ? (
               <button type="button" onClick={() => void loadPermissions(selectedUserId)} className="mt-4 text-sm font-medium text-primary">
@@ -652,9 +607,6 @@ export function ReferenceRolePermissionPanel({
             <h2 className="mt-2 text-xl font-semibold">Admin Users Review</h2>
             <p className="mt-1 text-sm text-muted-foreground">Review every employee and confirm who is assigned or still pending.</p>
           </div>
-          <div className="flex flex-col gap-3 border-b border-border p-5 sm:flex-row sm:items-center sm:justify-between">
-            <input value={roleFilter} onChange={(event) => setRoleFilter(event.target.value)} placeholder="Search employees..." className="h-11 w-full rounded-xl border border-input bg-background px-4 text-sm sm:max-w-md" />
-          </div>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[760px] border-collapse text-left">
               <TableHeader>
@@ -680,7 +632,7 @@ export function ReferenceRolePermissionPanel({
                       </span>
                     </td>
                     <td className="px-4 py-4">
-                      <div className="flex flex-wrap gap-2">
+                      <div className="flex flex-nowrap items-center gap-2 whitespace-nowrap">
                         <button type="button" onClick={() => void editEmployeeRole(user)} className="inline-flex items-center gap-1.5 rounded-lg bg-blue-900 px-3 py-1.5 text-xs font-bold text-white hover:bg-blue-950"><Edit3 className="h-3.5 w-3.5" /> Edit Role</button>
                         <button type="button" onClick={() => void viewEmployeePermissions(user)} className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-900 hover:bg-blue-100"><Eye className="h-3.5 w-3.5" /> View</button>
                         <button type="button" onClick={() => void removeEmployeeAccess(user)} className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-800 hover:bg-rose-100"><Trash2 className="h-3.5 w-3.5" /> Delete</button>
@@ -718,10 +670,6 @@ export function ReferenceRolePermissionPanel({
                 ))}
               </select>
             </label>
-            <label className="block w-full max-w-md text-sm">
-              <span className="mb-2 block font-semibold">Search permissions</span>
-              <input value={filter} onChange={(event) => setFilter(event.target.value)} placeholder="Search permission name, resource, action..." className="h-12 w-full rounded-xl border border-input bg-background px-4" />
-            </label>
             <button type="button" onClick={() => void saveRolePermissions()} disabled={!selectedRoleId || busy} className="h-12 rounded-xl bg-slate-900 px-5 text-sm font-bold text-white hover:bg-blue-950 disabled:opacity-50">
               {busy ? "Saving..." : "Save Role Permissions"}
             </button>
@@ -737,7 +685,7 @@ export function ReferenceRolePermissionPanel({
                     <p className="mt-1 text-xs font-semibold uppercase tracking-wider text-blue-700">{permission.resource} · {permission.action}</p>
                     <p className="mt-2 text-sm leading-6 text-slate-600">{permission.description ?? "Controls access to this dashboard feature."}</p>
                   </span>
-                  <span className="flex shrink-0 flex-col gap-2 sm:flex-row">
+                  <span className="flex shrink-0 flex-row flex-nowrap items-center gap-2 whitespace-nowrap">
                     <button type="button" onClick={(event) => { event.preventDefault(); event.stopPropagation(); void editPermission(permission); }} className="inline-flex items-center gap-1.5 rounded-lg bg-blue-900 px-3 py-1.5 text-xs font-bold text-white hover:bg-blue-950"><Edit3 className="h-3.5 w-3.5" /> Edit</button>
                     <button type="button" onClick={(event) => { event.preventDefault(); event.stopPropagation(); void deletePermission(permission); }} className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-800 hover:bg-rose-100"><Trash2 className="h-3.5 w-3.5" /> Delete</button>
                   </span>
@@ -760,15 +708,6 @@ export function ReferenceRolePermissionPanel({
               <h2 className="mt-2 text-xl font-semibold">Security Logs</h2>
               <p className="mt-1 text-sm text-muted-foreground">Audit trail for role creation, permission changes, and employee access updates.</p>
             </div>
-            <label className="relative w-full lg:max-w-md">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <input
-                value={securitySearch}
-                onChange={(event) => setSecuritySearch(event.target.value)}
-                placeholder="Search logs..."
-                className="h-11 w-full rounded-xl border border-input bg-background pl-9 pr-4 text-sm"
-              />
-            </label>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[860px] text-left text-sm">
@@ -806,23 +745,6 @@ export function ReferenceRolePermissionPanel({
       ) : (
         <section className="space-y-5">
           <div className="overflow-hidden rounded-2xl border border-border bg-card">
-            <div className="flex flex-col gap-4 border-b border-border p-5 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-700">Step 1</p>
-                <h2 className="mt-2 text-xl font-semibold">Roles</h2>
-                <p className="mt-1 text-sm text-muted-foreground">Reusable job-based roles available for assignment.</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => void createRole()}
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-blue-950 px-5 text-sm font-bold text-white shadow-sm transition hover:bg-blue-900"
-              >
-                <Plus className="h-4 w-4" /> Create Role
-              </button>
-            </div>
-            <div className="border-b border-border p-5">
-              <input value={roleSearch} onChange={(event) => setRoleSearch(event.target.value)} placeholder="Search roles..." className="h-11 w-full max-w-md rounded-xl border border-input bg-background px-4 text-sm" />
-            </div>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[720px] border-collapse text-left">
                 <TableHeader>
@@ -844,7 +766,7 @@ export function ReferenceRolePermissionPanel({
                         <span className="rounded-full bg-secondary px-2.5 py-1 text-xs text-muted-foreground">{role.isSystem ? "System" : "Custom"}</span>
                       </td>
                       <td className="px-4 py-4">
-                        <div className="flex flex-wrap gap-2">
+                        <div className="flex flex-nowrap items-center gap-2 whitespace-nowrap">
                           <button type="button" onClick={() => void editRole(role)} className="inline-flex items-center gap-1.5 rounded-lg bg-blue-900 px-3 py-1.5 text-xs font-bold text-white hover:bg-blue-950"><Edit3 className="h-3.5 w-3.5" /> Edit</button>
                           <button type="button" onClick={() => void deleteRole(role)} disabled={role.isSystem} className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-800 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-50"><Trash2 className="h-3.5 w-3.5" /> Delete</button>
                         </div>
@@ -858,5 +780,154 @@ export function ReferenceRolePermissionPanel({
         </section>
       )}
     </div>
+
+    <Dialog open={Boolean(roleModal)} onOpenChange={(open) => !open && setRoleModal(null)}>
+      <DialogContent className={dashboardModalPresets.simple.content()}>
+        <DashboardModalTitleBar
+          title={roleModal?.mode === "edit" ? "Edit Role" : "Create New Role"}
+          description={roleModal?.mode === "edit" ? "Update role name and description." : "Create a reusable employee role for dashboard access."}
+          variant="compact"
+        />
+        <DashboardModalScrollBody variant="compact">
+          <div className="space-y-5">
+            <label className="block text-sm">
+              <span className="mb-2 block font-semibold text-slate-700">Role Name</span>
+              <input
+                value={roleModal?.name ?? ""}
+                onChange={(event) => setRoleModal((current) => current ? { ...current, name: event.target.value } : current)}
+                placeholder="e.g. Custom Design Reviewer"
+                className="h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-sm text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+              />
+            </label>
+            <label className="block text-sm">
+              <span className="mb-2 block font-semibold text-slate-700">Description</span>
+              <textarea
+                value={roleModal?.description ?? ""}
+                onChange={(event) => setRoleModal((current) => current ? { ...current, description: event.target.value } : current)}
+                rows={5}
+                placeholder="What should this employee role manage?"
+                className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+              />
+            </label>
+          </div>
+        </DashboardModalScrollBody>
+        <DashboardModalFooter variant="compact">
+          <DashboardModalFooterButton size="sm" onClick={() => setRoleModal(null)}>Cancel</DashboardModalFooterButton>
+          <DashboardModalFooterButton variant="primary" size="sm" onClick={() => void saveRoleModal()}>
+            {roleModal?.mode === "edit" ? "Save Changes" : "Create Role"}
+          </DashboardModalFooterButton>
+        </DashboardModalFooter>
+      </DialogContent>
+    </Dialog>
+
+    <Dialog open={Boolean(permissionModal)} onOpenChange={(open) => !open && setPermissionModal(null)}>
+      <DialogContent className={dashboardModalPresets.compact.content()}>
+        <DashboardModalTitleBar
+          title="Edit Permission"
+          description="Update the permission key, resource, action, and dashboard description."
+          variant="compact"
+        />
+        <DashboardModalScrollBody variant="compact">
+          <div className="grid gap-5 md:grid-cols-2">
+            <label className="block text-sm md:col-span-2">
+              <span className="mb-2 block font-semibold text-slate-700">Permission Key</span>
+              <input
+                value={permissionModal?.key ?? ""}
+                onChange={(event) => setPermissionModal((current) => current ? { ...current, key: event.target.value } : current)}
+                className="h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-sm text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+              />
+            </label>
+            <label className="block text-sm">
+              <span className="mb-2 block font-semibold text-slate-700">Resource</span>
+              <input
+                value={permissionModal?.resource ?? ""}
+                onChange={(event) => setPermissionModal((current) => current ? { ...current, resource: event.target.value } : current)}
+                className="h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-sm text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+              />
+            </label>
+            <label className="block text-sm">
+              <span className="mb-2 block font-semibold text-slate-700">Action</span>
+              <input
+                value={permissionModal?.action ?? ""}
+                onChange={(event) => setPermissionModal((current) => current ? { ...current, action: event.target.value } : current)}
+                className="h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-sm text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+              />
+            </label>
+            <label className="block text-sm md:col-span-2">
+              <span className="mb-2 block font-semibold text-slate-700">Description</span>
+              <textarea
+                value={permissionModal?.description ?? ""}
+                onChange={(event) => setPermissionModal((current) => current ? { ...current, description: event.target.value } : current)}
+                rows={5}
+                className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+              />
+            </label>
+          </div>
+        </DashboardModalScrollBody>
+        <DashboardModalFooter variant="compact">
+          <DashboardModalFooterButton size="sm" onClick={() => setPermissionModal(null)}>Cancel</DashboardModalFooterButton>
+          <DashboardModalFooterButton variant="primary" size="sm" onClick={() => void savePermissionModal()}>Save Changes</DashboardModalFooterButton>
+        </DashboardModalFooter>
+      </DialogContent>
+    </Dialog>
+
+    <Dialog open={Boolean(employeeRoleModal)} onOpenChange={(open) => !open && setEmployeeRoleModal(null)}>
+      <DialogContent className={dashboardModalPresets.simple.content()}>
+        <DashboardModalTitleBar
+          title="Edit Employee Role"
+          description={employeeRoleModal?.user.name ?? employeeRoleModal?.user.email ?? "Assign a reusable role to this employee."}
+          variant="compact"
+        />
+        <DashboardModalScrollBody variant="compact">
+          <label className="block text-sm">
+            <span className="mb-2 block font-semibold text-slate-700">Employee Role</span>
+            <select
+              value={employeeRoleModal?.roleId ?? ""}
+              onChange={(event) => setEmployeeRoleModal((current) => current ? { ...current, roleId: event.target.value } : current)}
+              className="h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-sm text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+            >
+              <option value="">No role / access pending</option>
+              {roleItems.filter((role) => !role.isSystem).map((role) => (
+                <option key={role.id} value={role.id}>{role.name}</option>
+              ))}
+            </select>
+          </label>
+        </DashboardModalScrollBody>
+        <DashboardModalFooter variant="compact">
+          <DashboardModalFooterButton size="sm" onClick={() => setEmployeeRoleModal(null)}>Cancel</DashboardModalFooterButton>
+          <DashboardModalFooterButton variant="primary" size="sm" onClick={() => void saveEmployeeRoleModal()}>Save Role</DashboardModalFooterButton>
+        </DashboardModalFooter>
+      </DialogContent>
+    </Dialog>
+
+    <Dialog open={Boolean(employeePermissionsModal)} onOpenChange={(open) => !open && setEmployeePermissionsModal(null)}>
+      <DialogContent className={dashboardModalPresets.scrollable.content()}>
+        <DashboardModalTitleBar
+          title="Employee Permissions"
+          description={employeePermissionsModal?.user.name ?? employeePermissionsModal?.user.email ?? "View effective employee permissions."}
+          variant="detail"
+        />
+        <DashboardModalScrollBody hasFooter={false} variant="detail">
+          {employeePermissionsModal?.loading ? (
+            <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm font-semibold text-slate-700">Loading permissions...</div>
+          ) : employeePermissionsModal?.error ? (
+            <div className="rounded-2xl border border-rose-200 bg-rose-50 p-6 text-sm font-semibold text-rose-800">{employeePermissionsModal.error}</div>
+          ) : employeePermissionsModal?.permissions.length ? (
+            <div className="grid gap-3 md:grid-cols-2">
+              {employeePermissionsModal.permissions.map((item) => (
+                <div key={item} className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-800 shadow-sm">
+                  {item}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-8 text-center text-sm font-semibold text-slate-600">
+              No permissions assigned.
+            </div>
+          )}
+        </DashboardModalScrollBody>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }

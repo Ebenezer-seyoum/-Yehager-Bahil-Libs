@@ -42,6 +42,7 @@ export default async function CheckoutPage({
     const pickupPersonName = String(formData.get("pickupPersonName") ?? "");
     const pickupPersonPhone = String(formData.get("pickupPersonPhone") ?? "");
     const shipChoice = String(formData.get("shipChoice") ?? "own");
+    const tailorNote = String(formData.get("checkoutTailorNote") || formData.get("tailorNote") || "");
     const agreed = formData.get("agreeTerms") === "on";
 
     if (!agreed) {
@@ -92,6 +93,7 @@ export default async function CheckoutPage({
             pickupLocation: pickupLocation || undefined,
             pickupPersonName: pickupPersonName || undefined,
             pickupPersonPhone: pickupPersonPhone || undefined,
+            remarks: tailorNote || undefined,
           },
         });
 
@@ -115,8 +117,9 @@ export default async function CheckoutPage({
 
         revalidatePath("/cart");
       }
-    } catch {
-      redirect("/checkout?error=checkout");
+    } catch (e: any) {
+      console.error("Checkout error:", e);
+      redirect(`/checkout?error=checkout&debug=${encodeURIComponent(e instanceof Error ? e.message : "Internal Error")}`);
     }
 
     redirect(destination);

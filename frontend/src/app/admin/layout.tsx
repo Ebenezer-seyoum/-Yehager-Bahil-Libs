@@ -18,28 +18,20 @@ type Alert = {
 
 async function getAdminNotificationCounts() {
   try {
-    const [ordersResponse, alertsResponse, supportResponse, customDesignsResponse] = await Promise.all([
-      apiRequest<{ data?: Order[] }>("/api/v1/orders?limit=200"),
-      apiRequest<{ data?: Alert[] }>("/api/v1/admin/alerts?limit=200"),
-      apiRequest<{ count?: number }>("/api/v1/admin/support/unread-count").catch(() => ({ count: 0 })),
-      apiRequest<{ unreadCount?: number }>("/api/v1/uploaded-designs/admin?limit=1").catch(() => ({ unreadCount: 0 })),
-    ]);
-    const orders = Array.isArray(ordersResponse?.data) ? ordersResponse.data : [];
-    const alerts = Array.isArray(alertsResponse?.data) ? alertsResponse.data : [];
-
-    const orderNotifications = orders.filter((order) => ["pending", "processing"].includes(order.status ?? "pending"));
-    const groupOrderNotifications = orderNotifications.filter((order) => order.orderType === "group_order");
+    const response = await apiRequest<{ data?: { payment: number; custom_order: number; catalog_order: number; total: number } }>("/api/v1/admin/summary-counts");
+    const counts = response?.data;
+    
     return {
-      orders: orderNotifications.length,
-      orderIds: orderNotifications.map((order) => order.id).filter(Boolean),
-      groupOrders: groupOrderNotifications.length,
-      payments: orders.filter((order) => order.paymentStatus === "awaiting_verification").length,
-      alerts: alerts.filter((alert) => !alert.isResolved).length,
-      support: supportResponse?.count ?? 0,
-      customDesigns: customDesignsResponse?.unreadCount ?? 0,
+      orders: counts?.catalog_order ?? 0,
+      payments: counts?.payment ?? 0,
+      customDesigns: counts?.custom_order ?? 0,
+      total: counts?.total ?? 0,
+      // Keep other placeholders for now if needed by DashboardShell
+      alerts: 0,
+      support: 0,
     };
   } catch {
-    return { orders: 0, orderIds: [], groupOrders: 0, payments: 0, alerts: 0, support: 0, customDesigns: 0 };
+    return { orders: 0, payments: 0, customDesigns: 0, total: 0, alerts: 0, support: 0 };
   }
 }
 

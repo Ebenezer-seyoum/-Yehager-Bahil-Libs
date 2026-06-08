@@ -23,12 +23,15 @@ export type CheckoutLine = {
   itemMetadata?: Record<string, unknown> | null;
 };
 
-export function moneyToNumber(value: string | number) {
-  return typeof value === "number" ? value : Number(value);
+export function moneyToNumber(value: string | number | null | undefined) {
+  if (value === null || value === undefined || value === "") return 0;
+  const num = typeof value === "number" ? value : Number(value);
+  return Number.isNaN(num) ? 0 : num;
 }
 
 export function numberToMoney(value: number) {
-  return value.toFixed(2);
+  const safeValue = Number.isNaN(value) ? 0 : value;
+  return safeValue.toFixed(2);
 }
 
 export function buildCheckoutLines(inputs: CheckoutLineInput[]) {

@@ -82,3 +82,32 @@ export type AdminWorkspaceData = {
   settings?: Record<string, unknown>;
   sections?: Record<string, unknown>[];
 };
+
+export type Role = { id: string; name: string };
+export type AccountStatus = "active" | "invited" | "pending" | "inactive" | "blocked" | "suspended";
+
+export type User = {
+  id: string;
+  name?: string | null;
+  email?: string | null;
+  image?: string | null;
+  role?: string | null;
+  status?: string | null;
+  accountStatus?: string | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+  profile?: {
+    firstName?: string | null;
+    fatherName?: string | null;
+    grandfatherName?: string | null;
+    gender?: string | null;
+  };
+};
+
+export type EmployeeDirectoryUser = User & {
+  assignedRoleId?: string | null;
+  assignedRoleName?: string | null;
+  roleId?: string | null;
+  roleName?: string | null;
+};
+

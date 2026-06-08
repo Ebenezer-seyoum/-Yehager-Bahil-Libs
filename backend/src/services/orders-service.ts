@@ -174,6 +174,7 @@ export async function createCheckoutIntent(payload: {
   pickupLocation?: string;
   pickupPersonName?: string;
   pickupPersonPhone?: string;
+  remarks?: string;
 }) {
   const userEmail = payload.userEmail;
   if (!userEmail) {
@@ -308,6 +309,7 @@ export async function createCheckoutIntent(payload: {
         useEventOwnerAddress: Boolean(payload.useEventOwnerAddress),
         eventId: primaryEventId,
         eventName: primaryEvent?.name,
+        remarks: payload.remarks,
       })
       .returning();
 

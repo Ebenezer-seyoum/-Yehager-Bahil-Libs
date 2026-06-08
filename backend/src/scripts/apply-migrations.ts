@@ -1,7 +1,7 @@
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
-import { Client } from "../../node_modules/@types/pg/index.js";
+import { Client } from "pg";
 import { config } from "dotenv";
 
 config();

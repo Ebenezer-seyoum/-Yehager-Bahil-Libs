@@ -3,7 +3,7 @@ import type { ComponentType, PropsWithChildren } from "react";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth/next";
-import { ArrowRight, Calendar, Plus, Users } from "lucide-react";
+import { ArrowLeft, ArrowRight, Calendar, Plus, Users } from "lucide-react";
 import { apiRequest } from "@/lib/api-client";
 import { authOptions } from "@/auth-options";
 import { ensureBackendUserSynced } from "@/lib/backend-user-sync";
@@ -72,6 +72,11 @@ export default async function EventsPage() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-16">
+      <div className="mb-6">
+        <Link href="/my-account" className="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground">
+          <ArrowLeft className="h-4 w-4" /> Back to Account
+        </Link>
+      </div>
       <div className="mb-10 flex items-center justify-between">
         <div>
           <p className="mb-2 text-xs font-medium uppercase tracking-[0.4em] text-primary">Proprietary Feature</p>

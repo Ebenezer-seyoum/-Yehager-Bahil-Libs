@@ -1,8 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Edit3, FolderTree, Layers3, Plus, Search, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Edit3, FolderTree, Layers3, Plus, Trash2 } from "lucide-react";
 import { REGIONS, TAXONOMY } from "@/lib/taxonomy";
+
+const ADMIN_SECTION_SAVE_EVENT = "admin-sections:save-section";
 
 type SectionItem = {
   id: string;
@@ -15,7 +17,7 @@ function toSlug(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 }
 
-export function AdminSectionManager() {
+export function AdminSectionManager({ externalSearch }: { externalSearch?: string }) {
   const [sections, setSections] = useState<SectionItem[]>(
     REGIONS.map((region) => ({
       id: toSlug(region),
@@ -24,22 +26,24 @@ export function AdminSectionManager() {
       subsections: TAXONOMY[region] ?? [],
     })),
   );
-  const [search, setSearch] = useState("");
+  const [search] = useState("");
+  const effectiveSearch = externalSearch ?? search;
   const [selectedId, setSelectedId] = useState(sections[0]?.id ?? "");
   const [sectionName, setSectionName] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [subsectionName, setSubsectionName] = useState("");
   const [editingSubsection, setEditingSubsection] = useState<{ sectionId: string; name: string } | null>(null);
+  const sectionNameInputRef = useRef<HTMLInputElement | null>(null);
 
   const filteredSections = useMemo(() => {
-    const needle = search.trim().toLowerCase();
+    const needle = effectiveSearch.trim().toLowerCase();
     if (!needle) return sections;
     return sections.filter(
       (section) =>
         section.name.toLowerCase().includes(needle) ||
         section.subsections.some((subsection) => subsection.toLowerCase().includes(needle)),
     );
-  }, [search, sections]);
+  }, [effectiveSearch, sections]);
 
   const selectedSection = sections.find((section) => section.id === selectedId) ?? sections[0];
 
@@ -61,6 +65,15 @@ export function AdminSectionManager() {
     setSelectedId(newSection.id);
     resetSectionForm();
   }
+
+  useEffect(() => {
+    const startSectionCreate = () => {
+      resetSectionForm();
+      sectionNameInputRef.current?.focus();
+    };
+    window.addEventListener(ADMIN_SECTION_SAVE_EVENT, startSectionCreate);
+    return () => window.removeEventListener(ADMIN_SECTION_SAVE_EVENT, startSectionCreate);
+  }, []);
 
   function deleteSection(sectionId: string) {
     setSections((current) => {
@@ -120,17 +133,9 @@ export function AdminSectionManager() {
           </div>
         </div>
 
-        <div className="mt-5 grid gap-3 rounded-3xl border border-slate-200 bg-slate-50 p-4 lg:grid-cols-[1fr_1fr_auto]">
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search sections or subsections..."
-              className="h-11 w-full rounded-xl border border-slate-200 bg-white pl-10 pr-3 text-sm font-semibold text-slate-900 placeholder:text-slate-400"
-            />
-          </div>
+        <div className="mt-5 grid gap-3 rounded-3xl border border-slate-200 bg-slate-50 p-4 lg:grid-cols-[1fr_auto]">
           <input
+            ref={sectionNameInputRef}
             value={sectionName}
             onChange={(event) => setSectionName(event.target.value)}
             placeholder={editingId ? "Update section name" : "New section name"}

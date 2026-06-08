@@ -36,11 +36,14 @@ export type NavigationGroup = {
 
 export const adminNavigation: readonly NavigationGroup[] = [
   {
-    label: "Overview",
-    items: [{ href: "/admin", label: "Dashboard", icon: "dashboard", permission: "dashboard.view" }],
+    label: "Dashboard",
+    items: [
+      { href: "/admin", label: "Overview", icon: "dashboard", permission: "dashboard.view" },
+      { href: "/admin/analytics", label: "Analytics", icon: "reports", permission: "dashboard.view" },
+    ],
   },
   {
-    label: "Users",
+    label: "User Management",
     items: [
       { href: "/admin/users", label: "Employees", icon: "users", permission: "employees.view" },
       { href: "/admin/customers", label: "Customers", icon: "customers", permission: "customers.view" },
@@ -48,39 +51,43 @@ export const adminNavigation: readonly NavigationGroup[] = [
     ],
   },
   {
-    label: "Catalog",
+    label: "Product Management",
     items: [
       { href: "/admin/inventory", label: "Catalog", icon: "products", permission: "products.view" },
-      { href: "/admin/uploaded-designs", label: "Custom Orders", icon: "documents", permission: "uploaded_designs.view" },
-      { href: "/admin/group-orders", label: "Group Orders", icon: "orders", permission: "orders.view" },
       { href: "/admin/sections", label: "Sections", icon: "sections", permission: "products.view" },
     ],
   },
   {
-    label: "Operations",
+    label: "Order Management",
     items: [
-      { href: "/admin/orders", label: "Orders", icon: "orders", permission: "orders.view" },
-      { href: "/admin/payments", label: "Payments", icon: "payments", permission: "payments.view" },
+      { href: "/admin/orders?type=catalog", label: "Catalog Orders", icon: "orders", permission: "orders.view" },
+      { href: "/admin/uploaded-designs", label: "Custom orders", icon: "documents", permission: "uploaded_designs.view" },
       { href: "/admin/orders/documents", label: "Order Documents", icon: "documents", permission: "documents.view" },
-      { href: "/admin/exchange-rate", label: "Exchange Rate", icon: "exchange", permission: "exchange.view" },
+    ],
+  },
+  {
+    label: "Finance",
+    items: [
+      { href: "/admin/payments", label: "Payments", icon: "payments", permission: "payments.view" },
+      { href: "/admin/exchange-rate", label: "Exchange Rates", icon: "exchange", permission: "exchange.view" },
     ],
   },
   {
     label: "Reports",
     items: [
-      {
-        href: "/admin/reports",
-        label: "Reports Center",
-        icon: "reports",
-        permission: "reports.view",
-      },
+      { href: "/admin/reports", label: "Reports Center", icon: "reports", permission: "reports.view" },
+    ],
+  },
+  {
+    label: "Support",
+    items: [
+      { href: "/admin/support-inbox", label: "Support Inbox", icon: "inbox", permission: "support.view" },
     ],
   },
   {
     label: "System",
     items: [
       { href: "/admin/settings", label: "Settings", icon: "settings", permission: "settings.view" },
-      { href: "/admin/support-inbox", label: "Support Inbox", icon: "inbox", permission: "support.view" },
       { href: "/admin/audit", label: "Activity Logs", icon: "audit", permission: "audit.view" },
     ],
   },

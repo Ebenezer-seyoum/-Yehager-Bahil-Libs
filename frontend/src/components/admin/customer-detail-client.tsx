@@ -3,25 +3,33 @@
 import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FileText, Loader2, Lock, MapPin, NotebookPen, Pencil, ShoppingBag, Trash2, Unlock, User2, X } from "lucide-react";
+import { 
+  FileText, 
+  Loader2, 
+  Lock, 
+  MapPin, 
+  NotebookPen, 
+  Pencil, 
+  ShoppingBag, 
+  Trash2, 
+  Unlock, 
+  User2, 
+  X,
+  RefreshCw,
+  ArrowLeft,
+  ShieldCheck
+} from "lucide-react";
 import { dashboardConfirm, dashboardError, dashboardSuccess } from "@/lib/dashboard-swal";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
 type Customer = Record<string, any>;
 
-function formatDateTime(value?: string | null) {
-  if (!value) return "Not provided";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "Not provided";
-  return d.toLocaleString();
-}
-
 function formatDate(value?: string | null) {
   if (!value) return "Not provided";
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return "Not provided";
-  return d.toLocaleDateString();
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
 function initials(name?: string | null, email?: string | null) {
@@ -39,52 +47,36 @@ function initials(name?: string | null, email?: string | null) {
 function badgeTone(kind: "account" | "type", value?: string | null) {
   const v = String(value ?? "").toLowerCase();
   if (kind === "account") {
-    if (v === "active") return "bg-emerald-100 text-emerald-800 border-emerald-200";
-    if (v === "invited") return "bg-blue-100 text-blue-800 border-blue-200";
-    if (v === "inactive" || v === "blocked" || v === "suspended") return "bg-slate-100 text-slate-800 border-slate-200";
-    return "bg-slate-100 text-slate-800 border-slate-200";
+    if (v === "active") return "bg-emerald-50 text-emerald-700 border-emerald-100";
+    if (v === "invited") return "bg-blue-50 text-blue-700 border-blue-100";
+    if (v === "inactive" || v === "blocked" || v === "suspended") return "bg-slate-50 text-slate-700 border-slate-100";
+    return "bg-slate-50 text-slate-700 border-slate-100";
   }
   if (kind === "type") {
-    if (v === "vip") return "bg-purple-100 text-purple-800 border-purple-200";
-    if (v === "wholesale") return "bg-amber-100 text-amber-800 border-amber-200";
-    if (v === "returning") return "bg-emerald-100 text-emerald-800 border-emerald-200";
-    return "bg-blue-100 text-blue-800 border-blue-200";
+    if (v === "vip") return "bg-purple-50 text-purple-700 border-purple-100";
+    if (v === "wholesale") return "bg-amber-50 text-amber-700 border-amber-100";
+    if (v === "returning") return "bg-emerald-50 text-emerald-700 border-emerald-100";
+    return "bg-blue-50 text-blue-700 border-blue-100";
   }
-  return "bg-slate-100 text-slate-800 border-slate-200";
+  return "bg-slate-50 text-slate-700 border-slate-100";
 }
 
 function Field({ label, value }: { label: string; value?: string | null }) {
   const display = value && String(value).trim() ? value : "Not provided";
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="text-xs font-semibold text-slate-600">{label}</div>
-      <div className="mt-1 text-sm font-semibold text-slate-950">{display}</div>
+    <div className="rounded-2xl border border-slate-100 bg-slate-50/50 p-5 shadow-[inset_0_1px_2px_rgba(0,0,0,0.02)]">
+      <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">{label}</div>
+      <div className="mt-1 text-sm font-bold text-slate-900">{display}</div>
     </div>
   );
-}
-
-function validateEmail(value: string) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
-}
-
-function validatePhone(value: string) {
-  return /^[+\d][\d\s-]{6,24}$/.test(value.trim());
-}
-
-function validateName(value: string) {
-  const trimmed = value.trim();
-  if (!trimmed) return false;
-  return /^[\p{L}\s.'-]+$/u.test(trimmed);
 }
 
 export function CustomerDetailClient({
   initialCustomer,
   orders = [],
-  backTab = "all",
   canEdit = true,
   canDelete = true,
   embedded = false,
-  onClose,
 }: {
   initialCustomer: Customer;
   orders?: Array<Record<string, unknown>>;
@@ -101,13 +93,11 @@ export function CustomerDetailClient({
   const [resetOpen, setResetOpen] = useState(false);
   const [activeSection, setActiveSection] = useState<"personal" | "contact" | "account" | "orders" | "notes">("personal");
 
-  const originalRef = useRef<Customer>(initialCustomer);
-
-  const [firstName, setFirstName] = useState(String(customer.firstName ?? customer.first_name ?? ""));
-  const [fatherName, setFatherName] = useState(String(customer.fatherName ?? customer.father_name ?? ""));
-  const [grandfatherName, setGrandfatherName] = useState(String(customer.grandfatherName ?? customer.grandfather_name ?? ""));
+  const [firstName, setFirstName] = useState(String(customer.firstName ?? ""));
+  const [fatherName, setFatherName] = useState(String(customer.fatherName ?? ""));
+  const [grandfatherName, setGrandfatherName] = useState(String(customer.grandfatherName ?? ""));
   const [gender, setGender] = useState(String(customer.gender ?? ""));
-  const [dateOfBirth, setDateOfBirth] = useState(String(customer.dateOfBirth ?? customer.date_of_birth ?? ""));
+  const [dateOfBirth, setDateOfBirth] = useState(String(customer.dateOfBirth ?? ""));
 
   const [email, setEmail] = useState(String(customer.email ?? ""));
   const [phone, setPhone] = useState(String(customer.phone ?? ""));
@@ -115,8 +105,8 @@ export function CustomerDetailClient({
   const [city, setCity] = useState(String(customer.city ?? ""));
   const [address, setAddress] = useState(String(customer.address ?? ""));
 
-  const [accountStatus, setAccountStatus] = useState(String(customer.accountStatus ?? customer.account_status ?? customer.status ?? "active"));
-  const [customerType, setCustomerType] = useState(String(customer.customerType ?? customer.customer_type ?? ""));
+  const [accountStatus, setAccountStatus] = useState(String(customer.accountStatus ?? "active"));
+  const [customerType, setCustomerType] = useState(String(customer.customerType ?? ""));
   const [notes, setNotes] = useState(String(customer.notes ?? ""));
 
   const [newPassword, setNewPassword] = useState("");
@@ -129,120 +119,40 @@ export function CustomerDetailClient({
 
   const stats = useMemo(() => {
     const emailKey = String(customer.email ?? "").toLowerCase();
-    const customerOrders = orders.filter((o) => String((o as any).userEmail ?? (o as any).email ?? "").toLowerCase() === emailKey);
+    const customerOrders = orders.filter((o) => String((o as any).email ?? "").toLowerCase() === emailKey);
     const totalOrders = customerOrders.length;
-    const totalSpent = customerOrders.reduce((sum, o) => sum + Number((o as any).totalUsd ?? (o as any).total ?? 0), 0);
-    const last = [...customerOrders].sort((a, b) => new Date(String((b as any).createdAt ?? 0)).getTime() - new Date(String((a as any).createdAt ?? 0)).getTime())[0] ?? null;
-    return { customerOrders, totalOrders, totalSpent, lastOrderAt: last ? String((last as any).createdAt ?? "") : null };
+    const totalSpent = customerOrders.reduce((sum, o) => sum + Number((o as any).total ?? 0), 0);
+    return { totalOrders, totalSpent, customerOrders };
   }, [customer.email, orders]);
 
-  const photoUrl =
-    customer.profile_photo_url ?? customer.profilePhotoUrl ?? customer.avatarUrl ?? null;
+  const photoUrl = customer.profilePhotoUrl || customer.avatarUrl || null;
 
   async function refreshDetail() {
+    setBusy(true);
     try {
-      const res = await fetch(`/api/backend/admin/users/${customer.id}`, { method: "GET" });
-      const json = (await res.json().catch(() => null)) as any;
-      if (!res.ok) return;
-      const next = json?.data?.user ?? json?.data ?? null;
-      if (next) {
-        setCustomer(next);
-        originalRef.current = next;
-      }
-    } catch {
-      // ignore
-    }
+      const res = await fetch(`/api/backend/admin/users/${customer.id}`);
+      const json = await res.json();
+      if (res.ok && json.data) setCustomer(json.data);
+    } catch { /* ignore */ } finally { setBusy(false); }
   }
 
   async function save() {
-    const trimmedFirst = firstName.trim();
-    const trimmedEmail = email.trim();
-    const trimmedPhone = phone.trim();
-
-    if (!trimmedFirst) {
-      await dashboardError("Validation Error", "First Name is required.");
-      return;
-    }
-    if (!validateName(trimmedFirst) || (fatherName.trim() && !validateName(fatherName)) || (grandfatherName.trim() && !validateName(grandfatherName))) {
-      await dashboardError("Validation Error", "Please use letters only for name fields.");
-      return;
-    }
-    if (!trimmedEmail || !validateEmail(trimmedEmail)) {
-      await dashboardError("Validation Error", !trimmedEmail ? "Email Address is required." : "Please enter a valid email address.");
-      return;
-    }
-    if (!trimmedPhone || !validatePhone(trimmedPhone)) {
-      await dashboardError("Validation Error", !trimmedPhone ? "Phone Number is required." : "Please enter a valid phone number.");
-      return;
-    }
-    if (!accountStatus) {
-      await dashboardError("Validation Error", "Account Status is required.");
-      return;
-    }
-
     setBusy(true);
     try {
       const res = await fetch(`/api/backend/admin/users/${customer.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          firstName: trimmedFirst,
-          fatherName: fatherName.trim() || null,
-          grandfatherName: grandfatherName.trim() || null,
-          name: fullName,
-          email: trimmedEmail,
-          phone: trimmedPhone,
-          gender: gender || null,
-          dateOfBirth: dateOfBirth || null,
-          country: country.trim() || null,
-          city: city.trim() || null,
-          address: address.trim() || null,
-          accountStatus,
-          customerType: customerType || null,
-          notes: notes || null,
-        }),
+        body: JSON.stringify({ firstName, fatherName, grandfatherName, email, phone, gender, dateOfBirth, country, city, address, accountStatus, customerType, notes }),
       });
-      const json = (await res.json().catch(() => null)) as { message?: string } | null;
-      if (!res.ok) throw new Error(String(json?.message ?? "Unable to update customer."));
-      await dashboardSuccess("Customer Updated Successfully", "Customer information has been updated successfully.");
+      if (!res.ok) throw new Error("Update failed");
+      dashboardSuccess("Updated", "Customer profile saved.");
       setEditMode(false);
-      await refreshDetail();
-      router.refresh();
-    } catch (e) {
-      await dashboardError("Validation Error", e instanceof Error ? e.message : "Unable to update customer.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  function cancelEdit() {
-    const c = originalRef.current;
-    setFirstName(String(c.firstName ?? c.first_name ?? ""));
-    setFatherName(String(c.fatherName ?? c.father_name ?? ""));
-    setGrandfatherName(String(c.grandfatherName ?? c.grandfather_name ?? ""));
-    setGender(String(c.gender ?? ""));
-    setDateOfBirth(String(c.dateOfBirth ?? c.date_of_birth ?? ""));
-    setEmail(String(c.email ?? ""));
-    setPhone(String(c.phone ?? ""));
-    setCountry(String(c.country ?? ""));
-    setCity(String(c.city ?? ""));
-    setAddress(String(c.address ?? ""));
-    setAccountStatus(String(c.accountStatus ?? c.account_status ?? c.status ?? "active"));
-    setCustomerType(String(c.customerType ?? c.customer_type ?? ""));
-    setNotes(String(c.notes ?? ""));
-    setEditMode(false);
+      refreshDetail();
+    } catch (e: any) { dashboardError("Error", e.message); } finally { setBusy(false); }
   }
 
   async function resetPassword() {
-    if (!newPassword.trim() || !confirmPassword.trim()) {
-      await dashboardError("Validation Error", !newPassword.trim() ? "New password required" : "Confirm password required");
-      return;
-    }
-    if (newPassword !== confirmPassword) {
-      await dashboardError("Validation Error", "Password and confirm password do not match.");
-      return;
-    }
-
+    if (newPassword !== confirmPassword) return dashboardError("Error", "Passwords mismatch");
     setBusy(true);
     try {
       const res = await fetch(`/api/backend/admin/users/${customer.id}/password`, {
@@ -250,421 +160,201 @@ export function CustomerDetailClient({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ password: newPassword }),
       });
-      const json = (await res.json().catch(() => null)) as { message?: string } | null;
-      if (!res.ok) throw new Error(String(json?.message ?? "Unable to reset password."));
-      await dashboardSuccess("Password Reset Successfully", "Customer password has been updated successfully.");
+      if (!res.ok) throw new Error("Reset failed");
+      dashboardSuccess("Success", "Password updated.");
       setResetOpen(false);
-      setNewPassword("");
-      setConfirmPassword("");
-    } catch (e) {
-      await dashboardError("Validation Error", e instanceof Error ? e.message : "Unable to reset password.");
-    } finally {
-      setBusy(false);
-    }
+    } catch (e: any) { dashboardError("Error", e.message); } finally { setBusy(false); }
   }
 
   async function toggleActive() {
-    const current = String(accountStatus).toLowerCase();
-    const next = current === "active" ? "inactive" : "active";
-    const isDeactivate = next !== "active";
-    const ok = await dashboardConfirm({
-      title: isDeactivate ? "Deactivate Customer?" : "Activate Customer?",
-      text: isDeactivate
-        ? "This customer will no longer be able to access their account until reactivated."
-        : "This customer will be able to access their account again.",
-      confirmButtonText: isDeactivate ? "Yes, Deactivate" : "Yes, Activate",
-      cancelButtonText: "Cancel",
-      tone: isDeactivate ? "warning" : "success",
-      icon: "warning",
-    });
-    if (!ok) return;
-
+    const next = accountStatus === "active" ? "inactive" : "active";
     setBusy(true);
     try {
-      const res = await fetch(`/api/backend/admin/users/${customer.id}/status`, {
+      await fetch(`/api/backend/admin/users/${customer.id}/status`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: next }),
       });
-      const json = (await res.json().catch(() => null)) as { message?: string } | null;
-      if (!res.ok) throw new Error(String(json?.message ?? "Unable to update status."));
-      await dashboardSuccess(isDeactivate ? "Customer Deactivated" : "Customer Activated", `Customer account has been ${isDeactivate ? "deactivated" : "activated"} successfully.`);
       setAccountStatus(next);
-      await refreshDetail();
-      router.refresh();
-    } catch (e) {
-      await dashboardError("Validation Error", e instanceof Error ? e.message : "Unable to update status.");
-    } finally {
-      setBusy(false);
-    }
+      refreshDetail();
+    } catch { /* ignore */ } finally { setBusy(false); }
   }
 
   async function remove() {
-    const ok = await dashboardConfirm({
-      title: "Are you sure?",
-      text: "This customer account will be permanently deleted. This action cannot be undone.",
-      confirmButtonText: "Yes, Delete",
-      cancelButtonText: "Cancel",
-      tone: "danger",
-      icon: "warning",
-    });
-    if (!ok) return;
-
-    setBusy(true);
-    try {
-      const res = await fetch(`/api/backend/admin/users/${customer.id}`, { method: "DELETE" });
-      const json = (await res.json().catch(() => null)) as { message?: string } | null;
-      if (!res.ok) throw new Error(String(json?.message ?? "Unable to delete customer."));
-      await dashboardSuccess("Deleted Successfully", "Customer account has been deleted successfully.");
-      if (embedded && onClose) onClose();
-      router.push(`/admin/customers?tab=${encodeURIComponent(backTab)}&deleted=1`);
-    } catch (e) {
-      await dashboardError("Validation Error", e instanceof Error ? e.message : "Unable to delete customer.");
-    } finally {
-      setBusy(false);
+    const ok = await dashboardConfirm({ title: "Delete?", text: "Permanent.", confirmButtonText: "Yes, Delete", tone: "danger" });
+    if (ok) {
+       setBusy(true);
+       try {
+         await fetch(`/api/backend/admin/users/${customer.id}`, { method: "DELETE" });
+         router.push("/admin/customers");
+       } catch { /* ignore */ } finally { setBusy(false); }
     }
   }
 
   return (
-    <div className={embedded ? "space-y-3" : "mx-auto w-full max-w-screen-2xl space-y-4 pb-8"}>
-      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-          <div className="flex items-start gap-4">
-            {photoUrl ? (
-              <img src={String(photoUrl)} alt={fullName} className="h-16 w-16 rounded-2xl border border-slate-200 object-cover" />
-            ) : (
-              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-100 text-base font-bold text-slate-700">
-                {initials(fullName, email)}
+    <div className={embedded ? "space-y-4" : "mx-auto w-full max-w-screen-2xl space-y-6 pb-20"}>
+      {!embedded && (
+        <header className="rounded-[2.5rem] border border-slate-200 bg-white p-8 shadow-xl border-l-4 border-l-primary">
+          <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex items-center gap-6">
+              <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary font-black text-2xl shadow-sm overflow-hidden">
+                {photoUrl ? <img src={photoUrl} alt="" className="h-full w-full object-cover" /> : initials(fullName, email)}
               </div>
-            )}
-            <div>
-              {!embedded ? (
-                <Link href={`/admin/customers?tab=${encodeURIComponent(backTab)}`} className="text-xs font-semibold text-slate-600 hover:underline">
-                  ← Back to Customers
-                </Link>
-              ) : null}
-              <div className="mt-1 text-xl font-extrabold text-slate-950">{fullName}</div>
-              <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-slate-700">
-                <span className="font-semibold text-slate-900">ID:</span> {String(customer.id)}
-                <span className="mx-1 text-slate-300">•</span>
-                <span>{email || "Not provided"}</span>
-                <span className="mx-1 text-slate-300">•</span>
-                <span>{phone || "Not provided"}</span>
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-1">Management / Customers</p>
+                <h1 className="text-4xl font-black text-slate-900 uppercase tracking-tight">{fullName}</h1>
+                <p className="text-sm font-medium text-slate-500 mt-1">{email || "No Email"} • {phone || "No Phone"}</p>
               </div>
-              <div className="mt-2 flex flex-wrap gap-2">
-                <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${badgeTone("type", customerType)}`}>
-                  {customerType ? String(customerType).toUpperCase() : "CUSTOMER"}
-                </span>
-                <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${badgeTone("account", accountStatus)}`}>
-                  {String(accountStatus || "—").toUpperCase()}
-                </span>
-                <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-800">
-                  Total orders: {stats.totalOrders}
-                </span>
-                <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-800">
-                  Total spent: ${Number(stats.totalSpent).toFixed(2)}
-                </span>
+            </div>
+            <div className="flex flex-col items-end gap-3">
+              <div className="flex items-center gap-2">
+                <button onClick={() => refreshDetail()} className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-sm font-bold text-slate-900 shadow-sm hover:bg-slate-50 group transition-all">
+                  <RefreshCw className={cn("h-4 w-4 text-slate-400 group-hover:rotate-180 transition-transform duration-500", busy && "animate-spin")} /> Refresh
+                </button>
+                <button onClick={() => router.back()} className="inline-flex h-11 items-center gap-2 rounded-xl bg-slate-900 px-5 text-sm font-bold text-white shadow-lg hover:bg-slate-800 transition-all active:scale-95">
+                  <ArrowLeft className="h-4 w-4" /> Back
+                </button>
+              </div>
+              <div className="flex gap-2">
+                <span className={cn("inline-flex items-center rounded-full border px-3 py-1 text-[10px] font-black uppercase", badgeTone("type", customerType))}>{customerType || "CUSTOMER"}</span>
+                <span className={cn("inline-flex items-center rounded-full border px-3 py-1 text-[10px] font-black uppercase", badgeTone("account", accountStatus))}>{accountStatus}</span>
               </div>
             </div>
           </div>
+        </header>
+      )}
 
-          <div className="flex flex-wrap gap-2">
-            {!editMode ? (
-              <button
-                type="button"
-                onClick={() => setEditMode(true)}
-                disabled={!canEdit}
-                className="inline-flex h-10 items-center gap-2 rounded-xl bg-blue-900 px-4 text-sm font-semibold text-white shadow-sm shadow-blue-900/20 hover:bg-blue-950 disabled:opacity-50"
-              >
-                <Pencil className="h-4 w-4" /> Edit
-              </button>
-            ) : (
-              <>
-                <button
-                  type="button"
-                  onClick={() => void save()}
-                  disabled={!canEdit || busy}
-                  className="inline-flex h-10 items-center gap-2 rounded-xl bg-blue-900 px-4 text-sm font-semibold text-white shadow-sm shadow-blue-900/20 hover:bg-blue-950 disabled:opacity-50"
-                >
-                  {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                  Update Customer
-                </button>
-                <button
-                  type="button"
-                  onClick={cancelEdit}
-                  className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-900 shadow-sm hover:bg-slate-50"
-                >
-                  <X className="h-4 w-4" /> Cancel
-                </button>
-              </>
-            )}
-
-            <button
-              type="button"
-              onClick={() => setResetOpen(true)}
-              className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-900 shadow-sm hover:bg-slate-50"
-            >
-              <Lock className="h-4 w-4" /> Reset Password
-            </button>
-            <button
-              type="button"
-              onClick={() => void toggleActive()}
-              className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-900 shadow-sm hover:bg-slate-50"
-            >
-              <Unlock className="h-4 w-4" />
-              {String(accountStatus).toLowerCase() === "active" ? "Deactivate" : "Activate"}
-            </button>
-            <button
-              type="button"
-              onClick={() => void remove()}
-              disabled={!canDelete}
-              className="inline-flex h-10 items-center gap-2 rounded-xl border border-rose-200 bg-white px-4 text-sm font-semibold text-rose-700 shadow-sm hover:bg-rose-50 disabled:opacity-50"
-            >
-              <Trash2 className="h-4 w-4" /> Delete
-            </button>
-          </div>
+      <div className="flex flex-wrap items-center justify-between gap-4 rounded-[2rem] border border-slate-100 bg-slate-50/50 p-4 px-8 shadow-inner">
+        <div className="flex items-center gap-8">
+           <div className="flex flex-col"><span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Orders</span><span className="text-xl font-black text-slate-900">{stats.totalOrders}</span></div>
+           <div className="h-8 w-px bg-slate-200" />
+           <div className="flex flex-col"><span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Spent</span><span className="text-xl font-black text-slate-900">${stats.totalSpent.toFixed(2)}</span></div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {!editMode ? (
+            <button onClick={() => setEditMode(true)} disabled={!canEdit} className="inline-flex h-11 items-center gap-2 rounded-xl bg-blue-600 px-5 text-sm font-bold text-white shadow-lg hover:bg-blue-700 transition-all active:scale-95 disabled:opacity-50"><Pencil className="h-4 w-4" /> Edit Profile</button>
+          ) : (
+            <>
+              <button onClick={() => save()} disabled={busy} className="inline-flex h-11 items-center gap-2 rounded-xl bg-emerald-600 px-5 text-sm font-bold text-white shadow-lg hover:bg-emerald-700 transition-all active:scale-95"><ShieldCheck className="h-4 w-4" /> Save Changes</button>
+              <button onClick={() => setEditMode(false)} className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-sm font-bold text-slate-900 shadow-sm hover:bg-slate-50">Discard</button>
+            </>
+          )}
+          <div className="h-8 w-px bg-slate-200 mx-1" />
+          <button onClick={() => setResetOpen(true)} className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-sm font-bold text-slate-900 hover:bg-slate-50 transition-all"><Lock className="h-4 w-4 text-slate-400" /> Password</button>
+          <button onClick={() => toggleActive()} className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-sm font-bold text-slate-900 hover:bg-slate-50 transition-all"><Unlock className="h-4 w-4 text-slate-400" /> {accountStatus === "active" ? "Deactivate" : "Activate"}</button>
+          <button onClick={() => remove()} disabled={!canDelete} className="inline-flex h-11 items-center gap-2 rounded-xl border border-rose-200 bg-white px-5 text-sm font-bold text-rose-700 hover:bg-rose-50 transition-all active:scale-95 disabled:opacity-50"><Trash2 className="h-4 w-4" /> Delete</button>
         </div>
       </div>
 
-      <div className={embedded ? "grid gap-4 lg:grid-cols-[260px_1fr]" : "grid gap-4 lg:grid-cols-12"}>
-        {embedded ? (
-          <aside className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
-            <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Profile Overview</div>
-            <nav className="mt-3 space-y-1">
+      <div className={cn("grid gap-6", embedded ? "" : "lg:grid-cols-12")}>
+        <aside className={cn("space-y-6", embedded ? "" : "lg:col-span-4")}>
+          <section className="rounded-[2.5rem] border border-slate-200 bg-white p-4 shadow-sm">
+            <nav className="space-y-1">
               {[
-                { id: "personal", label: "Personal Information", icon: User2, hint: "Name, gender, birth" },
-                { id: "contact", label: "Address Information", icon: MapPin, hint: "Email, phone, city" },
-                { id: "account", label: "Account Information", icon: FileText, hint: "Status and invite" },
-                { id: "orders", label: "Orders", icon: ShoppingBag, hint: "Totals and last order" },
-                { id: "notes", label: "Notes", icon: NotebookPen, hint: "Internal notes" },
+                { id: "personal", label: "Identity Profile", icon: User2 },
+                { id: "contact", label: "Contact Details", icon: MapPin },
+                { id: "account", label: "Security & Type", icon: FileText },
+                { id: "orders", label: "Order History", icon: ShoppingBag },
+                { id: "notes", label: "Internal Notes", icon: NotebookPen },
               ].map((item) => {
-                const Icon = item.icon;
-                const selected = activeSection === item.id;
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => setActiveSection(item.id as any)}
-                    className={cn(
-                      "flex w-full items-center gap-3 rounded-2xl border px-3 py-3 text-left",
-                      selected ? "border-blue-200 bg-blue-50 shadow-sm" : "border-transparent hover:border-blue-100 hover:bg-blue-50",
-                    )}
-                  >
-                    <span
-                      className={cn(
-                        "flex h-10 w-10 items-center justify-center rounded-2xl",
-                        selected ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-700",
-                      )}
-                    >
-                      <Icon className="h-5 w-5" />
-                    </span>
-                    <span className="min-w-0">
-                      <span className="block text-sm font-bold text-slate-900">{item.label}</span>
-                      <span className="block text-xs text-slate-600">{item.hint}</span>
-                    </span>
+                 const isSelected = activeSection === item.id;
+                 return (
+                  <button key={item.id} onClick={() => setActiveSection(item.id as any)} className={cn("flex w-full items-center gap-4 rounded-3xl px-5 py-4 text-left transition-all", isSelected ? "bg-slate-900 text-white shadow-xl" : "text-slate-600 hover:bg-slate-50")}>
+                    <item.icon className={cn("h-5 w-5", isSelected ? "text-white" : "text-slate-400")} />
+                    <span className="text-[10px] font-black uppercase tracking-widest">{item.label}</span>
                   </button>
-                );
+                 );
               })}
             </nav>
-          </aside>
-        ) : null}
-
-        <main className={embedded ? "space-y-4" : "space-y-4 lg:col-span-12"}>
-          {embedded && activeSection !== "personal" ? null : (
-          <section id="personal" className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h2 className="text-base font-bold text-slate-900">Personal Information</h2>
-            {!editMode ? (
-              <div className="mt-4 grid gap-3 md:grid-cols-3">
-                <Field label="Full Name" value={fullName} />
-                <Field label="First Name" value={firstName} />
-                <Field label="Father’s Name" value={fatherName} />
-                <Field label="Grandfather’s Name" value={grandfatherName} />
-                <Field label="Gender" value={gender || null} />
-                <Field label="Date of Birth" value={dateOfBirth ? formatDate(dateOfBirth) : null} />
-              </div>
-            ) : (
-              <div className="mt-4 grid gap-3 md:grid-cols-3">
-                <label className="block text-sm">
-                  <span className="mb-1.5 block font-medium text-slate-700">First Name <span className="text-rose-600">*</span></span>
-                  <input value={firstName} onChange={(e) => setFirstName(e.target.value)} className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30" />
-                </label>
-                <label className="block text-sm">
-                  <span className="mb-1.5 block font-medium text-slate-700">Father’s Name</span>
-                  <input value={fatherName} onChange={(e) => setFatherName(e.target.value)} className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30" />
-                </label>
-                <label className="block text-sm">
-                  <span className="mb-1.5 block font-medium text-slate-700">Grandfather’s Name</span>
-                  <input value={grandfatherName} onChange={(e) => setGrandfatherName(e.target.value)} className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30" />
-                </label>
-                <label className="block text-sm">
-                  <span className="mb-1.5 block font-medium text-slate-700">Gender</span>
-                  <select value={gender} onChange={(e) => setGender(e.target.value)} className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30">
-                    <option value="">Not provided</option>
-                    <option value="male">Male</option>
-                    <option value="female">Female</option>
-                    <option value="other">Other</option>
-                  </select>
-                </label>
-                <label className="block text-sm">
-                  <span className="mb-1.5 block font-medium text-slate-700">Date of Birth</span>
-                  <input type="date" value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30" />
-                </label>
-              </div>
-            )}
           </section>
+        </aside>
+
+        <main className={cn("space-y-6", embedded ? "" : "lg:col-span-8")}>
+          {activeSection === "personal" && (
+            <section className="rounded-[2.5rem] border border-slate-200 bg-white p-8 shadow-sm">
+              <h2 className="mb-8 flex items-center gap-2 text-sm font-black uppercase tracking-widest text-slate-400"><User2 className="h-4 w-4" /> Personal Profile</h2>
+              {editMode ? (
+                <div className="grid gap-6 md:grid-cols-2">
+                  <div className="space-y-2"><label className="text-[10px] font-black uppercase text-slate-400">First Name</label><input value={firstName} onChange={e => setFirstName(e.target.value)} className="w-full rounded-2xl border border-slate-100 bg-slate-50/50 p-4 font-bold outline-none" /></div>
+                  <div className="space-y-2"><label className="text-[10px] font-black uppercase text-slate-400">Father's Name</label><input value={fatherName} onChange={e => setFatherName(e.target.value)} className="w-full rounded-2xl border border-slate-100 bg-slate-50/50 p-4 font-bold outline-none" /></div>
+                  <div className="space-y-2"><label className="text-[10px] font-black uppercase text-slate-400">Grandfather</label><input value={grandfatherName} onChange={e => setGrandfatherName(e.target.value)} className="w-full rounded-2xl border border-slate-100 bg-slate-50/50 p-4 font-bold outline-none" /></div>
+                  <div className="space-y-2"><label className="text-[10px] font-black uppercase text-slate-400">Gender</label><select value={gender} onChange={e => setGender(e.target.value)} className="w-full rounded-2xl border border-slate-100 bg-slate-50/50 p-4 font-bold outline-none appearance-none"><option value="male">Male</option><option value="female">Female</option></select></div>
+                </div>
+              ) : (
+                <div className="grid gap-4 md:grid-cols-2">
+                  <Field label="Full Name" value={fullName} />
+                  <Field label="Gender" value={gender} />
+                  <Field label="Birth Date" value={formatDate(dateOfBirth)} />
+                  <Field label="Marital Status" value={customer.maritalStatus} />
+                </div>
+              )}
+            </section>
+          )}
+          {activeSection === "contact" && (
+            <section className="rounded-[2.5rem] border border-slate-200 bg-white p-8 shadow-sm">
+               <h2 className="mb-8 flex items-center gap-2 text-sm font-black uppercase tracking-widest text-slate-400"><MapPin className="h-4 w-4" /> Reach & Locale</h2>
+               {editMode ? (
+                 <div className="grid gap-6 md:grid-cols-2">
+                    <div className="space-y-2"><label className="text-[10px] font-black uppercase text-slate-400">Email</label><input value={email} onChange={e => setEmail(e.target.value)} className="w-full rounded-2xl border border-slate-100 bg-slate-50/50 p-4 font-bold outline-none" /></div>
+                    <div className="space-y-2"><label className="text-[10px] font-black uppercase text-slate-400">Phone</label><input value={phone} onChange={e => setPhone(e.target.value)} className="w-full rounded-2xl border border-slate-100 bg-slate-50/50 p-4 font-bold outline-none" /></div>
+                    <div className="md:col-span-2 space-y-2"><label className="text-[10px] font-black uppercase text-slate-400">Address</label><textarea value={address} onChange={e => setAddress(e.target.value)} rows={3} className="w-full rounded-2xl border border-slate-100 bg-slate-50/50 p-4 font-bold outline-none" /></div>
+                 </div>
+               ) : (
+                 <div className="grid gap-4 md:grid-cols-2">
+                    <Field label="Email Address" value={email} />
+                    <Field label="Phone Line" value={phone} />
+                    <Field label="Nation" value={country} />
+                    <Field label="City" value={city} />
+                    <div className="md:col-span-2"><Field label="Physical Residence" value={address} /></div>
+                 </div>
+               )}
+            </section>
           )}
 
-          {embedded && activeSection !== "contact" ? null : (
-          <section id="contact" className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h2 className="text-base font-bold text-slate-900">Contact Information</h2>
-            {!editMode ? (
-              <div className="mt-4 grid gap-3 md:grid-cols-3">
-                <Field label="Email" value={email} />
-                <Field label="Phone" value={phone} />
-              </div>
-            ) : (
-              <div className="mt-4 grid gap-3 md:grid-cols-3">
-                <label className="block text-sm">
-                  <span className="mb-1.5 block font-medium text-slate-700">Email Address <span className="text-rose-600">*</span></span>
-                  <input value={email} onChange={(e) => setEmail(e.target.value)} className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30" />
-                </label>
-                <label className="block text-sm">
-                  <span className="mb-1.5 block font-medium text-slate-700">Phone Number <span className="text-rose-600">*</span></span>
-                  <input value={phone} onChange={(e) => setPhone(e.target.value)} className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30" />
-                </label>
-              </div>
-            )}
-          </section>
+          {activeSection === "orders" && (
+            <section className="rounded-[2.5rem] border border-slate-200 bg-white p-8 shadow-sm">
+               <h2 className="mb-8 flex items-center gap-2 text-sm font-black uppercase tracking-widest text-slate-400"><ShoppingBag className="h-4 w-4" /> Transactions</h2>
+               <div className="overflow-hidden rounded-3xl border border-slate-100">
+                  <table className="w-full text-left">
+                     <thead className="bg-slate-50"><tr><th className="px-6 py-4 text-[10px] font-black uppercase text-slate-400">ID</th><th className="px-6 py-4 text-[10px] font-black uppercase text-slate-400">Total</th><th className="px-6 py-4 text-[10px] font-black uppercase text-slate-400">Date</th></tr></thead>
+                     <tbody className="divide-y divide-slate-100">
+                       {stats.customerOrders.map((o: any) => (
+                         <tr key={o.id} className="hover:bg-slate-50 transition-all text-xs font-bold text-slate-700">
+                           <td className="px-6 py-4">#{o.id.slice(0, 8).toUpperCase()}</td>
+                           <td className="px-6 py-4">${Number(o.total || 0).toFixed(2)}</td>
+                           <td className="px-6 py-4">{formatDate(o.createdAt)}</td>
+                         </tr>
+                       ))}
+                     </tbody>
+                  </table>
+               </div>
+            </section>
           )}
 
-          {embedded && activeSection !== "contact" ? null : (
-          <section id="address" className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h2 className="text-base font-bold text-slate-900">Address Information</h2>
-            {!editMode ? (
-              <div className="mt-4 grid gap-3 md:grid-cols-3">
-                <Field label="Country" value={country} />
-                <Field label="City" value={city} />
-                <Field label="Address" value={address} />
-              </div>
-            ) : (
-              <div className="mt-4 grid gap-3 md:grid-cols-3">
-                <label className="block text-sm">
-                  <span className="mb-1.5 block font-medium text-slate-700">Country</span>
-                  <input value={country} onChange={(e) => setCountry(e.target.value)} className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30" />
-                </label>
-                <label className="block text-sm">
-                  <span className="mb-1.5 block font-medium text-slate-700">City</span>
-                  <input value={city} onChange={(e) => setCity(e.target.value)} className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30" />
-                </label>
-                <label className="block text-sm md:col-span-3">
-                  <span className="mb-1.5 block font-medium text-slate-700">Address</span>
-                  <input value={address} onChange={(e) => setAddress(e.target.value)} className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30" />
-                </label>
-              </div>
-            )}
-          </section>
-          )}
-
-          {embedded && activeSection !== "account" ? null : (
-          <section id="account" className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h2 className="text-base font-bold text-slate-900">Account Information</h2>
-            {!editMode ? (
-              <div className="mt-4 grid gap-3 md:grid-cols-3">
-                <Field label="Account Status" value={accountStatus} />
-                <Field label="Customer Type" value={customerType} />
-                <Field label="Invite Status" value={String(customer.inviteStatus ?? customer.invite_status ?? "Not provided")} />
-                <Field label="Last Login" value={formatDateTime(String(customer.lastLoginAt ?? customer.last_login_at ?? ""))} />
-                <Field label="Created Date" value={formatDateTime(String(customer.createdAt ?? customer.created_at ?? ""))} />
-                <Field label="Updated Date" value={formatDateTime(String(customer.updatedAt ?? customer.updated_at ?? ""))} />
-              </div>
-            ) : (
-              <div className="mt-4 grid gap-3 md:grid-cols-3">
-                <label className="block text-sm">
-                  <span className="mb-1.5 block font-medium text-slate-700">Account Status <span className="text-rose-600">*</span></span>
-                  <select value={accountStatus} onChange={(e) => setAccountStatus(e.target.value)} className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30">
-                    <option value="active">Active</option>
-                    <option value="invited">Invited</option>
-                    <option value="inactive">Inactive</option>
-                    <option value="blocked">Blocked</option>
-                  </select>
-                </label>
-                <label className="block text-sm">
-                  <span className="mb-1.5 block font-medium text-slate-700">Customer Type</span>
-                  <select value={customerType} onChange={(e) => setCustomerType(e.target.value)} className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30">
-                    <option value="">Not provided</option>
-                    <option value="new">New</option>
-                    <option value="returning">Returning</option>
-                    <option value="vip">VIP</option>
-                    <option value="wholesale">Wholesale</option>
-                  </select>
-                </label>
-              </div>
-            )}
-          </section>
-          )}
-
-          {embedded && activeSection !== "orders" ? null : (
-          <section id="orders" className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h2 className="text-base font-bold text-slate-900">Orders</h2>
-            <div className="mt-4 grid gap-3 md:grid-cols-3">
-              <Field label="Total Orders" value={String(stats.totalOrders)} />
-              <Field label="Total Spent" value={`$${Number(stats.totalSpent).toFixed(2)}`} />
-              <Field label="Last Order Date" value={stats.lastOrderAt ? formatDate(stats.lastOrderAt) : "Not provided"} />
-            </div>
-          </section>
-          )}
-
-          {embedded && activeSection !== "notes" ? null : (
-          <section id="notes" className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h2 className="text-base font-bold text-slate-900">Notes</h2>
-            {!editMode ? (
-              <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
-                {notes?.trim() ? notes : "No internal notes added."}
-              </div>
-            ) : (
-              <label className="mt-3 block text-sm">
-                <span className="mb-1.5 block font-medium text-slate-700">Internal admin notes</span>
-                <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={4} className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30" />
-              </label>
-            )}
-          </section>
+          {activeSection === "notes" && (
+            <section className="rounded-[2.5rem] border border-slate-200 bg-white p-8 shadow-sm">
+               <h2 className="mb-6 flex items-center gap-2 text-sm font-black uppercase tracking-widest text-slate-400"><NotebookPen className="h-4 w-4" /> Admin Notes</h2>
+               {editMode ? (
+                 <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={6} className="w-full rounded-3xl border border-slate-100 bg-slate-50/50 p-6 font-bold text-slate-800 outline-none" placeholder="Administrative notes..." />
+               ) : (
+                 <div className="rounded-3xl border border-slate-100 bg-slate-50/50 p-8 text-sm font-bold text-slate-500 italic leading-relaxed">{notes || "No internal notes recorded."}</div>
+               )}
+            </section>
           )}
         </main>
       </div>
 
-      <Dialog
-        open={resetOpen}
-        onOpenChange={(next) => {
-          if (!next) {
-            setNewPassword("");
-            setConfirmPassword("");
-          }
-          setResetOpen(next);
-        }}
-      >
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Reset Password</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3">
-            <label className="block text-sm">
-              <span className="mb-1.5 block font-medium text-slate-700">New Password</span>
-              <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30" />
-            </label>
-            <label className="block text-sm">
-              <span className="mb-1.5 block font-medium text-slate-700">Confirm Password</span>
-              <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30" />
-            </label>
-          </div>
-          <div className="mt-4 flex items-center justify-between gap-3">
-            <button type="button" onClick={() => setResetOpen(false)} className="inline-flex h-10 items-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-900 shadow-sm hover:bg-slate-50">
-              Cancel
-            </button>
-            <button type="button" onClick={() => void resetPassword()} disabled={busy} className="inline-flex h-10 items-center gap-2 rounded-xl bg-blue-900 px-5 text-sm font-semibold text-white shadow-md shadow-blue-900/25 hover:bg-blue-950 disabled:opacity-50">
-              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-              Reset Password
-            </button>
-          </div>
+      {/* @ts-ignore */}
+      <Dialog open={resetOpen} onOpenChange={setResetOpen}>
+        {/* @ts-ignore */}
+        <DialogContent className="rounded-[2.5rem] p-8 max-w-sm">
+           {/* @ts-ignore */}
+           <DialogHeader className="mb-6"><DialogTitle className="text-xl font-black uppercase">Password Reset</DialogTitle></DialogHeader>
+           <div className="space-y-4">
+              <input type="password" placeholder="New Password" value={newPassword} onChange={e => setNewPassword(e.target.value)} className="w-full rounded-2xl border border-slate-200 p-4 font-bold" />
+              <input type="password" placeholder="Confirm Password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} className="w-full rounded-2xl border border-slate-200 p-4 font-bold" />
+              <button disabled={busy} onClick={() => resetPassword()} className="w-full bg-slate-900 text-white p-4 rounded-2xl font-black uppercase tracking-widest shadow-lg">Confirm Reset</button>
+           </div>
         </DialogContent>
       </Dialog>
     </div>

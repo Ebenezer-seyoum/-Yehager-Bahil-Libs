@@ -328,6 +328,7 @@ export const orders = pgTable(
     totalUsd: numeric("total_usd", { precision: 12, scale: 2 }).notNull(),
     shippingCostUsd: numeric("shipping_cost_usd", { precision: 12, scale: 2 }).default("0").notNull(),
     orderType: text("order_type").default("catalog_order").notNull(),
+    orderMode: text("order_mode").default("individual").notNull(),
     status: text("status").default("pending").notNull(),
     paymentStatus: text("payment_status").default("pending").notNull(),
     paymentMethod: text("payment_method").default("stripe_usd").notNull(),
@@ -359,6 +360,7 @@ export const orders = pgTable(
     shippingAddress: jsonb("shipping_address").$type<Record<string, unknown>>(),
     useEventOwnerAddress: boolean("use_event_owner_address").default(false).notNull(),
     measurementId: uuid("measurement_id").references(() => measurements.id, { onDelete: "set null" }),
+    remarks: text("remarks"),
     ...timestamps,
   },
   (table) => [

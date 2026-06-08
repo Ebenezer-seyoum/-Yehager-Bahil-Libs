@@ -41,12 +41,12 @@ export const ADMIN_TABLE_WRAPPER =
   "overflow-hidden rounded-2xl border border-blue-100 bg-white shadow-sm";
 
 export const TABLE_HEAD_CLASS =
-  "sticky top-0 z-10 border-b border-blue-100 bg-[#eef0fb]";
+  "sticky top-0 z-10 border-b border-blue-100 bg-blue-50";
 
 export const TABLE_HEAD_ROW_CLASS = "text-left";
 
 export const TABLE_HEAD_CELL_CLASS =
-  "px-4 py-4 text-left text-sm font-bold text-blue-900";
+  "px-4 py-4 text-left text-sm font-bold text-blue-950";
 
 export const TABLE_HEAD_CELL_SORTABLE_CLASS =
   "cursor-pointer transition-colors hover:bg-blue-100/70 hover:text-blue-950";
@@ -59,6 +59,11 @@ export const ADMIN_TABLE_BODY_ROW =
 export const ADMIN_TABLE_BODY_ROW_ALT = "bg-blue-50/20";
 
 export const ADMIN_TABLE_BODY_CELL = "px-4 py-3 text-sm font-medium text-foreground";
+
+export const ADMIN_TABLE_NUMBER_CELL = "w-14 px-4 py-3 text-sm font-semibold text-slate-600";
+
+export const DASHBOARD_TABLE_ACTIONS_HEAD = "w-[12%] px-4 py-3";
+export const DASHBOARD_TABLE_NUMBER_HEAD = "w-[5%] px-4 py-3";
 
 /** @deprecated Use TABLE_HEAD_CLASS */
 export const ADMIN_TABLE_HEAD_ROW = TABLE_HEAD_CLASS;

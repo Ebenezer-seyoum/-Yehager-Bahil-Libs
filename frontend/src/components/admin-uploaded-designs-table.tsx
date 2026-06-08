@@ -1,8 +1,12 @@
 "use client";
-
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Eye } from "lucide-react";
-import { AdminUploadedDesignDialogs, type UploadedDesign } from "@/components/admin-uploaded-design-dialogs";
+import type { UploadedDesign } from "@/components/admin-uploaded-design-dialogs";
+import { DashboardActionButton, DashboardTableActions } from "@/components/admin/dashboard-action-button";
+
+const STATUS_OPTIONS = ["submitted", "in_review", "awaiting_payment", "approved", "rejected", "pending", "tailoring", "quality_check", "shipped", "delivered", "ready_for_pickup", "picked_up"];
+const PAYMENT_OPTIONS = ["pending", "awaiting_verification", "paid", "failed", "refunded", "unpaid"];
 
 function normalizedStatus(status?: string | null) {
   const key = String(status ?? "submitted").toLowerCase();
@@ -15,74 +19,259 @@ function normalizedStatus(status?: string | null) {
 }
 
 function statusClass(status?: string | null) {
-  const key = normalizedStatus(status);
-  if (key === "completed request") return "border-emerald-200 bg-emerald-50 text-emerald-700 before:bg-emerald-500";
-  if (key === "awaiting payment") return "border-blue-200 bg-blue-50 text-blue-800 before:bg-blue-500";
-  if (key === "declined") return "border-rose-200 bg-rose-50 text-rose-700 before:bg-rose-500";
-  return "border-amber-200 bg-amber-50 text-amber-800 before:bg-amber-500";
+  const key = String(status ?? "submitted").toLowerCase();
+  if (key === "submitted" || key === "in_review") return "bg-amber-100 text-amber-900 border-amber-200";
+  if (key === "awaiting_payment" || key === "approved" || key === "completed_request") return "bg-emerald-100 text-emerald-900 border-emerald-200";
+  if (key === "rejected") return "bg-rose-100 text-rose-900 border-rose-200";
+  
+  // Fulfillment statuses
+  if (key === "pending") return "bg-yellow-100 text-yellow-900 border-yellow-200";
+  if (key === "tailoring") return "bg-blue-100 text-blue-800 border-blue-200";
+  if (key === "quality_check") return "bg-purple-100 text-purple-800 border-purple-200";
+  if (key === "shipped") return "bg-cyan-100 text-cyan-800 border-cyan-200";
+  if (key === "delivered") return "bg-green-100 text-green-800 border-green-200";
+  if (key === "ready_for_pickup") return "bg-orange-100 text-orange-800 border-orange-200";
+  if (key === "picked_up") return "bg-green-100 text-green-900 border-green-200";
+  
+  return "border-slate-200 bg-slate-50 text-slate-800";
 }
 
-export function AdminUploadedDesignsTable({ rows, search }: { rows: UploadedDesign[]; search: string }) {
-  const [selected, setSelected] = useState<UploadedDesign | null>(null);
-  const [dialog, setDialog] = useState<"view" | null>(null);
-  const term = search.trim().toLowerCase();
-  const filtered = term
-    ? rows.filter((row) =>
+function paymentClass(status?: string | null) {
+  const key = String(status ?? "pending").toLowerCase();
+  if (key === "pending") return "bg-yellow-100 text-yellow-900 border-yellow-200";
+  if (key === "awaiting_verification") return "bg-orange-100 text-orange-800 border-orange-200";
+  if (key === "paid") return "bg-green-100 text-green-800 border-green-200";
+  if (key === "failed") return "bg-red-100 text-red-800 border-red-200";
+  if (key === "refunded") return "bg-slate-100 text-slate-800 border-slate-200";
+  if (key === "unpaid") return "bg-orange-100 text-orange-800 border-orange-200";
+  return "border-slate-200 bg-slate-50 text-slate-800";
+}
+
+function prettyLabel(value?: string | null) {
+  return (value ?? "submitted").replaceAll("_", " ");
+}
+
+export function AdminUploadedDesignsTable({ rows: initialRows, search }: { rows: UploadedDesign[]; search: string }) {
+  const router = useRouter();
+  const [rows, setRows] = useState(initialRows);
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [fabricFilter, setFabricFilter] = useState("all");
+  const [dateFilter, setDateFilter] = useState("all");
+  const [currentTime, setCurrentTime] = useState<number | null>(null);
+  const [busyKey, setBusyKey] = useState<string | null>(null);
+
+  useEffect(() => {
+    setRows(initialRows);
+  }, [initialRows]);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => setCurrentTime(Date.now()), 0);
+    return () => window.clearTimeout(timeout);
+  }, []);
+
+  async function updateDesign(id: string, patch: { status: string }) {
+    setBusyKey(id + "-status");
+    try {
+      const res = await fetch(`/api/backend/admin/uploaded-designs/${id}/review`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          status: patch.status,
+          remarks: `Order status updated to ${patch.status} from table view.`
+        }),
+      });
+      if (!res.ok) throw new Error("Failed to update status");
+      setRows((prev) => prev.map((r) => (r.id === id ? { ...r, status: patch.status } : r)));
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setBusyKey(null);
+    }
+  }
+
+  async function updateDesignPayment(id: string, patch: { paymentStatus: string }) {
+    setBusyKey(id + "-payment");
+    try {
+      let targetStatus = rows.find(r => r.id === id)?.status ?? "submitted";
+      if (patch.paymentStatus === 'paid') targetStatus = 'awaiting_payment';
+      if (patch.paymentStatus === 'unpaid') targetStatus = 'submitted';
+
+      const res = await fetch(`/api/backend/admin/uploaded-designs/${id}/review`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          status: targetStatus,
+          remarks: `Payment status updated to ${patch.paymentStatus} from table view.`
+        }),
+      });
+      if (!res.ok) throw new Error("Failed to update payment status");
+      setRows((prev) => prev.map((r) => (r.id === id ? { ...r, status: targetStatus, paymentStatus: patch.paymentStatus } : r)));
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setBusyKey(null);
+    }
+  }
+
+  const fabricOptions = useMemo(
+    () =>
+      Array.from(new Set(rows.map((row) => String(row.fabricType ?? "").trim()).filter(Boolean))).sort((a, b) =>
+        a.localeCompare(b),
+      ),
+    [rows],
+  );
+
+  const filtered = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    return rows.filter((row) => {
+      const matchesSearch =
+        !term ||
         [row.submissionNumber, row.designTitle, row.customerName, row.userEmail, row.status, row.fabricType]
           .map((value) => String(value ?? "").toLowerCase())
-          .some((value) => value.includes(term)),
-      )
-    : rows;
+          .some((value) => value.includes(term));
+      const status = normalizedStatus(row.status).replaceAll(" ", "_");
+      const matchesStatus = statusFilter === "all" || status === statusFilter;
+      const fabric = String(row.fabricType ?? "").trim();
+      const matchesFabric = fabricFilter === "all" || fabric === fabricFilter;
+      const submitted = row.submittedAt ?? row.createdAt;
+      const submittedTime = submitted ? new Date(String(submitted)).getTime() : 0;
+      const days = submittedTime && currentTime ? (currentTime - submittedTime) / (1000 * 60 * 60 * 24) : Number.POSITIVE_INFINITY;
+      const matchesDate =
+        dateFilter === "all" ||
+        (dateFilter === "today" && days <= 1) ||
+        (dateFilter === "week" && days <= 7) ||
+        (dateFilter === "month" && days <= 30);
+      return matchesSearch && matchesStatus && matchesFabric && matchesDate;
+    });
+  }, [currentTime, dateFilter, fabricFilter, rows, search, statusFilter]);
 
-  function open(row: UploadedDesign) {
-    setSelected(row);
-    setDialog("view");
+  async function open(row: UploadedDesign) {
+    try {
+      await fetch(`/api/backend/admin/uploaded-designs/${row.id}`);
+    } catch (err) {
+      console.error("Alert resolution failed:", err);
+    }
+    router.push(`/admin/uploaded-designs/${row.id}`);
   }
 
   return (
     <div className="space-y-4">
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="grid gap-2 border-b border-slate-200 bg-white p-3 sm:grid-cols-3">
+          <select
+            value={statusFilter}
+            onChange={(event) => setStatusFilter(event.target.value)}
+            className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-900"
+          >
+            <option value="all">All Statuses</option>
+            <option value="pending_review">Pending Review</option>
+            <option value="awaiting_payment">Awaiting Payment</option>
+            <option value="completed_request">Completed Request</option>
+            <option value="declined">Declined</option>
+          </select>
+          <select
+            value={fabricFilter}
+            onChange={(event) => setFabricFilter(event.target.value)}
+            className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-900"
+          >
+            <option value="all">All Fabrics</option>
+            {fabricOptions.map((fabric) => (
+              <option key={fabric} value={fabric}>
+                {fabric}
+              </option>
+            ))}
+          </select>
+          <select
+            value={dateFilter}
+            onChange={(event) => setDateFilter(event.target.value)}
+            className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-900"
+          >
+            <option value="all">All Dates</option>
+            <option value="today">Today</option>
+            <option value="week">Last 7 Days</option>
+            <option value="month">Last 30 Days</option>
+          </select>
+        </div>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[760px] border-collapse text-left">
+          <table className="w-full min-w-[1240px] border-collapse text-left text-sm">
             <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-600">
               <tr className="border-b border-slate-200">
-                <th className="px-4 py-4 font-bold">Request ID</th>
-                <th className="px-4 py-4 font-bold">Customer</th>
-                <th className="px-4 py-4 font-bold">Submitted</th>
-                <th className="px-4 py-4 font-bold">Status</th>
-                <th className="px-4 py-4 text-right font-bold">Actions</th>
+                <th className="px-4 py-4 font-bold text-xs uppercase w-14">No</th>
+                <th className="px-4 py-4 font-bold text-xs uppercase">Order ID</th>
+                <th className="px-4 py-4 font-bold text-xs uppercase">Order Type</th>
+                <th className="px-4 py-4 font-bold text-xs uppercase">Customer Name</th>
+                <th className="px-4 py-4 font-bold text-xs uppercase">Order Status</th>
+                <th className="px-4 py-4 font-bold text-xs uppercase">Payment Status</th>
+                <th className="px-4 py-4 text-right font-bold text-xs uppercase">Detail</th>
               </tr>
             </thead>
             <tbody>
               {filtered.map((row, index) => (
                 <tr key={row.id} className={`border-b border-slate-200 last:border-b-0 hover:bg-blue-50/70 ${index % 2 === 0 ? "bg-white" : "bg-slate-50/50"}`}>
-                  <td className="px-4 py-4 font-mono text-xs font-black text-blue-900">#{row.submissionNumber ?? "YBL-CD"}</td>
-                  <td className="px-4 py-4">
-                    <p className="font-semibold text-slate-950">{row.customerName ?? "Customer"}</p>
-                    <p className="mt-0.5 text-xs text-slate-500">{row.userEmail ?? "No email"}</p>
+                  <td className="px-4 py-5 align-middle">
+                    <button onClick={() => open(row)} className="text-sm font-semibold text-slate-600 hover:text-blue-600 transition-colors">
+                      {index + 1}
+                    </button>
                   </td>
-                  <td className="px-4 py-4 text-sm text-slate-700">{row.submittedAt || row.createdAt ? new Date(String(row.submittedAt ?? row.createdAt)).toLocaleDateString() : "Not provided"}</td>
-                  <td className="px-4 py-4">
-                    <span className={`inline-flex min-w-32 items-center justify-center gap-2 rounded-full border px-3 py-1.5 text-xs font-bold capitalize shadow-sm before:h-2 before:w-2 before:rounded-full before:content-[''] ${statusClass(row.status)}`}>
-                      {normalizedStatus(row.status)}
+                  <td className="px-4 py-5 align-middle">
+                    <button onClick={() => open(row)} className="text-left group">
+                      <p className="font-mono text-xs font-black text-blue-900 leading-none group-hover:text-blue-600 transition-colors">#{row.submissionNumber ?? "YBL-CD"}</p>
+                      <p className="mt-1 text-[11px] text-slate-500 font-medium">
+                        {row.submittedAt || row.createdAt ? new Date(String(row.submittedAt ?? row.createdAt)).toLocaleDateString() : "-"}
+                      </p>
+                    </button>
+                  </td>
+                  <td className="px-4 py-5 align-middle">
+                    <span className="inline-flex rounded-full border border-primary/40 bg-primary/10 px-3 py-1 text-[10px] font-black text-primary uppercase">
+                      { (row as any).familyGroupId || (row as any).eventId ? "Group Custom" : "Individual Custom" }
                     </span>
                   </td>
-                  <td className="px-4 py-4 text-right">
-                    <button type="button" onClick={() => open(row)} className="inline-flex h-10 items-center gap-2 rounded-xl bg-blue-900 px-4 text-sm font-bold text-white shadow-sm shadow-blue-900/20 hover:bg-blue-950">
-                      <Eye className="h-4 w-4" />
-                      View
-                    </button>
+                  <td className="px-4 py-5 align-middle">
+                    <p className="font-bold text-slate-950">{row.customerName ?? "Guest Customer"}</p>
+                    <p className="mt-0.5 text-xs text-slate-500">{row.userEmail ?? "Unregistered"}</p>
+                  </td>
+                  <td className="px-4 py-5 align-middle">
+                    <select
+                      disabled={busyKey !== null}
+                      value={row.status ?? "submitted"}
+                      onChange={(e) => void updateDesign(row.id, { status: e.target.value })}
+                      className={`h-9 min-w-[190px] rounded-full border px-4 text-sm font-bold capitalize outline-none transition-all shadow-sm ${statusClass(row.status)}`}
+                    >
+                      {STATUS_OPTIONS.map((opt) => (
+                        <option key={opt} value={opt}>
+                          {prettyLabel(opt)}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                  <td className="px-4 py-5 align-middle">
+                    <select
+                      disabled={busyKey !== null}
+                      value={(row as any).paymentStatus ?? (row.status === 'awaiting_payment' || row.status === 'approved' ? 'paid' : 'pending')}
+                      onChange={(e) => void updateDesignPayment(row.id, { paymentStatus: e.target.value })}
+                      className={`h-9 min-w-[170px] rounded-full border px-4 text-sm font-bold capitalize outline-none transition-all shadow-sm ${paymentClass((row as any).paymentStatus ?? (row.status === 'awaiting_payment' || row.status === 'approved' ? 'paid' : 'pending'))}`}
+                    >
+                       {PAYMENT_OPTIONS.map((opt) => (
+                         <option key={opt} value={opt}>
+                            {prettyLabel(opt)}
+                         </option>
+                       ))}
+                    </select>
+                  </td>
+                  <td className="px-4 py-5 align-middle text-right">
+                    <DashboardTableActions className="justify-end">
+                      <DashboardActionButton action="view" onClick={() => void open(row)} />
+                    </DashboardTableActions>
                   </td>
                 </tr>
               ))}
               {filtered.length === 0 ? (
-                <tr><td colSpan={5} className="px-4 py-12 text-center text-sm text-slate-500">No custom designs found for this filter.</td></tr>
+                <tr><td colSpan={7} className="px-4 py-12 text-center text-sm text-slate-500">No custom designs found for this filter.</td></tr>
               ) : null}
             </tbody>
           </table>
         </div>
       </div>
-      <AdminUploadedDesignDialogs design={selected} kind={dialog} onClose={() => { setDialog(null); setSelected(null); }} />
     </div>
   );
 }

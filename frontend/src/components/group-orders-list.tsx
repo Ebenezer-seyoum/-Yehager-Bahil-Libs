@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, CheckCircle2, Plus, Users } from "lucide-react";
+import { ArrowLeft, ArrowRight, CheckCircle2, Plus, Users } from "lucide-react";
 import { useState } from "react";
 import { CreateGroupOrderModal } from "@/components/create-group-order-modal";
 
@@ -26,6 +26,11 @@ export function GroupOrdersList({ groups }: { groups: GroupSummary[] }) {
   return (
     <>
       <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-16">
+        <div className="mb-6">
+          <Link href="/my-account" className="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground">
+            <ArrowLeft className="h-4 w-4" /> Back to Account
+          </Link>
+        </div>
         <div className="mb-12 flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.35em] text-primary">Private Shared Checkout</p>

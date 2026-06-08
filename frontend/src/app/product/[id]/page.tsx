@@ -63,10 +63,11 @@ function signinRedirect(path: string) {
   redirect(`/signin?callbackUrl=${encodeURIComponent(path)}`);
 }
 
-function cmToInches(value: FormDataEntryValue | null) {
-  const num = Number(value);
-  if (!Number.isFinite(num) || num <= 0) return undefined;
-  return Math.round((num / 2.54) * 10) / 10;
+function toOptionalNumber(value: FormDataEntryValue | null) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return undefined;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : undefined;
 }
 
 function isAuthApiError(error: unknown) {
@@ -118,14 +119,22 @@ export default async function ProductDetailPage({
     const body = {
       label: String(formData.get("label") ?? "My Measurements"),
       gender: String(formData.get("gender") ?? "female"),
-      chest: cmToInches(formData.get("chest")),
-      waist: cmToInches(formData.get("waist")),
-      hips: cmToInches(formData.get("hips")),
-      shoulderWidth: cmToInches(formData.get("shoulderWidth")),
-      armLength: cmToInches(formData.get("armLength")),
-      torsoLength: cmToInches(formData.get("torsoLength")),
-      inseam: cmToInches(formData.get("inseam")),
-      neck: cmToInches(formData.get("neck")),
+      chest: Number(formData.get("chest")),
+      waist: Number(formData.get("waist")),
+      hips: Number(formData.get("hips") || formData.get("pantsHip")), // Compatibility with both field names
+      shoulderWidth: Number(formData.get("shoulderWidth")),
+      armLength: Number(formData.get("armLength")),
+      torsoLength: Number(formData.get("torsoLength")),
+      neck: toOptionalNumber(formData.get("neck")),
+      bicepCircumference: toOptionalNumber(formData.get("bicepCircumference")),
+      wristCircumference: toOptionalNumber(formData.get("wristCircumference")),
+      pantsWaist: toOptionalNumber(formData.get("pantsWaist")),
+      pantsHip: toOptionalNumber(formData.get("pantsHip")),
+      thighCircumference: toOptionalNumber(formData.get("thighCircumference")),
+      waistToPantsLength: toOptionalNumber(formData.get("waistToPantsLength")),
+      hemStyle: String(formData.get("hemStyle") ?? "Straight"),
+      pressingStyle: String(formData.get("pressingStyle") ?? "Creased"),
+      inseam: toOptionalNumber(formData.get("inseam")),
     };
     try {
       const response = await apiRequest<{ data: Measurement }>(measurementId ? `/api/v1/measurements/${measurementId}` : "/api/v1/measurements", {

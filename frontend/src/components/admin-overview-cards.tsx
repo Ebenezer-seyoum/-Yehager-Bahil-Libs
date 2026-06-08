@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState, type ComponentType } from "react";
-import { BellRing, Boxes, ClipboardList, DollarSign, Search, ShoppingCart, TrendingUp, UserRound, UsersRound, X } from "lucide-react";
+import { BellRing, Boxes, ClipboardList, DollarSign, Search, ShoppingCart, TrendingUp, UserRound, UsersRound } from "lucide-react";
+import { DashboardModalActionBar, DashboardModalBody, DashboardModalFrame, DashboardModalHeader } from "@/components/admin/dashboard-modal";
 import { TableHeadCell, TableHeadRow, TableHeader } from "@/components/admin/table-header";
 
 type Order = {
@@ -51,7 +52,7 @@ type Metric = {
   value: string;
   helper: string;
   tone: string;
-  icon: ComponentType<{ className?: string }>;
+  icon: any;
   columns: string[];
   rows: Row[];
 };
@@ -242,48 +243,36 @@ export function AdminOverviewCards({
       </div>
 
       {activeMetric ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4">
-          <div className="w-full max-w-6xl overflow-hidden rounded-[28px] border border-sidebar-border bg-card shadow-[0_28px_80px_rgba(0,0,0,0.38)]">
-            <div className="flex flex-col gap-4 border-b border-sidebar-border bg-sidebar p-5 text-sidebar-foreground sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="text-sm uppercase tracking-[0.2em] text-sidebar-primary">Overview detail</p>
-                <h2 className="mt-1 text-2xl font-bold text-white">{activeMetric.label}</h2>
-                <p className="mt-1 text-sm text-sidebar-foreground/70">
-                  {activeMetric.rows.length} total record{activeMetric.rows.length === 1 ? "" : "s"}
-                </p>
-              </div>
-              <div className="flex items-center gap-3">
-                <label className="relative block w-full sm:w-80">
-                  <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-sidebar-primary" />
-                  {!query ? (
-                    <span className="pointer-events-none absolute left-11 top-1/2 -translate-y-1/2 text-sm font-medium text-white/95">
-                      Search {activeMetric.label.toLowerCase()}...
-                    </span>
-                  ) : null}
-                  <input
-                    autoFocus
-                    value={query}
-                    onChange={(event) => setQuery(event.target.value)}
-                    className="h-11 w-full min-w-0 rounded-2xl border border-white/20 bg-white/10 pl-11 pr-4 text-sm font-medium text-white outline-none focus:border-sidebar-primary/70 focus:bg-white/15 focus:ring-2 focus:ring-sidebar-primary/20"
-                  />
-                </label>
-                <button
-                  type="button"
-                  onClick={() => setActiveKey(null)}
-                  className="rounded-full border border-sidebar-primary/35 bg-sidebar-primary p-3 text-sidebar-primary-foreground transition hover:bg-sidebar-primary/90"
-                  aria-label="Close"
-                >
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
-            </div>
-
-            <div className="bg-background p-5">
+        <DashboardModalFrame onClose={() => setActiveKey(null)} maxWidth="max-w-6xl">
+          <DashboardModalHeader
+            title={activeMetric.label}
+            description={`${activeMetric.rows.length} total record${activeMetric.rows.length === 1 ? "" : "s"}`}
+            icon={activeMetric.icon}
+            onClose={() => setActiveKey(null)}
+          />
+          <DashboardModalActionBar>
+            <label className="relative block w-full sm:w-80">
+              <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-blue-800" />
+              {!query ? (
+                <span className="pointer-events-none absolute left-11 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-500">
+                  Search {activeMetric.label.toLowerCase()}...
+                </span>
+              ) : null}
+              <input
+                autoFocus
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                className="h-11 w-full min-w-0 rounded-xl border border-slate-200 bg-white pl-11 pr-4 text-sm font-medium text-slate-900 outline-none focus:border-blue-700 focus:ring-2 focus:ring-blue-100"
+              />
+            </label>
+          </DashboardModalActionBar>
+          <DashboardModalBody>
               <div className="overflow-hidden rounded-2xl border border-border bg-card">
                 <div className="overflow-x-auto">
                   <table className="min-w-[640px] w-full text-sm">
                     <TableHeader>
                       <TableHeadRow>
+                        <TableHeadCell>No</TableHeadCell>
                         {activeMetric.columns.map((column) => (
                           <TableHeadCell key={column}>{column}</TableHeadCell>
                         ))}
@@ -292,13 +281,14 @@ export function AdminOverviewCards({
                     <tbody>
                       {filteredRows.length === 0 ? (
                         <tr>
-                          <td colSpan={activeMetric.columns.length} className="px-5 py-12 text-center text-sm font-medium text-muted-foreground">
+                          <td colSpan={activeMetric.columns.length + 1} className="px-5 py-12 text-center text-sm font-medium text-muted-foreground">
                             No matching records found.
                           </td>
                         </tr>
                       ) : (
                         filteredRows.map((row, index) => (
                           <tr key={`${activeMetric.key}-${index}`} className="border-t border-border odd:bg-white even:bg-slate-50/70 hover:bg-amber-50/70">
+                            <td className="px-5 py-4 font-semibold text-slate-500">{index + 1}</td>
                             {activeMetric.columns.map((column) => (
                               <td key={column} className="px-5 py-4 font-medium text-foreground">
                                 {row[column] ?? "—"}
@@ -314,9 +304,8 @@ export function AdminOverviewCards({
               <p className="mt-4 text-sm font-medium text-muted-foreground">
                 Showing {filteredRows.length} of {activeMetric.rows.length} records
               </p>
-            </div>
-          </div>
-        </div>
+          </DashboardModalBody>
+        </DashboardModalFrame>
       ) : null}
     </>
   );

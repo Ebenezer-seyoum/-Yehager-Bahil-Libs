@@ -75,9 +75,8 @@ export const PAGE_TABS: Record<AdminPageId, AdminTabConfig[]> = {
     { id: "all", label: "All Employees", icon: UsersRound },
     { id: "active", label: "Active", icon: UserCheck },
     { id: "inactive", label: "Inactive", icon: UserRound },
-    { id: "unassigned", label: "Unassigned Role", icon: Shield },
     { id: "new", label: "New Employees", icon: UserPlus },
-    { id: "performance", label: "Performance", icon: LineChart },
+    { id: "access_pending", label: "Access Pending", icon: Lock },
     { id: "activity", label: "Activity", icon: Activity },
   ),
   customers: tabs(

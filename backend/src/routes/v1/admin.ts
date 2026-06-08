@@ -253,6 +253,32 @@ adminRouter.patch("/alerts/:alertId", requirePermission(PERMISSIONS.ALERTS_MANAG
   return c.json({ data: row });
 });
 
+adminRouter.get("/summary-counts", requirePermission(PERMISSIONS.ALERTS_VIEW), async (c) => {
+  const unresolvedAlerts = await db.query.systemAlerts.findMany({
+    where: eq(systemAlerts.isResolved, false),
+  });
+
+  const counts = {
+    payment: 0,
+    custom_order: 0,
+    catalog_order: 0,
+    total: 0,
+  };
+
+  unresolvedAlerts.forEach((alert) => {
+    counts.total++;
+    if (alert.type === "payment_proof_uploaded") {
+      counts.payment++;
+    } else if (["custom_design_submitted", "design_review"].includes(alert.type)) {
+      counts.custom_order++;
+    } else if (alert.type === "new_catalog_order") {
+      counts.catalog_order++;
+    }
+  });
+
+  return c.json({ data: counts });
+});
+
 adminRouter.get("/audit", requirePermission(PERMISSIONS.AUDIT_VIEW), zValidator("query", listQuerySchema), async (c) => {
   const { limit } = c.req.valid("query");
   const data = await db.query.auditLogs.findMany({

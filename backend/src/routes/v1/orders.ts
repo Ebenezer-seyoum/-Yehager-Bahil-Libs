@@ -13,6 +13,9 @@ import {
   submitEtbPaymentProof,
   updateOrderAdminState,
 } from "../../services/orders-service.js";
+import { systemAlerts } from "../../lib/db/schema.js";
+import { db } from "../../lib/db/drizzle.js";
+import { and, eq, sql } from "drizzle-orm";
 import type { AppBindings } from "../../types/hono.js";
 
 const querySchema = z.object({
@@ -29,6 +32,7 @@ const checkoutIntentSchema = z.object({
   pickupLocation: z.string().optional(),
   pickupPersonName: z.string().optional(),
   pickupPersonPhone: z.string().optional(),
+  remarks: z.string().max(1000).optional(),
 });
 const etbProofSchema = z.object({
   paymentProofUrl: z.string().url(),
@@ -83,6 +87,7 @@ ordersRouter.post("/checkout-intent", requireAuth, zValidator("json", checkoutIn
     pickupLocation: body.pickupLocation,
     pickupPersonName: body.pickupPersonName,
     pickupPersonPhone: body.pickupPersonPhone,
+    remarks: body.remarks,
   });
   return c.json({ data }, 201);
 });
@@ -108,6 +113,28 @@ ordersRouter.get("/", requireAuth, requirePermission(PERMISSIONS.ORDERS_VIEW), z
 ordersRouter.get("/:orderId", requireAuth, requirePermission(PERMISSIONS.ORDERS_VIEW), async (c) => {
   const orderId = c.req.param("orderId");
   const data = await getOrderDetailsForAdmin(orderId);
+  return c.json({ data });
+});
+
+ordersRouter.get("/admin/:orderId", requireAuth, requirePermission(PERMISSIONS.ORDERS_VIEW), async (c) => {
+  const orderId = c.req.param("orderId");
+  const data = await getOrderDetailsForAdmin(orderId);
+
+  // Auto-resolve alerts related to this order
+  await db
+    .update(systemAlerts)
+    .set({
+      isResolved: true,
+      resolvedBy: "admin_viewed_order",
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        sql`${systemAlerts.type} IN ('new_catalog_order', 'payment_proof_uploaded')`,
+        eq(systemAlerts.entityId, orderId)
+      )
+    );
+
   return c.json({ data });
 });
 

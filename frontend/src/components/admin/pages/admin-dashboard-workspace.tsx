@@ -7,8 +7,16 @@ import { AdminRevenueCharts } from "@/components/admin-revenue-charts";
 import { AdminWorkflowPipeline } from "@/components/admin-workflow-pipeline";
 import { AdminWorkspace } from "@/components/admin/admin-workspace";
 import { KPIGrid } from "@/components/admin/kpi-grid";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { 
+  DashboardModalFrame, 
+  DashboardModalHeader, 
+  DashboardModalActionBar, 
+  DashboardModalBody 
+} from "@/components/admin/dashboard-modal";
 import { can } from "@/lib/permissions";
+import { rowsInDateRange } from "@/lib/reports/utils";
+import { cn } from "@/lib/utils";
+import { PAGE_TABS } from "@/lib/admin/page-tabs-config";
 import { getDateRangeBounds, money, normalize } from "@/lib/reports/utils";
 import type { AdminWorkspaceData } from "@/lib/admin/types";
 
@@ -94,18 +102,20 @@ export function AdminDashboardWorkspace({ data }: { data: AdminWorkspaceData }) 
     positiveIsGood: true,
   });
 
+  const dashboardHideKpiTabs = (PAGE_TABS.dashboard ?? []).map((t) => t.id).filter((id) => id !== "overview");
+
   return (
     <AdminWorkspace
       pageId="dashboard"
       initialData={data}
       hideTabs
       hideFilters
-      hideKpisOnTabs={["overview"]}
+      hideKpisOnTabs={dashboardHideKpiTabs}
       showDateRange
       pageClassName="rounded-2xl bg-slate-50"
       footer={<AdminRevenueCharts orders={(data.orders ?? []) as any} />}
     >
-      {({ filteredData, dateRange }) => {
+      {({ filteredData, dateRange, activeTab }) => {
         const orders = ((filteredData.orders ?? []) as AnyRow[]).slice();
         const users = ((data.users ?? []) as AnyRow[]).slice();
         const products = ((data.products ?? []) as AnyRow[]).slice();
@@ -286,87 +296,92 @@ export function AdminDashboardWorkspace({ data }: { data: AdminWorkspaceData }) 
 
         return (
           <div className="space-y-4">
-            <section className="space-y-2">
-              <KPIGrid metrics={primaryCards as any} />
-            </section>
+            <section className="space-y-2" />
 
             <AdminWorkflowPipeline orders={orders as any} />
 
-            <Dialog open={open} onOpenChange={setOpen}>
-              <DialogContent className="max-w-5xl">
-                <DialogHeader>
-                  <DialogTitle>{modalTitle}</DialogTitle>
-                  <DialogDescription>
-                    Total: <span className="font-semibold text-white">{modalValue}</span>
-                    {modalRangeLabel ? <span className="ml-2 text-blue-100">• {modalRangeLabel}</span> : null}
-                  </DialogDescription>
-                </DialogHeader>
-
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="flex-1">
-                    <input
-                      value={modalSearch}
-                      onChange={(e) => setModalSearch(e.target.value)}
-                      placeholder="Search records…"
-                      className="h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 placeholder:text-slate-500 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-                    />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={exportModalCsv}
-                      className="inline-flex h-10 items-center rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-900 shadow-sm hover:bg-slate-50"
-                    >
-                      Export CSV
-                    </button>
-                    {modalFullPage ? (
-                      <a
-                        href={modalFullPage}
+            {open && (
+              <DashboardModalFrame onClose={() => setOpen(false)} maxWidth="max-w-5xl">
+                <DashboardModalHeader
+                  title={modalTitle}
+                  description={
+                    <>
+                      Total: <span className="font-semibold text-white">{modalValue}</span>
+                      {modalRangeLabel ? <span className="ml-2 text-blue-100">• {modalRangeLabel}</span> : null}
+                    </>
+                  }
+                  onClose={() => setOpen(false)}
+                />
+                
+                <DashboardModalActionBar>
+                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between w-full">
+                    <div className="flex-1">
+                      <input
+                        value={modalSearch}
+                        onChange={(e) => setModalSearch(e.target.value)}
+                        placeholder="Search records…"
+                        className="h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 placeholder:text-slate-500 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                      />
+                    </div>
+                    <div className="flex items-center gap-2">
+                       <button
+                        type="button"
+                        onClick={exportModalCsv}
                         className="inline-flex h-10 items-center rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-900 shadow-sm hover:bg-slate-50"
                       >
-                        View Full Page
-                      </a>
-                    ) : null}
+                        Export CSV
+                      </button>
+                      {modalFullPage ? (
+                        <a
+                          href={modalFullPage}
+                          className="inline-flex h-10 items-center rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-900 shadow-sm hover:bg-slate-50"
+                        >
+                          View Full Page
+                        </a>
+                      ) : null}
+                    </div>
                   </div>
-                </div>
+                </DashboardModalActionBar>
 
-                <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-                  <table className="w-full min-w-[760px] text-sm">
-                    <thead className="border-b border-blue-100 bg-blue-50 text-slate-900">
-                      <tr>
-                        {modalColumns.map((col) => (
-                          <th key={col} className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider">
-                            {col}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredModalRows.length === 0 ? (
+                <DashboardModalBody>
+                  <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+                    <table className="w-full min-w-[760px] text-sm">
+                      <thead className="border-b border-blue-100 bg-blue-50 text-slate-900">
                         <tr>
-                          <td className="px-4 py-6 text-slate-700" colSpan={modalColumns.length}>
-                            No records found for this KPI.
-                          </td>
+                          {modalColumns.map((col) => (
+                            <th key={col} className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider">
+                              {col}
+                            </th>
+                          ))}
                         </tr>
-                      ) : (
-                        filteredModalRows.map((row, index) => (
-                          <tr
-                            key={String(row?.id ?? row?.ticketNumber ?? index)}
-                            className="border-b border-slate-100 text-slate-800 hover:bg-blue-50/40"
-                          >
-                            {modalColumns.map((col) => (
-                              <td key={col} className="px-4 py-3">
-                                {String(row?.[col] ?? "—")}
-                              </td>
-                            ))}
+                      </thead>
+                      <tbody>
+                        {filteredModalRows.length === 0 ? (
+                          <tr>
+                            <td className="px-4 py-6 text-slate-700" colSpan={modalColumns.length}>
+                              No records found for this KPI.
+                            </td>
                           </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </DialogContent>
-            </Dialog>
+                        ) : (
+                          filteredModalRows.map((row, index) => (
+                            <tr
+                              key={String(row?.id ?? row?.ticketNumber ?? index)}
+                              className="border-b border-slate-100 text-slate-800 hover:bg-blue-50/40"
+                            >
+                              {modalColumns.map((col) => (
+                                <td key={col} className="px-4 py-3 text-foreground">
+                                  {String(row?.[col] ?? "—")}
+                                </td>
+                              ))}
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </DashboardModalBody>
+              </DashboardModalFrame>
+            )}
           </div>
         );
       }}

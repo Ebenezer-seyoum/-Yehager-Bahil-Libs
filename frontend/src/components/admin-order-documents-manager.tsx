@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, CreditCard, FileCheck, FileSignature, FileText, MapPin, Package, Search, Truck, User } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, CreditCard, FileCheck, FileSignature, FileText, MapPin, Package, Truck, User } from "lucide-react";
 import { AdminOrderDocuments } from "@/components/admin-order-documents";
 
 type ShippingDocument = { url: string; label: string; uploadedAt?: string };
@@ -80,8 +80,15 @@ function itemPrice(item: OrderItem) {
   return Number.isFinite(value) && value > 0 ? formatCurrency(value) : "";
 }
 
-export function AdminOrderDocumentsManager({ initialOrders }: { initialOrders: Order[] }) {
+export function AdminOrderDocumentsManager({
+  initialOrders,
+  externalSearch,
+}: {
+  initialOrders: Order[];
+  externalSearch?: string;
+}) {
   const [search, setSearch] = useState("");
+  const effectiveSearch = externalSearch ?? search;
   const [filter, setFilter] = useState<"all" | "pickup" | "mail">("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [paymentFilter, setPaymentFilter] = useState("all");
@@ -89,7 +96,7 @@ export function AdminOrderDocumentsManager({ initialOrders }: { initialOrders: O
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
 
   const filteredOrders = useMemo(() => {
-    const needle = search.trim().toLowerCase();
+    const needle = effectiveSearch.trim().toLowerCase();
     return initialOrders.filter((order) => {
       const matchesSearch =
         !needle ||
@@ -112,7 +119,7 @@ export function AdminOrderDocumentsManager({ initialOrders }: { initialOrders: O
         (documentFilter === "shipping_docs" && !isPickup && hasShippingDocs);
       return matchesSearch && matchesFilter && matchesStatus && matchesPayment && matchesDocuments;
     });
-  }, [documentFilter, filter, initialOrders, paymentFilter, search, statusFilter]);
+  }, [documentFilter, effectiveSearch, filter, initialOrders, paymentFilter, statusFilter]);
 
   const pickupOrders = filteredOrders.filter((order) => order.fulfillmentType === "pickup");
   const mailOrders = filteredOrders.filter((order) => order.fulfillmentType !== "pickup");
@@ -281,16 +288,15 @@ export function AdminOrderDocumentsManager({ initialOrders }: { initialOrders: O
       </div>
 
       <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
-        <div className="grid gap-3 lg:grid-cols-[minmax(220px,1.4fr)_repeat(4,minmax(150px,1fr))]">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <div className={`grid gap-3 ${externalSearch === undefined ? "lg:grid-cols-[minmax(220px,1.4fr)_repeat(4,minmax(150px,1fr))]" : "lg:grid-cols-4"}`}>
+        {externalSearch === undefined ? (
           <input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            className="h-10 w-full rounded-lg border border-input bg-background pl-9 pr-4 text-sm"
+            className="h-10 w-full rounded-lg border border-input bg-background px-4 text-sm"
             placeholder="Search by order, customer, email..."
           />
-        </div>
+        ) : null}
           <select value={filter} onChange={(event) => setFilter(event.target.value as "all" | "pickup" | "mail")} className="h-10 rounded-lg border border-input bg-background px-3 text-sm font-medium">
             <option value="all">All fulfillment</option>
             <option value="pickup">In-store pickup</option>
@@ -315,7 +321,7 @@ export function AdminOrderDocumentsManager({ initialOrders }: { initialOrders: O
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
           <span>{filteredOrders.length} showing</span>
-          {(search || filter !== "all" || statusFilter !== "all" || paymentFilter !== "all" || documentFilter !== "all") ? (
+          {((externalSearch === undefined && search) || filter !== "all" || statusFilter !== "all" || paymentFilter !== "all" || documentFilter !== "all") ? (
             <button
               type="button"
               onClick={() => {

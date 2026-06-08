@@ -18,12 +18,20 @@ function buildMeasurementBody(formData) {
     gender: String(formData.get("gender") ?? "female"),
     chest: Number(formData.get("chest")),
     waist: Number(formData.get("waist")),
-    hips: Number(formData.get("hips")),
+    hips: Number(formData.get("pantsHip") || formData.get("hips")),
     shoulderWidth: Number(formData.get("shoulderWidth")),
     armLength: Number(formData.get("armLength")),
     torsoLength: Number(formData.get("torsoLength")),
-    inseam: toOptionalNumber(formData.get("inseam")),
     neck: toOptionalNumber(formData.get("neck")),
+    bicepCircumference: toOptionalNumber(formData.get("bicepCircumference")),
+    wristCircumference: toOptionalNumber(formData.get("wristCircumference")),
+    pantsWaist: toOptionalNumber(formData.get("pantsWaist")),
+    pantsHip: toOptionalNumber(formData.get("pantsHip")),
+    thighCircumference: toOptionalNumber(formData.get("thighCircumference")),
+    waistToPantsLength: toOptionalNumber(formData.get("waistToPantsLength")),
+    hemStyle: String(formData.get("hemStyle") ?? "Straight"),
+    pressingStyle: String(formData.get("pressingStyle") ?? "Creased"),
+    inseam: toOptionalNumber(formData.get("inseam")),
   };
 }
 
@@ -76,19 +84,24 @@ export default async function MyAccountPage() {
   let profile = null;
   let measurements = [];
   let orders = [];
-  try {
-    const [userRes, measurementRes, ordersRes] = await Promise.all([
-      apiRequest("/api/v1/users/me"),
-      apiRequest("/api/v1/measurements"),
-      apiRequest("/api/v1/orders/me?limit=50"),
-    ]);
-    profile = userRes?.data ?? null;
-    measurements = Array.isArray(measurementRes?.data) ? measurementRes.data : [];
-    orders = Array.isArray(ordersRes?.data) ? ordersRes.data : [];
-  } catch {
-    profile = null;
-    measurements = [];
-    orders = [];
+
+  // Use allSettled so a failure in one call doesn't reset the others
+  const [userRes, measurementRes, ordersRes] = await Promise.allSettled([
+    apiRequest("/api/v1/users/me"),
+    apiRequest("/api/v1/measurements"),
+    apiRequest("/api/v1/orders/me?limit=50"),
+  ]);
+
+  if (userRes.status === "fulfilled") {
+    profile = userRes.value?.data ?? null;
+  }
+  if (measurementRes.status === "fulfilled") {
+    const raw = measurementRes.value;
+    // Handle both { data: [...] } and direct array responses
+    measurements = Array.isArray(raw?.data) ? raw.data : Array.isArray(raw) ? raw : [];
+  }
+  if (ordersRes.status === "fulfilled") {
+    orders = Array.isArray(ordersRes.value?.data) ? ordersRes.value.data : [];
   }
 
   return (

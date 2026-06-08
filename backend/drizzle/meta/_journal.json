@@ -8,6 +8,20 @@
       "when": 1779566411988,
       "tag": "0000_known_rick_jones",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1780895671764,
+      "tag": "0001_wide_pyro",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1780908824621,
+      "tag": "0002_familiar_lake",
+      "breakpoints": true
     }
   ]
 }

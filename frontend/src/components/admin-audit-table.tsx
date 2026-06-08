@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { TableHeadCell, TableHeadRow, TableHeader } from "@/components/admin/table-header";
 import { ADMIN_TABLE_WRAPPER } from "@/lib/admin/admin-design-system";
-import { AlertTriangle, CheckCircle2, CreditCard, Package, Search, ShieldCheck, Truck, UserRound } from "lucide-react";
+import { AlertTriangle, CheckCircle2, CreditCard, Package, ShieldCheck, Truck, UserRound } from "lucide-react";
 
 type AuditLog = {
   id: string;
@@ -37,11 +37,12 @@ const severityStyles: Record<string, string> = {
   critical: "bg-rose-100 text-rose-800",
 };
 
-export function AdminAuditTable({ logs }: { logs: AuditLog[] }) {
+export function AdminAuditTable({ logs, externalSearch }: { logs: AuditLog[]; externalSearch?: string }) {
   const [search, setSearch] = useState("");
+  const effectiveSearch = externalSearch ?? search;
   const [category, setCategory] = useState("all");
   const filtered = useMemo(() => {
-    const needle = search.trim().toLowerCase();
+    const needle = effectiveSearch.trim().toLowerCase();
     return logs.filter((log) => {
       const matchesSearch =
         !needle ||
@@ -51,7 +52,7 @@ export function AdminAuditTable({ logs }: { logs: AuditLog[] }) {
       const matchesCategory = category === "all" || log.category === category;
       return matchesSearch && matchesCategory;
     });
-  }, [logs, search, category]);
+  }, [logs, effectiveSearch, category]);
 
   return (
     <div className="space-y-4">
@@ -71,15 +72,14 @@ export function AdminAuditTable({ logs }: { logs: AuditLog[] }) {
       </div>
 
       <div className="flex flex-col gap-3 rounded-2xl border border-border bg-card p-4 shadow-sm sm:flex-row">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        {externalSearch === undefined ? (
           <input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Search logs..."
-            className="w-full rounded-xl border border-input bg-background py-2.5 pl-9 pr-4 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/25"
+            className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/25"
           />
-        </div>
+        ) : null}
         <select value={category} onChange={(event) => setCategory(event.target.value)} className="rounded-xl border border-input bg-background px-3 py-2.5 text-sm font-semibold">
           <option value="all">All categories</option>
           {categories.map((item) => (

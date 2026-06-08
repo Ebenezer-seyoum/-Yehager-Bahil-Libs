@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Home } from "lucide-react";
+import { Home, Eye, EyeOff } from "lucide-react";
 import { getProviders, getSession, signIn, signOut } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
@@ -34,7 +34,7 @@ function getSafeCallbackUrl(value: string | null) {
 
 function GoogleMark() {
   return (
-    <svg aria-hidden="true" viewBox="0 0 24 24" className="h-6 w-6">
+    <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5">
       <path fill="#4285F4" d="M21.6 12.227c0-.709-.064-1.391-.182-2.045H12v3.868h5.382a4.607 4.607 0 0 1-1.995 3.023v2.51h3.232c1.891-1.742 2.981-4.31 2.981-7.356Z" />
       <path fill="#34A853" d="M12 22c2.7 0 4.964-.895 6.619-2.418l-3.232-2.51c-.896.6-2.042.955-3.387.955-2.595 0-4.79-1.754-5.576-4.113H3.083v2.586A9.999 9.999 0 0 0 12 22Z" />
       <path fill="#FBBC05" d="M6.424 13.914A5.996 5.996 0 0 1 6.091 12c0-.664.118-1.309.333-1.914V7.5H3.083A9.996 9.996 0 0 0 2 12c0 1.613.386 3.14 1.083 4.5l3.341-2.586Z" />
@@ -45,7 +45,7 @@ function GoogleMark() {
 
 function MailIcon() {
   return (
-    <svg aria-hidden="true" viewBox="0 0 24 24" className="h-6 w-6 fill-none stroke-current">
+    <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5 fill-none stroke-[#9badc5] flex-shrink-0">
       <path d="M4 6h16v12H4z" strokeWidth="1.8" />
       <path d="m4 7 8 6 8-6" strokeWidth="1.8" />
     </svg>
@@ -54,7 +54,7 @@ function MailIcon() {
 
 function LockIcon() {
   return (
-    <svg aria-hidden="true" viewBox="0 0 24 24" className="h-6 w-6 fill-none stroke-current">
+    <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5 fill-none stroke-[#9badc5] flex-shrink-0">
       <rect x="5" y="10" width="14" height="10" rx="2" strokeWidth="1.8" />
       <path d="M8 10V7a4 4 0 0 1 8 0v3" strokeWidth="1.8" />
     </svg>
@@ -67,10 +67,10 @@ function FeedbackBanner({ feedback }: { feedback: Feedback }) {
   return (
     <div
       aria-live="polite"
-      className={`mt-6 rounded-[16px] border px-4 py-3 text-center text-sm font-medium ${
+      className={`rounded-xl px-4 py-3 text-center text-sm font-semibold mb-6 ${
         feedback.type === "success"
-          ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-          : "border-rose-200 bg-rose-50 text-rose-700"
+          ? "bg-green-100 text-green-900 border border-green-300"
+          : "bg-red-100 text-red-900 border border-red-300"
       }`}
     >
       {feedback.message}
@@ -97,49 +97,55 @@ function SignInForm() {
         }
       : null;
   })();
+  
   const [email, setEmail] = useState(searchParams.get("email") ?? "");
   const [password, setPassword] = useState("");
   const [feedback, setFeedback] = useState<Feedback>(initialFeedback);
+  const [emailError, setEmailError] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+  
+  const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [googleSubmitting, setGoogleSubmitting] = useState(false);
   const [googleAvailable, setGoogleAvailable] = useState<boolean | null>(null);
 
   useEffect(() => {
     let mounted = true;
-
     async function loadProviders() {
       const providers = await getProviders();
       if (mounted) {
         setGoogleAvailable(Boolean(providers?.google));
       }
     }
-
     void loadProviders();
-
     return () => {
       mounted = false;
     };
   }, []);
 
+  useEffect(() => {
+    if (feedback) {
+      const timer = setTimeout(() => setFeedback(null), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [feedback]);
+
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setFeedback(null);
+    setEmailError("");
+    setPasswordError("");
+    let hasError = false;
 
     if (!email.trim()) {
-      setFeedback({
-        type: "error",
-        message: "Please insert email.",
-      });
-      return;
+      setEmailError("Please insert email.");
+      hasError = true;
     }
-
     if (!password) {
-      setFeedback({
-        type: "error",
-        message: "Please insert password.",
-      });
-      return;
+      setPasswordError("Please insert password.");
+      hasError = true;
     }
+    if (hasError) return;
 
     setSubmitting(true);
 
@@ -191,7 +197,6 @@ function SignInForm() {
 
   async function onGoogleSignIn() {
     setFeedback(null);
-
     if (googleAvailable === false) {
       setFeedback({
         type: "error",
@@ -199,108 +204,113 @@ function SignInForm() {
       });
       return;
     }
-
     setGoogleSubmitting(true);
     await signIn("google", { callbackUrl: callbackUrl ?? "/my-account" });
   }
 
   return (
-    <div className="min-h-screen bg-[#f6f9fc] px-4 py-8 text-[#10182d]">
+    <div className="min-h-screen bg-[#f8fafc] px-4 py-12 relative flex items-center justify-center font-sans">
       <Link
         href="/"
-        className="mx-auto mb-6 flex w-fit items-center gap-2 rounded-full border border-[#dce5f0] bg-white px-4 py-2 text-sm font-semibold text-[#34435c] shadow-[0_8px_24px_rgba(15,23,42,0.06)] transition hover:bg-[#f8fbff]"
+        className="absolute top-8 left-8 flex items-center gap-2 rounded-full border border-[#cbd5e1] bg-white px-4 py-2 text-sm font-semibold text-[#334155] shadow-sm transition hover:bg-[#f1f5f9]"
       >
         <Home className="h-4 w-4" />
         Back to home
       </Link>
-      <div className="mx-auto flex min-h-[calc(100vh-4rem)] max-w-[540px] items-center justify-center">
-        <div className="relative flex min-h-[650px] w-full flex-col justify-center rounded-[22px] bg-white px-6 pb-8 pt-20 shadow-[0_22px_60px_rgba(15,23,42,0.08)] sm:min-h-[670px] sm:px-8 sm:pb-9 sm:pt-24">
-          <div className="absolute left-1/2 top-0 flex h-20 w-20 -translate-x-1/2 -translate-y-1/2 items-center justify-center overflow-hidden rounded-full border-[6px] border-white bg-white shadow-[0_8px_20px_rgba(15,23,42,0.08)]">
+      
+      <div className="w-full max-w-[480px] bg-white rounded-[24px] p-10 shadow-[0_8px_30px_rgb(0,0,0,0.04)] sm:p-12">
+        <div className="flex justify-center mb-6">
+          <div className="h-20 w-20 overflow-hidden rounded-full border border-gray-100 shadow-sm flex items-center justify-center bg-white">
             <img
               src="https://media.base44.com/images/public/69cc55fa50bba233144fe99d/5050da81c_YeHagerBahilLibs-03.png"
               alt="Yehager Bahil Libs"
-              className="h-full w-full scale-[1.55] object-cover"
+              className="h-full w-full object-cover scale-[1.2]"
             />
           </div>
+        </div>
 
-          <div className="mx-auto w-full max-w-[440px]">
-            <div className="text-center">
-              <h1 className="text-[30px] font-extrabold leading-[1.08] tracking-[-0.03em] text-[#11182d] sm:text-[36px]">
-                Welcome to Yehager
-                <br />
-                Bahil Libs
-              </h1>
-              <p className="mt-4 text-[17px] tracking-[0.03em] text-[#6b7e9d] sm:text-[19px]">Sign in to continue</p>
+        <div className="text-center mb-8">
+          <h1 className="text-[26px] font-bold leading-tight text-[#0f172a] mb-2">
+            Welcome to Yehager Bahil<br />Libs
+          </h1>
+          <p className="text-[15px] font-medium text-[#64748b]">Sign in to continue</p>
+        </div>
+
+        <FeedbackBanner feedback={feedback} />
+
+        <button
+          type="button"
+          onClick={() => void onGoogleSignIn()}
+          disabled={googleSubmitting}
+          className="flex w-full items-center justify-center gap-3 rounded-xl border border-[#cbd5e1] bg-white py-3.5 text-[15px] font-semibold text-[#334155] transition hover:bg-[#f8fafc] disabled:opacity-60"
+        >
+          <GoogleMark />
+          {googleSubmitting ? "Opening Google..." : "Continue with Google"}
+        </button>
+
+        <div className="my-7 flex items-center gap-4">
+          <span className="h-px flex-1 bg-[#e2e8f0]" />
+          <span className="text-xs font-semibold uppercase tracking-wider text-[#94a3b8]">OR</span>
+          <span className="h-px flex-1 bg-[#e2e8f0]" />
+        </div>
+
+        <form onSubmit={onSubmit} noValidate>
+          <div className="mb-5">
+            <label className="block text-center mb-1.5 text-[14px] font-semibold text-[#1e293b]">Email</label>
+            <div className={`flex items-center gap-3 rounded-xl border ${emailError ? "border-red-400" : "border-[#cbd5e1]"} bg-white px-4 py-3.5 focus-within:border-[#94a3b8]`}>
+              <MailIcon />
+              <input
+                type="email"
+                value={email}
+                onChange={(event) => { setEmail(event.target.value); setEmailError(""); }}
+                placeholder="you@example.com"
+                required
+                className="w-full bg-transparent text-[15px] text-[#0f172a] outline-none placeholder:text-[#94a3b8]"
+              />
             </div>
-
-            <button
-              type="button"
-              onClick={() => void onGoogleSignIn()}
-              disabled={googleSubmitting}
-              className="mt-8 flex h-14 w-full items-center justify-center gap-4 rounded-[16px] border border-[#dce5f0] bg-white text-[17px] font-medium text-[#34435c] transition hover:bg-[#f8fbff] disabled:cursor-not-allowed disabled:opacity-60 sm:text-[19px]"
-            >
-              <GoogleMark />
-              {googleSubmitting ? "Opening Google..." : "Continue with Google"}
-            </button>
-
-            <div className="mt-8 flex items-center gap-5 text-sm uppercase tracking-[0.08em] text-[#8ca0bd]">
-              <span className="h-px flex-1 bg-[#dce5f0]" />
-              OR
-              <span className="h-px flex-1 bg-[#dce5f0]" />
-            </div>
-
-            <FeedbackBanner feedback={feedback} />
-
-            <form onSubmit={onSubmit} noValidate className="mt-8">
-              <label className="block text-center">
-                <span className="mb-3 block text-base font-medium text-[#34435c]">Email</span>
-                <span className="flex h-14 items-center gap-4 rounded-[16px] border border-[#dce5f0] px-4 text-[#9badc5]">
-                  <MailIcon />
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(event) => setEmail(event.target.value)}
-                    placeholder="you@example.com"
-                    required
-                    className="h-full w-full bg-transparent text-base text-[#34435c] outline-none placeholder:text-[#9badc5] sm:text-lg"
-                  />
-                </span>
-              </label>
-
-              <label className="mt-6 block text-center">
-                <span className="mb-3 block text-base font-medium text-[#34435c]">Password</span>
-                <span className="flex h-14 items-center gap-4 rounded-[16px] border border-[#dce5f0] px-4 text-[#9badc5]">
-                  <LockIcon />
-                  <input
-                    type="password"
-                    value={password}
-                    onChange={(event) => setPassword(event.target.value)}
-                    placeholder="••••••••"
-                    required
-                    className="h-full w-full bg-transparent text-base text-[#34435c] outline-none placeholder:text-[#9badc5] sm:text-lg"
-                  />
-                </span>
-              </label>
-
-              <button
-                type="submit"
-                disabled={submitting}
-                className="mt-6 h-14 w-full rounded-[16px] bg-[#10172d] text-lg font-medium text-white transition hover:bg-[#18213b] disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {submitting ? "Signing in..." : "Sign in"}
-              </button>
-            </form>
-
-            <div className="mt-5 flex items-center justify-between gap-3 text-sm text-[#7184a1] sm:text-base">
-              <Link href="/forgot-password">Forgot password?</Link>
-              <span>
-                Need an account?{" "}
-                <Link href="/register" className="font-medium text-[#34435c]">
-                  Sign up
-                </Link>
-              </span>
-            </div>
+            {emailError && <p className="mt-1.5 text-[13px] font-medium text-red-700 text-center">{emailError}</p>}
           </div>
+
+          <div className="mb-6">
+            <label className="block text-center mb-1.5 text-[14px] font-semibold text-[#1e293b]">Password</label>
+            <div className={`flex items-center gap-3 rounded-xl border ${passwordError ? "border-red-400" : "border-[#cbd5e1]"} bg-white px-4 py-3.5 focus-within:border-[#94a3b8]`}>
+              <LockIcon />
+              <input
+                type={showPassword ? "text" : "password"}
+                value={password}
+                onChange={(event) => { setPassword(event.target.value); setPasswordError(""); }}
+                placeholder="••••••••"
+                required
+                className="w-full bg-transparent text-[15px] text-[#0f172a] outline-none placeholder:text-[#94a3b8]"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="text-[#9badc5] hover:text-[#64748b] transition flex-shrink-0"
+              >
+                {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+              </button>
+            </div>
+            {passwordError && <p className="mt-1.5 text-[13px] font-medium text-red-700 text-center">{passwordError}</p>}
+          </div>
+
+          <button
+            type="submit"
+            disabled={submitting}
+            className="w-full rounded-xl bg-[#0f172a] py-3.5 text-[16px] font-semibold text-white transition hover:bg-[#1e293b] disabled:opacity-60"
+          >
+            {submitting ? "Signing in..." : "Sign in"}
+          </button>
+        </form>
+
+        <div className="mt-6 flex flex-col items-center gap-3 text-[14px] font-medium text-[#64748b]">
+          <Link href="/forgot-password" className="hover:text-[#0f172a] transition-colors">Forgot password?</Link>
+          <span>
+            Need an account?{" "}
+            <Link href="/register" className="font-semibold text-[#0f172a] hover:underline">
+              Sign up
+            </Link>
+          </span>
         </div>
       </div>
     </div>
@@ -309,7 +319,7 @@ function SignInForm() {
 
 export default function SignInPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-[#f6f9fc]" />}>
+    <Suspense fallback={<div className="min-h-screen bg-[#f8fafc]" />}>
       <SignInForm />
     </Suspense>
   );

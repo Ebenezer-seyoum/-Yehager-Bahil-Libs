@@ -9,7 +9,7 @@ export function AdminExchangeWorkspace({
   exchangeRate: Parameters<typeof AdminExchangeRatePanel>[0]["exchangeRate"];
 }) {
   return (
-    <AdminWorkspace pageId="exchange-rate" initialData={{}} hideFilters>
+    <AdminWorkspace pageId="exchange-rate" initialData={{}} hideFilters hideKpis>
       {() => <AdminExchangeRatePanel exchangeRate={exchangeRate} />}
     </AdminWorkspace>
   );

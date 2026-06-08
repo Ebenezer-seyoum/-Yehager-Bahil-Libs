@@ -4,6 +4,7 @@ import { authOptions } from "@/auth-options";
 import { apiRequest } from "@/lib/api-client";
 import { can } from "@/lib/permissions";
 import { AdminEmployeesWorkspace } from "@/components/admin/pages/admin-employees-workspace";
+import { DashboardNotice } from "@/components/admin/dashboard-notice";
 
 export default async function AdminUsersPage({ searchParams }) {
   const session = await getServerSession(authOptions);
@@ -37,24 +38,16 @@ export default async function AdminUsersPage({ searchParams }) {
   return (
     <div className="space-y-4">
       {query.created === "1" ? (
-        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-medium text-emerald-800 shadow-sm">
-          Success — employee account created.
-        </div>
+        <DashboardNotice tone="success">Success! Employee account created.</DashboardNotice>
       ) : null}
       {query.updated ? (
-        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-medium text-emerald-800 shadow-sm">
-          Success — employee information updated.
-        </div>
+        <DashboardNotice tone="success">Success! Employee information updated.</DashboardNotice>
       ) : null}
       {query.deleted === "1" ? (
-        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-medium text-emerald-800 shadow-sm">
-          Success — user was deleted.
-        </div>
+        <DashboardNotice tone="success">Success! User was deleted.</DashboardNotice>
       ) : null}
       {query.error && query.tab !== "create" ? (
-        <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-700 shadow-sm">
-          Action failed — please review the user details and try again.
-        </div>
+        <DashboardNotice tone="error">Error! Please review the user details and try again.</DashboardNotice>
       ) : null}
 
       <AdminEmployeesWorkspace

@@ -110,7 +110,8 @@ function filterUsers(users: Row[], tabId: string, kind: "employee" | "customer")
         return s !== "active";
       });
     case "new":
-      return base.filter((u) => isRecent(u.createdAt, 30));
+      return base.filter((u) => isRecent(u.createdAt, 10));
+    case "access_pending":
     case "unassigned":
       if (kind !== "employee") return base;
       return base.filter((u) => {

@@ -3,8 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Check, Eye, EyeOff, FileText, Loader2, Shield, User2, MapPin, NotebookPen, Lock, Unlock, Key, Trash2, Pencil, X } from "lucide-react";
-import { dashboardConfirm, dashboardError, dashboardLoading, dashboardSuccess } from "@/lib/dashboard-swal";
+import { Check, Eye, EyeOff, FileText, Loader2, Shield, User2, MapPin, NotebookPen, Lock, Unlock, Key, Trash2, Pencil, X, RefreshCw, ArrowLeft, Users } from "lucide-react";
+import { dashboardConfirm, dashboardError, dashboardLoading, dashboardSuccess, dashboardAlert } from "@/lib/dashboard-swal";
 import { cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
@@ -269,7 +269,6 @@ export function EmployeeDetailClient({
   canDelete,
   currentUserId,
   embedded = false,
-  onClose,
 }: {
   initialPayload: EmployeePayload;
   backTab: string;
@@ -497,20 +496,20 @@ export function EmployeeDetailClient({
 
     const cleanFirst = firstName.trim();
     const cleanFather = fatherName.trim();
-    if (!cleanFirst) return showTopNotice("error", "Validation Error", "First Name is required.");
-    if (!cleanFather) return showTopNotice("error", "Validation Error", "Father’s Name is required.");
+    if (!cleanFirst) return await dashboardError("Validation Error", "First Name is required.");
+    if (!cleanFather) return await dashboardError("Validation Error", "Father’s Name is required.");
     if (!validateName(cleanFirst) || !validateName(cleanFather) || (grandfatherName.trim() && !validateName(grandfatherName))) {
-      return showTopNotice("error", "Validation Error", "Please use letters only for name fields.");
+      return await dashboardError("Validation Error", "Please use letters only for name fields.");
     }
 
-    if (!email.trim()) return showTopNotice("error", "Validation Error", "Email Address is required.");
-    if (!validateEmail(email)) return showTopNotice("error", "Validation Error", "Please enter a valid email address.");
+    if (!email.trim()) return await dashboardError("Validation Error", "Email Address is required.");
+    if (!validateEmail(email)) return await dashboardError("Validation Error", "Please enter a valid email address.");
 
-    if (!phone.trim()) return showTopNotice("error", "Validation Error", "Phone Number is required.");
-    if (!validatePhone(phone)) return showTopNotice("error", "Validation Error", "Please enter a valid phone number.");
+    if (!phone.trim()) return await dashboardError("Validation Error", "Phone Number is required.");
+    if (!validatePhone(phone)) return await dashboardError("Validation Error", "Please enter a valid phone number.");
 
-    if (!gender.trim()) return showTopNotice("error", "Validation Error", "Gender is required.");
-    if (!accountStatus) return showTopNotice("error", "Validation Error", "Account Status is required.");
+    if (!gender.trim()) return await dashboardError("Validation Error", "Gender is required.");
+    if (!accountStatus) return await dashboardError("Validation Error", "Account Status is required.");
 
     if (photoFile) {
       const allowed = ["image/jpeg", "image/png", "image/webp"];
@@ -556,19 +555,19 @@ export function EmployeeDetailClient({
       if (!res.ok) {
         const message = String(json?.message ?? "Unable to update employee information. Please try again.");
         if (res.status === 409) {
-          showTopNotice("error", "Validation Error", "This email is already registered.");
+          await dashboardError("Validation Error", "This email is already registered.");
         } else {
-          showTopNotice("error", "Update Failed", message);
+          await dashboardError("Update Failed", message);
         }
         return;
       }
 
-      showTopNotice("success", "Employee Updated", "Employee information has been updated successfully.");
+      await dashboardSuccess("Employee Updated", "Employee information has been updated successfully.");
       setEditMode(false);
       await reloadDetails();
       router.refresh();
     } catch (e) {
-      showTopNotice("error", "Update Failed", e instanceof Error ? e.message : "Unable to update employee information. Please try again.");
+      await dashboardError("Update Failed", e instanceof Error ? e.message : "Unable to update employee information. Please try again.");
     } finally {
       setBusy(false);
     }
@@ -611,17 +610,20 @@ export function EmployeeDetailClient({
       // Close loading state before showing final feedback.
       dashboardLoading.close();
 
-      await dashboardSuccess(
+      await dashboardAlert(
         isBlocked ? "User Unblocked" : "User Blocked",
         isBlocked ? "This employee has been unblocked successfully." : "This employee has been blocked successfully.",
-        { target: swalTargetRef.current ?? undefined, iconHtml: successIconHtml },
+        { target: swalTargetRef.current ?? undefined, icon: "success", tone: "success", confirmButtonText: "OK" },
       );
       await reloadDetails();
       router.refresh();
     } catch (e) {
       dashboardLoading.close();
-      await dashboardError("Update Failed", e instanceof Error ? e.message : "Could not update user status.", {
+      await dashboardAlert("Update Failed", e instanceof Error ? e.message : "Could not update user status.", {
         target: swalTargetRef.current ?? undefined,
+        icon: "error",
+        tone: "danger",
+        confirmButtonText: "OK",
       });
     } finally {
       setBusy(false);
@@ -735,25 +737,32 @@ export function EmployeeDetailClient({
         const message = String(json?.message ?? "Could not delete user.");
         if (res.status === 409 || /history|activity|audit/i.test(message)) {
           dashboardLoading.close();
-          await dashboardError(
-            "Cannot Delete Account",
-            "This account can’t be deleted because it has activity history. Please block the account instead.",
-            { target: swalTargetRef.current ?? undefined },
-          );
+          await dashboardAlert("Cannot Delete Account", "This account can’t be deleted because it has activity history. Please block the account instead.", {
+            target: swalTargetRef.current ?? undefined,
+            icon: "warning",
+            tone: "warning",
+            confirmButtonText: "OK",
+          });
           return;
         }
         throw new Error(message);
       }
       dashboardLoading.close();
-      await dashboardSuccess("Deleted Successfully", "Employee account has been deleted successfully.", {
+      await dashboardAlert("Deleted Successfully", "Employee account has been deleted successfully.", {
         target: swalTargetRef.current ?? undefined,
+        icon: "success",
+        tone: "success",
+        confirmButtonText: "OK",
       });
       router.push(`/admin/users?tab=${encodeURIComponent(backTab)}`);
       router.refresh();
     } catch (e) {
       dashboardLoading.close();
-      await dashboardError("Delete Failed", e instanceof Error ? e.message : "Unable to delete employee. Please try again.", {
+      await dashboardAlert("Delete Failed", e instanceof Error ? e.message : "Unable to delete employee. Please try again.", {
         target: swalTargetRef.current ?? undefined,
+        icon: "error",
+        tone: "danger",
+        confirmButtonText: "OK",
       });
     } finally {
       setBusy(false);
@@ -769,26 +778,43 @@ export function EmployeeDetailClient({
   return (
     <div ref={swalTargetRef} className="space-y-4">
       {!embedded ? (
-        <Link
-          href={`/admin/users?tab=${encodeURIComponent(backTab)}`}
-          className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-900 shadow-sm hover:bg-slate-50"
-        >
-          ← Back
-        </Link>
-      ) : null}
+        <div className="mb-8 rounded-[2rem] border border-slate-200 bg-white p-8 shadow-xl relative overflow-hidden ring-1 ring-black/[0.02] border-l-4 border-l-[#8b5cf6]">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+            <div className="flex items-center gap-6">
+              <div className="h-20 w-20 rounded-2xl bg-[#f5f3ff] flex items-center justify-center text-[#8b5cf6] shadow-sm">
+                <Users className="h-10 w-10" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400 mb-1">Users</p>
+                <h1 className="text-4xl font-black text-slate-900 tracking-tight uppercase truncate">
+                  {displayName}
+                </h1>
+                <p className="text-sm text-slate-500 font-medium mt-1">
+                  Manage staff accounts, roles, activity, and performance.
+                </p>
+              </div>
+            </div>
 
-      {embedded ? (
-        <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
-          <button
-            type="button"
-            onClick={() => onClose?.()}
-            className="inline-flex h-10 items-center rounded-xl bg-slate-950 px-4 text-sm font-semibold text-white shadow-sm hover:bg-slate-900"
-          >
-            ← Back
-          </button>
-
-          <div className="text-sm font-semibold text-slate-900">Employee Detail</div>
-          <div className="w-[92px]" />
+            <div className="flex flex-col gap-3 shrink-0 items-end">
+              <button
+                onClick={() => {
+                  router.refresh();
+                  dashboardSuccess("Page Refreshed", "The employee details have been reloaded.");
+                }}
+                className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-bold text-slate-900 shadow-sm hover:bg-slate-50 transition-all group"
+              >
+                <RefreshCw className="h-4 w-4 text-slate-400 group-hover:rotate-180 transition-transform duration-500" />
+                Refresh
+              </button>
+              <button
+                onClick={() => router.push(`/admin/users?tab=${encodeURIComponent(backTab)}`)}
+                className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-bold text-slate-900 shadow-sm hover:bg-slate-50 transition-all group"
+              >
+                <ArrowLeft className="h-4 w-4 text-slate-400 group-hover:-translate-x-1 transition-transform" />
+                Back to Users
+              </button>
+            </div>
+          </div>
         </div>
       ) : null}
 
@@ -988,8 +1014,11 @@ export function EmployeeDetailClient({
           setResetPasswordOpen(next);
         }}
       >
+        {/* @ts-ignore */}
         <DialogContent className="max-w-md">
+          {/* @ts-ignore */}
           <DialogHeader>
+            {/* @ts-ignore */}
             <DialogTitle className="font-extrabold tracking-wide">RESET PASSWORD OPTIONS</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 pt-2">
@@ -1226,7 +1255,7 @@ export function EmployeeDetailClient({
                       <button
                         key={item.id}
                         type="button"
-                        onClick={() => setActiveSection(item.id)}
+                        onClick={() => setActiveSection(item.id as EmployeeSectionId)}
                         className={cn(
                           "flex w-full items-center gap-3 rounded-2xl border px-3 py-3 text-left",
                           selected

@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/auth-options";
 import { apiRequest } from "@/lib/api-client";
 import { AdminCustomersWorkspace } from "@/components/admin/pages/admin-customers-workspace";
+import { DashboardNotice } from "@/components/admin/dashboard-notice";
 
 export default async function AdminCustomersPage({ searchParams }) {
   const session = await getServerSession(authOptions);
@@ -14,19 +15,29 @@ export default async function AdminCustomersPage({ searchParams }) {
   let users = [];
   let orders = [];
   let alerts = [];
+
+  // Fetch users
   try {
-    const [usersResponse, ordersResponse, alertsResponse] = await Promise.all([
-      apiRequest("/api/v1/admin/users?limit=200"),
-      apiRequest("/api/v1/orders?limit=200"),
-      apiRequest("/api/v1/admin/alerts?limit=200"),
-    ]);
+    const usersResponse = await apiRequest("/api/v1/admin/users?limit=200");
     users = Array.isArray(usersResponse?.data) ? usersResponse.data : [];
+  } catch (err) {
+    console.error("Failed to fetch users for admin customers page:", err);
+  }
+
+  // Fetch orders
+  try {
+    const ordersResponse = await apiRequest("/api/v1/orders?limit=200");
     orders = Array.isArray(ordersResponse?.data) ? ordersResponse.data : [];
+  } catch (err) {
+    console.error("Failed to fetch orders for admin customers page:", err);
+  }
+
+  // Fetch alerts
+  try {
+    const alertsResponse = await apiRequest("/api/v1/admin/alerts?limit=200");
     alerts = Array.isArray(alertsResponse?.data) ? alertsResponse.data : [];
-  } catch {
-    users = [];
-    orders = [];
-    alerts = [];
+  } catch (err) {
+    console.error("Failed to fetch alerts for admin customers page:", err);
   }
 
   const customers = users
@@ -46,24 +57,16 @@ export default async function AdminCustomersPage({ searchParams }) {
   return (
     <div className="space-y-4">
       {query.created === "1" ? (
-        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-medium text-emerald-800 shadow-sm">
-          Success — customer account created.
-        </div>
+        <DashboardNotice tone="success">Success! Customer account created.</DashboardNotice>
       ) : null}
       {query.updated ? (
-        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-medium text-emerald-800 shadow-sm">
-          Success — customer information updated.
-        </div>
+        <DashboardNotice tone="success">Success! Customer information updated.</DashboardNotice>
       ) : null}
       {query.deleted === "1" ? (
-        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-medium text-emerald-800 shadow-sm">
-          Success — customer was deleted.
-        </div>
+        <DashboardNotice tone="success">Success! Customer was deleted.</DashboardNotice>
       ) : null}
       {query.error && query.tab !== "create" ? (
-        <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-700 shadow-sm">
-          Action failed — please review the customer details and try again.
-        </div>
+        <DashboardNotice tone="error">Error! Please review the customer details and try again.</DashboardNotice>
       ) : null}
 
       <AdminCustomersWorkspace data={{ users: customers, orders, alerts }} />

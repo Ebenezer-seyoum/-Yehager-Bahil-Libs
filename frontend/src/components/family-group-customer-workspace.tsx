@@ -29,14 +29,18 @@ type SelectedDesign = {
 type Measurement = { id: string; label?: string | null };
 
 const measurementFields = [
-  ["chest", "Chest / Bust", "Around the fullest part"],
+  ["neck", "Neck", "Around collar line"],
   ["shoulderWidth", "Shoulder Width", "Shoulder seam to seam"],
-  ["armLength", "Sleeve Length", "Shoulder to wrist"],
-  ["torsoLength", "Back Length", "Nape of neck to waist"],
+  ["chest", "Chest / Bust", "Around the fullest part"],
   ["waist", "Waist", "Natural waistline"],
   ["hips", "Hips / Seat", "Fullest part of hips"],
-  ["inseam", "Inseam", "Crotch to ankle"],
-  ["neck", "Neck", "Around collar line"],
+  ["armLength", "Sleeve Length", "Shoulder to wrist"],
+  ["torsoLength", "Back Length", "Nape of neck to waist"],
+  ["bicepCircumference", "Bicep", "Fullest part of upper arm"],
+  ["wristCircumference", "Wrist", "Around the wrist bone"],
+  ["pantsWaist", "Pants Waist", "Around natural waistline"],
+  ["thighCircumference", "Thigh", "Around fullest part of upper thigh"],
+  ["waistToPantsLength", "Outseam", "Waist to desired pants hem"],
 ] as const;
 
 export function FamilyGroupCustomerWorkspace({
@@ -70,6 +74,7 @@ export function FamilyGroupCustomerWorkspace({
   const [step, setStep] = useState(1);
   const [gender, setGender] = useState("male");
   const [relation, setRelation] = useState("Myself");
+  const [selectedMeasurementId, setSelectedMeasurementId] = useState<string>("");
   const hasSource = Boolean(group.productName);
   const customReady = group.selectionType !== "custom_design" || selectedDesign?.status === "awaiting_payment";
 
@@ -234,23 +239,44 @@ export function FamilyGroupCustomerWorkspace({
                   {["Myself", "Husband", "Wife", "Son", "Daughter", "Other"].map((value) => <button key={value} type="button" onClick={() => setRelation(value)} className={`h-12 rounded-xl border-2 font-semibold ${relation === value ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground"}`}>{value}</button>)}
                 </div>
               </div>
-              <button type="button" onClick={() => setStep(2)} className="h-12 w-full rounded-xl bg-primary text-base font-semibold text-black">Continue to Measurements →</button>
+              <button type="button" onClick={() => {
+                if (relation === "Myself" && savedMeasurements.length > 0) {
+                  setSelectedMeasurementId(savedMeasurements[0].id);
+                } else {
+                  setSelectedMeasurementId("");
+                }
+                setStep(2);
+              }} className="h-12 w-full rounded-xl bg-primary text-base font-semibold text-black">Continue to Measurements →</button>
             </div>
 
             <div className={step === 2 ? "space-y-5 p-7 pt-6" : "hidden"}>
               {savedMeasurements.length ? (
                 <label className="block text-sm font-semibold">Use saved measurements
-                  <select name="measurementId" className="mt-2 h-11 w-full rounded-xl border border-input bg-black px-4"><option value="">Enter new measurements</option>{savedMeasurements.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select>
+                  <select 
+                    name="measurementId" 
+                    value={selectedMeasurementId}
+                    onChange={(e) => setSelectedMeasurementId(e.target.value)}
+                    className="mt-2 h-11 w-full rounded-xl border border-input bg-black px-4"
+                  >
+                    <option value="">Enter new manual measurements</option>
+                    {savedMeasurements.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+                  </select>
                 </label>
               ) : null}
-              <div className="grid gap-x-5 gap-y-4 sm:grid-cols-2">
-                {measurementFields.map(([name, label, hint]) => (
-                  <label key={name} className="text-sm font-semibold">{label}{!["inseam", "neck"].includes(name) ? <span className="text-primary">*</span> : null}
-                    <input name={name} type="number" step="0.1" min="0" placeholder="0.0" className="mt-2 h-12 w-full rounded-xl border border-input bg-black px-4 text-lg text-blue-200 outline-none focus:border-primary" />
-                    <span className="mt-1 block text-xs font-normal text-muted-foreground">{hint}</span>
-                  </label>
-                ))}
-              </div>
+              {selectedMeasurementId ? (
+                <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-5 text-sm font-bold text-emerald-400">
+                  Using your exact predefined profile sizing.
+                </div>
+              ) : (
+                <div className="grid gap-x-5 gap-y-4 sm:grid-cols-2">
+                  {measurementFields.map(([name, label, hint]) => (
+                    <label key={name} className="text-sm font-semibold">{label}{!["inseam", "neck"].includes(name) ? <span className="text-primary">*</span> : null}
+                      <input name={name} type="number" step="0.1" min="0" placeholder="0.0" className="mt-2 h-12 w-full rounded-xl border border-input bg-black px-4 text-lg text-blue-200 outline-none focus:border-primary" />
+                      <span className="mt-1 block text-xs font-normal text-muted-foreground">{hint}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-4">
                 <button type="button" onClick={() => setStep(1)} className="h-12 rounded-xl border border-border font-semibold">← Back</button>
                 <button type="submit" className="h-12 rounded-xl bg-primary text-base font-semibold text-black">Add to Family Group ✓</button>

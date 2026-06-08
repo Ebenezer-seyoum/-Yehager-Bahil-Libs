@@ -22,8 +22,27 @@ export default async function FamilyGroupPage({ params, searchParams }) {
     await ensureBackendUserSynced();
     const measurementId = String(formData.get("measurementId") ?? "").trim();
     const measurements = Object.fromEntries(
-      ["chest", "waist", "hips", "shoulderWidth", "armLength", "torsoLength", "inseam", "neck"]
-        .map((field) => [field, toOptionalNumber(formData.get(field))]),
+      [
+        "chest",
+        "waist",
+        "hips",
+        "shoulderWidth",
+        "armLength",
+        "torsoLength",
+        "inseam",
+        "neck",
+        "bicepCircumference",
+        "wristCircumference",
+        "pantsWaist",
+        "pantsHip",
+        "thighCircumference",
+        "waistToPantsLength",
+      ].map((field) => {
+        let val = formData.get(field);
+        if (field === "hips" && !val) val = formData.get("pantsHip");
+        if (field === "pantsHip" && !val) val = formData.get("hips");
+        return [field, toOptionalNumber(val)];
+      }),
     );
     await apiRequest(`/api/v1/family-groups/${groupId}/members`, {
       method: "POST",

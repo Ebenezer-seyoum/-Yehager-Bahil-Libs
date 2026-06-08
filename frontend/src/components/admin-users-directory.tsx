@@ -1,17 +1,17 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
+import { XCircle } from "lucide-react";
 import { TableHeadCell, TableHeadRow, TableHeader } from "@/components/admin/table-header";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { EmployeeDetailClient } from "@/components/admin/employee-detail-client";
+import { DashboardActionButton, DashboardTableActions } from "@/components/admin/dashboard-action-button";
+import { useRouter } from "next/navigation";
 
 type User = {
   id: string;
   name?: string | null;
-  email: string;
-  role: string;
-  status: string;
+  email?: string | null;
+  role?: string | null;
+  status?: string | null;
   accountStatus?: string | null;
   roleStatus?: string | null;
   phone?: string | null;
@@ -74,42 +74,20 @@ export function AdminUsersDirectory({
   canDelete?: boolean;
   canAssignRole?: boolean;
 }) {
-  const [detailOpen, setDetailOpen] = useState(false);
-  const [detailBusy, setDetailBusy] = useState(false);
-  const [detailError, setDetailError] = useState<string | null>(null);
-  const [detailPayload, setDetailPayload] = useState<DetailPayload | null>(null);
-  const [detailEmployeeId, setDetailEmployeeId] = useState<string | null>(null);
+  const normalizedQuery = String(query ?? "").trim().toLowerCase();
+  const filteredUsers = normalizedQuery
+    ? users.filter((user) => {
+        const haystack = [user.name, user.email, user.role, user.accountStatus]
+          .map((value) => String(value ?? "").toLowerCase())
+          .join(" ");
+        return haystack.includes(normalizedQuery);
+      })
+    : users;
 
-  async function openEmployeeDetail(employeeId: string) {
-    setDetailEmployeeId(employeeId);
-    setDetailOpen(true);
-    setDetailBusy(true);
-    setDetailError(null);
-    const quickUser = users.find((u) => u.id === employeeId) ?? null;
-    if (quickUser) {
-      setDetailPayload({
-        user: quickUser,
-        profile: null,
-        assignedRole: null,
-        permissions: [],
-        activity: [],
-        handledOrders: [],
-      });
-    } else {
-      setDetailPayload(null);
-    }
-    try {
-      const res = await fetch(`/api/backend/admin/users/${employeeId}`, { method: "GET" });
-      const json = (await res.json().catch(() => null)) as { message?: string; data?: DetailPayload } | null;
-      if (!res.ok) {
-        throw new Error(String(json?.message ?? "Unable to load employee details. Please try again."));
-      }
-      setDetailPayload(json?.data ?? null);
-    } catch (e) {
-      setDetailError(e instanceof Error ? e.message : "Unable to load employee details. Please try again.");
-    } finally {
-      setDetailBusy(false);
-    }
+  const router = useRouter();
+
+  function openEmployeeDetail(employeeId: string) {
+    router.push(`/admin/users/${employeeId}?tab=${encodeURIComponent(mode)}`);
   }
 
   return (
@@ -119,6 +97,7 @@ export function AdminUsersDirectory({
           <table className="w-full min-w-[860px] border-collapse text-left">
             <TableHeader>
               <TableHeadRow>
+                <TableHeadCell className="w-14">No</TableHeadCell>
                 <TableHeadCell>Profile Picture</TableHeadCell>
                 <TableHeadCell>Employee Name</TableHeadCell>
                 <TableHeadCell>Role</TableHeadCell>
@@ -128,44 +107,61 @@ export function AdminUsersDirectory({
               </TableHeadRow>
             </TableHeader>
             <tbody>
-              {users.length === 0 ? (
+              {filteredUsers.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-10 text-center text-sm text-muted-foreground">
-                    {mode === "active"
-                      ? "No active employees found."
-                      : mode === "inactive"
-                        ? "No inactive employees found."
-                        : mode === "unassigned"
-                          ? "All employees have assigned roles."
-                          : mode === "new"
-                            ? "No new employees found for this period."
-                              : "No employees found."}
+                  <td colSpan={7} className="px-4 py-10 text-center text-sm text-red-700">
+                    <div className="mx-auto flex max-w-md flex-col items-center gap-3">
+                      <XCircle className="h-12 w-12 text-red-500" />
+                      <div className="space-y-1 text-center">
+                        <p className="text-base font-semibold text-red-700">
+                          {mode === "active"
+                            ? "No active employees found."
+                            : mode === "inactive"
+                              ? "No inactive employees found."
+                              : mode === "unassigned"
+                                ? "All employees have assigned roles."
+                                : mode === "new"
+                                  ? "No new employees found for this period."
+                                  : "No employees found."}
+                        </p>
+                        <p className="text-sm text-red-600">Try a different search term or adjust your filters.</p>
+                      </div>
+                    </div>
                   </td>
                 </tr>
               ) : (
-                users.map((user) => {
-                  const viewHref = `/admin/users/employees/${user.id}?tab=${encodeURIComponent(mode)}`;
+                filteredUsers.map((user, index) => {
                   return (
                     <tr key={user.id} className="border-b border-border last:border-b-0">
+                      <td className="px-4 py-4 text-sm font-semibold text-slate-600">{index + 1}</td>
                       <td className="px-4 py-4">
-                        <Link href={viewHref} className="flex items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => void openEmployeeDetail(user.id)}
+                          className="flex items-center gap-3 rounded-xl text-left focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                          aria-label={`View ${user.name ?? user.email} details`}
+                        >
                           {user.avatarUrl ? (
                             <img
                               src={user.avatarUrl}
-                              alt={user.name ?? user.email}
+                              alt={user.name ?? user.email ?? "User"}
                               className="h-10 w-10 rounded-xl border border-border object-cover"
                             />
                           ) : (
                             <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-secondary text-sm font-semibold">
-                              {initials(user.name, user.email)}
+                              {initials(user.name, user.email ?? "")}
                             </span>
                           )}
-                        </Link>
+                        </button>
                       </td>
                       <td className="px-4 py-4">
-                        <Link href={viewHref} className="block font-medium">
+                        <button
+                          type="button"
+                          onClick={() => void openEmployeeDetail(user.id)}
+                          className="block rounded-md text-left font-medium text-slate-950 hover:text-blue-900 hover:underline focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                        >
                           {user.name ?? "Unnamed employee"}
-                        </Link>
+                        </button>
                       </td>
                       <td className="px-4 py-4 text-sm capitalize">{user.role}</td>
                       <td className="px-4 py-4">
@@ -175,13 +171,9 @@ export function AdminUsersDirectory({
                       </td>
                       <td className="px-4 py-4 text-sm text-muted-foreground">{formatDate(user.lastLoginAt)}</td>
                       <td className="px-4 py-4">
-                        <button
-                          type="button"
-                          onClick={() => openEmployeeDetail(user.id)}
-                          className="inline-flex items-center rounded-xl bg-blue-900 px-3 py-2 text-sm font-semibold text-white shadow-sm shadow-blue-900/20 hover:bg-blue-950"
-                        >
-                          View
-                        </button>
+                        <DashboardTableActions>
+                          <DashboardActionButton action="view" onClick={() => void openEmployeeDetail(user.id)} />
+                        </DashboardTableActions>
                       </td>
                     </tr>
                   );
@@ -192,38 +184,6 @@ export function AdminUsersDirectory({
         </div>
       </section>
 
-      <Dialog open={detailOpen} onOpenChange={(next) => { if (!next) { setDetailPayload(null); setDetailError(null); setDetailEmployeeId(null); } setDetailOpen(next); }}>
-        <DialogContent className="max-w-5xl overflow-hidden p-0">
-          <div className="bg-blue-950 px-6 py-4 pr-16 text-white">
-            <DialogTitle className="text-lg font-bold text-white">Employee Detail</DialogTitle>
-            <p className="mt-1 text-sm text-blue-100">View profile, assigned access, contact information, and employee activity.</p>
-          </div>
-          <div className="max-h-[78vh] overflow-y-auto bg-slate-50 p-5">
-            {detailError ? (
-              <div className="rounded-2xl border border-rose-200 bg-rose-50 p-6 text-sm text-rose-900">
-                {detailError}
-              </div>
-            ) : detailPayload ? (
-              <div className="space-y-3">
-                {detailBusy ? (
-                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-center text-xs font-medium text-slate-700">
-                    Loading latest details…
-                  </div>
-                ) : null}
-                <EmployeeDetailClient
-                  initialPayload={detailPayload}
-                  backTab={mode}
-                  canAssignRole={canAssignRole}
-                  canEdit={canEdit}
-                  canDelete={canDelete}
-                  embedded
-                  onClose={() => setDetailOpen(false)}
-                />
-              </div>
-            ) : null}
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

@@ -28,7 +28,7 @@ import {
   MessageSquare
 } from "lucide-react";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
-import { KPIGrid } from "@/components/admin/kpi-grid";
+import { DashboardModalBody, DashboardModalFrame, DashboardModalHeader } from "@/components/admin/dashboard-modal";
 
 const SUPPORT_TABS = [
   { id: "all", label: "All Messages", icon: Mail },
@@ -75,16 +75,6 @@ const getInitials = (name) => {
 export default function SupportInboxPage() {
   const { data: session } = useSession();
   const [tickets, setTickets] = useState([]);
-  const [kpis, setKpis] = useState({
-    total: 0,
-    new: 0,
-    unread: 0,
-    open: 0,
-    pending: 0,
-    resolved: 0,
-    complaints: 0,
-    urgent: 0,
-  });
   const [admins, setAdmins] = useState([]);
   const [loading, setLoading] = useState(true);
   const [seeding, setSeeding] = useState(false);
@@ -167,12 +157,7 @@ export default function SupportInboxPage() {
 
       setTickets(fetchedTickets);
 
-      // Fetch KPIs
-      const resKPIs = await fetch(`/api/backend/admin/support/kpis`);
-      const dataKPIs = await resKPIs.json();
-      if (dataKPIs.data) {
-        setKpis(dataKPIs.data);
-      }
+      // KPIs removed for this page per configuration
     } catch (err) {
       console.error("Failed to load support inbox data:", err);
     } finally {
@@ -326,7 +311,7 @@ export default function SupportInboxPage() {
 
   const showToast = (msg, type = "success") => {
     setSuccessToast({ msg, type });
-    setTimeout(() => setSuccessToast(null), 4000);
+    setTimeout(() => setSuccessToast(null), 3000);
   };
 
   return (
@@ -335,13 +320,20 @@ export default function SupportInboxPage() {
       
       {/* SUCCESS TOAST POPUP */}
       {successToast && (
-        <div className={`fixed bottom-5 right-5 z-50 flex items-center gap-3 rounded-lg px-4 py-3 shadow-lg transition-all duration-300 transform translate-y-0 ${
+        <div className={`fixed right-8 top-8 z-50 flex min-h-[70px] w-[min(640px,calc(100vw-32px))] items-center rounded-md px-6 py-5 pr-16 text-xl font-bold text-white transition-all duration-300 transform translate-y-0 ${
           successToast.type === "success" 
-            ? "bg-emerald-600 text-white" 
-            : "bg-rose-600 text-white"
+            ? "bg-[#829276]" 
+            : "bg-[#c15b5d]"
         }`}>
-          {successToast.type === "success" ? <CheckCircle2 className="h-5 w-5" /> : <AlertTriangle className="h-5 w-5" />}
-          <span className="text-sm font-medium">{successToast.msg}</span>
+          <span>{successToast.type === "success" ? "Success!" : "Error!"} {successToast.msg}</span>
+          <button
+            type="button"
+            onClick={() => setSuccessToast(null)}
+            className="absolute right-5 top-1/2 -translate-y-1/2 text-4xl font-light leading-none text-white/70 hover:text-white"
+            aria-label="Dismiss message"
+          >
+            ×
+          </button>
         </div>
       )}
 
@@ -363,19 +355,7 @@ export default function SupportInboxPage() {
         }
       />
 
-      {/* COMPACT KPI CARDS */}
-      <KPIGrid
-        metrics={[
-          { id: "total", title: "Total Messages", value: String(kpis.total), description: "All support messages", color: "blue", icon: Mail, changePercent: 0, positiveIsGood: true, status: "ready" },
-          { id: "new", title: "New Messages", value: String(kpis.new), description: "Newly received", color: "purple", icon: Inbox, changePercent: 0, positiveIsGood: true, status: "ready" },
-          { id: "unread", title: "Unread Messages", value: String(kpis.unread), description: "Needs review", color: "yellow", icon: AlertCircle, changePercent: 0, positiveIsGood: false, status: "ready" },
-          { id: "open", title: "Open Tickets", value: String(kpis.open), description: "Active conversations", color: "blue", icon: Clock, changePercent: 0, positiveIsGood: true, status: "ready" },
-          { id: "pending", title: "Pending Replies", value: String(kpis.pending), description: "Awaiting response", color: "yellow", icon: MessageSquare, changePercent: 0, positiveIsGood: false, status: "ready" },
-          { id: "resolved", title: "Resolved Tickets", value: String(kpis.resolved), description: "Closed successfully", color: "green", icon: CheckCircle2, changePercent: 0, positiveIsGood: true, status: "ready" },
-          { id: "complaints", title: "Complaints", value: String(kpis.complaints), description: "Customer complaints", color: "red", icon: AlertTriangle, changePercent: 0, positiveIsGood: false, status: "ready" },
-          { id: "urgent", title: "Urgent Messages", value: String(kpis.urgent), description: "Requires attention", color: "red", icon: AlertTriangle, changePercent: 0, positiveIsGood: false, status: "ready" },
-        ]}
-      />
+      {/* KPI cards removed per request */}
 
       {/* ADVANCED FILTER TABS (BLUE/WHITE HIGHLIGHT SYSTEM) */}
       <div className="rounded-2xl border border-blue-100 bg-blue-50/60 p-2 shadow-sm">
@@ -604,6 +584,7 @@ export default function SupportInboxPage() {
           <table className="w-full border-collapse text-left text-xs">
             <thead>
               <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-500 uppercase tracking-wider font-semibold">
+                <th className="px-4 py-3">No</th>
                 <th className="px-4 py-3">Ticket</th>
                 <th className="px-4 py-3">Customer</th>
                 <th className="px-4 py-3">Subject</th>
@@ -614,7 +595,7 @@ export default function SupportInboxPage() {
               </tr>
             </thead>
             <tbody>
-              {tickets.map((t) => (
+              {tickets.map((t, index) => (
                 <tr
                   key={t.id}
                   onClick={() => handleOpenTicket(t.id)}
@@ -622,6 +603,7 @@ export default function SupportInboxPage() {
                     t.unreadByAdmin ? "font-bold text-slate-900 dark:text-white bg-blue-50/20" : "text-slate-600 dark:text-slate-300"
                   }`}
                 >
+                  <td className="px-4 py-3.5 text-xs font-semibold text-slate-500">{index + 1}</td>
                   <td className="px-4 py-3.5 font-mono text-[10px] text-slate-400">{t.ticketNumber}</td>
                   <td className="px-4 py-3.5">
                     <div>
@@ -661,37 +643,25 @@ export default function SupportInboxPage() {
 
       {/* REPLY MODAL POPUP */}
       {selectedTicketId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="flex flex-col w-full max-w-4xl h-[90vh] bg-white dark:bg-slate-900 rounded-2xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800 animate-in fade-in zoom-in-95 duration-200">
-            
-            {/* Modal Header */}
-            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 px-6 py-4">
-              <div className="flex flex-wrap items-center gap-2.5">
-                <span className="font-mono text-xs text-slate-400">{selectedTicket?.ticketNumber}</span>
-                <span className="h-4 w-px bg-slate-300 dark:bg-slate-800" />
-                <h2 className="text-sm font-bold text-slate-800 dark:text-slate-100 max-w-[300px] truncate">
-                  {selectedTicket?.subject}
-                </h2>
-                <span className={`rounded-full px-2.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${
-                  selectedTicket?.status === "new" ? "bg-sky-100 text-sky-700" :
-                  selectedTicket?.status === "open" ? "bg-emerald-100 text-emerald-700" :
-                  selectedTicket?.status === "pending_reply" ? "bg-amber-100 text-amber-700" :
-                  "bg-slate-100 text-slate-600"
-                }`}>
-                  {selectedTicket?.status.replace("_", " ")}
-                </span>
-              </div>
-              <button
-                onClick={() => {
-                  setSelectedTicketId(null);
-                  setSelectedTicket(null);
-                  setErrorBanner(null);
-                }}
-                className="rounded-full p-1.5 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-700"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
+        <DashboardModalFrame
+          onClose={() => {
+            setSelectedTicketId(null);
+            setSelectedTicket(null);
+            setErrorBanner(null);
+          }}
+          maxWidth="max-w-4xl"
+        >
+          <DashboardModalHeader
+            title={selectedTicket?.subject || "Support ticket"}
+            description={`${selectedTicket?.ticketNumber || ""}${selectedTicket?.status ? ` / ${selectedTicket.status.replace("_", " ")}` : ""}`}
+            icon={MessageSquare}
+            onClose={() => {
+              setSelectedTicketId(null);
+              setSelectedTicket(null);
+              setErrorBanner(null);
+            }}
+          />
+          <DashboardModalBody className="p-0">
 
             {ticketLoading ? (
               <div className="flex flex-1 items-center justify-center">
@@ -960,8 +930,8 @@ export default function SupportInboxPage() {
               </div>
             )}
 
-          </div>
-        </div>
+          </DashboardModalBody>
+        </DashboardModalFrame>
       )}
 
       </div>

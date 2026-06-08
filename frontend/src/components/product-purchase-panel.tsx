@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { BookOpen, ChevronDown, Clock, Mail, Pencil, Play, Ruler, ShoppingBag, Users, X } from "lucide-react";
+import { BookOpen, ChevronDown, Clock, Mail, Pencil, Play, Ruler, ShoppingBag, Users, X, PlusCircle } from "lucide-react";
 import { useMemo, useState } from "react";
 import { ShareLinks } from "@/components/share-links";
 import { MeasurementVideoModal } from "@/components/measurement-help";
+import { useToast } from "@/components/ui/use-toast";
 
 type Role = {
   label: string;
@@ -87,24 +88,29 @@ function MeasurementInput({
   defaultValue?: number | null;
 }) {
   return (
-    <label>
-      <span className="mb-1 block text-sm font-semibold text-muted-foreground">
-        {label} {required ? <span className="text-primary">*</span> : <span className="font-normal italic">(optional)</span>}
+    <label className="block">
+      <span className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-zinc-500">
+        {label}{" "}
+        {required ? (
+          <span className="text-[#f5a623]">*</span>
+        ) : (
+          <span className="text-[10px] font-normal lowercase italic text-zinc-600">(optional)</span>
+        )}
       </span>
-      <span className="relative block">
+      <div className="relative block">
         <input
           {...(name ? { name } : {})}
           type="number"
           min="0.1"
           step="0.1"
           required={required}
-          defaultValue={inchesToCm(defaultValue) ?? ""}
+          defaultValue={defaultValue ?? ""}
           placeholder="0.0"
-          className="h-12 w-full rounded-lg border border-input bg-black px-4 pr-12 text-lg text-blue-200 outline-none transition focus:border-primary"
+          className="h-12 w-full rounded-xl border border-white/10 bg-black px-4 pr-12 text-lg font-medium text-blue-200 outline-none transition-all focus:border-[#f5a623] focus:ring-1 focus:ring-[#f5a623]/40"
         />
-        <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-primary">cm</span>
-      </span>
-      <span className="mt-1 block min-h-10 text-xs leading-snug text-muted-foreground">{hint}</span>
+        <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-[#f5a623]">cm</span>
+      </div>
+      <p className="mt-1.5 text-[11px] leading-snug text-zinc-500">{hint}</p>
     </label>
   );
 }
@@ -113,27 +119,33 @@ function ExtraMeasurementInput({
   label,
   hint,
   required = true,
+  name,
+  defaultValue,
 }: {
   label: string;
   hint: string;
   required?: boolean;
+  name?: string;
+  defaultValue?: number | null;
 }) {
   return (
-    <label>
-      <span className="mb-1 block text-sm font-semibold text-muted-foreground">
-        {label} {required ? <span className="text-primary">*</span> : null}
+    <label className="block">
+      <span className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-zinc-500">
+        {label} {required ? <span className="text-[#f5a623]">*</span> : null}
       </span>
-      <span className="relative block">
+      <div className="relative block">
         <input
+          {...(name ? { name } : {})}
           type="number"
           min="0.1"
           step="0.1"
+          defaultValue={defaultValue ?? ""}
           placeholder="0.0"
-          className="h-12 w-full rounded-lg border border-input bg-black px-4 pr-12 text-lg text-blue-200 outline-none transition focus:border-primary"
+          className="h-12 w-full rounded-xl border border-white/10 bg-black px-4 pr-12 text-lg font-medium text-blue-200 outline-none transition-all focus:border-[#f5a623] focus:ring-1 focus:ring-[#f5a623]/40"
         />
-        <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-primary">cm</span>
-      </span>
-      <span className="mt-1 block min-h-10 text-xs leading-snug text-muted-foreground">{hint}</span>
+        <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-[#f5a623]">cm</span>
+      </div>
+      <p className="mt-1.5 text-[11px] leading-snug text-zinc-500">{hint}</p>
     </label>
   );
 }
@@ -153,12 +165,12 @@ function ChoiceCard({
     <button
       type="button"
       onClick={onClick}
-      className={`min-h-28 rounded-xl border-2 p-4 text-left transition-colors ${
-        selected ? "border-primary bg-primary/10" : "border-border bg-background/40 hover:border-primary/50"
+      className={`min-h-[110px] rounded-2xl border-2 p-5 text-left transition-all ${
+        selected ? "border-[#f5a623] bg-[#f5a623]/10 shadow-[0_0_20px_rgba(245,166,35,0.15)]" : "border-white/5 bg-[#141414] hover:border-white/20"
       }`}
     >
-      <span className={`block text-sm font-bold ${selected ? "text-primary" : "text-foreground"}`}>{title}</span>
-      <span className="mt-2 block text-xs leading-relaxed text-muted-foreground">{description}</span>
+      <span className={`block text-base font-bold ${selected ? "text-[#f5a623]" : "text-white"}`}>{title}</span>
+      <span className="mt-2 block text-xs leading-relaxed text-zinc-400">{description}</span>
     </button>
   );
 }
@@ -180,6 +192,7 @@ export function ProductPurchasePanel({
   createEventAction,
   createGroupAction,
 }: ProductPurchasePanelProps) {
+  const { toast } = useToast();
   const [selectedRoleIndex, setSelectedRoleIndex] = useState(0);
   const [eventOpen, setEventOpen] = useState(false);
   const [showVideo, setShowVideo] = useState(false);
@@ -188,21 +201,47 @@ export function ProductPurchasePanel({
   const [hemStyle, setHemStyle] = useState("Straight");
   const [pressingStyle, setPressingStyle] = useState("Creased");
   const [tailorNote, setTailorNote] = useState("");
-  const [tailorNoteSkipped, setTailorNoteSkipped] = useState(false);
+  const [isPantsOpen, setIsPantsOpen] = useState(false);
+
   const selectedRole = roles[selectedRoleIndex] ?? null;
   const displayPrice = Number(selectedRole?.price ?? price);
   const measurementGender = selectedRole?.gender ?? product.gender ?? "female";
   const etb = etbRate ? Math.round(displayPrice * etbRate).toLocaleString() : null;
   const signinHref = `/signin?callbackUrl=${encodeURIComponent(`/product/${product.id}`)}`;
   const hasMeasurement = Boolean(savedMeasurement?.id);
-  const measurementSummary = [
-    ["Chest", savedMeasurement?.chest],
-    ["Waist", savedMeasurement?.waist],
-    ["Hips", savedMeasurement?.hips],
-    ["Shoulder", savedMeasurement?.shoulderWidth],
-    ["Arm", savedMeasurement?.armLength],
-    ["Torso", savedMeasurement?.torsoLength],
-  ] as const;
+
+  const measurementSummary = useMemo(() => {
+    const m = savedMeasurement;
+    const chest = m?.chest;
+    const waist = m?.waist;
+    const hips = m?.hips || (m as any)?.pantsHip;
+    const shoulder = m?.shoulderWidth;
+    const arm = m?.armLength;
+    const torso = m?.torsoLength;
+    const neck = (m as any)?.neck;
+    const bicep = (m as any)?.bicepCircumference;
+    const wrist = (m as any)?.wristCircumference;
+    const pantsWaist = (m as any)?.pantsWaist;
+    const thigh = (m as any)?.thighCircumference;
+    const outseam = (m as any)?.waistToPantsLength;
+
+    return [
+      ["Neck", (m as any)?.neck],
+      ["Shoulder", (m as any)?.shoulderWidth || (m as any)?.shoulder_width],
+      ["Chest", (m as any)?.chest],
+      ["Waist", (m as any)?.waist],
+      ["Hips", (m as any)?.hips || (m as any)?.pantsHip || (m as any)?.pants_hip],
+      ["Arm", (m as any)?.armLength || (m as any)?.arm_length],
+      ["Torso", (m as any)?.torsoLength || (m as any)?.torso_length],
+      ["Bicep", (m as any)?.bicepCircumference || (m as any)?.bicep],
+      ["Wrist", (m as any)?.wristCircumference || (m as any)?.wrist],
+      ["Pants Waist", (m as any)?.pantsWaist || (m as any)?.pants_waist],
+      ["Thigh", (m as any)?.thighCircumference || (m as any)?.thigh],
+      ["Outseam", (m as any)?.waistToPantsLength || (m as any)?.outseam],
+      ["Hem Style", (m as any)?.hemStyle || (m as any)?.hem_style],
+      ["Pressing", (m as any)?.pressingStyle || (m as any)?.pressing_style],
+    ].filter(([_, v]) => v !== undefined && v !== null && v !== "");
+  }, [savedMeasurement]);
 
   const detailItems = useMemo(
     () =>
@@ -221,7 +260,7 @@ export function ProductPurchasePanel({
       <div className="flex flex-wrap items-center gap-2">
         {product.region ? <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">{product.region}</span> : null}
         {product.subcategory ? <span className="rounded-full bg-secondary px-3 py-1 text-xs text-secondary-foreground">{product.subcategory}</span> : null}
-        {product.uniqueId ? <span className="rounded-full bg-secondary px-3 py-1 font-mono text-xs text-muted-foreground">#{product.uniqueId}</span> : null}
+        {product.uniqueId ? <span className="rounded-full bg-secondary px-3 py-1 font-mono text-xs text-muted-foreground"># {product.uniqueId}</span> : null}
       </div>
 
       <div>
@@ -281,26 +320,26 @@ export function ProductPurchasePanel({
         </div>
       </div>
 
-      {authRequired ? (
-        <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">
-          Sign in is required to save measurements and add this product to your cart.
+      {authRequired && !isAuthenticated ? (
+        <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive font-bold">
+          Account required to save measurements and continue with your order.
         </div>
       ) : null}
 
-      {/* Measurement editor / summary: render in the same place so summary replaces the form when collapsed */}
+      {/* Unified Measurement Block */}
       {(hasMeasurement || isMeasurementEditorOpen) ? (
-        <section className="rounded-xl border border-border bg-card p-6">
-          <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+        <section className="rounded-3xl border border-white/5 bg-card p-6 md:p-8 space-y-8 shadow-2xl">
+          <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <Ruler className="h-5 w-5 text-primary" />
-              <h2 className="font-heading text-xl font-bold">Your Measurements</h2>
+              <Ruler className="h-6 w-6 text-[#f5a623]" />
+              <h2 className="font-heading text-xl font-bold text-white tracking-tight">Your Measurements</h2>
             </div>
             <div className="flex items-center gap-4">
-              <a href="#measurement-form" className="inline-flex items-center gap-1.5 text-sm font-semibold text-primary hover:underline">
+              <button type="button" className="inline-flex items-center gap-2 text-sm font-bold text-[#f5a623] transition-colors hover:text-[#ffb84d]">
                 <BookOpen className="h-4 w-4" />
                 How to Measure
-              </a>
-              <button type="button" onClick={() => setShowVideo(true)} className="inline-flex items-center gap-1.5 text-sm font-semibold text-muted-foreground hover:text-primary hover:underline">
+              </button>
+              <button type="button" onClick={() => setShowVideo(true)} className="inline-flex items-center gap-2 text-sm font-bold text-zinc-400 transition-colors hover:text-[#f5a623]">
                 <Play className="h-4 w-4" />
                 Watch Tutorial
               </button>
@@ -308,62 +347,80 @@ export function ProductPurchasePanel({
           </div>
 
           {hasMeasurement && !isMeasurementEditorOpen ? (
-            <div className="rounded-2xl border border-white/10 bg-[#1a1a1a] p-5 shadow-[0_10px_30px_rgba(0,0,0,0.35)]">
-              <div className="flex items-start justify-between gap-4">
+            <div className="rounded-2xl border border-white/10 bg-[#1a1a1a] p-6 shadow-xl">
+              <div className="mb-6 flex items-center justify-between">
                 <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-zinc-400">Your Measurements</p>
+                  <p className="text-[10px] font-black uppercase tracking-[0.25em] text-[#f5a623]">Saved Profile</p>
+                  <p className="mt-1 text-lg font-bold text-white tracking-tight">{savedMeasurement?.label ?? "My Measurements"}</p>
                 </div>
                 <button
                   type="button"
                   onClick={() => setIsMeasurementEditorOpen(true)}
-                  className="inline-flex items-center rounded-md px-0 py-0 text-sm font-semibold text-[#f5a623] hover:text-[#ffb84d]"
+                  className="inline-flex items-center gap-2 rounded-xl border border-[#f5a623]/30 bg-[#f5a623]/10 px-4 py-2 text-sm font-bold text-[#f5a623] transition-all hover:bg-[#f5a623]/20 active:scale-95"
                 >
+                  <Pencil className="h-4 w-4" />
                   Edit
                 </button>
               </div>
-              <div className="mt-4 grid grid-cols-2 gap-x-8 gap-y-4 text-sm sm:grid-cols-3">
+              <div className="grid grid-cols-2 gap-x-8 gap-y-5 text-sm sm:grid-cols-3">
                 {measurementSummary.map(([label, value]) => (
-                  <div key={label}>
-                    <p className="text-[13px] text-zinc-400">{label}</p>
-                    <p className="mt-1 text-[14px] font-semibold text-white">{value ? `${Number(value).toFixed(1)} cm` : "-"}</p>
+                  <div key={label} className="space-y-1">
+                    <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">{label}</p>
+                    <p className="text-[17px] font-bold text-white">{value ? `${Number(value).toFixed(1)} cm` : "-"}</p>
                   </div>
                 ))}
               </div>
             </div>
           ) : (
-            <>
-              <div className="mb-6 rounded-lg border border-primary/30 bg-primary/10 p-4">
-                <p className="font-bold text-primary">Please measure in centimeters (cm) only.</p>
-                <p className="mt-1 text-sm text-muted-foreground">Do not use inches - all values must be entered in CM to ensure a perfect fit.</p>
+            <div className="space-y-8 animate-in fade-in duration-500">
+              <div className="rounded-2xl border border-[#f5a623]/20 bg-[#f5a623]/5 p-5 flex items-start gap-4">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#f5a623]/20">
+                   <span className="text-lg">📏</span>
+                </div>
+                <div>
+                   <p className="font-bold text-[#f5a623]">Please measure in centimeters (cm) only.</p>
+                   <p className="mt-1 text-sm leading-relaxed text-zinc-400">Precision is key for a perfect fit. Do not use inches — enter all values in CM.</p>
+                </div>
               </div>
 
               <form
                 id="measurement-form"
                 action={async (formData) => {
-                  const result = await createMeasurementAction(formData);
-                  if (result && typeof result === "object" && "id" in result) {
-                    setSavedMeasurement(result as SavedMeasurement);
-                    setIsMeasurementEditorOpen(false);
+                  if (!isAuthenticated) {
+                    toast({ title: "Auth Required", description: "Please sign in to save measurements.", variant: "destructive" });
+                    return;
+                  }
+                  try {
+                    formData.set("hemStyle", hemStyle);
+                    formData.set("pressingStyle", pressingStyle);
+                    const result = await createMeasurementAction(formData);
+                    if (result && typeof result === "object" && "id" in result) {
+                      setSavedMeasurement(result as SavedMeasurement);
+                      setIsMeasurementEditorOpen(false);
+                      toast({ title: "Success", description: "Measurements saved for your order." });
+                    }
+                  } catch (error) {
+                    toast({ title: "Error", description: "Failed to save measurements. Please check all required fields.", variant: "destructive" });
                   }
                 }}
-                className="mt-6 space-y-6"
+                className="space-y-10"
               >
                 <input type="hidden" name="productId" value={product.id} />
                 <input type="hidden" name="measurementId" value={savedMeasurement?.id ?? ""} />
                 <input type="hidden" name="label" value={`${product.name} measurements`} />
 
-                <div>
-                  <label className="mb-2 block text-sm font-semibold text-muted-foreground">
-                    Select Gender <span className="text-primary">*</span>
+                <div className="space-y-4">
+                  <label className="text-xs font-black uppercase tracking-[0.2em] text-zinc-500 block text-left">
+                    Select Gender <span className="text-[#f5a623]">*</span>
                   </label>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-2 gap-4">
                     {[
                       ["female", "👗 Women"],
                       ["male", "👔 Men"],
                     ].map(([value, label]) => (
-                      <label key={value} className="cursor-pointer">
-                        <input className="peer sr-only" type="radio" name="gender" value={value} defaultChecked={(measurementGender === "male" ? "male" : "female") === value} />
-                        <span className="flex h-16 items-center justify-center rounded-xl border-2 border-border text-xl font-bold text-muted-foreground transition peer-checked:border-primary peer-checked:bg-primary/10 peer-checked:text-primary">
+                      <label key={value} className="cursor-pointer group">
+                        <input className="peer sr-only" type="radio" name="gender" value={value} defaultChecked={measurementGender === value} />
+                        <span className="flex h-20 items-center justify-center rounded-2xl border-2 border-white/5 bg-[#141414] text-xl font-bold text-zinc-500 transition-all group-hover:border-white/10 peer-checked:border-[#f5a623] peer-checked:bg-[#f5a623]/10 peer-checked:text-[#f5a623] peer-checked:shadow-[0_0_20px_rgba(245,166,35,0.1)]">
                           {label}
                         </span>
                       </label>
@@ -371,472 +428,196 @@ export function ProductPurchasePanel({
                   </div>
                 </div>
 
-                <div className="rounded-xl border border-border bg-background/40 p-5">
-                  <h3 className="text-xl font-bold text-primary">👗 Dress Measurements</h3>
-                  <p className="mt-1 text-sm text-muted-foreground">Measurements used to tailor your dress or top garment</p>
-                  <div className="my-5 h-px bg-primary/40" />
-                  <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2">
-                    <MeasurementInput name="shoulderWidth" label="Shoulder" hint="Seam to seam across the top of the shoulder" defaultValue={savedMeasurement?.shoulderWidth} />
-                    <MeasurementInput name="chest" label="Chest / Bust" hint="Around the fullest part of the bust" defaultValue={savedMeasurement?.chest} />
-                    <MeasurementInput name="waist" label="Waist" hint="Around the natural waistline" defaultValue={savedMeasurement?.waist} />
-                    <MeasurementInput name="torsoLength" label="Shoulder to Waist" hint="From shoulder down to natural waist" defaultValue={savedMeasurement?.torsoLength} />
-                    <MeasurementInput name="hips" label="Hip" hint="Around the fullest part of the hips, usually 7-9 inches below the waist" defaultValue={savedMeasurement?.hips} />
-                    <MeasurementInput name="armLength" label="Arm Length" hint="From shoulder seam to wrist with arm slightly bent" defaultValue={savedMeasurement?.armLength} />
-                    <MeasurementInput label="Thigh Circumference" hint="Around the fullest part of the upper thigh" required={false} />
-                    <MeasurementInput label="Wrist Circumference" hint="Around the wrist bone" required={false} />
+                <div className="rounded-3xl border border-white/5 bg-[#141414] p-6 md:p-8 space-y-6">
+                  <div className="flex items-center gap-4">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#f5a623]/10 text-2xl shadow-inner">👔</div>
+                    <div className="text-left">
+                      <h3 className="text-lg font-bold text-white tracking-tight">Top Body Measurements</h3>
+                      <p className="text-[13px] text-zinc-500">Essential for shirts, coats, and blazers</p>
+                    </div>
                   </div>
-                  <p className="mt-4 text-sm font-semibold text-muted-foreground">
-                    Length Preference <span className="font-normal italic">(choose one or both - optional)</span>
-                  </p>
-                  <div className="mt-3 grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2">
-                    <MeasurementInput label="Waist to Skirt Length" hint="From waist down to where you want the skirt hemline to end" required={false} />
-                    <MeasurementInput label="Waist to Dress Length" hint="From waist down to where you want the full dress to end" required={false} />
+                  <div className="h-px bg-gradient-to-r from-transparent via-white/5 to-transparent" />
+                  <div className="grid grid-cols-1 gap-x-6 gap-y-6 sm:grid-cols-2">
+                    <MeasurementInput name="neck" label="Neck" hint="Around the base of the neck" defaultValue={(savedMeasurement as any)?.neck} />
+                    <MeasurementInput name="shoulderWidth" label="Shoulder" hint="Seam to seam across the top" defaultValue={savedMeasurement?.shoulderWidth} />
+                    <MeasurementInput name="chest" label="Chest / Bust" hint="Around the fullest part" defaultValue={savedMeasurement?.chest} />
+                    <MeasurementInput name="waist" label="Waist" hint="Around the narrowest part" defaultValue={savedMeasurement?.waist} />
+                    <MeasurementInput name="torsoLength" label="Garment Length" hint="From neck to desired hem" defaultValue={savedMeasurement?.torsoLength} />
+                    <MeasurementInput name="armLength" label="Arm Length" hint="From shoulder seam to wrist" defaultValue={savedMeasurement?.armLength} />
+                    <MeasurementInput name="bicepCircumference" label="Bicep" hint="Fullest part of upper arm" required={false} defaultValue={(savedMeasurement as any)?.bicepCircumference} />
+                    <MeasurementInput name="wristCircumference" label="Wrist" hint="Around the wrist bone" required={false} defaultValue={(savedMeasurement as any)?.wristCircumference} />
                   </div>
-                  <p className="mt-3 text-sm italic text-muted-foreground">
-                    💡 Waist to Skirt Length - for garments ending at the skirt/hem. Waist to Dress Length - for the full dress from waist to hem.
-                  </p>
                 </div>
 
-                <details className="rounded-xl border border-border bg-background/40 p-5">
-                  <summary className="flex cursor-pointer list-none items-center justify-between text-xl font-bold">
-                    <span className="text-lg">👖 Add Women&apos;s Pants Measurements</span>
-                    <ChevronDown className="h-5 w-5" />
-                  </summary>
-                  <div className="mt-4 rounded-xl border border-border bg-background/40 p-5">
-                    <h3 className="text-xl font-bold text-primary">👖 Women&apos;s Pants Measurements</h3>
-                    <p className="mt-1 text-sm text-muted-foreground">Required if you are also ordering pants / trousers</p>
-                    <div className="my-5 h-px bg-primary/40" />
-                    <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2">
-                      <ExtraMeasurementInput label="Waist" hint="Around the narrowest part of your natural waist" />
-                      <ExtraMeasurementInput label="Hip" hint="Around the fullest part of the hips, usually 7-9 inches below the waist" />
-                      <ExtraMeasurementInput label="Thigh Circumference" hint="Around the fullest part of the upper thigh" />
-                      <ExtraMeasurementInput label="Waist to Length" hint="From waist down to where you want the pants to end" />
-                    </div>
-
-                    <input type="hidden" name="hemStyle" value={hemStyle} />
-                    <input type="hidden" name="pressingStyle" value={pressingStyle} />
-
-                    <p className="mt-6 text-sm font-semibold text-muted-foreground">
-                      Hem Style <span className="text-primary">*</span>
-                    </p>
-                    <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                      <ChoiceCard
-                        title="Straight"
-                        description="Clean, simple finish - the fabric lies flat at the bottom without any fold. A classic, neat look."
-                        selected={hemStyle === "Straight"}
-                        onClick={() => setHemStyle("Straight")}
-                      />
-                      <ChoiceCard
-                        title="Folded Hem"
-                        description="The bottom edge is folded inward and stitched - creates a structured, slightly heavier finish that holds its shape."
-                        selected={hemStyle === "Folded Hem"}
-                        onClick={() => setHemStyle("Folded Hem")}
-                      />
-                    </div>
-
-                    <p className="mt-6 text-sm font-semibold text-muted-foreground">
-                      Pressing (Iron) Style <span className="text-primary">*</span>
-                    </p>
-                    <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                      <ChoiceCard
-                        title="Creased"
-                        description="A sharp, pressed crease runs down the front and back of each leg - gives a formal, tailored appearance."
-                        selected={pressingStyle === "Creased"}
-                        onClick={() => setPressingStyle("Creased")}
-                      />
-                      <ChoiceCard
-                        title="Plain (No Crease)"
-                        description="The fabric is ironed smooth without any crease line - a relaxed, casual, and modern finish."
-                        selected={pressingStyle === "Plain (No Crease)"}
-                        onClick={() => setPressingStyle("Plain (No Crease)")}
-                      />
-                    </div>
-                  </div>
-                </details>
-
-                <div className="overflow-hidden rounded-xl border border-primary/30 bg-primary/5">
-                  <div className="flex gap-4 border-b border-primary/30 p-5">
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/20">
-                      <Mail className="h-4 w-4 text-primary" />
-                    </span>
-                    <div>
-                      <h3 className="text-base font-bold sm:text-lg">A Message to Our Tailors</h3>
-                      <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-                        Is there anything specific you&apos;d like our tailors to know? Share fit preferences, design details, or special instructions.
-                      </p>
-                    </div>
-                  </div>
-                  {tailorNoteSkipped ? (
-                    <div className="space-y-5 p-5">
-                      <p className="text-sm italic text-muted-foreground">No note added.</p>
-                      <button
-                        type="button"
-                        onClick={() => setTailorNoteSkipped(false)}
-                        className="inline-flex items-center gap-2 text-sm font-semibold text-primary hover:underline"
-                      >
-                        <Pencil className="h-4 w-4" />
-                        Add a note to our tailors
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="space-y-4 p-5">
-                      <div className="rounded-lg border border-border bg-black p-4 text-blue-200">
-                        <p className="text-sm">Examples:</p>
-                        <ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-relaxed">
-                          <li>&quot;I prefer a slightly relaxed fit in the shoulders&quot;</li>
-                          <li>&quot;Please add a chest pocket on the left side&quot;</li>
-                          <li>&quot;The collar should be slightly wider than standard&quot;</li>
-                        </ul>
+                <div className="rounded-3xl border border-white/5 bg-[#141414] overflow-hidden">
+                  <button 
+                    type="button"
+                    onClick={(e) => { e.preventDefault(); setIsPantsOpen(!isPantsOpen); }}
+                    className="flex w-full items-center justify-between p-6 md:p-8 transition-colors hover:bg-white/[0.02]"
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-zinc-800/50 text-2xl">👖</div>
+                      <div className="text-left">
+                        <h3 className="text-lg font-bold text-white tracking-tight">Pants Measurements</h3>
+                        <p className="text-[13px] text-zinc-500">Required for trousers or full suit sets</p>
                       </div>
-                      <textarea
-                        name="tailorNote"
-                        maxLength={300}
-                        rows={4}
-                        value={tailorNote}
-                        onChange={(event) => setTailorNote(event.target.value)}
-                        placeholder="Type your note here..."
-                        className="w-full resize-none rounded-lg border border-input bg-black p-4 text-sm outline-none transition focus:border-primary"
-                      />
-                      <div className="flex items-center justify-between gap-3">
-                        <p className="text-xs text-muted-foreground">{tailorNote.length} / 300 characters</p>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setTailorNote("");
-                            setTailorNoteSkipped(true);
-                          }}
-                          className="rounded-lg bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
-                        >
-                          Skip
-                        </button>
+                    </div>
+                    <div className="rounded-full bg-white/5 p-2 transition-transform duration-200">
+                      <ChevronDown className={`h-5 w-5 text-zinc-400 ${isPantsOpen ? "rotate-180" : ""}`} />
+                    </div>
+                  </button>
+                  {isPantsOpen && (
+                    <div className="px-6 pb-8 md:px-8 md:pb-10 space-y-8 animate-in slide-in-from-top-4 duration-300">
+                      <div className="h-px bg-white/5 mb-2" />
+                      <div className="grid grid-cols-1 gap-x-6 gap-y-6 sm:grid-cols-2">
+                         <ExtraMeasurementInput name="pantsWaist" label="Pants Waist" hint="Around natural waistline" defaultValue={(savedMeasurement as any)?.pantsWaist} />
+                         <ExtraMeasurementInput name="pantsHip" label="Pants Hip" hint="Around fullest part of hips" defaultValue={(savedMeasurement as any)?.pantsHip} />
+                         <ExtraMeasurementInput name="thighCircumference" label="Thigh" hint="Around fullest part of upper thigh" defaultValue={(savedMeasurement as any)?.thighCircumference} />
+                         <ExtraMeasurementInput name="waistToPantsLength" label="Outseam" hint="From waist to desired pants hem" defaultValue={(savedMeasurement as any)?.waistToPantsLength} />
+                      </div>
+
+                      <div className="grid grid-cols-1 gap-10 md:grid-cols-2 pt-4">
+                         <div className="space-y-4">
+                           <label className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 block text-left">Hem Style <span className="text-[#f5a623]">*</span></label>
+                           <div className="grid grid-cols-1 gap-3">
+                             <ChoiceCard title="Straight" description="Clean finish without any fold." selected={hemStyle === "Straight"} onClick={() => setHemStyle("Straight")} />
+                             <ChoiceCard title="Folded Hem" description="Bottom edge is folded inward." selected={hemStyle === "Folded Hem"} onClick={() => setHemStyle("Folded Hem")} />
+                           </div>
+                         </div>
+                         <div className="space-y-4">
+                           <label className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 block text-left">Iron / Pressing <span className="text-[#f5a623]">*</span></label>
+                           <div className="grid grid-cols-1 gap-3">
+                             <ChoiceCard title="Creased" description="Sharp formal crease." selected={pressingStyle === "Creased"} onClick={() => setPressingStyle("Creased")} />
+                             <ChoiceCard title="Plain" description="Smooth finish without crease." selected={pressingStyle === "Plain (No Crease)"} onClick={() => setPressingStyle("Plain (No Crease)")} />
+                           </div>
+                         </div>
                       </div>
                     </div>
                   )}
                 </div>
 
-                {isAuthenticated ? (
-                  <button type="submit" className="h-14 w-full rounded-lg bg-primary px-5 text-base font-bold text-primary-foreground transition-colors hover:bg-primary/90">
+                <div className="overflow-hidden rounded-3xl border border-white/5 bg-[#141414]">
+                  <div className="flex gap-5 border-b border-white/5 p-6 md:p-8 bg-gradient-to-br from-[#f5a623]/10 to-transparent">
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#f5a623]/20 shadow-inner">
+                      <Mail className="h-5 w-5 text-[#f5a623]" />
+                    </div>
+                    <div className="text-left">
+                      <h3 className="text-lg font-bold text-white tracking-tight">Special Instructions</h3>
+                      <p className="mt-1 text-sm leading-relaxed text-zinc-500">Share fit preferences with our tailors.</p>
+                    </div>
+                  </div>
+                  <div className="p-6 md:p-8">
+                    <textarea
+                      name="tailorNote"
+                      maxLength={300}
+                      rows={3}
+                      value={tailorNote}
+                      onChange={(e) => setTailorNote(e.target.value)}
+                      placeholder="e.g., Slimmer sleeves, extra long length..."
+                      className="w-full resize-none rounded-2xl border border-white/10 bg-black p-5 text-sm text-white outline-none focus:border-[#f5a623] placeholder:text-zinc-700"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-4 sm:flex-row pt-4">
+                  <button 
+                    type="submit" 
+                    className="h-16 flex-1 rounded-2xl bg-[#f5a623] px-10 text-lg font-black text-black transition-all hover:bg-[#ffb84d] active:scale-95 disabled:opacity-50"
+                  >
                     {hasMeasurement ? "Update Measurements" : "Save Measurements"}
                   </button>
-                ) : (
-                  <button type="button" disabled className="h-14 w-full cursor-not-allowed rounded-lg bg-primary px-5 text-base font-bold text-primary-foreground opacity-45">
-                    Sign in to save measurements
-                  </button>
-                )}
+                  {hasMeasurement && (
+                    <button
+                      type="button"
+                      onClick={() => setIsMeasurementEditorOpen(false)}
+                      className="h-16 rounded-2xl border border-white/10 bg-transparent px-8 text-base font-bold text-white hover:bg-white/5"
+                    >
+                      Cancel
+                    </button>
+                  )}
+                </div>
               </form>
-              {hasMeasurement ? (
-                <button
-                  type="button"
-                  onClick={() => setIsMeasurementEditorOpen(false)}
-                  className="mt-4 inline-flex items-center justify-center rounded-md border border-border px-4 py-2 text-sm font-semibold text-muted-foreground hover:bg-secondary"
-                >
-                  Close
-                </button>
-              ) : null}
-            </>
+            </div>
           )}
         </section>
       ) : null}
 
-      {isMeasurementEditorOpen ? (
-        <section className="rounded-xl border border-border bg-card p-6">
-          <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <Ruler className="h-5 w-5 text-primary" />
-              <h2 className="font-heading text-xl font-bold">Your Measurements</h2>
-            </div>
-            <div className="flex items-center gap-4">
-              <a href="#measurement-form" className="inline-flex items-center gap-1.5 text-sm font-semibold text-primary hover:underline">
-                <BookOpen className="h-4 w-4" />
-                How to Measure
-              </a>
-              <button type="button" onClick={() => setShowVideo(true)} className="inline-flex items-center gap-1.5 text-sm font-semibold text-muted-foreground hover:text-primary hover:underline">
-                <Play className="h-4 w-4" />
-                Watch Tutorial
-              </button>
-            </div>
-          </div>
-
-        <div className="mb-6 rounded-lg border border-primary/30 bg-primary/10 p-4">
-          <p className="font-bold text-primary">Please measure in centimeters (cm) only.</p>
-          <p className="mt-1 text-sm text-muted-foreground">Do not use inches - all values must be entered in CM to ensure a perfect fit.</p>
-        </div>
-
-        <form
-          id="measurement-form"
-          action={async (formData) => {
-            const result = await createMeasurementAction(formData);
-            if (result && typeof result === "object" && "id" in result) {
-              setSavedMeasurement(result as SavedMeasurement);
-              setIsMeasurementEditorOpen(false);
-            }
-          }}
-          className="mt-6 space-y-6"
-        >
-          <input type="hidden" name="productId" value={product.id} />
-          <input type="hidden" name="measurementId" value={savedMeasurement?.id ?? ""} />
-          <input type="hidden" name="label" value={`${product.name} measurements`} />
-
-          <div>
-            <label className="mb-2 block text-sm font-semibold text-muted-foreground">
-              Select Gender <span className="text-primary">*</span>
-            </label>
-            <div className="grid grid-cols-2 gap-3">
-              {[
-                ["female", "👗 Women"],
-                ["male", "👔 Men"],
-              ].map(([value, label]) => (
-                <label key={value} className="cursor-pointer">
-                  <input className="peer sr-only" type="radio" name="gender" value={value} defaultChecked={(measurementGender === "male" ? "male" : "female") === value} />
-                  <span className="flex h-16 items-center justify-center rounded-xl border-2 border-border text-xl font-bold text-muted-foreground transition peer-checked:border-primary peer-checked:bg-primary/10 peer-checked:text-primary">
-                    {label}
-                  </span>
-                </label>
-              ))}
-            </div>
-          </div>
-
-          <div className="rounded-xl border border-border bg-background/40 p-5">
-            <h3 className="text-xl font-bold text-primary">👗 Dress Measurements</h3>
-            <p className="mt-1 text-sm text-muted-foreground">Measurements used to tailor your dress or top garment</p>
-            <div className="my-5 h-px bg-primary/40" />
-            <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2">
-              <MeasurementInput name="shoulderWidth" label="Shoulder" hint="Seam to seam across the top of the shoulder" defaultValue={savedMeasurement?.shoulderWidth} />
-              <MeasurementInput name="chest" label="Chest / Bust" hint="Around the fullest part of the bust" defaultValue={savedMeasurement?.chest} />
-              <MeasurementInput name="waist" label="Waist" hint="Around the natural waistline" defaultValue={savedMeasurement?.waist} />
-              <MeasurementInput name="torsoLength" label="Shoulder to Waist" hint="From shoulder down to natural waist" defaultValue={savedMeasurement?.torsoLength} />
-              <MeasurementInput name="hips" label="Hip" hint="Around the fullest part of the hips, usually 7-9 inches below the waist" defaultValue={savedMeasurement?.hips} />
-              <MeasurementInput name="armLength" label="Arm Length" hint="From shoulder seam to wrist with arm slightly bent" defaultValue={savedMeasurement?.armLength} />
-              <MeasurementInput label="Thigh Circumference" hint="Around the fullest part of the upper thigh" required={false} />
-              <MeasurementInput label="Wrist Circumference" hint="Around the wrist bone" required={false} />
-            </div>
-            <p className="mt-4 text-sm font-semibold text-muted-foreground">
-              Length Preference <span className="font-normal italic">(choose one or both - optional)</span>
-            </p>
-            <div className="mt-3 grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2">
-              <MeasurementInput label="Waist to Skirt Length" hint="From waist down to where you want the skirt hemline to end" required={false} />
-              <MeasurementInput label="Waist to Dress Length" hint="From waist down to where you want the full dress to end" required={false} />
-            </div>
-            <p className="mt-3 text-sm italic text-muted-foreground">
-              💡 Waist to Skirt Length - for garments ending at the skirt/hem. Waist to Dress Length - for the full dress from waist to hem.
-            </p>
-          </div>
-
-          <details className="rounded-xl border border-border bg-background/40 p-5">
-            <summary className="flex cursor-pointer list-none items-center justify-between text-xl font-bold">
-              <span className="text-lg">👖 Add Women&apos;s Pants Measurements</span>
-              <ChevronDown className="h-5 w-5" />
-            </summary>
-            <div className="mt-4 rounded-xl border border-border bg-background/40 p-5">
-              <h3 className="text-xl font-bold text-primary">👖 Women&apos;s Pants Measurements</h3>
-              <p className="mt-1 text-sm text-muted-foreground">Required if you are also ordering pants / trousers</p>
-              <div className="my-5 h-px bg-primary/40" />
-              <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2">
-                <ExtraMeasurementInput label="Waist" hint="Around the narrowest part of your natural waist" />
-                <ExtraMeasurementInput label="Hip" hint="Around the fullest part of the hips, usually 7-9 inches below the waist" />
-                <ExtraMeasurementInput label="Thigh Circumference" hint="Around the fullest part of the upper thigh" />
-                <ExtraMeasurementInput label="Waist to Length" hint="From waist down to where you want the pants to end" />
-              </div>
-
-              <input type="hidden" name="hemStyle" value={hemStyle} />
-              <input type="hidden" name="pressingStyle" value={pressingStyle} />
-
-              <p className="mt-6 text-sm font-semibold text-muted-foreground">
-                Hem Style <span className="text-primary">*</span>
-              </p>
-              <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <ChoiceCard
-                  title="Straight"
-                  description="Clean, simple finish - the fabric lies flat at the bottom without any fold. A classic, neat look."
-                  selected={hemStyle === "Straight"}
-                  onClick={() => setHemStyle("Straight")}
-                />
-                <ChoiceCard
-                  title="Folded Hem"
-                  description="The bottom edge is folded inward and stitched - creates a structured, slightly heavier finish that holds its shape."
-                  selected={hemStyle === "Folded Hem"}
-                  onClick={() => setHemStyle("Folded Hem")}
-                />
-              </div>
-
-              <p className="mt-6 text-sm font-semibold text-muted-foreground">
-                Pressing (Iron) Style <span className="text-primary">*</span>
-              </p>
-              <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <ChoiceCard
-                  title="Creased"
-                  description="A sharp, pressed crease runs down the front and back of each leg - gives a formal, tailored appearance."
-                  selected={pressingStyle === "Creased"}
-                  onClick={() => setPressingStyle("Creased")}
-                />
-                <ChoiceCard
-                  title="Plain (No Crease)"
-                  description="The fabric is ironed smooth without any crease line - a relaxed, casual, and modern finish."
-                  selected={pressingStyle === "Plain (No Crease)"}
-                  onClick={() => setPressingStyle("Plain (No Crease)")}
-                />
-              </div>
-            </div>
-          </details>
-
-          <div className="overflow-hidden rounded-xl border border-primary/30 bg-primary/5">
-            <div className="flex gap-4 border-b border-primary/30 p-5">
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/20">
-                <Mail className="h-4 w-4 text-primary" />
-              </span>
-              <div>
-                <h3 className="text-base font-bold sm:text-lg">A Message to Our Tailors</h3>
-                <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-                  Is there anything specific you&apos;d like our tailors to know? Share fit preferences, design details, or special instructions.
-                </p>
-              </div>
-            </div>
-            {tailorNoteSkipped ? (
-              <div className="space-y-5 p-5">
-                <p className="text-sm italic text-muted-foreground">No note added.</p>
-                <button
-                  type="button"
-                  onClick={() => setTailorNoteSkipped(false)}
-                  className="inline-flex items-center gap-2 text-sm font-semibold text-primary hover:underline"
-                >
-                  <Pencil className="h-4 w-4" />
-                  Add a note to our tailors
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-4 p-5">
-                <div className="rounded-lg border border-border bg-black p-4 text-blue-200">
-                  <p className="text-sm">Examples:</p>
-                  <ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-relaxed">
-                    <li>&quot;I prefer a slightly relaxed fit in the shoulders&quot;</li>
-                    <li>&quot;Please add a chest pocket on the left side&quot;</li>
-                    <li>&quot;The collar should be slightly wider than standard&quot;</li>
-                  </ul>
-                </div>
-                <textarea
-                  name="tailorNote"
-                  maxLength={300}
-                  rows={4}
-                  value={tailorNote}
-                  onChange={(event) => setTailorNote(event.target.value)}
-                  placeholder="Type your note here..."
-                  className="w-full resize-none rounded-lg border border-input bg-black p-4 text-sm outline-none transition focus:border-primary"
-                />
-                <div className="flex items-center justify-between gap-3">
-                  <p className="text-xs text-muted-foreground">{tailorNote.length} / 300 characters</p>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setTailorNote("");
-                      setTailorNoteSkipped(true);
-                    }}
-                    className="rounded-lg bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
-                  >
-                    Skip
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {isAuthenticated ? (
-            <button type="submit" className="h-14 w-full rounded-lg bg-primary px-5 text-base font-bold text-primary-foreground transition-colors hover:bg-primary/90">
-              {hasMeasurement ? "Update Measurements" : "Save Measurements"}
-            </button>
-          ) : (
-            <button type="button" disabled className="h-14 w-full cursor-not-allowed rounded-lg bg-primary px-5 text-base font-bold text-primary-foreground opacity-45">
-              Sign in to save measurements
-            </button>
-          )}
-        </form>
-        {hasMeasurement ? (
-          <button
-            type="button"
-            onClick={() => setIsMeasurementEditorOpen(false)}
-            className="mt-4 inline-flex items-center justify-center rounded-md border border-border px-4 py-2 text-sm font-semibold text-muted-foreground hover:bg-secondary"
-          >
-            Close
-          </button>
-        ) : null}
-      </section>
-      ) : null}
-
-      <div className="flex flex-col gap-3 sm:flex-row">
+      <div className="space-y-3">
         {isAuthenticated ? (
-          <form action={addToCartAction} className="flex-1">
+          <form action={addToCartAction}>
             <input type="hidden" name="productId" value={product.id} />
             <input type="hidden" name="eventId" value={eventId} />
             <input type="hidden" name="roleLabel" value={selectedRole?.label ?? ""} />
-            <input type="hidden" name="measurementId" value={latestMeasurement?.id ?? ""} />
-            <button type="submit" className="inline-flex h-14 w-full items-center justify-center gap-3 rounded-md bg-primary px-5 text-lg font-semibold text-primary-foreground transition-colors hover:bg-primary/90">
+            <input type="hidden" name="measurementId" value={savedMeasurement?.id ?? ""} />
+            <button type="submit" className="inline-flex h-14 w-full items-center justify-center gap-3 rounded-xl bg-[#f5a623] px-5 text-lg font-bold text-black transition-transform hover:scale-[1.01] active:scale-95">
               <ShoppingBag className="h-5 w-5" />
               Add to Cart
             </button>
           </form>
         ) : (
-          <Link href={signinHref} className="inline-flex h-14 flex-1 items-center justify-center gap-3 rounded-md bg-primary px-5 text-lg font-semibold text-primary-foreground transition-colors hover:bg-primary/90">
+          <Link href={signinHref} className="inline-flex h-14 w-full items-center justify-center gap-3 rounded-xl bg-[#f5a623] px-5 text-lg font-bold text-black transition-transform hover:scale-[1.01] active:scale-95">
             <ShoppingBag className="h-5 w-5" />
             Add to Cart
           </Link>
         )}
 
         {!event ? (
-          <button
-            type="button"
-            onClick={() => setEventOpen(true)}
-            className="inline-flex h-14 flex-1 items-center justify-center gap-3 rounded-md border border-border px-5 text-lg font-semibold transition-colors hover:border-primary/50 hover:bg-secondary"
-          >
-            <Users className="h-5 w-5" />
-            Group Order
-          </button>
+          <div className="grid grid-cols-2 gap-3">
+            <form action={createGroupAction} className="w-full">
+              <input type="hidden" name="productId" value={product.id} />
+              <input type="hidden" name="groupName" value={`${product.name} Group Order`} />
+              <button
+                type="submit"
+                className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-transparent px-3 text-sm font-semibold text-white hover:bg-white/5"
+              >
+                <Users className="h-4 w-4" />
+                Group Order
+              </button>
+            </form>
+            <button
+              type="button"
+              onClick={() => setEventOpen(true)}
+              className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-transparent px-3 text-sm font-semibold text-white hover:bg-white/5"
+            >
+              <PlusCircle className="h-4 w-4" />
+              Create Event
+            </button>
+          </div>
         ) : (
-          <Link href={`/event/${event.id}`} className="inline-flex h-14 flex-1 items-center justify-center gap-3 rounded-md border border-border px-5 text-lg font-semibold transition-colors hover:border-primary/50 hover:bg-secondary">
+          <Link href={`/event/${event.id}`} className="inline-flex h-12 w-full items-center justify-center gap-3 rounded-xl border border-white/10 bg-transparent px-5 text-base font-semibold text-white hover:bg-white/5">
             <Users className="h-5 w-5" />
             Event Dashboard
           </Link>
         )}
-
-        <ShareLinks url={shareUrl} title={`Check out ${product.name}`} />
       </div>
 
-      {measurements.length === 0 ? (
-        <p className="text-center text-sm text-muted-foreground">
-            <Link href={signinHref} className="text-primary hover:underline">
-            Sign in
-          </Link>{" "}
-          to save measurements and add to cart
-        </p>
-      ) : null}
+      <ShareLinks url={shareUrl} title={`Check out ${product.name}`} />
 
-      {eventOpen ? (
-        <div className="fixed inset-0 z-[130] flex items-center justify-center bg-black/80 p-4" onClick={(eventClick) => eventClick.target === eventClick.currentTarget && setEventOpen(false)}>
-          <div className="w-full max-w-lg rounded-xl border border-border bg-background p-6">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h2 className="font-heading text-2xl font-bold">Start a Shared Order</h2>
-                  <p className="mt-2 text-sm text-muted-foreground">Create a private group order, or a shareable Event Match-Up with an invite link.</p>
-              </div>
-              <button type="button" onClick={() => setEventOpen(false)} className="rounded-full p-1 text-muted-foreground hover:bg-secondary" aria-label="Close group order modal">
-                <X className="h-5 w-5" />
+      {eventOpen && (
+        <div className="fixed inset-0 z-[130] flex items-center justify-center bg-black/80 px-4" onClick={(e) => e.target === e.currentTarget && setEventOpen(false)}>
+          <div className="w-full max-w-[400px] overflow-hidden rounded-2xl border border-white/10 bg-[#141414] shadow-2xl">
+            <div className="flex items-center justify-between border-b border-white/5 px-6 py-4">
+              <h2 className="text-lg font-bold text-white tracking-tight">Create Event Group</h2>
+              <button type="button" onClick={() => setEventOpen(false)} className="rounded-full bg-white/5 p-1.5 text-zinc-400 hover:text-white" aria-label="Close modal">
+                <X className="h-4 w-4" />
               </button>
             </div>
-              <form className="mt-5 space-y-3">
+            <div className="p-6">
+              <p className="text-[15px] leading-relaxed text-zinc-400">
+                Invite friends and family to order together for your celebration.
+              </p>
+              <form action={createEventAction} className="mt-5 space-y-5">
                 <input type="hidden" name="productId" value={product.id} />
                 <input type="hidden" name="productName" value={product.name} />
-                <input name="groupName" required placeholder="e.g. Abebe Family Order" className="h-14 w-full rounded-lg border border-input bg-background px-4 text-base focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/40" />
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <button formAction={createGroupAction} type="submit" className="h-14 rounded-md bg-blue-950 px-4 text-base font-bold text-white hover:bg-blue-800">
-                    Create Group Order
-                  </button>
-                  <button formAction={createEventAction} type="submit" name="eventName" value="Event Match-Up" className="h-14 rounded-md bg-primary px-4 text-base font-bold text-primary-foreground hover:bg-primary/90">
-                    Create Event Match-Up
-                  </button>
-              </div>
-            </form>
+                <input name="eventName" required placeholder="e.g. Wedding 2025" className="h-12 w-full rounded-xl border border-white/10 bg-black px-4 text-white focus:border-[#f5a623] outline-none" />
+                <button type="submit" className="h-12 w-full rounded-xl bg-[#f5a623] font-bold text-black transition-all hover:bg-[#ffb84d]">Create Event</button>
+              </form>
+            </div>
           </div>
         </div>
-      ) : null}
-      {showVideo ? <MeasurementVideoModal gender={measurementGender} onClose={() => setShowVideo(false)} /> : null}
+      )}
+
+      {showVideo && <MeasurementVideoModal gender={measurementGender} onClose={() => setShowVideo(false)} />}
     </div>
   );
 }

@@ -23,21 +23,21 @@ const inter = Inter({
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXTAUTH_URL ?? "http://localhost:3000"),
   title: {
-    default: "Yehager Bahil",
-    template: "%s | Yehager Bahil",
+    default: "YehagerBahilLibs",
+    template: "%s | YehagerBahilLibs",
   },
-  description: "Ethiopian traditional attire and cultural fashion by Yehager Bahil.",
+  description: "Ethiopian traditional attire and cultural fashion by YehagerBahilLibs.",
   manifest: "/manifest.webmanifest",
   openGraph: {
-    title: "Yehager Bahil",
-    description: "Ethiopian traditional attire and cultural fashion by Yehager Bahil.",
+    title: "YehagerBahilLibs",
+    description: "Ethiopian traditional attire and cultural fashion by YehagerBahilLibs.",
     type: "website",
     url: "/",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Yehager Bahil",
-    description: "Ethiopian traditional attire and cultural fashion by Yehager Bahil.",
+    title: "YehagerBahilLibs",
+    description: "Ethiopian traditional attire and cultural fashion by YehagerBahilLibs.",
   },
 };
 

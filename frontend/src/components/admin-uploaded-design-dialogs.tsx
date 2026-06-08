@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import type { ComponentType, PropsWithChildren } from "react";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, ClipboardList, Clock3, Images, Loader2, Palette, Ruler, UserRound, XCircle } from "lucide-react";
+import { CheckCircle2, ClipboardList, Clock3, CreditCard, Eye, FileText, Images, Loader2, Package, Palette, Ruler, Scissors, Truck, UserRound, XCircle, ChevronRight, ExternalLink } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { dashboardError, dashboardSuccess } from "@/lib/dashboard-swal";
 
@@ -61,9 +61,9 @@ function prettyStatus(value?: string | null) {
 
 function Field({ label, value }: { label: string; value: unknown }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
-      <p className="mt-1 break-words text-sm font-semibold text-slate-950">{display(value)}</p>
+    <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{label}</p>
+      <p className="mt-1 break-words text-sm font-bold text-slate-900">{display(value)}</p>
     </div>
   );
 }
@@ -103,17 +103,11 @@ export function AdminUploadedDesignDialogs({
 }
 
 function ViewDialog({ design, onClose }: { design: UploadedDesign; onClose: () => void }) {
-  const [section, setSection] = useState<"overview" | "images" | "measurements" | "customer" | "review">("overview");
+  const [section, setSection] = useState<"info" | "customer" | "measurements" | "payment" | "production" | "shipping" | "timeline" | "attachments">("info");
+  const [activeMemberIdx, setActiveMemberIdx] = useState<number>(0);
   const [decision, setDecision] = useState<"approve" | "reject" | null>(null);
-  const measurements = Object.entries(design.measurementSnapshot ?? {});
-  const address = design.contactAddress ?? {};
-  const images = [
-    ["Front", design.frontImageUrl],
-    ["Side", design.sideImageUrl],
-    ["Back", design.backImageUrl],
-    ["Detail", design.detailImageUrl],
-  ].filter((item): item is [string, string] => Boolean(item[1]));
-  const [selectedImage, setSelectedImage] = useState(images[0]?.[1] ?? "");
+
+  const isGroup = !!((design as any).familyGroupId || (design as any).eventId);
   const canReview = ["submitted", "in_review"].includes(String(design.status ?? "submitted"));
 
   if (decision) {
@@ -121,141 +115,360 @@ function ViewDialog({ design, onClose }: { design: UploadedDesign; onClose: () =
   }
 
   const sections = [
-    { id: "overview", label: "Design Overview", hint: "Request and quote", icon: Palette },
-    { id: "images", label: "Uploaded Images", hint: "Front, side, back, detail", icon: Images },
-    { id: "measurements", label: "Measurements", hint: "Customer sizing", icon: Ruler },
-    { id: "customer", label: "Customer Information", hint: "Contact and address", icon: UserRound },
-    { id: "review", label: "Review Information", hint: "Decision and linked records", icon: ClipboardList },
+    { id: "info", label: "Order Information", hint: "Core metadata", icon: Palette },
+    { id: "customer", label: "Customer Detail", hint: "Contact & address", icon: UserRound },
+    { id: "measurements", label: "Measurement Details", hint: "Sizing data", icon: Ruler },
+    { id: "payment", label: "Payment Information", hint: "Transaction detail", icon: CreditCard },
+    { id: "production", label: "Production Tracking", hint: "Workflow status", icon: Package },
+    { id: "shipping", label: "Shipping Information", hint: "Carrier & tracking", icon: Truck },
+    { id: "timeline", label: "Order Timeline", hint: "Lifecycle stages", icon: ClipboardList },
+    { id: "attachments", label: "Document Attachments", hint: "Images & files", icon: Eye },
   ] as const;
+
+  const timelineStages = [
+    { label: "Request Submitted", status: "submitted" },
+    { label: "Admin Review", status: "in_review" },
+    { label: "Quote Issued", status: "approved" },
+    { label: "Payment Received", status: "paid" },
+    { label: "Production Started", status: "tailoring" },
+    { label: "Shipped/Ready", status: "shipped" },
+  ];
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <TypedDialogContent className="max-w-6xl p-0">
-        <div className="bg-blue-950 px-6 py-4 pr-16 text-white">
-          <TypedDialogTitle className="text-lg font-bold text-white">Custom Design Details</TypedDialogTitle>
-          <p className="mt-1 text-sm text-blue-100">
-            #{design.submissionNumber ?? design.id} · {design.customerName ?? design.userEmail ?? "Customer request"}
-          </p>
+      <TypedDialogContent className="max-w-7xl p-0 border-none overflow-hidden rounded-3xl !outline-none shadow-2xl">
+        <div className="bg-[#0f172a] px-10 py-8 pr-16 text-white relative border-b border-white/10">
+          <TypedDialogTitle className="text-4xl font-black text-white leading-tight tracking-tight uppercase">Custom Design Workspace</TypedDialogTitle>
+          <p className="mt-2 text-base text-slate-400 font-medium max-w-2xl">Manage custom creation requests, technical specifications, and client communication.</p>
+          <button onClick={onClose} className="absolute right-8 top-8 text-slate-500 hover:text-white transition-all transform hover:rotate-90 hover:scale-110">
+            <XCircle className="h-8 w-8" />
+          </button>
         </div>
-        <div className="max-h-[88vh] overflow-y-auto bg-slate-50 p-5">
-          <header className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-                {selectedImage ? <img src={selectedImage} alt="Selected design reference" className="h-28 w-full rounded-2xl border border-slate-200 object-cover sm:w-44" /> : null}
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-900">Custom Design Request</p>
-                  <h2 className="mt-1 text-2xl font-black text-slate-950">{design.designTitle ?? "Custom Design"}</h2>
-                  <p className="mt-2 text-sm font-semibold text-slate-700">#{design.submissionNumber ?? design.id}</p>
-                  <p className="mt-1 text-sm text-slate-600">{design.customerName ?? "Customer"} · {design.userEmail ?? "No email"}</p>
-                  <span className={`mt-3 inline-flex rounded-full border px-3 py-1 text-xs font-bold capitalize ${
-                    String(design.status) === "rejected" ? "border-rose-200 bg-rose-50 text-rose-700" :
-                    String(design.status) === "completed_request" ? "border-emerald-200 bg-emerald-50 text-emerald-700" :
-                    "border-blue-200 bg-blue-50 text-blue-900"
+
+        <div className="max-h-[85vh] overflow-y-auto bg-[#f8fafc]">
+          <div className="p-10 pb-16">
+            <div className="mb-10 rounded-[2rem] border border-slate-200 bg-white p-8 shadow-xl flex flex-col lg:flex-row items-center gap-10 ring-1 ring-black/[0.02]">
+              <div className="h-40 w-40 shrink-0 overflow-hidden rounded-[2.5rem] border-4 border-slate-50 shadow-2xl bg-[#0f172a] flex items-center justify-center relative">
+                 <img src={design.frontImageUrl || design.sideImageUrl || ""} alt="Design preview" className="h-full w-full object-cover" />
+              </div>
+              <div className="flex-1 text-center lg:text-left">
+                <div className="flex flex-wrap items-center justify-center lg:justify-start gap-4 mb-4">
+                   <h2 className="text-3xl font-black text-slate-900 tracking-tight">{design.designTitle || "CUSTOM DESIGN"}</h2>
+                   <div className="bg-slate-100 px-4 py-1.5 rounded-full border border-slate-200 shadow-sm flex items-center gap-2">
+                     <span className="text-xs font-black text-slate-500 uppercase tracking-widest">SUB #</span>
+                     <span className="text-xs font-black text-slate-900">{design.submissionNumber || design.id.slice(0,10)}</span>
+                   </div>
+                </div>
+                
+                <div className="flex flex-wrap justify-center lg:justify-start gap-3 mb-6">
+                  <span className={`inline-flex rounded-xl border-2 px-4 py-1 text-xs font-black uppercase tracking-wider shadow-sm ${
+                    String(design.status) === "rejected" ? "border-rose-200 bg-rose-50 text-rose-600" :
+                    String(design.status) === "completed_request" ? "border-emerald-200 bg-emerald-50 text-emerald-600" :
+                    "border-blue-200 bg-blue-50 text-blue-600"
                   }`}>{prettyStatus(design.status)}</span>
+                  <span className="inline-flex rounded-xl border-2 border-slate-100 bg-slate-50 px-4 py-1 text-xs font-black uppercase tracking-wider text-slate-500 shadow-sm">
+                    { isGroup ? "Group Custom Design" : "Individual Custom Design" }
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-50 p-6 rounded-[1.5rem] border-2 border-slate-100">
+                    <div className="flex flex-col gap-2">
+                       <span className="text-[10px] font-black uppercase text-slate-400 tracking-[0.15em] pl-1">Request Lifecycle</span>
+                       <div className="h-12 w-full rounded-2xl border-2 border-blue-100 bg-white px-4 flex items-center text-sm font-black text-blue-800">
+                          {prettyStatus(design.status)}
+                       </div>
+                    </div>
+                    <div className="flex flex-col gap-2">
+                       <span className="text-[10px] font-black uppercase text-slate-400 tracking-[0.15em] pl-1">Quoted Value</span>
+                       <div className="h-12 w-full rounded-2xl border-2 border-emerald-100 bg-white px-4 flex items-center text-sm font-black text-emerald-800 shadow-sm">
+                          {design.quotedPriceUsd ? `$${Number(design.quotedPriceUsd).toFixed(2)}` : "Pending Quote"}
+                       </div>
+                    </div>
                 </div>
               </div>
-              <div className="flex flex-wrap gap-2">
-                {canReview ? (
-                  <>
-                    <button type="button" onClick={() => setDecision("approve")} className="inline-flex h-11 items-center gap-2 rounded-xl bg-blue-900 px-5 text-sm font-bold text-white shadow-sm shadow-blue-900/20 hover:bg-blue-950">
-                      <CheckCircle2 className="h-4 w-4" /> Approve & Quote
+              <div className="min-w-[240px] flex flex-col gap-3">
+                 {canReview && (
+                   <>
+                    <button onClick={() => setDecision("approve")} className="h-14 w-full rounded-2xl bg-blue-600 text-sm font-black text-white hover:bg-blue-700 shadow-xl shadow-blue-500/30 transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-2">
+                      <CheckCircle2 className="h-5 w-5" /> ISSUE QUOTE
                     </button>
-                    <button type="button" onClick={() => setDecision("reject")} className="inline-flex h-11 items-center gap-2 rounded-xl bg-red-600 px-5 text-sm font-bold text-white shadow-sm hover:bg-red-700">
-                      <XCircle className="h-4 w-4" /> Decline
+                    <button onClick={() => setDecision("reject")} className="h-14 w-full rounded-2xl bg-slate-900 text-sm font-black text-white hover:bg-black shadow-lg transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-2">
+                      <XCircle className="h-5 w-5" /> DECLINE REQUEST
                     </button>
-                  </>
-                ) : null}
-                {design.approvedOrderId ? <Link href={`/admin/orders/${design.approvedOrderId}`} className="inline-flex h-11 items-center rounded-xl bg-blue-900 px-5 text-sm font-bold text-white hover:bg-blue-950">View Order</Link> : null}
+                   </>
+                 )}
+                 {!canReview && (
+                   <div className="h-14 w-full rounded-2xl bg-slate-100 flex items-center justify-center text-sm font-black text-slate-400 border border-slate-200">
+                     DECISION RECORDED
+                   </div>
+                 )}
               </div>
             </div>
-          </header>
 
-          <div className="mt-4 grid gap-4 lg:grid-cols-[270px_1fr]">
-            <aside className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
-              <p className="px-2 py-2 text-xs font-bold uppercase tracking-wide text-slate-500">Request Overview</p>
-              <nav className="space-y-1">
-                {sections.map((item) => {
-                  const Icon = item.icon;
-                  const active = section === item.id;
-                  return (
-                    <button key={item.id} type="button" onClick={() => setSection(item.id)} className={`flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition ${active ? "border border-blue-200 bg-blue-50 text-blue-950 shadow-sm" : "text-slate-700 hover:bg-slate-50"}`}>
-                      <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${active ? "bg-blue-700 text-white" : "bg-slate-100 text-slate-700"}`}><Icon className="h-5 w-5" /></span>
-                      <span><span className="block text-sm font-bold">{item.label}</span><span className="mt-0.5 block text-xs text-slate-500">{item.hint}</span></span>
-                    </button>
-                  );
-                })}
-              </nav>
-            </aside>
+            <div className="grid gap-10 lg:grid-cols-[340px_1fr]">
+              <aside className="space-y-6 shrink-0">
+                <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-xl sticky top-6">
+                  <p className="mb-6 px-4 text-xs font-black uppercase tracking-[0.2em] text-slate-400 border-b border-slate-100 pb-4">Workspace Sections</p>
+                  <nav className="space-y-3">
+                    {sections.map((item) => {
+                      const Icon = item.icon;
+                      const isActive = section === item.id;
+                      return (
+                        <button key={item.id} type="button" onClick={() => setSection(item.id)} className={`flex w-full items-center gap-5 rounded-[1.25rem] px-5 py-4 text-left transition-all group ${isActive ? "bg-[#0f172a] text-white shadow-xl scale-[1.02]" : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"}`}>
+                           <div className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl transition-all ${isActive ? "bg-blue-600 text-white rotate-6" : "bg-slate-100 group-hover:bg-slate-200"}`}>
+                             <Icon className="h-7 w-7" />
+                           </div>
+                           <div className="overflow-hidden">
+                              <span className="block text-base font-black truncate tracking-tight">{item.label}</span>
+                              <span className="block text-[10px] font-bold opacity-60 truncate uppercase tracking-[0.05em] mt-0.5">{item.hint}</span>
+                           </div>
+                        </button>
+                      );
+                    })}
+                  </nav>
+                </div>
+              </aside>
 
-            <main className="rounded-2xl border border-slate-200 bg-white p-5 text-slate-950 shadow-sm">
-              {section === "images" ? (
-                <section>
-                  <h3 className="text-lg font-bold">Uploaded Images</h3>
-                  {selectedImage ? <a href={selectedImage} target="_blank" rel="noreferrer"><img src={selectedImage} alt="Selected design" className="mt-4 h-72 w-full rounded-2xl border border-slate-200 object-contain bg-slate-50" /></a> : null}
-                  <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-                    {images.map(([label, url]) => (
-                      <button key={label} type="button" onClick={() => setSelectedImage(url)} className={`overflow-hidden rounded-xl border-2 text-left ${selectedImage === url ? "border-blue-700" : "border-slate-200 hover:border-blue-300"}`}>
-                        <img src={url} alt={`${label} design`} className="h-24 w-full object-cover" />
-                        <span className="block px-3 py-2 text-xs font-bold text-slate-800">{label}</span>
-                      </button>
-                    ))}
-                  </div>
-                </section>
-              ) : section === "measurements" ? (
-                <section>
-                  <h3 className="text-lg font-bold">Measurements</h3>
-                  <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                    {measurements.length ? measurements.map(([key, value]) => <Field key={key} label={key.replaceAll("_", " ")} value={value} />) : <Field label="Measurements" value={null} />}
-                  </div>
-                </section>
-              ) : section === "customer" ? (
-                <section>
-                  <h3 className="text-lg font-bold">Customer Information</h3>
-                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                    <Field label="Customer Name" value={design.customerName} />
-                    <Field label="Email Address" value={design.userEmail} />
-                    <Field label="Phone Number" value={design.contactPhone} />
-                    <Field label="Telegram" value={design.contactTelegram} />
-                    {Object.entries(address).map(([key, value]) => <Field key={key} label={key.replaceAll("_", " ")} value={value} />)}
-                  </div>
-                </section>
-              ) : section === "review" ? (
-                <section>
-                  <h3 className="text-lg font-bold">Review Information</h3>
-                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                    <Field label="Status" value={prettyStatus(design.status)} />
-                    <Field label="Reviewed By" value={design.reviewedBy} />
-                    <Field label="Reviewed At" value={design.reviewedAt ? new Date(design.reviewedAt).toLocaleString() : null} />
-                    <Field label="Quoted Price" value={design.quotedPriceUsd ? `$${Number(design.quotedPriceUsd).toFixed(2)}` : null} />
-                    <Field label="Estimated Delivery" value={design.estimatedDeliveryLabel} />
-                    <Field label="Cart Item" value={design.approvedCartItemId} />
-                    <Field label="Order" value={design.approvedOrderId} />
-                    <Field label="Review Reason / Note" value={design.reviewReason} />
-                  </div>
-                </section>
-              ) : (
-                <section>
-                  <h3 className="text-lg font-bold">Design Overview</h3>
-                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                    <Field label="Design Title" value={design.designTitle} />
-                    <Field label="Request ID" value={design.submissionNumber} />
-                    <Field label="Fabric Type" value={design.fabricType} />
-                    <Field label="Embroidery Style" value={design.embroideryStyle} />
-                    <Field label="Color Preference" value={design.colorPreference} />
-                    <Field label="Submitted" value={design.submittedAt || design.createdAt ? new Date(String(design.submittedAt ?? design.createdAt)).toLocaleString() : null} />
-                    <Field label="Quoted Price" value={design.quotedPriceUsd ? `$${Number(design.quotedPriceUsd).toFixed(2)}` : null} />
-                    <Field label="Estimated Delivery" value={design.estimatedDeliveryLabel} />
-                  </div>
-                  <div className="mt-3"><Field label="Customer Design Notes" value={design.inspirationNote} /></div>
-                </section>
-              )}
-            </main>
+              <main className="min-h-[800px]">
+                <div className="rounded-[2.5rem] border border-slate-200 bg-white p-12 shadow-2xl relative overflow-hidden ring-1 ring-black/[0.02]">
+                   <div className="flex items-center gap-4 mb-10 relative z-10">
+                      <div className="h-2 w-12 bg-blue-600 rounded-full" />
+                      <h3 className="text-3xl font-black text-slate-900 tracking-tight uppercase">{sections.find(s => s.id === section)?.label}</h3>
+                   </div>
+
+                   <div className="relative z-10">
+                      {section === "info" && (
+                         <div className="space-y-10">
+                            <div className="grid gap-6 sm:grid-cols-2">
+                               <Field label="Submission Number" value={design.submissionNumber} />
+                               <Field label="Design Category" value={isGroup ? "Group Custom" : "Individual Custom"} />
+                               <Field label="Submission Date" value={(design.submittedAt || design.createdAt) ? new Date(String(design.submittedAt ?? design.createdAt)).toLocaleString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : "N/A"} />
+                               <Field label="Fabric Preference" value={design.fabricType} />
+                               <Field label="Embroidery Preference" value={design.embroideryStyle} />
+                               <Field label="Color Preference" value={design.colorPreference} />
+                            </div>
+                            <div className="sm:col-span-2">
+                               <div className="rounded-[1.5rem] border border-slate-100 bg-[#f8fafc] p-8 shadow-inner">
+                                  <p className="text-[10px] font-black uppercase tracking-[0.1em] text-slate-400 mb-2">Technical Inspiration Notes</p>
+                                  <p className="text-base font-bold text-slate-800 leading-relaxed italic">"{design.inspirationNote || "No specific inspiration notes provided by customer."}"</p>
+                               </div>
+                            </div>
+
+                            {/* Image Grid in Info Section */}
+                            <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 pt-6">
+                               {[
+                                 ["Front View", design.frontImageUrl],
+                                 ["Side View", design.sideImageUrl],
+                                 ["Back View", design.backImageUrl],
+                                 ["Detail View", design.detailImageUrl],
+                               ].filter(i => i[1]).map(([label, url]) => (
+                                 <a key={label} href={url || ""} target="_blank" rel="noreferrer" className="group rounded-[1.5rem] overflow-hidden border-4 border-slate-50 shadow-lg relative aspect-square bg-[#0f172a]">
+                                    <img src={url || ""} alt={label} className="h-full w-full object-cover transition duration-500 group-hover:scale-110" />
+                                    <div className="absolute inset-x-0 bottom-0 bg-black/60 p-2 text-center">
+                                       <span className="text-[10px] font-black text-white uppercase tracking-widest">{label}</span>
+                                    </div>
+                                    <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-blue-600/20">
+                                       <ExternalLink className="text-white h-8 w-8" />
+                                    </div>
+                                 </a>
+                               ))}
+                            </div>
+                         </div>
+                      )}
+
+                      {section === "customer" && (
+                         <div className="space-y-10">
+                            <div className="flex items-center gap-8 p-10 rounded-[2.5rem] bg-[#f8fafc] border border-slate-100 shadow-inner">
+                               <div className="h-24 w-24 rounded-3xl bg-blue-600 flex items-center justify-center text-white shadow-2xl rotate-3">
+                                  <UserRound className="h-12 w-12" />
+                               </div>
+                               <div>
+                                  <h4 className="text-3xl font-black text-slate-900 tracking-tight">{design.customerName || "Anonymous Sender"}</h4>
+                                  <p className="text-lg font-bold text-slate-500 mt-1">{design.userEmail}</p>
+                               </div>
+                            </div>
+                            <div className="grid gap-6 sm:grid-cols-2">
+                               <Field label="Phone Connection" value={design.contactPhone || "Not Provided"} />
+                               <Field label="Telegram / Social" value={design.contactTelegram || "Not Provided"} />
+                               <div className="sm:col-span-2">
+                                  <div className="rounded-[1.5rem] border border-slate-100 bg-white p-6 shadow-lg">
+                                     <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 flex items-center gap-2">
+                                        <Truck className="h-3 w-3" /> Delivery Address Details
+                                     </p>
+                                     <p className="text-base font-bold text-slate-800 leading-relaxed">
+                                        {design.contactAddress ? (typeof design.contactAddress === 'object' ? JSON.stringify(design.contactAddress) : design.contactAddress) : "No address provided."}
+                                     </p>
+                                  </div>
+                               </div>
+                            </div>
+                         </div>
+                      )}
+
+                      {section === "measurements" && (
+                         <div className="space-y-10">
+                            { isGroup && (design as any).members?.length > 0 ? (
+                               <div className="space-y-8">
+                                  <div className="flex items-center gap-4 overflow-x-auto pb-4 pt-2 -mx-2 px-2 scrollbar-hide">
+                                     {(design as any).members.map((member: any, idx: number) => (
+                                        <button 
+                                           key={idx} 
+                                           onClick={() => setActiveMemberIdx(idx)}
+                                           className={`flex flex-col items-center gap-3 shrink-0 p-4 rounded-[1.5rem] transition-all min-w-[120px] ${activeMemberIdx === idx ? 'bg-[#0f172a] text-white shadow-2xl scale-110 relative z-10' : 'bg-white border border-slate-100 text-slate-500 hover:bg-slate-50'}`}
+                                        >
+                                           <div className={`h-14 w-14 rounded-2xl flex items-center justify-center font-black text-lg ${activeMemberIdx === idx ? 'bg-blue-600' : 'bg-slate-100 text-slate-400'}`}>
+                                              {member.name?.charAt(0) || idx + 1}
+                                           </div>
+                                           <span className="text-xs font-black uppercase tracking-tight truncate w-full text-center">{member.name || `Member ${idx+1}`}</span>
+                                        </button>
+                                     ))}
+                                  </div>
+
+                                  <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                                     <div className="overflow-hidden rounded-[2rem] border-2 border-slate-100 bg-white shadow-2xl">
+                                        <div className="bg-[#0f172a] px-8 py-4 flex items-center justify-between text-white">
+                                           <span className="text-sm font-black uppercase tracking-widest text-blue-400">Snapshot: {(design as any).members[activeMemberIdx]?.name}</span>
+                                           <Ruler className="h-5 w-5 text-slate-600" />
+                                        </div>
+                                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-8 gap-y-6 p-10">
+                                           {Object.entries((design as any).members[activeMemberIdx]?.measurements || {}).map(([key, val]) => (
+                                              <div key={key} className="relative">
+                                                 <p className="text-[10px] font-black uppercase text-slate-400 leading-tight mb-1.5 tracking-tighter">{key.replaceAll("_", " ")}</p>
+                                                 <p className="text-lg font-black text-slate-900 flex items-baseline gap-1">
+                                                    {String(val)} <span className="text-[10px] font-bold text-slate-300">cm</span>
+                                                 </p>
+                                                 <div className="absolute -left-3 top-2 bottom-0 w-[2px] bg-blue-500/10 rounded-full" />
+                                              </div>
+                                           ))}
+                                        </div>
+                                     </div>
+                                  </div>
+                               </div>
+                            ) : design.measurementSnapshot && Object.keys(design.measurementSnapshot).length > 0 ? (
+                               <div className="grid grid-cols-2 sm:grid-cols-4 gap-8 p-12 rounded-[2.5rem] border-2 border-slate-100 bg-white shadow-xl">
+                                  {Object.entries(design.measurementSnapshot).map(([key, val]) => (
+                                     <div key={key} className="group relative">
+                                        <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-1.5">{key.replaceAll("_", " ")}</p>
+                                        <p className="text-xl font-black text-slate-900 tabular-nums">{String(val)} <span className="text-[10px] text-slate-300 ml-0.5 font-bold">cm</span></p>
+                                        <div className="absolute -left-3 top-1.5 bottom-0 w-[2px] bg-slate-100 group-hover:bg-blue-500 transition-colors rounded-full" />
+                                     </div>
+                                  ))}
+                               </div>
+                            ) : (
+                               <div className="py-20 text-center bg-slate-50 rounded-[2.5rem] border-2 border-dashed border-slate-200">
+                                  <Ruler className="h-16 w-16 text-slate-200 mx-auto mb-6" />
+                                  <p className="text-lg font-black text-slate-400 uppercase tracking-widest">No Technical Sizing Data</p>
+                                  <p className="text-sm font-bold text-slate-400 mt-2">Measurements were not provided with this custom request.</p>
+                               </div>
+                            )}
+                         </div>
+                      )}
+
+                      {section === "payment" && (
+                         <div className="space-y-10">
+                            <div className="p-10 rounded-[2.5rem] bg-[#0f172a] text-white shadow-2xl relative overflow-hidden">
+                               <div className="absolute top-0 right-0 p-8 opacity-10">
+                                  <CreditCard className="h-32 w-32" />
+                               </div>
+                               <h4 className="text-sm font-black text-blue-400 uppercase tracking-[0.2em] mb-8">Financial Overview</h4>
+                               <div className="grid gap-10 sm:grid-cols-2">
+                                  <div>
+                                     <p className="text-xs font-bold text-slate-400 uppercase mb-1">Quoted Price</p>
+                                     <p className="text-5xl font-black">{design.quotedPriceUsd ? `$${Number(design.quotedPriceUsd).toFixed(2)}` : "$ ---.--"}</p>
+                                  </div>
+                                  <div>
+                                     <p className="text-xs font-bold text-slate-400 uppercase mb-1">Payment Status</p>
+                                     <p className="text-3xl font-black uppercase text-blue-300 italic tracking-tighter">{(design as any).paymentStatus || "Awaiting Quote"}</p>
+                                  </div>
+                               </div>
+                            </div>
+                            <div className="rounded-[1.5rem] bg-amber-50 border border-amber-200 p-6 flex gap-4">
+                               <Clock3 className="h-6 w-6 text-amber-600 shrink-0" />
+                               <div>
+                                  <p className="text-sm font-black text-amber-900 italic uppercase">Conditional Production</p>
+                                  <p className="text-xs font-bold text-amber-700 mt-1">Custom designs enter production only after full payment verification of the issued quote.</p>
+                               </div>
+                            </div>
+                         </div>
+                      )}
+
+                      {section === "production" && (
+                         <div className="rounded-[2rem] border-2 border-dashed border-slate-200 p-20 text-center bg-slate-50">
+                            <div className="h-24 w-24 rounded-[2rem] bg-white shadow-xl flex items-center justify-center mx-auto mb-8">
+                               <Scissors className="h-10 w-10 text-slate-300" />
+                            </div>
+                            <h4 className="text-xl font-black text-slate-800 uppercase tracking-widest">Workflow Initialization</h4>
+                            <p className="text-sm font-bold text-slate-500 mt-3 max-w-md mx-auto leading-relaxed">
+                               Custom creation and material procurement tracking occurs in this section once the order transitions to tailoring.
+                            </p>
+                         </div>
+                      )}
+
+                      {section === "shipping" && (
+                         <div className="rounded-[2.5rem] border border-slate-100 bg-[#f8fafc] p-12 text-center">
+                            <Truck className="h-20 w-20 text-slate-200 mx-auto mb-6" />
+                            <h4 className="text-xl font-black text-slate-400 uppercase tracking-widest">Awaiting Logistics Data</h4>
+                            <p className="text-sm font-bold text-slate-400 mt-2">Shipping IDs and carrier tracking will appear here after production completion.</p>
+                         </div>
+                      )}
+
+                      {section === "timeline" && (
+                         <div className="space-y-12 pl-4">
+                            <div className="relative">
+                               <div className="absolute left-[31px] top-6 bottom-6 w-1bg-slate-100 rounded-full" />
+                               <div className="space-y-12">
+                                  {timelineStages.map((stage, idx) => {
+                                     const currentStatusIdx = timelineStages.findIndex(s => s.status === design.status);
+                                     const isCompleted = idx <= (currentStatusIdx === -1 ? 0 : currentStatusIdx);
+                                     return (
+                                        <div key={idx} className="relative flex items-center gap-8 group">
+                                           <div className={`h-16 w-16 rounded-[1.25rem] border-4 flex items-center justify-center relative z-10 transition-all duration-700 shadow-xl ${isCompleted ? 'bg-blue-600 border-blue-100 text-white' : 'bg-white border-slate-50 text-slate-200'}`}>
+                                              {isCompleted ? <CheckCircle2 className="h-7 w-7" /> : <div className="h-2 w-2 rounded-full bg-slate-200" />}
+                                           </div>
+                                           <div className="flex flex-col">
+                                              <span className={`text-xl font-black uppercase tracking-tight ${isCompleted ? 'text-[#0f172a]' : 'text-slate-200'}`}>{stage.label}</span>
+                                              <span className="text-xs font-bold text-slate-400 mt-1 uppercase tracking-widest">{isCompleted ? 'Validated' : 'Pending Lifecycle Event'}</span>
+                                           </div>
+                                        </div>
+                                     );
+                                  })}
+                               </div>
+                            </div>
+                         </div>
+                      )}
+
+                      {section === "attachments" && (
+                         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                            {[
+                              { label: "Original References", icon: Images, count: (design.frontImageUrl?1:0)+(design.sideImageUrl?1:0)+(design.backImageUrl?1:0)+(design.detailImageUrl?1:0) },
+                              { label: "Technical Sheet", icon: Ruler, count: design.measurementSnapshot && Object.keys(design.measurementSnapshot).length > 0 ? 1 : 0 },
+                              { label: "Quote Document", icon: FileText, count: design.quotedPriceUsd ? 1 : 0 },
+                              { label: "Initial Invoice", icon: CreditCard, count: 0 },
+                              { label: "System Audit", icon: ClipboardList, count: 1 }
+                            ].map((doc, dIdx) => (
+                               <div key={dIdx} className="p-8 rounded-[2rem] border-2 border-slate-100 bg-white hover:bg-slate-50 transition-all cursor-pointer shadow-lg group">
+                                  <div className="h-16 w-16 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-400 mb-6 group-hover:bg-[#0f172a] group-hover:text-white transition-all">
+                                     <doc.icon className="h-8 w-8" />
+                                  </div>
+                                  <p className="text-base font-black text-slate-900 uppercase tracking-tight">{doc.label}</p>
+                                  <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-widest">{doc.count} Files Available</p>
+                                  <div className="mt-6 flex items-center gap-2 text-[10px] font-black text-blue-600 group-hover:translate-x-2 transition-transform uppercase">
+                                     Explore <ChevronRight className="h-3 w-3" />
+                                  </div>
+                               </div>
+                            ))}
+                         </div>
+                      )}
+                   </div>
+                </div>
+              </main>
+            </div>
           </div>
         </div>
       </TypedDialogContent>
     </Dialog>
   );
 }
+
 
 function DecisionDialog({
   design,

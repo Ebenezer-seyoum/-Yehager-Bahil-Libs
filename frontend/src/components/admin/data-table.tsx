@@ -5,6 +5,7 @@ import { ChevronLeft, ChevronRight, Columns3 } from "lucide-react";
 import { EmptyState } from "./empty-state";
 import { LoadingState } from "./loading-state";
 import { TableHeadCell, TableHeadRow, TableHeader } from "./table-header";
+import { ADMIN_TABLE_NUMBER_CELL } from "@/lib/admin/admin-design-system";
 import { cn } from "@/lib/utils";
 
 export type DataTableColumn<T> = {
@@ -110,6 +111,7 @@ export function DataTable<T extends Record<string, unknown>>({
         <table className="min-w-full w-full text-sm">
           <TableHeader>
             <TableHeadRow>
+              <TableHeadCell className="w-14">No</TableHeadCell>
               {visibleColumns.map((column) => (
                 <TableHeadCell
                   key={column.key}
@@ -132,6 +134,7 @@ export function DataTable<T extends Record<string, unknown>>({
                   index % 2 === 1 && "bg-blue-50/20",
                 )}
               >
+                <td className={ADMIN_TABLE_NUMBER_CELL}>{page * pageSize + index + 1}</td>
                 {visibleColumns.map((column) => (
                   <td key={column.key} className="px-4 py-3 font-medium text-foreground">
                     {column.cell(row)}

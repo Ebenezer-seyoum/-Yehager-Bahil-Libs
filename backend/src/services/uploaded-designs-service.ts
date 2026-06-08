@@ -1,7 +1,7 @@
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, sql, count } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
 import { db } from "../lib/db/drizzle.js";
-import { auditLogs, cartItems, events, familyGroups, systemAlerts, uploadedDesigns } from "../lib/db/schema.js";
+import { auditLogs, cartItems, events, familyGroups, systemAlerts, uploadedDesigns, familyMembers, eventParticipants } from "../lib/db/schema.js";
 import { numberToMoney } from "./checkout-utils.js";
 import { getUserByEmail } from "../repositories/users-repository.js";
 
@@ -191,7 +191,12 @@ export async function getUploadedDesignForAdmin(designId: string) {
       resolvedBy: "admin_viewed_custom_design",
       updatedAt: new Date(),
     })
-    .where(and(eq(systemAlerts.type, "design_review"), eq(systemAlerts.entityId, designId)));
+    .where(
+      and(
+        sql`${systemAlerts.type} IN ('design_review', 'custom_design_submitted')`,
+        eq(systemAlerts.entityId, designId)
+      )
+    );
   return row;
 }
 
@@ -222,21 +227,32 @@ export async function reviewUploadedDesign(payload: {
         throw new HTTPException(400, { message: "A valid estimated completion and delivery time is required" });
       }
 
-      const isSharedSource = Boolean(submission.familyGroupId || submission.eventId);
-      const [cartItem] = isSharedSource ? [null] : await tx
+      let memberCount = 1;
+      if (submission.familyGroupId) {
+        const [res] = await tx.select({ value: count() }).from(familyMembers).where(eq(familyMembers.familyGroupId, submission.familyGroupId));
+        memberCount = Number(res?.value || 1);
+      } else if (submission.eventId) {
+        const [res] = await tx.select({ value: count() }).from(eventParticipants).where(eq(eventParticipants.eventId, submission.eventId));
+        memberCount = Number(res?.value || 1);
+      }
+
+      const totalPrice = quotedPrice * memberCount;
+
+      const [cartItem] = await tx
         .insert(cartItems)
         .values({
           userId: submission.userId,
           userEmail: submission.userEmail,
-          productName: `Custom Design - ${submission.designTitle}`,
+          productName: `Custom Design - ${submission.designTitle}${memberCount > 1 ? ` (Group of ${memberCount})` : ""}`,
           productImage: submission.frontImageUrl,
-          priceUsd: numberToMoney(quotedPrice),
+          priceUsd: numberToMoney(totalPrice),
           quantity: 1,
-          itemType: "custom_design",
+          itemType: submission.familyGroupId || submission.eventId ? "group_order" : "custom_design",
           uploadedDesignId: submission.id,
           measurementSnapshot: submission.measurementSnapshot,
+          eventId: submission.eventId,
           itemMetadata: {
-            type: "custom_design",
+            type: submission.familyGroupId || submission.eventId ? "group_order" : "custom_design",
             submission_number: submission.submissionNumber,
             design_title: submission.designTitle,
             front_image_url: submission.frontImageUrl,
@@ -251,6 +267,8 @@ export async function reviewUploadedDesign(payload: {
             estimated_delivery_label: payload.estimatedDeliveryLabel,
             estimated_delivery_days_min: deliveryMin,
             estimated_delivery_days_max: deliveryMax,
+            ...(submission.familyGroupId ? { group_id: submission.familyGroupId } : {}),
+            ...(submission.eventId ? { event_id: submission.eventId } : {}),
           },
         })
         .returning();
@@ -282,7 +300,7 @@ export async function reviewUploadedDesign(payload: {
         entityType: "uploaded_design",
         entityId: updated.id,
         performedBy: payload.performedBy ?? "admin",
-        details: isSharedSource ? "Shared custom design approved for group ordering" : "Custom design approved and added to cart",
+        details: "Custom design approved and added to cart",
         metadata: {
           cart_item_id: cartItem?.id ?? null,
           quoted_price_usd: quotedPrice,
@@ -295,9 +313,7 @@ export async function reviewUploadedDesign(payload: {
 
       await tx.insert(systemAlerts).values({
         title: `Custom design approved: ${submission.submissionNumber}`,
-        message: isSharedSource
-          ? `${submission.userEmail}'s shared custom design is ready for group checkout.`
-          : `${submission.userEmail}'s custom design was added to cart and is awaiting payment.`,
+        message: `${submission.userEmail}'s custom design was approved and added to cart, and is awaiting payment.`,
         type: "custom_design_awaiting_payment",
         severity: "info",
         entityId: submission.id,

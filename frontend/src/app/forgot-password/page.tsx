@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { ArrowLeft, Home } from "lucide-react";
+import { useState, useEffect } from "react";
 
 type Feedback = {
   type: "success" | "error";
@@ -10,7 +11,7 @@ type Feedback = {
 
 function MailIcon() {
   return (
-    <svg aria-hidden="true" viewBox="0 0 24 24" className="h-6 w-6 fill-none stroke-current">
+    <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5 fill-none stroke-[#9badc5]">
       <path d="M4 6h16v12H4z" strokeWidth="1.8" />
       <path d="m4 7 8 6 8-6" strokeWidth="1.8" />
     </svg>
@@ -23,10 +24,10 @@ function FeedbackBanner({ feedback }: { feedback: Feedback }) {
   return (
     <div
       aria-live="polite"
-      className={`mt-5 rounded-[16px] border px-4 py-3 text-center text-sm font-medium ${
+      className={`rounded-xl px-4 py-3 text-center text-sm font-semibold mb-6 mx-auto w-full ${
         feedback.type === "success"
-          ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-          : "border-rose-200 bg-rose-50 text-rose-700"
+          ? "bg-green-100 text-green-900 border border-green-300"
+          : "bg-red-100 text-red-900 border border-red-300"
       }`}
     >
       {feedback.message}
@@ -37,17 +38,23 @@ function FeedbackBanner({ feedback }: { feedback: Feedback }) {
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
   const [feedback, setFeedback] = useState<Feedback>(null);
+  const [emailError, setEmailError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (feedback) {
+      const timer = setTimeout(() => setFeedback(null), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [feedback]);
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setFeedback(null);
+    setEmailError("");
 
     if (!email.trim()) {
-      setFeedback({
-        type: "error",
-        message: "Please insert email.",
-      });
+      setEmailError("Please insert email.");
       return;
     }
 
@@ -80,51 +87,57 @@ export default function ForgotPasswordPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f6f9fc] px-4 py-8 text-[#10182d]">
-      <div className="mx-auto flex min-h-[calc(100vh-4rem)] max-w-[540px] items-center justify-center">
-        <div className="flex min-h-[420px] w-full flex-col justify-center rounded-[22px] bg-white px-6 py-8 shadow-[0_22px_60px_rgba(15,23,42,0.08)] sm:px-8 sm:py-10">
-          <div className="mx-auto w-full max-w-[440px]">
-            <Link href="/signin" className="inline-flex items-center gap-3 text-base text-[#7184a1] sm:text-lg">
-              <span className="text-2xl leading-none">←</span>
-              Back to sign in
-            </Link>
-
-            <div className="mt-6 text-center">
-              <h1 className="text-[28px] font-extrabold tracking-[-0.03em] text-[#0b1224]">
-                Reset your password
-              </h1>
-              <FeedbackBanner feedback={feedback} />
-              <p className="mx-auto mt-4 max-w-[360px] text-[17px] leading-8 text-[#526682]">
-                Enter your email and we&apos;ll send you a link to reset your password
-              </p>
-            </div>
-
-            <form onSubmit={onSubmit} noValidate className="mt-8">
-              <label className="block text-center">
-                <span className="mb-3 block text-base font-medium text-[#34435c]">Email</span>
-                <span className="flex h-14 items-center gap-4 rounded-[16px] border border-[#dce5f0] px-4 text-[#9badc5]">
-                  <MailIcon />
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(event) => setEmail(event.target.value)}
-                    placeholder="you@example.com"
-                    disabled={submitting}
-                    className="h-full w-full bg-transparent text-base text-[#34435c] outline-none placeholder:text-[#9badc5] sm:text-lg"
-                  />
-                </span>
-              </label>
-
-              <button
-                type="submit"
-                disabled={submitting}
-                className="mt-6 h-14 w-full rounded-[16px] bg-[#10172d] text-lg font-medium text-white transition hover:bg-[#18213b] disabled:cursor-not-allowed disabled:opacity-70"
-              >
-                {submitting ? "Sending…" : "Send reset link"}
-              </button>
-            </form>
-          </div>
+    <div className="min-h-screen bg-[#f8fafc] px-4 py-12 relative flex items-center justify-center font-sans">
+      <Link
+        href="/"
+        className="absolute top-8 left-8 flex items-center gap-2 rounded-full border border-[#cbd5e1] bg-white px-4 py-2 text-sm font-semibold text-[#334155] shadow-sm transition hover:bg-[#f1f5f9]"
+      >
+        <Home className="h-4 w-4" />
+        Back to home
+      </Link>
+      
+      <div className="w-full max-w-[480px] bg-white rounded-[24px] p-10 shadow-[0_8px_30px_rgb(0,0,0,0.04)] sm:p-12">
+        <Link href="/signin" className="inline-flex items-center gap-2 text-sm font-semibold text-[#64748b] transition hover:text-[#0f172a] mb-6">
+          <ArrowLeft className="h-4 w-4" />
+          Back to sign in
+        </Link>
+        
+        <div className="text-center mb-8">
+          <h1 className="text-[26px] font-bold leading-tight text-[#0f172a] mb-3">
+            Reset your password
+          </h1>
+          <p className="text-[15px] font-medium text-[#64748b] max-w-[320px] mx-auto leading-relaxed">
+            Enter your email and we&apos;ll send you a link to reset your password
+          </p>
         </div>
+
+        <FeedbackBanner feedback={feedback} />
+
+        <form onSubmit={onSubmit} noValidate>
+          <div className="mb-6">
+            <label className="block text-center mb-1.5 text-[14px] font-semibold text-[#1e293b]">Email</label>
+            <div className={`flex items-center gap-3 rounded-xl border ${emailError ? "border-red-400" : "border-[#cbd5e1]"} bg-white px-4 py-3.5 focus-within:border-[#94a3b8]`}>
+              <MailIcon />
+              <input
+                type="email"
+                value={email}
+                onChange={(event) => { setEmail(event.target.value); setEmailError(""); }}
+                placeholder="you@example.com"
+                disabled={submitting}
+                className="w-full bg-transparent text-[15px] text-[#0f172a] outline-none placeholder:text-[#94a3b8]"
+              />
+            </div>
+            {emailError && <p className="mt-1.5 text-[13px] font-medium text-red-700 text-center">{emailError}</p>}
+          </div>
+
+          <button
+            type="submit"
+            disabled={submitting}
+            className="w-full rounded-xl bg-[#0f172a] py-3.5 text-[16px] font-semibold text-white transition hover:bg-[#1e293b] disabled:opacity-60"
+          >
+            {submitting ? "Sending…" : "Send reset link"}
+          </button>
+        </form>
       </div>
     </div>
   );

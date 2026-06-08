@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/auth-options";
+import { apiRequest } from "@/lib/api-client";
 import { UploadDesignWizard } from "@/components/upload-design-wizard";
 
 export default async function UploadYourDesignPage({
@@ -19,5 +20,12 @@ export default async function UploadYourDesignPage({
     redirect(`/signin?callbackUrl=${encodeURIComponent(`/upload-your-design${callback.size ? `?${callback}` : ""}`)}`);
   }
 
-  return <UploadDesignWizard familyGroupId={familyGroupId} eventId={eventId} />;
+  let measurements: any[] = [];
+  try {
+    const response = await apiRequest<{ data: any[] }>("/api/v1/measurements");
+    measurements = Array.isArray(response?.data) ? response.data : [];
+  } catch {}
+  const latestMeasurement = measurements[0] ?? null;
+
+  return <UploadDesignWizard familyGroupId={familyGroupId} eventId={eventId} savedMeasurement={latestMeasurement} />;
 }

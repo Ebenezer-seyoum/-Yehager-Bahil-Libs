@@ -30,6 +30,93 @@
   }
 }
 
+@layer components {
+  .dashboard-notice {
+    width: min(640px, calc(100vw - 32px)) !important;
+    min-height: 70px !important;
+    border: 0 !important;
+    border-radius: 6px !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    color: #ffffff !important;
+  }
+
+  .dashboard-notice-success {
+    background: #047857 !important;
+  }
+
+  .dashboard-notice-error {
+    background: #991b1b !important;
+  }
+
+  .dashboard-notice-warning {
+    background: #efbd62 !important;
+  }
+
+  .dashboard-notice-info {
+    background: #778899 !important;
+  }
+
+  .dashboard-notice .swal2-title,
+  .dashboard-notice-title {
+    margin: 0 !important;
+    padding: 22px 64px 22px 24px !important;
+    color: #ffffff !important;
+    font-size: 21px !important;
+    font-weight: 700 !important;
+    line-height: 1.25 !important;
+    text-align: left !important;
+  }
+
+  .dashboard-notice .swal2-close,
+  .dashboard-notice-close {
+    top: 50% !important;
+    right: 20px !important;
+    width: 32px !important;
+    height: 32px !important;
+    transform: translateY(-50%) !important;
+    color: rgba(255, 255, 255, 0.72) !important;
+    font-size: 38px !important;
+    font-weight: 300 !important;
+    line-height: 32px !important;
+    outline: none !important;
+    transition: color 150ms ease;
+  }
+
+  .dashboard-notice .swal2-close:hover,
+  .dashboard-notice-close:hover {
+    color: #ffffff !important;
+  }
+}
+
+/* Admin action button helpers (explicit visual tokens used by admin pages) */
+.btn {
+  height: 38px;
+  padding: 0 16px;
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-add    { background: #16A34A; color: white; }
+.btn-view   { background: #64748B; color: white; }
+.btn-edit   { background: #2563EB; color: white; }
+.btn-delete { background: #DC2626; color: white; }
+
+/* Inline validation message shown directly below inputs */
+.dashboard-validation-error {
+  color: #991b1b;
+  font-size: 12px;
+  line-height: 1rem;
+  margin-top: 6px;
+}
+
+
 @keyframes accordion-up {
   from {
     height: var(--radix-accordion-content-height);
@@ -185,6 +272,36 @@
     --muted-foreground: 0 0% 32%;
     --border: 0 0% 78%;
     --input: 0 0% 82%;
+    font-family: var(--font-inter), Inter, ui-sans-serif, system-ui, sans-serif;
+    font-size: 14px;
+  }
+
+  .dashboard-theme h1 {
+    font-family: var(--font-inter), Inter, ui-sans-serif, system-ui, sans-serif;
+    font-size: 32px;
+    font-weight: 700;
+    line-height: 1.2;
+    letter-spacing: 0;
+  }
+
+  .dashboard-theme h2 {
+    font-family: var(--font-inter), Inter, ui-sans-serif, system-ui, sans-serif;
+    font-size: 24px;
+    font-weight: 600;
+    line-height: 1.25;
+    letter-spacing: 0;
+  }
+
+  .dashboard-theme .card-title {
+    font-size: 16px;
+    font-weight: 600;
+    line-height: 1.35;
+  }
+
+  .dashboard-theme .caption {
+    color: #6b7280;
+    font-size: 12px;
+    line-height: 1.4;
   }
 
   .dashboard-theme [class~="bg-card"] {
@@ -198,11 +315,11 @@
   }
 
   .dashboard-theme table thead tr {
-    background: hsl(0 0% 96%);
+    background: #eff6ff;
   }
 
   .dashboard-theme table thead th {
-    color: hsl(0 0% 24%);
+    color: #172554;
     font-weight: 700;
   }
 
@@ -252,9 +369,10 @@
   .dashboard-swal-popup,
   .payment-swal-popup {
     border: 1px solid hsl(var(--border)) !important;
-    border-radius: 1.5rem !important;
+    border-radius: 1rem !important;
     padding: 1.5rem !important;
     box-shadow: 0 28px 80px rgba(0, 0, 0, 0.38) !important;
+    font-family: var(--font-inter), Inter, ui-sans-serif, system-ui, sans-serif !important;
   }
 
   /* Ensure SweetAlert2 sits above Radix Dialog overlays/modals. */
@@ -281,8 +399,8 @@
   }
 
   .dashboard-swal-icon-warning {
-    background: #fee2e2 !important;
-    color: #ef0013 !important;
+    background: #fef3c7 !important;
+    color: #d97706 !important;
   }
 
   .dashboard-swal-icon-success {
@@ -331,7 +449,7 @@
     border-radius: 0 !important;
     box-shadow: none !important;
     color: #171717 !important;
-    font-size: 1.5rem !important;
+    font-size: 24px !important;
     font-weight: 600 !important;
     line-height: 2rem !important;
     padding: 0 !important;
@@ -342,7 +460,7 @@
   .dashboard-swal-text,
   .payment-swal-text {
     color: hsl(var(--muted-foreground)) !important;
-    font-size: 0.875rem !important;
+    font-size: 14px !important;
     line-height: 1.25rem !important;
     margin: 0.5rem 0 0 !important;
     padding: 0 !important;
@@ -357,10 +475,10 @@
   .dashboard-swal-cancel,
   .dashboard-swal-confirm,
   .payment-swal-button {
-    border-radius: 0.75rem !important;
+    border-radius: 0.5rem !important;
     min-width: auto !important;
-    padding: 0.625rem 1.25rem !important;
-    font-size: 0.875rem !important;
+    padding: 0.55rem 1rem !important;
+    font-size: 12px !important;
     line-height: 1.25rem !important;
     font-weight: 600 !important;
   }
@@ -424,9 +542,15 @@
     color: #ffffff !important;
   }
 
+  .dashboard-swal-confirm-primary {
+    background: #1e3a8a !important;
+    border: 1px solid #1e3a8a !important;
+    color: #ffffff !important;
+  }
+
   .dashboard-swal-confirm-warning {
-    background: #a16207 !important;
-    border: 1px solid #a16207 !important;
+    background: #d97706 !important;
+    border: 1px solid #d97706 !important;
     color: #ffffff !important;
   }
 

@@ -1,5 +1,5 @@
 import { Kysely, PostgresDialect } from "kysely";
-import { Pool } from "../../../node_modules/@types/pg/index.js";
+import { Pool } from "pg";
 import { env } from "../../config/env.js";
 
 export interface DB {
