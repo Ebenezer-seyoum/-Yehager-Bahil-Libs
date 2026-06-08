@@ -7,8 +7,8 @@ export default async function GroupOrdersPage() {
   let groups = [];
   try {
     await ensureBackendUserSynced();
-    const response = await apiRequest("/api/v1/family-groups/mine");
-    groups = Array.isArray(response?.data) ? response.data : [];
+  const response: any = await apiRequest("/api/v1/family-groups/mine");
+groups = Array.isArray(response?.data) ? response.data : [];
   } catch {
     redirect("/signin?callbackUrl=/group-orders");
   }
