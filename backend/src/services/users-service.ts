@@ -134,7 +134,7 @@ export async function authenticateUser(payload: { email: string; password: strin
     throw new HTTPException(401, { message: "Invalid credentials" });
   }
   if (user.status !== "active") {
-    throw new HTTPException(403, { message: "Your account has been blocked. Please contact your administrator for assistance." });
+    throw new HTTPException(403, { message: "Please contact admin. Account has been blocked." });
   }
 
   const matches = await verifyPassword(payload.password, user.passwordHash);

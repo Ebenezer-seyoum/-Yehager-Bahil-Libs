@@ -32,6 +32,7 @@ export function AdminWorkspace({
   headerNotice,
   filterPlaceholder,
   maxWidth = "max-w-screen-2xl",
+  showRecordsBadge = true,
   footer,
   title,
   subtitle,
@@ -65,6 +66,7 @@ export function AdminWorkspace({
   headerNotice?: string;
   filterPlaceholder?: string;
   maxWidth?: string;
+  showRecordsBadge?: boolean;
   /** Charts / insights only — never duplicate KPI cards */
   footer?: ReactNode;
   title?: string;
@@ -182,7 +184,7 @@ export function AdminWorkspace({
           placeholder={filterPlaceholder ?? filterPlaceholderFor(pageId)}
           showExport={showExport}
           onExport={onExport}
-          recordsCount={recordsCount}
+          recordsCount={showRecordsBadge === false ? undefined : recordsCount}
           actions={typeof filterActions === "function" ? filterActions({ activeTab, filteredData: tabFilteredData, search, dateRange }) : filterActions ?? primaryAction}
         />
       ) : null}

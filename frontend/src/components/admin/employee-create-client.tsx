@@ -49,6 +49,7 @@ function FlagImage({ iso2, name, className }: { iso2?: string | null; name?: str
 export function EmployeeCreateClient({ roles }: { roles: Role[] }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
+  const noticeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   
   // State for form
   const [firstName, setFirstName] = useState("");
@@ -82,6 +83,43 @@ export function EmployeeCreateClient({ roles }: { roles: Role[] }) {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [formNotice, setFormNotice] = useState<{ tone: "success" | "error"; title: string; message: string } | null>(null);
 
+  useEffect(() => {
+    if (!formNotice) return;
+    if (noticeTimeoutRef.current) {
+      clearTimeout(noticeTimeoutRef.current);
+      noticeTimeoutRef.current = null;
+    }
+    noticeTimeoutRef.current = setTimeout(() => {
+      setFormNotice(null);
+      noticeTimeoutRef.current = null;
+    }, 10000);
+    return () => {
+      if (noticeTimeoutRef.current) {
+        clearTimeout(noticeTimeoutRef.current);
+        noticeTimeoutRef.current = null;
+      }
+    };
+  }, [formNotice]);
+
+  function generateAutoPassword() {
+    // Keep this compatible with backend policy: min 8, include mixed chars.
+    const upper = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+    const lower = "abcdefghijkmnopqrstuvwxyz";
+    const digits = "23456789";
+    const symbols = "!@#$%^&*";
+    const all = upper + lower + digits + symbols;
+    const seed = [
+      upper[Math.floor(Math.random() * upper.length)],
+      lower[Math.floor(Math.random() * lower.length)],
+      digits[Math.floor(Math.random() * digits.length)],
+      symbols[Math.floor(Math.random() * symbols.length)],
+    ];
+    while (seed.length < 12) {
+      seed.push(all[Math.floor(Math.random() * all.length)]);
+    }
+    return seed.sort(() => Math.random() - 0.5).join("");
+  }
+
   const selectedCountry = useMemo(() => {
     return COUNTRY_CALLING_CODES.find((item) => item.iso2 === safeIso2(phoneCountryIso2)) ?? COUNTRY_CALLING_CODES[0];
   }, [phoneCountryIso2]);
@@ -111,7 +149,15 @@ export function EmployeeCreateClient({ roles }: { roles: Role[] }) {
   const handleCreate = async () => {
     const errors = validate();
     setFieldErrors(errors);
-    if (Object.keys(errors).length > 0) return;
+    if (Object.keys(errors).length > 0) {
+      const firstError = Object.values(errors)[0] ?? "Please complete all required fields.";
+      setFormNotice({
+        tone: "error",
+        title: "Validation Error",
+        message: firstError,
+      });
+      return;
+    }
 
     setBusy(true);
     setFormNotice(null);
@@ -123,6 +169,8 @@ export function EmployeeCreateClient({ roles }: { roles: Role[] }) {
         // Implement upload logic or just use preview for now if backend expects URL
       }
 
+      const passwordToSend = sendInviteLink ? generateAutoPassword() : tempPassword;
+
       const payload = {
         name: `${firstName} ${fatherName} ${grandfatherName}`.trim(),
         email: email.trim(),
@@ -130,7 +178,7 @@ export function EmployeeCreateClient({ roles }: { roles: Role[] }) {
         roleId: roleId || undefined,
         status: accountStatus,
         avatarUrl,
-        password: sendInviteLink ? undefined : tempPassword,
+        password: passwordToSend,
         sendInvite: sendInviteLink,
         profile: {
           firstName: firstName.trim(),
@@ -211,18 +259,35 @@ export function EmployeeCreateClient({ roles }: { roles: Role[] }) {
         </div>
       </header>
 
-      {formNotice && (
-        <div className={cn(
-          "flex items-center gap-4 rounded-2xl p-6 shadow-md border-l-4 animate-in fade-in slide-in-from-top-4 duration-300",
-          formNotice.tone === "success" ? "bg-emerald-50 border-l-emerald-500 text-emerald-900" : "bg-rose-50 border-l-rose-500 text-rose-900"
-        )}>
-          {formNotice.tone === "success" ? <CheckCircle2 className="h-6 w-6 text-emerald-500" /> : <XCircle className="h-6 w-6 text-rose-500" />}
-          <div>
-            <p className="font-black uppercase tracking-tight text-lg">{formNotice.title}</p>
-            <p className="text-sm font-medium">{formNotice.message}</p>
+      {formNotice ? (
+        <div
+          className={cn(
+            "fixed right-4 top-4 z-[120] flex w-[min(92vw,420px)] items-start gap-3 rounded-2xl p-4 shadow-2xl ring-1 animate-in fade-in slide-in-from-top-2 duration-300",
+            formNotice.tone === "success"
+              ? "bg-emerald-900 text-emerald-50 ring-emerald-700"
+              : "bg-rose-900 text-rose-50 ring-rose-700",
+          )}
+          role="status"
+          aria-live="polite"
+        >
+          {formNotice.tone === "success" ? (
+            <CheckCircle2 className="mt-0.5 h-5 w-5 text-emerald-200" />
+          ) : (
+            <XCircle className="mt-0.5 h-5 w-5 text-rose-200" />
+          )}
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-black uppercase tracking-wide">{formNotice.title}</p>
+            <p className="mt-0.5 text-sm font-medium leading-relaxed">{formNotice.message}</p>
           </div>
+          <button
+            type="button"
+            onClick={() => setFormNotice(null)}
+            className="rounded-lg px-2 py-1 text-xs font-bold uppercase tracking-wide text-white/80 hover:bg-white/10 hover:text-white"
+          >
+            Close
+          </button>
         </div>
-      )}
+      ) : null}
 
       {/* Main Form Layout */}
       <div className="grid gap-6 lg:grid-cols-3">
@@ -340,6 +405,7 @@ export function EmployeeCreateClient({ roles }: { roles: Role[] }) {
                     )}
                     placeholder="E.g. Seyoum"
                   />
+                  {fieldErrors.fatherName && <p className="text-[10px] font-bold text-rose-500 uppercase tracking-tighter">{fieldErrors.fatherName}</p>}
                 </div>
                 <div className="space-y-2">
                   <label className="text-xs font-black uppercase tracking-tight text-slate-900">Grandfather's Name</label>
@@ -368,6 +434,7 @@ export function EmployeeCreateClient({ roles }: { roles: Role[] }) {
                     )}
                     placeholder="staff@yehagerbahil.com"
                   />
+                  {fieldErrors.email && <p className="text-[10px] font-bold text-rose-500 uppercase tracking-tighter">{fieldErrors.email}</p>}
                 </div>
                 <div className="space-y-2">
                   <label className="text-xs font-black uppercase tracking-tight text-slate-900 flex items-center gap-1.5">
@@ -419,6 +486,7 @@ export function EmployeeCreateClient({ roles }: { roles: Role[] }) {
                       placeholder="900 000 000"
                     />
                   </div>
+                  {fieldErrors.phone && <p className="text-[10px] font-bold text-rose-500 uppercase tracking-tighter">{fieldErrors.phone}</p>}
                 </div>
               </div>
 
@@ -435,6 +503,7 @@ export function EmployeeCreateClient({ roles }: { roles: Role[] }) {
                     <option value="male">Male</option>
                     <option value="female">Female</option>
                   </select>
+                  {fieldErrors.gender && <p className="text-[10px] font-bold text-rose-500 uppercase tracking-tighter">{fieldErrors.gender}</p>}
                 </div>
                 <div className="space-y-2">
                   <label className="text-xs font-black uppercase tracking-tight text-slate-900 flex items-center gap-1.5"><Calendar className="h-3 w-3" /> Date of Birth</label>
@@ -534,6 +603,7 @@ export function EmployeeCreateClient({ roles }: { roles: Role[] }) {
                           {showTempPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                         </button>
                       </div>
+                      {fieldErrors.tempPassword && <p className="text-[10px] font-bold text-rose-500 uppercase tracking-tighter">{fieldErrors.tempPassword}</p>}
                     </div>
                     <div className="space-y-2">
                       <label className="text-xs font-black uppercase tracking-tight text-slate-900 flex items-center gap-1.5"><Lock className="h-3 w-3" /> Confirm Password</label>
@@ -551,6 +621,7 @@ export function EmployeeCreateClient({ roles }: { roles: Role[] }) {
                           {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                         </button>
                       </div>
+                      {fieldErrors.confirmPassword && <p className="text-[10px] font-bold text-rose-500 uppercase tracking-tighter">{fieldErrors.confirmPassword}</p>}
                     </div>
                   </div>
                 )}
@@ -565,12 +636,13 @@ export function EmployeeCreateClient({ roles }: { roles: Role[] }) {
                   Discard
                 </button>
                 <button 
+                  type="button"
                   onClick={handleCreate}
                   disabled={busy}
-                  className="inline-flex h-12 items-center justify-center gap-3 rounded-2xl bg-primary px-10 text-sm font-black uppercase tracking-widest text-white shadow-xl shadow-primary/20 transition-all hover:scale-[1.02] active:scale-100 disabled:opacity-50"
+                  className="inline-flex h-12 items-center justify-center gap-3 rounded-2xl bg-[#166534] px-10 text-sm font-black uppercase tracking-widest text-white shadow-xl shadow-[#166534]/25 transition-all hover:scale-[1.02] hover:bg-[#14532D] active:scale-100 disabled:opacity-50"
                 >
                   {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <CheckCircle2 className="h-5 w-5" />}
-                  {busy ? "Processing..." : "Create Personnel"}
+                  {busy ? "Adding..." : "Add Employee"}
                 </button>
               </div>
             </div>

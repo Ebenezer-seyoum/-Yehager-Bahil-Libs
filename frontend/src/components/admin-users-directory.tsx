@@ -87,7 +87,7 @@ export function AdminUsersDirectory({
   const router = useRouter();
 
   function openEmployeeDetail(employeeId: string) {
-    router.push(`/admin/users/${employeeId}?tab=${encodeURIComponent(mode)}`);
+    router.push(`/admin/users/employees/${employeeId}?tab=${encodeURIComponent(mode)}`);
   }
 
   return (

@@ -15,7 +15,7 @@ type Feedback = {
 const authErrorMessages: Record<string, string> = {
   AccessDenied: "Google sign-in was cancelled or denied.",
   CredentialsSignin: "Invalid email or password.",
-  AccountBlocked: "Your account has been blocked. Please contact your administrator for assistance.",
+  AccountBlocked: "Please contact admin. Account has been blocked.",
   OAuthAccountNotLinked: "Please sign in with the same method you used before.",
   OAuthCallback: "Google sign-in could not be completed. Please try again.",
   OAuthSignin: "Google sign-in could not be started. Please try again.",
@@ -177,7 +177,7 @@ function SignInForm() {
         await signOut({ redirect: false });
         setFeedback({
           type: "error",
-          message: "Your account has been blocked. Please contact your administrator for assistance.",
+          message: "Please contact admin. Account has been blocked.",
         });
         setSubmitting(false);
         return;

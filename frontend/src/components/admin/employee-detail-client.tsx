@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Check, Eye, EyeOff, FileText, Loader2, Shield, User2, MapPin, NotebookPen, Lock, Unlock, Key, Trash2, Pencil, X, RefreshCw, ArrowLeft, Users } from "lucide-react";
+import { Check, Eye, EyeOff, FileText, Loader2, Shield, User2, MapPin, NotebookPen, Lock, Unlock, RotateCcw, Trash2, Edit, X, RefreshCw, ArrowLeft, Users } from "lucide-react";
 import { dashboardConfirm, dashboardError, dashboardLoading, dashboardSuccess, dashboardAlert } from "@/lib/dashboard-swal";
 import { cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -53,6 +53,17 @@ function badgeTone(kind: "account" | "roleStatus" | "invite", value?: string | n
     return "bg-blue-100 text-blue-800 border-blue-200";
   }
   return "bg-slate-100 text-slate-800 border-slate-200";
+}
+
+function getAccessStatus(user: EmployeeUser) {
+  const status = String(user.status ?? "").toLowerCase();
+  if (status !== "active") {
+    return "Blocked";
+  }
+
+  const lastLogin = user.lastLoginAt ? new Date(user.lastLoginAt).getTime() : NaN;
+  const isOnline = Number.isFinite(lastLogin) && Date.now() - lastLogin < 5 * 60 * 1000;
+  return isOnline ? "Online" : "Unblocked";
 }
 
 function Field({
@@ -170,7 +181,7 @@ type ApiResponse<T> = {
   data?: T;
 };
 
-type EmployeeSectionId = "personal" | "contact" | "account" | "access" | "notes";
+type EmployeeSectionId = "personal" | "contact" | "account" | "access" | "activity" | "notes";
 
 type EmployeeUser = {
   id: string;
@@ -774,6 +785,16 @@ export function EmployeeDetailClient({
   const userStatusValue = String(user.status ?? "").toLowerCase();
   const userAccountStatusValue = String(user.accountStatus ?? "").toLowerCase();
   const isBlockedForUi = userStatusValue === "inactive" || userStatusValue === "suspended" || userAccountStatusValue === "blocked" || userAccountStatusValue === "inactive";
+  const accessStatusLabel = getAccessStatus(user);
+
+  function goToSection(sectionId: EmployeeSectionId) {
+    setActiveSection(sectionId);
+    if (typeof window === "undefined") return;
+    const node = document.getElementById(sectionId);
+    if (node) {
+      node.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }
 
   return (
     <div ref={swalTargetRef} className="space-y-4">
@@ -795,22 +816,22 @@ export function EmployeeDetailClient({
               </div>
             </div>
 
-            <div className="flex flex-col gap-3 shrink-0 items-end">
+            <div className="flex flex-row gap-3 shrink-0 items-center">
               <button
                 onClick={() => {
                   router.refresh();
                   dashboardSuccess("Page Refreshed", "The employee details have been reloaded.");
                 }}
-                className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-bold text-slate-900 shadow-sm hover:bg-slate-50 transition-all group"
+                className="flex items-center gap-2 rounded-xl border border-[#CBD5E1] bg-[#F8FAFC] px-5 py-2.5 text-sm font-bold text-[#334155] shadow-sm hover:bg-slate-100 transition-all group"
               >
-                <RefreshCw className="h-4 w-4 text-slate-400 group-hover:rotate-180 transition-transform duration-500" />
+                <RefreshCw className="h-4 w-4 text-[#334155] group-hover:rotate-180 transition-transform duration-500" />
                 Refresh
               </button>
               <button
                 onClick={() => router.push(`/admin/users?tab=${encodeURIComponent(backTab)}`)}
-                className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-bold text-slate-900 shadow-sm hover:bg-slate-50 transition-all group"
+                className="flex items-center gap-2 rounded-xl border border-[#CBD5E1] bg-[#F8FAFC] px-5 py-2.5 text-sm font-bold text-[#334155] shadow-sm hover:bg-slate-100 transition-all group"
               >
-                <ArrowLeft className="h-4 w-4 text-slate-400 group-hover:-translate-x-1 transition-transform" />
+                <ArrowLeft className="h-4 w-4 text-[#334155] group-hover:-translate-x-1 transition-transform" />
                 Back to Users
               </button>
             </div>
@@ -908,8 +929,8 @@ export function EmployeeDetailClient({
               </h1>
               <div className="mt-1 text-sm text-slate-600">Employee ID: {user.id}</div>
               <div className="mt-2 flex flex-wrap gap-2">
-                <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${badgeTone("account", user.accountStatus)}`}>
-                  {String(user.accountStatus ?? "Not provided")}
+                <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${badgeTone("account", isBlockedForUi ? "inactive" : "active")}`}>
+                  {accessStatusLabel}
                 </span>
                 <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${badgeTone("roleStatus", roleStatusValue)}`}>
                   {String(roleStatusValue ?? "Not provided")}
@@ -936,47 +957,47 @@ export function EmployeeDetailClient({
             </div>
           </div>
 
-          <div className={cn("flex flex-wrap items-center gap-2", embedded ? "md:flex-col md:items-stretch" : "")}>
+          <div className="flex w-full flex-col items-stretch gap-2 md:w-auto"> 
             {!editMode ? (
               <>
+                <button
+                  type="button"
+                  disabled={!canEdit}
+                  onClick={enterEditMode}
+                  className="inline-flex h-10 items-center gap-2 rounded-xl bg-[#2563EB] px-4 text-sm font-semibold text-white shadow-sm hover:bg-[#1D4ED8] disabled:opacity-50"
+                >
+                  <Edit className="h-4 w-4" />
+                  Edit User
+                </button>
+                <button
+                  type="button"
+                  onClick={openResetPasswordModal}
+                  disabled={!canEdit || busy}
+                  className="inline-flex h-10 items-center gap-2 rounded-xl bg-[#7C3AED] px-4 text-sm font-semibold text-white shadow-sm hover:bg-[#6D28D9] disabled:opacity-50"
+                >
+                  <RotateCcw className="h-4 w-4" />
+                  Reset Password
+                </button>
                 <button
                   type="button"
                   onClick={toggleBlock}
                   disabled={busy}
                   className={cn(
                     "inline-flex h-10 items-center gap-2 rounded-xl px-4 text-sm font-semibold text-white shadow-sm",
-                    isBlockedForUi ? "bg-blue-600 hover:bg-blue-700" : "bg-amber-500 hover:bg-amber-600",
+                    isBlockedForUi ? "bg-[#16A34A] hover:bg-[#15803D]" : "bg-[#EA580C] hover:bg-[#C2410C]",
                   )}
                 >
                   {isBlockedForUi ? <Unlock className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
-                  {isBlockedForUi ? "Unblock" : "Block"}
-                </button>
-                <button
-                  type="button"
-                  onClick={openResetPasswordModal}
-                  disabled={!canEdit || busy}
-                  className="inline-flex h-10 items-center gap-2 rounded-xl bg-slate-950 px-4 text-sm font-semibold text-white shadow-sm hover:bg-slate-900 disabled:opacity-50"
-                >
-                  <Key className="h-4 w-4" />
-                  Reset Password
+                  {isBlockedForUi ? "Unblock User" : "Block User"}
                 </button>
                 <button
                   type="button"
                   onClick={deleteEmployee}
                   disabled={!canDelete || busy}
-                  className="inline-flex h-10 items-center gap-2 rounded-xl bg-red-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-red-700 disabled:opacity-50"
+                  className="inline-flex h-10 items-center gap-2 rounded-xl bg-[#DC2626] px-4 text-sm font-semibold text-white shadow-sm hover:bg-[#B91C1C] disabled:opacity-50"
                 >
                   <Trash2 className="h-4 w-4" />
-                  Delete
-                </button>
-                <button
-                  type="button"
-                  disabled={!canEdit}
-                  onClick={enterEditMode}
-                  className="inline-flex h-10 items-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-50"
-                >
-                  <Pencil className="h-4 w-4" />
-                  Edit
+                  Delete User
                 </button>
               </>
             ) : (
@@ -1217,21 +1238,30 @@ export function EmployeeDetailClient({
           <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Sections</div>
           <nav className="mt-3 space-y-1">
             {[
-              ["personal", "Personal Information"],
-              ["contact", "Contact Information"],
-              ["account", "Account Information"],
-              ["access", "Roles & Permissions"],
-              ["activity", "Active Logs"],
-              ["notes", "Notes"],
-            ].map(([id, label]) => (
-              <a
-                key={id}
-                href={`#${id}`}
-                className="block rounded-xl border border-transparent px-3 py-2 text-sm font-semibold text-slate-800 hover:border-blue-100 hover:bg-blue-50"
-              >
-                {label}
-              </a>
-            ))}
+              { id: "personal", label: "👤 Personal Information" },
+              { id: "contact", label: "📞 Contact Information" },
+              { id: "account", label: "🛡 Account Information" },
+              { id: "access", label: "🔑 Roles & Permissions" },
+              { id: "activity", label: "🕒 Activity Logs" },
+              { id: "notes", label: "📝 Admin Notes" },
+            ].map((item) => {
+              const selected = activeSection === item.id;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => goToSection(item.id as EmployeeSectionId)}
+                  className={cn(
+                    "block w-full rounded-xl border border-transparent px-3 py-2 text-left text-sm font-bold transition",
+                    selected
+                      ? "border-l-4 border-l-[#2563EB] bg-[#EFF6FF] text-[#2563EB]"
+                      : "text-slate-800 hover:border-blue-100 hover:bg-blue-50",
+                  )}
+                >
+                  {item.label}
+                </button>
+              );
+            })}
           </nav>
         </aside>
         ) : null}
@@ -1364,7 +1394,9 @@ export function EmployeeDetailClient({
                       {!editMode ? (
                         <>
                           <Field label="Account Status" value={user.accountStatus} />
+                          <Field label="Current Access" value={accessStatusLabel} />
                           <Field label="Password" value="Hidden for security" />
+                          <Field label="Temporary Password" value={user.mustChangePassword ? "Temporary password active" : "Not active"} />
                           <Field label="Password Status" value={user.passwordStatus ?? "Never reset"} />
                           <Field
                             label="Last Password Reset"
@@ -1389,9 +1421,9 @@ export function EmployeeDetailClient({
                             value={accountStatus}
                             onChange={setAccountStatus}
                             options={[
-                              { value: "active", label: "Active" },
-                              { value: "invited", label: "Invited" },
-                              { value: "pending", label: "Inactive" },
+                              { value: "active", label: "Online" },
+                              { value: "invited", label: "Unblocked" },
+                              { value: "pending", label: "Blocked" },
                             ]}
                           />
                           <TextInput label="Invite Status" value={inviteStatus} onChange={setInviteStatus} />
@@ -1529,7 +1561,9 @@ export function EmployeeDetailClient({
               {!editMode ? (
                 <>
                   <Field label="Account Status" value={user.accountStatus} />
+                    <Field label="Current Access" value={accessStatusLabel} />
                           <Field label="Password" value="Hidden for security" />
+                    <Field label="Temporary Password" value={user.mustChangePassword ? "Temporary password active" : "Not active"} />
                   <Field label="Role Status" value={roleStatusValue} />
                   <Field label="Invite Status" value={inviteStatusValue} />
                   <Field label="Last Login" value={user.lastLoginAt ? formatDateTime(user.lastLoginAt) : "Never logged in"} />
@@ -1609,7 +1643,7 @@ export function EmployeeDetailClient({
 
           {!embedded ? (
           <section id="activity" className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h2 className="text-base font-bold text-slate-900">Active Logs</h2>
+            <h2 className="text-base font-bold text-slate-900">Activity Logs</h2>
             <div className="mt-4 overflow-x-auto">
               <table className="w-full min-w-[900px] border-collapse text-left">
                 <thead className="bg-blue-50 text-slate-900">
@@ -1647,7 +1681,7 @@ export function EmployeeDetailClient({
 
           {embedded && panel !== "overview" ? null : (
           <section id="notes" className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h2 className="text-base font-bold text-slate-900">Notes</h2>
+            <h2 className="text-base font-bold text-slate-900">Admin Notes</h2>
             {!editMode ? (
               <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
                 {profile?.notes ? profile.notes : "No internal notes added."}

@@ -47,10 +47,16 @@ const providers: NonNullable<NextAuthOptions["providers"]> = [
 
       if (!response.ok) {
         const errorPayload = await response.json().catch(() => null);
+        const backendMessage = String(
+          errorPayload?.message ?? errorPayload?.error?.message ?? errorPayload?.error ?? "",
+        ).toLowerCase();
         console.warn("[auth] backend login failed", {
           status: response.status,
           error: errorPayload?.error?.message ?? errorPayload?.error ?? errorPayload ?? null,
         });
+        if (response.status === 403 || backendMessage.includes("blocked")) {
+          throw new Error("AccountBlocked");
+        }
         return null;
       }
 

@@ -58,13 +58,15 @@ export function AdminEmployeesWorkspace({
         canCreate && (
           <button
             onClick={() => router.push("/admin/users/create")}
-            className="inline-flex h-10 items-center gap-2 rounded-xl bg-slate-900 px-4 text-sm font-bold text-white shadow-lg hover:bg-slate-800 transition-all active:scale-95"
+            className="inline-flex h-10 items-center gap-2 rounded-xl bg-green-800 px-4 text-sm font-bold text-white shadow-lg hover:bg-green-900 transition-all active:scale-95"
           >
             <Plus className="h-4 w-4" />
             Add Employee
           </button>
         )
       }
+      showRecordsBadge={false}
+      hideKpis={true}
     >
       {({ search }) => (
         <AdminUsersDirectory
