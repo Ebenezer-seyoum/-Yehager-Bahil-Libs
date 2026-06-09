@@ -15,6 +15,7 @@ export type AdminPageId =
   | "uploaded-designs"
   | "exchange-rate"
   | "support-inbox"
+  | "alerts"
   | "settings"
   | "activity-logs"
   | "reports";

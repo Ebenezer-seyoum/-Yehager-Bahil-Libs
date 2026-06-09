@@ -18,6 +18,7 @@ import {
   ChevronRight,
   ShieldCheck,
   ImageIcon,
+  MapPin,
   Hash
 } from "lucide-react";
 import { cn } from "@/lib/utils";

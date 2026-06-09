@@ -1,9 +1,11 @@
 "use client";
 
 import { Plus, type LucideIcon } from "lucide-react";
-import { DASHBOARD_ADD_BUTTON_CLASS } from "@/lib/admin/admin-design-system";
 import { cn } from "@/lib/utils";
 import type { ButtonHTMLAttributes, ReactNode } from "react";
+
+const DASHBOARD_ADD_BUTTON_CLASS =
+  "inline-flex items-center gap-2 rounded-xl bg-blue-900 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-blue-900/30 transition-all hover:bg-blue-950 active:scale-95";
 
 export function DashboardAddButton({
   label,
