@@ -480,7 +480,7 @@ export async function updateUserProfileForAdminService(payload: {
           ...(profilePatch.address !== undefined ? { address: profilePatch.address?.trim() || null } : {}),
           ...(profilePatch.employmentType !== undefined ? { employmentType: profilePatch.employmentType?.trim() || null } : {}),
           ...(profilePatch.startDate !== undefined ? { startDate: toTs(profilePatch.startDate) } : {}),
-          ...(profilePatch.inviteStatus !== undefined ? { inviteStatus: profilePatch.inviteStatus?.trim() || "none" } : {}),
+          ...(profilePatch.inviteStatus !== undefined ? { inviteStatus: (profilePatch.inviteStatus ?? "none").trim() || "none" } : {}),
           ...(profilePatch.notes !== undefined ? { notes: profilePatch.notes?.trim() || null } : {}),
           updatedAt: new Date(),
         })

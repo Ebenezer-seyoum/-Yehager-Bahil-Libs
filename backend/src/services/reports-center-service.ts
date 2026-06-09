@@ -228,7 +228,7 @@ function buildCustomerRows(users: CustomerRow[], ordersRows: OrderRow[]) {
   for (const order of ordersRows) {
     const email = String(order.userEmail ?? "").toLowerCase();
     if (!email) continue;
-    const existing = customerMap.get(email) ?? {
+    const existing: CustomerRow = customerMap.get(email) ?? ({
       id: order.userId ?? order.id,
       email: order.userEmail,
       name: order.customerName ?? order.userEmail,
@@ -241,14 +241,14 @@ function buildCustomerRows(users: CustomerRow[], ordersRows: OrderRow[]) {
       city: getCity(order),
       statusLabel: "active",
       lastOrderDate: order.createdAt,
-    };
+    } as unknown as CustomerRow);
 
     existing.totalOrders = toNumber(existing.totalOrders) + 1;
-    existing.totalSpent = toNumber(existing.totalSpent) + toNumber(order.totalUsd);
+    existing.totalSpent = toNumber(existing.totalSpent) + toNumber(order.totalUsd as string);
     if (!existing.country) existing.country = getCountry(order);
     if (!existing.city) existing.city = getCity(order);
     existing.lastOrderDate = order.createdAt ?? existing.lastOrderDate;
-    customerMap.set(email, existing as CustomerRow);
+    customerMap.set(email, existing);
   }
 
   return Array.from(customerMap.values()).sort((a, b) => toNumber(b.totalSpent) - toNumber(a.totalSpent));
@@ -328,7 +328,7 @@ function buildDeliveryRows(ordersRows: OrderRow[]) {
     deliveryStatus: order.status,
     deliveryDate: order.updatedAt ?? order.createdAt,
     deliveryTime: order.updatedAt && order.createdAt ? `${Math.max(0, Math.round((new Date(String(order.updatedAt)).getTime() - new Date(String(order.createdAt)).getTime()) / 3_600_000))}h` : "Unknown",
-    employee: (order as any).employeeName ?? (order as any).assignedEmployee ?? "Unassigned",
+    employee: (order as Record<string, unknown>).employeeName ?? (order as Record<string, unknown>).assignedEmployee ?? "Unassigned",
     country: getCountry(order),
     city: getCity(order),
     createdAt: order.createdAt,
@@ -337,7 +337,7 @@ function buildDeliveryRows(ordersRows: OrderRow[]) {
 
 function buildFinancialRows(ordersRows: OrderRow[]) {
   return ordersRows.map((order) => {
-    const total = toNumber(order.totalUsd);
+    const total = toNumber(order.totalUsd as string);
     const shipping = toNumber(order.shippingCostUsd);
     const refundStatus = normalize(order.paymentStatus) === "refunded" || normalize(order.status) === "cancelled" ? "Refunded" : "Not refunded";
 
@@ -403,7 +403,7 @@ function summarizeOrders(rows: OrderRow[]) {
   const delivered = rows.filter(isDelivered);
   const pending = rows.filter(isPending);
   const cancelled = rows.filter(isCancelled);
-  const revenue = paid.reduce((sum, row) => sum + toNumber(row.totalUsd), 0);
+  const revenue = paid.reduce((sum, row) => sum + toNumber(row.totalUsd as string), 0);
 
   return {
     totalOrders: rows.length,
