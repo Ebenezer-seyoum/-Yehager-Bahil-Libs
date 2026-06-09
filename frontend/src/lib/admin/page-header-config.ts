@@ -21,6 +21,7 @@ export const PAGE_HEADER_CONFIG: Record<
   "support-inbox": { theme: "slate", section: "System" },
   settings: { theme: "slate", section: "System" },
   "activity-logs": { theme: "slate", section: "System" },
+  alerts: { theme: "orange", section: "Operations" },
 };
 
 export const THEME_STYLES: Record<

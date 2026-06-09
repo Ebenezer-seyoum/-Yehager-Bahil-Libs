@@ -16,6 +16,7 @@ export const FILTER_PLACEHOLDERS: Record<AdminPageId, string> = {
   "support-inbox": "Search by ticket #, customer, email, subject, or order id...",
   settings: "Search settings...",
   "activity-logs": "Search activity logs...",
+  alerts: "Search alerts...",
 };
 
 export function filterPlaceholderFor(pageId: AdminPageId) {

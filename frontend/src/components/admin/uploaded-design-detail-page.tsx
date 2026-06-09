@@ -245,22 +245,25 @@ export function UploadedDesignDetailPage({
                     <p className="text-base font-bold text-slate-800 leading-relaxed italic">"{design.inspirationNote || "No specific inspiration notes provided."}"</p>
                   </div>
                   <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 pt-6">
-                    {[
+                    {([
                       ["Front View", design.frontImageUrl],
                       ["Side View", design.sideImageUrl],
                       ["Back View", design.backImageUrl],
                       ["Detail View", design.detailImageUrl],
-                    ].filter((i) => i[1]).map(([label, url]) => (
-                      <a key={label} href={url || ""} target="_blank" rel="noreferrer" className="group rounded-[1.5rem] overflow-hidden border-4 border-slate-50 shadow-lg relative aspect-square bg-[#0f172a]">
-                        <img src={url || ""} alt={label} className="h-full w-full object-cover transition duration-500 group-hover:scale-110" />
-                        <div className="absolute inset-x-0 bottom-0 bg-black/60 p-2 text-center">
-                          <span className="text-[10px] font-black text-white uppercase tracking-widest">{label}</span>
-                        </div>
-                        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-blue-600/20">
-                          <ExternalLink className="text-white h-8 w-8" />
-                        </div>
-                      </a>
-                    ))}
+                    ] as [string, string | null | undefined][]).filter((i) => i[1]).map(([label, url]) => {
+                      const imageUrl = url ?? undefined;
+                      return (
+                        <a key={label} href={imageUrl} target="_blank" rel="noreferrer" className="group rounded-[1.5rem] overflow-hidden border-4 border-slate-50 shadow-lg relative aspect-square bg-[#0f172a]">
+                          <img src={imageUrl} alt={label} className="h-full w-full object-cover transition duration-500 group-hover:scale-110" />
+                          <div className="absolute inset-x-0 bottom-0 bg-black/60 p-2 text-center">
+                            <span className="text-[10px] font-black text-white uppercase tracking-widest">{label}</span>
+                          </div>
+                          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-blue-600/20">
+                            <ExternalLink className="text-white h-8 w-8" />
+                          </div>
+                        </a>
+                      );
+                    })}
                   </div>
                 </div>
               )}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ComponentType, type PropsWithChildren } from "react";
 import { useRouter } from "next/navigation";
 import { 
   ArrowLeft, 
@@ -24,6 +24,8 @@ import { cn } from "@/lib/utils";
 import { COUNTRY_CALLING_CODES } from "@/lib/country-calling-codes";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { safeIso2 } from "@/lib/utils/phone-utils";
+
+const TypedPopoverContent = PopoverContent as ComponentType<PropsWithChildren<{ align?: string; className?: string; sideOffset?: number }>>;
 
 function FlagImage({ iso2, name, className }: { iso2?: string | null; name?: string | null; className?: string }) {
   const [failed, setFailed] = useState(false);
@@ -243,7 +245,7 @@ export function CustomerCreateClient() {
                               <FlagImage iso2={phoneCountryIso2} /> <span className="text-xs">{phoneDialCode}</span>
                             </button>
                           </PopoverTrigger>
-                          <PopoverContent align="start" className="w-64 rounded-[2rem] p-4 shadow-2xl border-slate-100">
+                          <TypedPopoverContent align="start" className="w-64 rounded-[2rem] p-4 shadow-2xl border-slate-100">
                              <input value={phoneCountryQuery} onChange={e => setPhoneCountryQuery(e.target.value)} className="w-full rounded-xl bg-slate-50 p-2 text-xs font-bold outline-none" placeholder="Search..." />
                              <div className="mt-2 max-h-48 overflow-y-auto space-y-1">
                                 {filteredCountryCodes.map(c => (
@@ -252,7 +254,7 @@ export function CustomerCreateClient() {
                                   </button>
                                 ))}
                              </div>
-                          </PopoverContent>
+                          </TypedPopoverContent>
                         </Popover>
                         <input value={phoneNumber} onChange={e => setPhoneNumber(e.target.value)} className="flex-1 rounded-2xl border border-slate-100 bg-slate-50/50 p-4 font-bold outline-none" />
                       </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState, useEffect } from "react";
+import { useMemo, useRef, useState, useEffect, type ComponentType, type PropsWithChildren } from "react";
 import { useRouter } from "next/navigation";
 import { 
   ArrowLeft, 
@@ -25,6 +25,8 @@ import type { AccountStatus, Role } from "@/lib/admin/types";
 import { COUNTRY_CALLING_CODES } from "@/lib/country-calling-codes";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { safeIso2 } from "@/lib/utils/phone-utils";
+
+const TypedPopoverContent = PopoverContent as ComponentType<PropsWithChildren<{ align?: string; className?: string; sideOffset?: number }>>;
 
 function FlagImage({ iso2, name, className }: { iso2?: string | null; name?: string | null; className?: string }) {
   const [failed, setFailed] = useState(false);
@@ -448,7 +450,7 @@ export function EmployeeCreateClient({ roles }: { roles: Role[] }) {
                           <span className="text-xs font-black">{phoneDialCode}</span>
                         </button>
                       </PopoverTrigger>
-                      <PopoverContent align="start" className="w-64 p-0 rounded-2xl shadow-2xl border-slate-100">
+                      <TypedPopoverContent align="start" className="w-64 p-0 rounded-2xl shadow-2xl border-slate-100">
                         <div className="p-2 border-b border-slate-50">
                           <input 
                             className="w-full bg-slate-50 border-none rounded-lg text-xs font-bold p-2 focus:ring-0" 
@@ -474,7 +476,7 @@ export function EmployeeCreateClient({ roles }: { roles: Role[] }) {
                             </button>
                           ))}
                         </div>
-                      </PopoverContent>
+                      </TypedPopoverContent>
                     </Popover>
                     <input 
                       value={phoneNumber}

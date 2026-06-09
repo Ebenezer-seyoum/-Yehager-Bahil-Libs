@@ -44,6 +44,8 @@ export function AdminEmployeesWorkspace({
 
   return (
     <AdminWorkspace
+      pageId="employees"
+      initialData={data}
       title="Employee Management"
       subtitle="Manage your studio staff, roles, and access permissions"
       icon={Search}

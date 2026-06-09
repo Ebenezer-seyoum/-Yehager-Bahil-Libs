@@ -31,7 +31,7 @@ export function AdminOrdersWorkspace({
       const handler = setTimeout(() => {
         const q = query.trim().toLowerCase();
         const matches = orders.filter((order) =>
-          [order.id, order.orderNumber, order.userName, order.userEmail, order.status, order.paymentStatus]
+          [order.id, order.orderNumber, (order as any).userName, order.userEmail, order.status, order.paymentStatus]
             .filter(Boolean)
             .some((value) => String(value).toLowerCase().includes(q)),
         ).length;

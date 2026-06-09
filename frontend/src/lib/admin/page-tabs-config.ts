@@ -196,6 +196,11 @@ export const PAGE_TABS: Record<AdminPageId, AdminTabConfig[]> = {
     { id: "security", label: "Security Logs", icon: Lock },
     { id: "errors", label: "Error Logs", icon: AlertTriangle },
   ),
+  alerts: tabs(
+    { id: "all", label: "All Alerts", icon: Bell },
+    { id: "unread", label: "Unread", icon: AlertTriangle },
+    { id: "resolved", label: "Resolved", icon: CheckCircle2 },
+  ),
 };
 
 export const PAGE_META: Record<AdminPageId, Omit<AdminPageMeta, "tabs">> = {
@@ -317,6 +322,14 @@ export const PAGE_META: Record<AdminPageId, Omit<AdminPageMeta, "tabs">> = {
     icon: ScrollText,
     title: "Activity Logs",
     subtitle: "Monitor admin actions, system events, security logs, and errors.",
+    defaultTab: "all",
+  },
+  alerts: {
+    id: "alerts",
+    section: "Operations",
+    icon: Bell,
+    title: "Alerts",
+    subtitle: "Monitor system alerts, warnings, and error notifications.",
     defaultTab: "all",
   },
 };

@@ -1,8 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ComponentType, type PropsWithChildren } from "react";
 import { Edit3, Eye, Trash2 } from "lucide-react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
+
+const TypedDialog = Dialog as ComponentType<PropsWithChildren<{ open?: boolean; onOpenChange?: (open: boolean) => void }>>;
+const TypedDialogContent = DialogContent as ComponentType<PropsWithChildren<{ className?: string }>>;
 import {
   DashboardModalFooter,
   DashboardModalFooterButton,
@@ -781,8 +784,8 @@ export function ReferenceRolePermissionPanel({
       )}
     </div>
 
-    <Dialog open={Boolean(roleModal)} onOpenChange={(open) => !open && setRoleModal(null)}>
-      <DialogContent className={dashboardModalPresets.simple.content()}>
+    <TypedDialog open={Boolean(roleModal)} onOpenChange={(open) => !open && setRoleModal(null)}>
+      <TypedDialogContent className={dashboardModalPresets.simple.content()}>
         <DashboardModalTitleBar
           title={roleModal?.mode === "edit" ? "Edit Role" : "Create New Role"}
           description={roleModal?.mode === "edit" ? "Update role name and description." : "Create a reusable employee role for dashboard access."}
@@ -817,11 +820,11 @@ export function ReferenceRolePermissionPanel({
             {roleModal?.mode === "edit" ? "Save Changes" : "Create Role"}
           </DashboardModalFooterButton>
         </DashboardModalFooter>
-      </DialogContent>
-    </Dialog>
+      </TypedDialogContent>
+    </TypedDialog>
 
-    <Dialog open={Boolean(permissionModal)} onOpenChange={(open) => !open && setPermissionModal(null)}>
-      <DialogContent className={dashboardModalPresets.compact.content()}>
+    <TypedDialog open={Boolean(permissionModal)} onOpenChange={(open) => !open && setPermissionModal(null)}>
+      <TypedDialogContent className={dashboardModalPresets.compact.content()}>
         <DashboardModalTitleBar
           title="Edit Permission"
           description="Update the permission key, resource, action, and dashboard description."
@@ -868,11 +871,11 @@ export function ReferenceRolePermissionPanel({
           <DashboardModalFooterButton size="sm" onClick={() => setPermissionModal(null)}>Cancel</DashboardModalFooterButton>
           <DashboardModalFooterButton variant="primary" size="sm" onClick={() => void savePermissionModal()}>Save Changes</DashboardModalFooterButton>
         </DashboardModalFooter>
-      </DialogContent>
-    </Dialog>
+      </TypedDialogContent>
+    </TypedDialog>
 
-    <Dialog open={Boolean(employeeRoleModal)} onOpenChange={(open) => !open && setEmployeeRoleModal(null)}>
-      <DialogContent className={dashboardModalPresets.simple.content()}>
+    <TypedDialog open={Boolean(employeeRoleModal)} onOpenChange={(open) => !open && setEmployeeRoleModal(null)}>
+      <TypedDialogContent className={dashboardModalPresets.simple.content()}>
         <DashboardModalTitleBar
           title="Edit Employee Role"
           description={employeeRoleModal?.user.name ?? employeeRoleModal?.user.email ?? "Assign a reusable role to this employee."}
@@ -897,11 +900,11 @@ export function ReferenceRolePermissionPanel({
           <DashboardModalFooterButton size="sm" onClick={() => setEmployeeRoleModal(null)}>Cancel</DashboardModalFooterButton>
           <DashboardModalFooterButton variant="primary" size="sm" onClick={() => void saveEmployeeRoleModal()}>Save Role</DashboardModalFooterButton>
         </DashboardModalFooter>
-      </DialogContent>
-    </Dialog>
+      </TypedDialogContent>
+    </TypedDialog>
 
-    <Dialog open={Boolean(employeePermissionsModal)} onOpenChange={(open) => !open && setEmployeePermissionsModal(null)}>
-      <DialogContent className={dashboardModalPresets.scrollable.content()}>
+    <TypedDialog open={Boolean(employeePermissionsModal)} onOpenChange={(open) => !open && setEmployeePermissionsModal(null)}>
+      <TypedDialogContent className={dashboardModalPresets.scrollable.content()}>
         <DashboardModalTitleBar
           title="Employee Permissions"
           description={employeePermissionsModal?.user.name ?? employeePermissionsModal?.user.email ?? "View effective employee permissions."}
@@ -926,8 +929,8 @@ export function ReferenceRolePermissionPanel({
             </div>
           )}
         </DashboardModalScrollBody>
-      </DialogContent>
-    </Dialog>
+      </TypedDialogContent>
+    </TypedDialog>
     </>
   );
 }
