@@ -18,9 +18,11 @@ import {
   CheckCircle2,
   XCircle,
   Upload,
-  FolderOpen
+  FolderOpen,
+  X
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { dashboardConfirm, dashboardSuccess, dashboardError } from "@/lib/dashboard-swal";
 import { REGIONS, TAXONOMY } from "@/lib/taxonomy";
 
 type SignedUpload = {
@@ -105,6 +107,7 @@ export function ProductCreateClient() {
   const [uploadMode, setUploadMode] = useState<"single" | "multiple">("single");
   const [busy, setBusy] = useState(false);
   const [formNotice, setFormNotice] = useState<{ tone: "success" | "error"; title: string; message: string } | null>(null);
+  const [previewImage, setPreviewImage] = useState<{ name: string; url: string } | null>(null);
 
   // Existing products list for increment counts
   const [existingProducts, setExistingProducts] = useState<any[]>([]);
@@ -229,7 +232,8 @@ export function ProductCreateClient() {
 
       // 3. Generate Name
       const nextNum = getNextIncrementNumber(region, subcategory);
-      const generatedName = `${region} ${subcategory} ${middleText.trim()} — ${getRegionCode(region)}-${getSubcategoryCode(subcategory)}-${nextNum}`;
+      const uniqueId = `${getRegionCode(region)}-${getSubcategoryCode(subcategory)}-${nextNum}`;
+      const generatedName = `${region} ${subcategory} ${middleText.trim()} — ${uniqueId}`;
 
       // 4. Create Product
       const payload = {
@@ -246,6 +250,7 @@ export function ProductCreateClient() {
         isActive,
         isFeatured,
         images: imageUrls,
+        uniqueId,
       };
 
       const res = await fetch("/api/backend/admin/products", {
@@ -256,7 +261,7 @@ export function ProductCreateClient() {
 
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err.message || "Failed to create product");
+        throw new Error(err.error || err.message || "Failed to create product");
       }
 
       setFormNotice({ tone: "success", title: "Success", message: "Product added to catalog successfully" });
@@ -321,6 +326,14 @@ export function ProductCreateClient() {
 
     setBulkProducts(parsed);
     setFormNotice(null);
+
+    // SweetAlert success notification for discovered folders
+    if (parsed.length > 0) {
+      void dashboardSuccess(
+        "Folders Discovered",
+        `Found ${parsed.length} product folder${parsed.length === 1 ? "" : "s"} with images ready for import.`
+      );
+    }
   }
 
   // Update a single property for an item in bulk list
@@ -340,19 +353,29 @@ export function ProductCreateClient() {
   async function handleBulkImport() {
     const activeProducts = bulkProducts.filter(p => p.import);
     if (activeProducts.length === 0) {
-      setFormNotice({ tone: "error", title: "No Items Selected", message: "Please check at least one product folder to import." });
+      void dashboardError("No Items Selected", "Please check at least one product folder to import.");
       return;
     }
 
     const invalid = activeProducts.find(p => !p.middleText.trim() || !p.priceUsd || p.files.length !== 4);
     if (invalid) {
-      setFormNotice({
-        tone: "error",
-        title: "Invalid Data",
-        message: `Product "${invalid.folderName}" needs a middle name, a price, and exactly 4 images (detected ${invalid.files.length}).`
-      });
+      void dashboardError(
+        "Invalid Data",
+        `Product "${invalid.folderName}" needs a middle name, a price, and exactly 4 images (detected ${invalid.files.length}).`
+      );
       return;
     }
+
+    // SweetAlert confirmation before proceeding
+    const confirmed = await dashboardConfirm({
+      title: "Run Bulk Import?",
+      text: `Are you sure you want to import ${activeProducts.length} product folder${activeProducts.length === 1 ? "" : "s"}? This will upload images and create catalog entries.`,
+      confirmButtonText: "Yes, import all",
+      cancelButtonText: "No, cancel",
+      tone: "success",
+      icon: "question",
+    });
+    if (!confirmed) return;
 
     setBusy(true);
     setBulkProgress({ current: 0, total: activeProducts.length });
@@ -384,7 +407,8 @@ export function ProductCreateClient() {
         const nextNum = getNextIncrementNumber(prod.region, prod.subcategory, offset);
         localCounters[key] = offset + 1;
 
-        const generatedName = `${prod.region} ${prod.subcategory} ${prod.middleText.trim()} — ${getRegionCode(prod.region)}-${getSubcategoryCode(prod.subcategory)}-${nextNum}`;
+        const uniqueId = `${getRegionCode(prod.region)}-${getSubcategoryCode(prod.subcategory)}-${nextNum}`;
+        const generatedName = `${prod.region} ${prod.subcategory} ${prod.middleText.trim()} — ${uniqueId}`;
 
         // 3. Post to backend
         const payload = {
@@ -401,6 +425,7 @@ export function ProductCreateClient() {
           isActive: prod.isActive,
           isFeatured: prod.isFeatured,
           images: urls,
+          uniqueId,
         };
 
         const res = await fetch("/api/backend/admin/products", {
@@ -411,7 +436,7 @@ export function ProductCreateClient() {
 
         if (!res.ok) {
           const err = await res.json().catch(() => ({}));
-          throw new Error(err.message || "Insert failed");
+          throw new Error(err.error || err.message || "Insert failed");
         }
 
         successCount++;
@@ -426,14 +451,13 @@ export function ProductCreateClient() {
     setBulkProgress(null);
 
     if (successCount === activeProducts.length) {
-      setFormNotice({ tone: "success", title: "Import Complete", message: `Successfully imported all ${successCount} products!` });
+      void dashboardSuccess("Import Complete", `Successfully imported all ${successCount} products!`);
       setTimeout(() => router.push("/admin/inventory"), 1500);
     } else {
-      setFormNotice({
-        tone: "error",
-        title: "Import Finished with Warnings",
-        message: `Imported ${successCount} of ${activeProducts.length} successfully. Please check folders with errors.`
-      });
+      void dashboardError(
+        "Import Finished with Warnings",
+        `Imported ${successCount} of ${activeProducts.length} successfully. Please check folders with errors.`
+      );
     }
   }
 
@@ -926,7 +950,7 @@ export function ProductCreateClient() {
                       const subsections = TAXONOMY[prod.region] ?? [];
                       return (
                         <tr key={prod.id} className={cn("hover:bg-slate-50 transition-colors", !prod.import && "opacity-50")}>
-                          <td className="px-6 py-4">
+                          <td className="px-6 py-6">
                             <input
                               type="checkbox"
                               checked={prod.import}
@@ -935,26 +959,42 @@ export function ProductCreateClient() {
                               className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
                             />
                           </td>
-                          <td className="px-6 py-4 select-all">
+                          <td className="px-6 py-6 select-all">
                             <span className="font-mono text-slate-900 block truncate max-w-[150px]" title={prod.folderName}>
                               {prod.folderName}
                             </span>
                           </td>
-                          <td className="px-6 py-4">
-                            <div className="flex gap-1.5 flex-wrap">
-                              {prod.files.map((file, i) => (
-                                <div key={i} className="relative h-12 w-9 rounded-md border border-slate-200 overflow-hidden bg-slate-50 shrink-0">
-                                  <img src={URL.createObjectURL(file)} className="h-full w-full object-cover" />
-                                </div>
-                              ))}
+                          <td className="px-6 py-6">
+                            <div className="flex gap-2 flex-wrap items-center">
+                              {prod.files.map((file, i) => {
+                                const fileUrl = URL.createObjectURL(file);
+                                return (
+                                  <div
+                                    key={i}
+                                    onClick={() => {
+                                      setPreviewImage({
+                                        name: `${prod.folderName} - Pose ${i + 1} (${file.name})`,
+                                        url: fileUrl
+                                      });
+                                    }}
+                                    className="relative h-20 w-16 rounded-lg border border-slate-200 overflow-hidden bg-slate-50 shrink-0 cursor-zoom-in hover:scale-105 hover:border-emerald-500 hover:shadow-md transition-all duration-200"
+                                    title="Click to cross-check image"
+                                  >
+                                    <img src={fileUrl} className="h-full w-full object-cover" />
+                                    <div className="absolute bottom-0 inset-x-0 bg-black/40 text-[8px] font-black text-white text-center py-0.5 uppercase tracking-wider opacity-0 hover:opacity-100 transition-opacity">
+                                      View
+                                    </div>
+                                  </div>
+                                );
+                              })}
                               {prod.files.length !== 4 && (
-                                <div className="text-[10px] text-rose-600 font-bold flex items-center bg-rose-50 px-2 py-1 rounded border border-rose-100 shrink-0">
+                                <div className="text-[10px] text-rose-600 font-bold flex items-center bg-rose-50 px-3 py-2 rounded-xl border border-rose-100 shrink-0 max-w-[150px] leading-tight">
                                   Error: Need exactly 4 files (got {prod.files.length})
                                 </div>
                               )}
                             </div>
                           </td>
-                          <td className="px-6 py-4 space-y-1">
+                          <td className="px-6 py-6 space-y-1">
                             <select
                               value={prod.region}
                               disabled={busy}
@@ -972,7 +1012,7 @@ export function ProductCreateClient() {
                               {subsections.map(s => <option key={s} value={s}>{s}</option>)}
                             </select>
                           </td>
-                          <td className="px-6 py-4">
+                          <td className="px-6 py-6">
                             <div className="space-y-1">
                               <input
                                 value={prod.middleText}
@@ -985,7 +1025,7 @@ export function ProductCreateClient() {
                               </p>
                             </div>
                           </td>
-                          <td className="px-6 py-4">
+                          <td className="px-6 py-6">
                             <input
                               type="number"
                               value={prod.priceUsd}
@@ -995,7 +1035,7 @@ export function ProductCreateClient() {
                               placeholder="0.00"
                             />
                           </td>
-                          <td className="px-6 py-4">
+                          <td className="px-6 py-6">
                             <span className={cn(
                               "inline-flex items-center rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-wider",
                               prod.status === "pending" && "bg-slate-100 text-slate-500",
@@ -1019,6 +1059,32 @@ export function ProductCreateClient() {
               </div>
             </section>
           )}
+        </div>
+      )}
+
+      {/* Large Image Crosscheck Preview Modal */}
+      {previewImage && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="relative max-w-2xl w-full bg-white rounded-3xl overflow-hidden shadow-2xl p-6 flex flex-col items-center">
+            <button
+              onClick={() => {
+                URL.revokeObjectURL(previewImage.url);
+                setPreviewImage(null);
+              }}
+              className="absolute top-4 right-4 h-10 w-10 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-700 font-black transition-colors"
+            >
+              <X className="h-5 w-5" />
+            </button>
+            <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 truncate max-w-lg">
+              Cross-Check Image: {previewImage.name}
+            </h3>
+            <div className="w-full aspect-[3/4] max-h-[60vh] rounded-2xl overflow-hidden border border-slate-200 bg-slate-50 flex items-center justify-center">
+              <img src={previewImage.url} alt="" className="h-full w-full object-contain" />
+            </div>
+            <p className="mt-4 text-[10px] font-black text-slate-500 uppercase tracking-wider">
+              Verify pose, quality, and details before importing.
+            </p>
+          </div>
         </div>
       )}
     </div>

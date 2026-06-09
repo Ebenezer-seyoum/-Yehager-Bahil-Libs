@@ -1,34 +1,55 @@
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/auth-options";
-import { ProductDetailClient } from "@/components/admin/product-detail-client";
+import { apiRequest } from "@/lib/api-client";
+import { AdminProductDetailPanel } from "@/components/admin-product-detail-panel";
 
-export default async function ProductDetailPage({
-  params,
-}: {
-  params: { id: string };
-}) {
+interface PageProps {
+  params: Promise<{ id: string }>;
+}
+
+function productId(product: any): string {
+  return String(product?.id ?? product?._id ?? "");
+}
+
+export default async function AdminProductDetailPage({ params }: PageProps) {
   const session = await getServerSession(authOptions);
-  if (!session?.user?.id) redirect(`/signin?callbackUrl=/admin/inventory/${params.id}`);
-  if (session.user.role !== "admin") redirect("/admin/inventory");
+  if (!session?.user?.id) {
+    redirect("/signin?callbackUrl=/admin/inventory");
+  }
+  if (session.user.role !== "admin" && session.user.role !== "employee") {
+    redirect("/");
+  }
 
-  const baseUrl = process.env.NEXT_PUBLIC_API_URL;
-  const cookie = `next-auth.session-token=${(session.user as any).accessToken || ""}`;
+  const { id } = await params;
+  console.log("AdminProductDetailPage loading for ID:", id);
+  
+  let product: any = null;
+  try {
+    const response = await apiRequest<{ data?: any } | any>(`/api/v1/admin/products/${id}`);
+    console.log("Direct API response for product ID:", id, response);
+    const directProduct = response?.data ?? response;
+    product = productId(directProduct) ? directProduct : null;
+  } catch (err) {
+    console.warn("Direct product fetch failed, trying limit=200 fallback search. Error:", err instanceof Error ? err.message : err);
+    try {
+      const response = await apiRequest<{ data?: any[] } | any>("/api/v1/admin/products?limit=200");
+      const list = Array.isArray(response?.data) ? response.data : Array.isArray(response) ? response : [];
+      product = list.find((item: any) => productId(item) === id) ?? null;
+      console.log("Fallback search result found:", product ? "yes" : "no");
+    } catch (fallbackErr) {
+      console.error("Fallback search also failed. Error:", fallbackErr instanceof Error ? fallbackErr.message : fallbackErr);
+      product = null;
+    }
+  }
 
-  const res = await fetch(`${baseUrl}/api/backend/admin/products/${params.id}`, { 
-    headers: { Cookie: cookie },
-    next: { tags: [`product-${params.id}`] }
-  }).catch(() => null);
-
-  const productData = res && res.ok ? await res.json() : null;
-
-  if (!productData?.data) {
+  if (!product) {
     redirect("/admin/inventory");
   }
 
   return (
-    <ProductDetailClient
-      initialProduct={productData.data}
-    />
+    <div className="mx-auto w-full max-w-7xl space-y-6">
+      <AdminProductDetailPanel product={product} />
+    </div>
   );
 }

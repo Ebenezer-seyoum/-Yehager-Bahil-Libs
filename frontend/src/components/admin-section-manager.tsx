@@ -163,9 +163,8 @@ export function AdminSectionManager({ externalSearch }: { externalSearch?: strin
               <article
                 key={section.id}
                 onClick={() => setSelectedId(section.id)}
-                className={`cursor-pointer rounded-3xl border p-4 transition hover:border-blue-200 hover:bg-blue-50 ${
-                  selectedSection?.id === section.id ? "border-emerald-200 bg-emerald-50" : "border-slate-200 bg-white"
-                }`}
+                className={`cursor-pointer rounded-3xl border p-4 transition hover:border-blue-200 hover:bg-blue-50 ${selectedSection?.id === section.id ? "border-emerald-200 bg-emerald-50" : "border-slate-200 bg-white"
+                  }`}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-start gap-3">
@@ -176,9 +175,8 @@ export function AdminSectionManager({ externalSearch }: { externalSearch?: strin
                       <h4 className="font-extrabold text-slate-950">{section.name}</h4>
                       <p className="mt-1 text-sm font-semibold text-slate-500">{section.subsections.length} subsections</p>
                       <span
-                        className={`mt-2 inline-flex rounded-full px-3 py-1 text-xs font-extrabold ${
-                          section.visible ? "bg-emerald-100 text-emerald-800" : "bg-red-100 text-red-800"
-                        }`}
+                        className={`mt-2 inline-flex rounded-full px-3 py-1 text-xs font-extrabold ${section.visible ? "bg-emerald-100 text-emerald-800" : "bg-red-100 text-red-800"
+                          }`}
                       >
                         {section.visible ? "Displayed on home" : "Hidden from home"}
                       </span>

@@ -226,7 +226,7 @@ function buildCustomerRows(users: CustomerRow[], ordersRows: OrderRow[]) {
   }
 
   for (const order of ordersRows) {
-    const email = String(order.userEmail ?? order.customerEmail ?? "").toLowerCase();
+    const email = String(order.userEmail ?? "").toLowerCase();
     if (!email) continue;
     const existing = customerMap.get(email) ?? {
       id: order.userId ?? order.id,
@@ -240,10 +240,11 @@ function buildCustomerRows(users: CustomerRow[], ordersRows: OrderRow[]) {
       country: getCountry(order),
       city: getCity(order),
       statusLabel: "active",
+      lastOrderDate: order.createdAt,
     };
 
     existing.totalOrders = toNumber(existing.totalOrders) + 1;
-    existing.totalSpent = toNumber(existing.totalSpent) + toNumber(order.totalUsd ?? order.total);
+    existing.totalSpent = toNumber(existing.totalSpent) + toNumber(order.totalUsd);
     if (!existing.country) existing.country = getCountry(order);
     if (!existing.city) existing.city = getCity(order);
     existing.lastOrderDate = order.createdAt ?? existing.lastOrderDate;
@@ -327,7 +328,7 @@ function buildDeliveryRows(ordersRows: OrderRow[]) {
     deliveryStatus: order.status,
     deliveryDate: order.updatedAt ?? order.createdAt,
     deliveryTime: order.updatedAt && order.createdAt ? `${Math.max(0, Math.round((new Date(String(order.updatedAt)).getTime() - new Date(String(order.createdAt)).getTime()) / 3_600_000))}h` : "Unknown",
-    employee: order.employeeName ?? order.assignedEmployee ?? "Unassigned",
+    employee: (order as any).employeeName ?? (order as any).assignedEmployee ?? "Unassigned",
     country: getCountry(order),
     city: getCity(order),
     createdAt: order.createdAt,
@@ -336,7 +337,7 @@ function buildDeliveryRows(ordersRows: OrderRow[]) {
 
 function buildFinancialRows(ordersRows: OrderRow[]) {
   return ordersRows.map((order) => {
-    const total = toNumber(order.totalUsd ?? order.total);
+    const total = toNumber(order.totalUsd);
     const shipping = toNumber(order.shippingCostUsd);
     const refundStatus = normalize(order.paymentStatus) === "refunded" || normalize(order.status) === "cancelled" ? "Refunded" : "Not refunded";
 
@@ -402,7 +403,7 @@ function summarizeOrders(rows: OrderRow[]) {
   const delivered = rows.filter(isDelivered);
   const pending = rows.filter(isPending);
   const cancelled = rows.filter(isCancelled);
-  const revenue = paid.reduce((sum, row) => sum + toNumber(row.totalUsd ?? row.total), 0);
+  const revenue = paid.reduce((sum, row) => sum + toNumber(row.totalUsd), 0);
 
   return {
     totalOrders: rows.length,

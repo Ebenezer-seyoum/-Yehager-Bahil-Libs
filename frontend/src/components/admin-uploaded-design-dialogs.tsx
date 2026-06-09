@@ -261,9 +261,9 @@ function ViewDialog({ design, onClose }: { design: UploadedDesign; onClose: () =
                                  ["Side View", design.sideImageUrl],
                                  ["Back View", design.backImageUrl],
                                  ["Detail View", design.detailImageUrl],
-                               ].filter(i => i[1]).map(([label, url]) => (
-                                 <a key={label} href={url || ""} target="_blank" rel="noreferrer" className="group rounded-[1.5rem] overflow-hidden border-4 border-slate-50 shadow-lg relative aspect-square bg-[#0f172a]">
-                                    <img src={url || ""} alt={label} className="h-full w-full object-cover transition duration-500 group-hover:scale-110" />
+                               ].filter((i): i is [string, string] => Boolean(i[1])).map(([label, url]) => (
+                                 <a key={label} href={url} target="_blank" rel="noreferrer" className="group rounded-[1.5rem] overflow-hidden border-4 border-slate-50 shadow-lg relative aspect-square bg-[#0f172a]">
+                                    <img src={url} alt={label} className="h-full w-full object-cover transition duration-500 group-hover:scale-110" />
                                     <div className="absolute inset-x-0 bottom-0 bg-black/60 p-2 text-center">
                                        <span className="text-[10px] font-black text-white uppercase tracking-widest">{label}</span>
                                     </div>
