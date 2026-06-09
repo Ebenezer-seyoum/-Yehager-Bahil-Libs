@@ -725,6 +725,23 @@ adminRouter.get("/products", requirePermission(PERMISSIONS.PRODUCTS_VIEW), zVali
   return c.json({ data });
 });
 
+adminRouter.get(
+  "/products/:productId",
+  requirePermission(PERMISSIONS.PRODUCTS_VIEW),
+  zValidator("param", productParamSchema),
+  async (c) => {
+    const { productId } = c.req.valid("param");
+    const data = await db.query.products.findFirst({
+      where: eq(products.id, productId),
+    });
+    if (!data) {
+      throw new HTTPException(404, { message: "Product not found" });
+    }
+    return c.json({ data });
+  },
+);
+
+
 adminRouter.post(
   "/products",
   requirePermission(PERMISSIONS.PRODUCTS_CREATE),

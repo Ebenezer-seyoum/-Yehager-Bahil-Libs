@@ -14,16 +14,21 @@ export default async function AdminProductDetailPage({ params }) {
   if (session.user.role !== "admin" && session.user.role !== "employee") redirect("/");
 
   const { id } = await params;
+  console.log("AdminProductDetailPage loading for ID:", id);
   let product = null;
   try {
     const response = await apiRequest(`/api/v1/admin/products/${id}`);
+    console.log("Direct API response for product ID:", id, response);
     const directProduct = response?.data ?? response;
     product = productId(directProduct) ? directProduct : null;
-  } catch {
+  } catch (err) {
+    console.warn("Direct product fetch failed, trying limit=200 fallback search. Error:", err instanceof Error ? err.message : err);
     try {
-      const response = await apiRequest("/api/v1/admin/products?limit=1000");
+      const response = await apiRequest("/api/v1/admin/products?limit=200");
       product = Array.isArray(response?.data) ? response.data.find((item) => productId(item) === id) ?? null : null;
-    } catch {
+      console.log("Fallback search result found:", product ? "yes" : "no");
+    } catch (fallbackErr) {
+      console.error("Fallback search also failed. Error:", fallbackErr instanceof Error ? fallbackErr.message : fallbackErr);
       product = null;
     }
   }

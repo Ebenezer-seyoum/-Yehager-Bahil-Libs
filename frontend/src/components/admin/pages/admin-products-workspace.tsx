@@ -23,6 +23,7 @@ export function AdminProductsWorkspace({ data }: { data: AdminWorkspaceData }) {
       title="Product Management"
       subtitle="Organize, update, and manage your heritage clothing collection and stock"
       icon={Package}
+      hideKpis={true}
       defaultTab="all"
       tabs={[
         { id: "all", label: "All Items", icon: Package },
@@ -34,7 +35,7 @@ export function AdminProductsWorkspace({ data }: { data: AdminWorkspaceData }) {
         <button
           type="button"
           onClick={() => router.push("/admin/inventory/create")}
-          className="inline-flex h-10 items-center gap-2 rounded-xl bg-slate-900 px-4 text-sm font-bold text-white shadow-lg hover:bg-slate-800 transition-all active:scale-95"
+          className="inline-flex h-10 items-center gap-2 rounded-xl bg-emerald-800 px-4 text-sm font-bold text-white shadow-lg hover:bg-emerald-900 transition-all active:scale-95"
         >
           <Plus className="h-4 w-4" />
           Add Product
