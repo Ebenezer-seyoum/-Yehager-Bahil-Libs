@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  ArrowLeft,
   CheckCircle2,
   ChevronRight,
   ClipboardList,
@@ -18,6 +17,7 @@ import {
   Truck,
   UserRound,
 } from "lucide-react";
+import { AdminDetailLayout, AdminDetailHeader } from "@/components/admin/admin-detail-layout";
 
 /* ── Types ───────────────────────────────────────────── */
 type OrderItem = {
@@ -181,82 +181,60 @@ export function OrderDetailPage({
   const shippingAddrStr = typeof order.shippingAddress === "string" ? order.shippingAddress : null;
 
   return (
-    <div className="min-h-screen bg-[#f8fafc]">
-      {/* ── Page Header ─────────────────────────────────── */}
-      <div className="bg-[#0f172a] border-b border-white/10">
-        <div className="mx-auto max-w-[1600px] px-8 py-6 flex items-center gap-6">
-          <button
-            onClick={() => router.push(backUrl)}
-            className="flex items-center gap-2 text-slate-400 hover:text-white transition-all group shrink-0"
-          >
-            <div className="h-10 w-10 rounded-2xl bg-white/10 flex items-center justify-center group-hover:bg-blue-600 transition-all">
-              <ArrowLeft className="h-5 w-5" />
+    <AdminDetailLayout
+      topHeader={
+        <AdminDetailHeader
+          icon={ShoppingBag}
+          iconTheme="bg-blue-600/10 text-blue-400"
+          category="Order Detail Workspace"
+          title={`Order #${order.orderNumber}`}
+          subtitle="Comprehensive management of order lifecycle, customer relationships, and fulfillment logistics."
+          onRefresh={() => {}}
+          onBack={() => router.push(backUrl)}
+        />
+      }
+      profileCard={
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div className="flex items-center gap-6">
+            <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl bg-slate-100 border border-slate-200">
+               <ShoppingBag className="h-10 w-10 text-blue-400" />
             </div>
-            <span className="text-sm font-black uppercase tracking-widest hidden sm:block">Back to Orders</span>
-          </button>
-          <div className="flex-1 min-w-0">
-            <h1 className="text-3xl font-black text-white tracking-tight uppercase truncate">Order Detail Workspace</h1>
-            <p className="text-sm text-slate-400 font-medium mt-1">
-              Comprehensive management of order lifecycle, customer relationships, and fulfillment logistics.
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <div className="mx-auto max-w-[1600px] px-8 py-10 pb-20">
-        {/* ── Identity Block ───────────────────────────── */}
-        <div className="mb-10 rounded-[2rem] border border-slate-200 bg-white p-8 shadow-xl flex flex-col lg:flex-row items-center gap-10 ring-1 ring-black/[0.02]">
-          <div className="h-40 w-40 shrink-0 overflow-hidden rounded-[2.5rem] border-4 border-slate-50 shadow-2xl bg-[#0f172a] flex items-center justify-center relative">
-            <div className="absolute inset-0 bg-blue-600/10 animate-pulse" />
-            <ShoppingBag className="h-16 w-16 text-blue-400 relative z-10" />
-          </div>
-          <div className="flex-1 text-center lg:text-left">
-            <div className="flex flex-wrap items-center justify-center lg:justify-start gap-4 mb-4">
-              <h2 className="text-3xl font-black text-slate-900 tracking-tight">ORDER #{order.orderNumber}</h2>
-              <div className="bg-slate-100 px-4 py-1.5 rounded-full border border-slate-200 shadow-sm flex items-center gap-2">
-                <span className="text-xs font-black text-slate-500 uppercase tracking-widest">ID</span>
-                <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />
-                <span className="text-xs font-black text-slate-900">{String(order.id).slice(0, 12)}</span>
+            <div>
+              <h2 className="text-2xl font-black text-slate-900 tracking-tight">ORDER #{order.orderNumber}</h2>
+              <div className="flex items-center gap-3 mt-2">
+                <span className="font-mono text-[10px] font-black text-slate-900 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">ID: {String(order.id).slice(0, 12)}</span>
+                <span className={`inline-flex rounded-xl border-2 px-3 py-0.5 text-[10px] font-black uppercase tracking-wider shadow-sm ${STATUS_STYLES[order.status ?? "pending"] ?? STATUS_STYLES.pending}`}>{prettyLabel(order.status)}</span>
+                <span className={`inline-flex rounded-xl border-2 px-3 py-0.5 text-[10px] font-black uppercase tracking-wider shadow-sm ${PAYMENT_STYLES[order.paymentStatus ?? "pending"] ?? PAYMENT_STYLES.pending}`}>{prettyLabel(order.paymentStatus)}</span>
+                <span className="inline-flex rounded-xl border-2 border-slate-100 bg-slate-50 px-3 py-0.5 text-[10px] font-black uppercase tracking-wider text-slate-500 shadow-sm">{isGroup ? "Group Catalog Order" : "Individual Catalog Order"}</span>
               </div>
             </div>
-
-            <div className="flex flex-wrap justify-center lg:justify-start gap-3 mb-6">
-              <span className={`inline-flex rounded-xl border-2 px-4 py-1 text-xs font-black uppercase tracking-wider shadow-sm ${STATUS_STYLES[order.status ?? "pending"] ?? STATUS_STYLES.pending}`}>
-                {prettyLabel(order.status)}
-              </span>
-              <span className={`inline-flex rounded-xl border-2 px-4 py-1 text-xs font-black uppercase tracking-wider shadow-sm ${PAYMENT_STYLES[order.paymentStatus ?? "pending"] ?? PAYMENT_STYLES.pending}`}>
-                {prettyLabel(order.paymentStatus)}
-              </span>
-              <span className="inline-flex rounded-xl border-2 border-slate-100 bg-slate-50 px-4 py-1 text-xs font-black uppercase tracking-wider text-slate-500 shadow-sm">
-                {isGroup ? "Group Catalog Order" : "Individual Catalog Order"}
-              </span>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-50 p-6 rounded-[1.5rem] border-2 border-slate-100">
-              <div className="flex flex-col gap-2.5">
+          </div>
+          <div className="flex flex-col gap-4 items-end">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-50 p-4 rounded-3xl border border-slate-100">
+              <div className="flex flex-col gap-1.5">
                 <div className="flex items-center gap-2 pl-1">
-                  <div className="h-2 w-2 rounded-full bg-blue-600" />
-                  <span className="text-xs font-black uppercase text-slate-500 tracking-[0.1em]">Modify Order Status</span>
+                  <div className="h-1.5 w-1.5 rounded-full bg-blue-600" />
+                  <span className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Order Status</span>
                 </div>
                 <select
                   disabled={busy}
                   value={order.status ?? "pending"}
                   onChange={(e) => void updateOrder({ status: e.target.value })}
-                  className={`h-14 w-full rounded-2xl border-2 px-4 text-sm font-black outline-none shadow-md transition-all focus:ring-4 focus:ring-blue-500/10 cursor-pointer ${STATUS_STYLES[order.status ?? "pending"] || "bg-white border-slate-200"} hover:border-blue-400`}
+                  className={`h-10 w-full rounded-xl border-2 px-3 text-xs font-black outline-none shadow-sm transition-all focus:ring-4 focus:ring-blue-500/10 cursor-pointer ${STATUS_STYLES[order.status ?? "pending"] || "bg-white border-slate-200"} hover:border-blue-400`}
                 >
                   {ORDER_STATUSES.map((s) => <option key={s} value={s}>{prettyLabel(s)}</option>)}
                 </select>
               </div>
-              <div className="flex flex-col gap-2.5">
+              <div className="flex flex-col gap-1.5">
                 <div className="flex items-center gap-2 pl-1">
-                  <div className="h-2 w-2 rounded-full bg-emerald-600" />
-                  <span className="text-xs font-black uppercase text-slate-500 tracking-[0.1em]">Modify Payment Status</span>
+                  <div className="h-1.5 w-1.5 rounded-full bg-emerald-600" />
+                  <span className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Payment Status</span>
                 </div>
                 <select
                   disabled={busy}
                   value={order.paymentStatus ?? "pending"}
                   onChange={(e) => void updateOrder({ paymentStatus: e.target.value })}
-                  className={`h-14 w-full rounded-2xl border-2 px-4 text-sm font-black outline-none shadow-md transition-all focus:ring-4 focus:ring-emerald-500/10 cursor-pointer ${PAYMENT_STYLES[order.paymentStatus ?? "pending"] || "bg-white border-slate-200"} hover:border-emerald-400`}
+                  className={`h-10 w-full rounded-xl border-2 px-3 text-xs font-black outline-none shadow-sm transition-all focus:ring-4 focus:ring-emerald-500/10 cursor-pointer ${PAYMENT_STYLES[order.paymentStatus ?? "pending"] || "bg-white border-slate-200"} hover:border-emerald-400`}
                 >
                   {PAYMENT_STATUSES.map((s) => <option key={s} value={s}>{prettyLabel(s)}</option>)}
                 </select>
@@ -264,47 +242,11 @@ export function OrderDetailPage({
             </div>
           </div>
         </div>
-
-        {/* ── Sidebar + Main ───────────────────────────── */}
-        <div className="grid gap-10 lg:grid-cols-[340px_1fr]">
-          {/* Sidebar */}
-          <aside className="space-y-6 shrink-0">
-            <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-xl sticky top-6">
-              <p className="mb-6 px-4 text-xs font-black uppercase tracking-[0.2em] text-slate-400 border-b border-slate-100 pb-4">Workspace Sections</p>
-              <nav className="space-y-3">
-                {sections.map((item) => {
-                  const Icon = item.icon;
-                  const isActive = section === item.id;
-                  return (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => setSection(item.id)}
-                      className={`flex w-full items-center gap-5 rounded-[1.25rem] px-5 py-4 text-left transition-all group ${isActive ? "bg-[#0f172a] text-white shadow-xl scale-[1.02]" : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"}`}
-                    >
-                      <div className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl transition-all ${isActive ? "bg-blue-600 text-white rotate-6" : "bg-slate-100 group-hover:bg-slate-200"}`}>
-                        <Icon className="h-7 w-7" />
-                      </div>
-                      <div className="overflow-hidden">
-                        <span className="block text-base font-black truncate tracking-tight">{item.label}</span>
-                        <span className="block text-[10px] font-bold opacity-60 truncate uppercase tracking-[0.05em] mt-0.5">{item.hint}</span>
-                      </div>
-                    </button>
-                  );
-                })}
-              </nav>
-            </div>
-          </aside>
-
-          {/* Main Content */}
-          <main className="min-h-[800px]">
-            <div className="rounded-[2.5rem] border border-slate-200 bg-white p-12 shadow-2xl relative overflow-hidden ring-1 ring-black/[0.02]">
-              <div className="flex items-center gap-4 mb-10 relative z-10">
-                <div className="h-2 w-12 bg-blue-600 rounded-full" />
-                <h3 className="text-3xl font-black text-slate-900 tracking-tight uppercase">{sections.find((s) => s.id === section)?.label}</h3>
-              </div>
-              
-              <div className="relative z-10">
+      }
+      sections={[...sections]}
+      activeSection={section}
+      onSectionChange={(id) => setSection(id as any)}
+    >
                 {/* ── Order Information ─────────────────── */}
                 {section === "info" && (
                   <div className="grid gap-6 sm:grid-cols-2">
@@ -589,11 +531,6 @@ export function OrderDetailPage({
                     ))}
                   </div>
                 )}
-              </div>
-            </div>
-          </main>
-        </div>
-      </div>
-    </div>
+    </AdminDetailLayout>
   );
 }

@@ -11,7 +11,7 @@ export default async function AdminCustomerDetailPage({ params, searchParams }) 
 
   const { id } = await params;
   const query = (await searchParams) ?? {};
-  const backTab = typeof query.tab === "string" ? query.tab : "all";
+  const backTab = typeof query.backTab === "string" ? query.backTab : (typeof query.tab === "string" ? query.tab : "all");
 
   let customer = null;
   let orders = [];
@@ -22,7 +22,8 @@ export default async function AdminCustomerDetailPage({ params, searchParams }) 
     ]);
     customer = customerResponse?.data?.user ?? customerResponse?.data ?? null;
     orders = Array.isArray(ordersResponse?.data) ? ordersResponse.data : [];
-  } catch {
+  } catch (err) {
+    console.error("Failed fetching customer/orders in customer page:", err);
     customer = null;
     orders = [];
   }

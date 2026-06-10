@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/auth-options";
+import { apiRequest } from "@/lib/api-client";
 import { PaymentDetailClient } from "@/components/admin/payment-detail-client";
 
 export default async function PaymentVerificationPage({
@@ -9,25 +10,27 @@ export default async function PaymentVerificationPage({
   params: { id: string };
 }) {
   const session = await getServerSession(authOptions);
-  if (!session?.user?.id) redirect(`/signin?callbackUrl=/admin/payments/${params.id}`);
-  if (session.user.role !== "admin") redirect("/admin/payments");
+  if (!session?.user?.id) redirect(`/signin?callbackUrl=/admin/payments`);
+  if (session.user.role !== "admin" && session.user.role !== "employee") redirect("/admin/payments");
 
-  const baseUrl = process.env.NEXT_PUBLIC_API_URL;
-  const cookie = `next-auth.session-token=${(session.user as any).accessToken || ""}`;
+  const { id } = await params;
 
-  const res = await fetch(`${baseUrl}/api/backend/admin/orders/${params.id}`, { 
-    headers: { Cookie: cookie },
-  }).catch(() => null);
+  let orderData: any = null;
+  try {
+    const response: any = await apiRequest(`/api/v1/orders/${id}`);
+    orderData = response?.data ?? null;
+  } catch (err) {
+    console.error("Failed fetching order for payment detail:", err);
+    orderData = null;
+  }
 
-  const orderData = res && res.ok ? await res.json() : null;
-
-  if (!orderData?.data) {
+  if (!orderData) {
     redirect("/admin/payments");
   }
 
   return (
     <PaymentDetailClient
-      order={orderData.data}
+      order={orderData}
     />
   );
 }

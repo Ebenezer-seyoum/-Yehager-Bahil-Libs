@@ -144,7 +144,9 @@ function filterPayments(orders: Row[], tabId: string): Row[] {
         ["bank", "transfer", "qr", "mobile", "etb"].some((k) => norm(o.paymentMethod).includes(k)),
       );
     case "pending":
-      return paymentRows.filter((o) => norm(o.paymentStatus) === "awaiting_verification");
+      return paymentRows.filter((o) => ["awaiting_verification", "pending"].includes(norm(o.paymentStatus)));
+    case "verified":
+      return paymentRows.filter((o) => norm(o.paymentStatus) === "paid");
     case "failed":
       return paymentRows.filter((o) => norm(o.paymentStatus) === "failed");
     case "refunds":

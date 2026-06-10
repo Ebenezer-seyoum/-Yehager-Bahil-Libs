@@ -30,6 +30,7 @@ export function AdminCustomersWorkspace({ data }: { data: AdminWorkspaceData }) 
       subtitle="Overview of all registered customers, their accounts, and purchase history"
       icon={Users}
       defaultTab="all"
+      hideKpis={true}
       tabs={[
         { id: "all", label: "All Customers", icon: Users },
         { id: "active", label: "Active", icon: Users },

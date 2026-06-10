@@ -18,6 +18,7 @@ export function AdminPaymentsWorkspace({ data }: { data: AdminWorkspaceData }) {
     <AdminWorkspace
       pageId="payments"
       initialData={data}
+      hideKpis
       title="Financial Verification"
       subtitle="Verify bank transfers, process manual payments, and manage order finances"
       icon={Banknote}

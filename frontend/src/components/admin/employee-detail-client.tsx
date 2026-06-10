@@ -7,6 +7,7 @@ import { Check, Eye, EyeOff, FileText, Loader2, Shield, User2, MapPin, NotebookP
 import { dashboardConfirm, dashboardError, dashboardLoading, dashboardSuccess, dashboardAlert } from "@/lib/dashboard-swal";
 import { cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { AdminDetailLayout, AdminDetailHeader } from "@/components/admin/admin-detail-layout";
 
 function formatDateTime(value?: string | null) {
   if (!value) return "Not provided";
@@ -797,65 +798,51 @@ export function EmployeeDetailClient({
   }
 
   return (
-    <div ref={swalTargetRef} className="space-y-4">
-      {!embedded ? (
-        <div className="mb-8 rounded-[2rem] border border-slate-200 bg-white p-8 shadow-xl relative overflow-hidden ring-1 ring-black/[0.02] border-l-4 border-l-[#8b5cf6]">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-            <div className="flex items-center gap-6">
-              <div className="h-20 w-20 rounded-2xl bg-[#f5f3ff] flex items-center justify-center text-[#8b5cf6] shadow-sm">
-                <Users className="h-10 w-10" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400 mb-1">Users</p>
-                <h1 className="text-4xl font-black text-slate-900 tracking-tight uppercase truncate">
-                  {displayName}
-                </h1>
-                <p className="text-sm text-slate-500 font-medium mt-1">
-                  Manage staff accounts, roles, activity, and performance.
-                </p>
-              </div>
-            </div>
-
-            <div className="flex flex-row gap-3 shrink-0 items-center">
-              <button
-                onClick={() => {
-                  router.refresh();
-                  dashboardSuccess("Page Refreshed", "The employee details have been reloaded.");
-                }}
-                className="flex items-center gap-2 rounded-xl border border-[#CBD5E1] bg-[#F8FAFC] px-5 py-2.5 text-sm font-bold text-[#334155] shadow-sm hover:bg-slate-100 transition-all group"
-              >
-                <RefreshCw className="h-4 w-4 text-[#334155] group-hover:rotate-180 transition-transform duration-500" />
-                Refresh
-              </button>
-              <button
-                onClick={() => router.push(`/admin/users?tab=${encodeURIComponent(backTab)}`)}
-                className="flex items-center gap-2 rounded-xl border border-[#CBD5E1] bg-[#F8FAFC] px-5 py-2.5 text-sm font-bold text-[#334155] shadow-sm hover:bg-slate-100 transition-all group"
-              >
-                <ArrowLeft className="h-4 w-4 text-[#334155] group-hover:-translate-x-1 transition-transform" />
-                Back to Users
-              </button>
-            </div>
+    <AdminDetailLayout
+      embedded={embedded}
+      topHeader={
+        <AdminDetailHeader
+          icon={Users}
+          iconTheme="bg-[#f5f3ff] text-[#8b5cf6]"
+          category="Users"
+          title={displayName}
+          subtitle="Manage staff accounts, roles, activity, and performance."
+          onRefresh={() => {
+            router.refresh();
+            dashboardSuccess("Page Refreshed", "The employee details have been reloaded.");
+          }}
+          onBack={() => router.push(`/admin/users?tab=${encodeURIComponent(backTab)}`)}
+          backLabel="Back to Users"
+        />
+      }
+      topNotice={
+        topNotice ? (
+          <div
+            className={cn(
+              "rounded-2xl border px-4 py-3 text-sm shadow-sm",
+              topNotice.tone === "success"
+                ? "border-blue-200 bg-blue-50 text-blue-900"
+                : "border-rose-200 bg-rose-50 text-rose-900",
+            )}
+            aria-live="polite"
+          >
+            <p className="font-bold">{topNotice.title}</p>
+            <p className="mt-0.5">{topNotice.message}</p>
           </div>
-        </div>
-      ) : null}
-
-      {topNotice ? (
-        <div
-          className={cn(
-            "rounded-2xl border px-4 py-3 text-sm shadow-sm",
-            topNotice.tone === "success"
-              ? "border-blue-200 bg-blue-50 text-blue-900"
-              : "border-rose-200 bg-rose-50 text-rose-900",
-          )}
-          aria-live="polite"
-        >
-          <p className="font-bold">{topNotice.title}</p>
-          <p className="mt-0.5">{topNotice.message}</p>
-        </div>
-      ) : null}
-
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        ) : null
+      }
+      sections={[
+        { id: "personal", label: "Identity Profile", icon: User2 },
+        { id: "contact", label: "Contact Details", icon: MapPin },
+        { id: "account", label: "Security & Type", icon: FileText },
+        { id: "access", label: "Roles & Permissions", icon: Shield },
+        { id: "activity", label: "Activity Logs", icon: RotateCcw },
+        { id: "notes", label: "Internal Notes", icon: NotebookPen },
+      ]}
+      activeSection={activeSection}
+      onSectionChange={(id) => goToSection(id as EmployeeSectionId)}
+      profileCard={
+        <div ref={swalTargetRef} className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div className="flex items-start gap-4">
             <div className="relative">
               {user.avatarUrl && !photoRemoved && !photoPreview ? (
@@ -1022,8 +1009,8 @@ export function EmployeeDetailClient({
             )}
           </div>
         </div>
-      </section>
-
+      }
+    >
       <Dialog
         open={resetPasswordOpen}
         onOpenChange={(next) => {
@@ -1232,92 +1219,7 @@ export function EmployeeDetailClient({
         </DialogContent>
       </Dialog>
 
-      <div className={embedded ? "" : "grid gap-4 lg:grid-cols-[260px_1fr]"}>
-        {!embedded ? (
-        <aside className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
-          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Sections</div>
-          <nav className="mt-3 space-y-1">
-            {[
-              { id: "personal", label: "👤 Personal Information" },
-              { id: "contact", label: "📞 Contact Information" },
-              { id: "account", label: "🛡 Account Information" },
-              { id: "access", label: "🔑 Roles & Permissions" },
-              { id: "activity", label: "🕒 Activity Logs" },
-              { id: "notes", label: "📝 Admin Notes" },
-            ].map((item) => {
-              const selected = activeSection === item.id;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => goToSection(item.id as EmployeeSectionId)}
-                  className={cn(
-                    "block w-full rounded-xl border border-transparent px-3 py-2 text-left text-sm font-bold transition",
-                    selected
-                      ? "border-l-4 border-l-[#2563EB] bg-[#EFF6FF] text-[#2563EB]"
-                      : "text-slate-800 hover:border-blue-100 hover:bg-blue-50",
-                  )}
-                >
-                  {item.label}
-                </button>
-              );
-            })}
-          </nav>
-        </aside>
-        ) : null}
-
-        <main className="space-y-4">
-          {embedded ? (
-            <div className="grid gap-4 lg:grid-cols-[260px_1fr]">
-              <aside className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
-                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Profile Overview</div>
-                <nav className="mt-3 space-y-1">
-                  {[
-                    { id: "personal", label: "Personal Information", icon: User2 },
-                    { id: "contact", label: "Address Information", icon: MapPin },
-                    { id: "account", label: "Account Information", icon: FileText },
-                    { id: "access", label: "Roles & Permissions", icon: Shield },
-                    { id: "notes", label: "Notes", icon: NotebookPen },
-                  ].map((item) => {
-                    const Icon = item.icon;
-                    const selected = activeSection === item.id;
-                    return (
-                      <button
-                        key={item.id}
-                        type="button"
-                        onClick={() => setActiveSection(item.id as EmployeeSectionId)}
-                        className={cn(
-                          "flex w-full items-center gap-3 rounded-2xl border px-3 py-3 text-left",
-                          selected
-                            ? "border-blue-200 bg-blue-50 shadow-sm"
-                            : "border-transparent hover:border-blue-100 hover:bg-blue-50",
-                        )}
-                      >
-                        <span className={cn("flex h-10 w-10 items-center justify-center rounded-2xl", selected ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-700")}>
-                          <Icon className="h-5 w-5" />
-                        </span>
-                        <span className="min-w-0">
-                          <span className="block text-sm font-bold text-slate-900">{item.label}</span>
-                                <span className="block text-xs text-slate-600">
-                                  {item.id === "personal"
-                                    ? "Name, gender, birth"
-                                    : item.id === "contact"
-                                      ? "Phone, country, city"
-                                      : item.id === "account"
-                                        ? "Login, status"
-                                        : item.id === "access"
-                                          ? "Permissions and role"
-                                          : "Internal notes"}
-                                </span>
-                        </span>
-                      </button>
-                    );
-                  })}
-                </nav>
-              </aside>
-
-              <div className="space-y-4">
-                {activeSection === "access" ? (
+        {activeSection === "access" ? (
                   <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
                     <h2 className="text-base font-bold text-slate-900">Roles &amp; Permissions</h2>
                     {String(roleStatusValue).toLowerCase() !== "assigned" || !assignedRole ? (
@@ -1488,219 +1390,7 @@ export function EmployeeDetailClient({
                     </div>
                   </section>
                 )}
-              </div>
-            </div>
-          ) : (
-          <section id="personal" className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h2 className="text-base font-bold text-slate-900">Personal Information</h2>
-            <div className="mt-4 grid gap-3 md:grid-cols-2">
-              {!editMode ? (
-                <>
-                  <Field label="Full Name" value={displayName} />
-                  <Field label="First Name" value={profile?.firstName} />
-                  <Field label="Father’s Name" value={profile?.fatherName} />
-                  <Field label="Grandfather’s Name" value={profile?.grandfatherName} />
-                  <Field label="Gender" value={profile?.gender} />
-                  <Field label="Date of Birth" value={profile?.dateOfBirth ? formatDate(profile.dateOfBirth) : ""} />
-                  <Field label="Marital Status" value={profile?.maritalStatus} />
-                </>
-              ) : (
-                <>
-                  <TextInput label="First Name" required value={firstName} onChange={setFirstName} />
-                  <TextInput label="Father’s Name" required value={fatherName} onChange={setFatherName} />
-                  <TextInput label="Grandfather’s Name" value={grandfatherName} onChange={setGrandfatherName} />
-                  <SelectInput
-                    label="Gender"
-                    required
-                    value={gender}
-                    onChange={setGender}
-                    options={[
-                      { value: "", label: "Select…" },
-                      { value: "male", label: "Male" },
-                      { value: "female", label: "Female" },
-                      { value: "other", label: "Other" },
-                    ]}
-                  />
-                  <TextInput label="Date of Birth" type="date" value={dateOfBirth} onChange={setDateOfBirth} />
-                  <TextInput label="Marital Status" value={maritalStatus} onChange={setMaritalStatus} />
-                </>
-              )}
-            </div>
-          </section>
-          )}
 
-          {embedded && panel !== "overview" ? null : (
-          <section id="contact" className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h2 className="text-base font-bold text-slate-900">Contact Information</h2>
-            <div className="mt-4 grid gap-3 md:grid-cols-2">
-              {!editMode ? (
-                <>
-                  <Field label="Email Address" value={user.email} href={`mailto:${user.email}`} />
-                  <Field label="Phone Number" value={user.phone} href={user.phone ? `tel:${user.phone}` : undefined} />
-                  <Field label="Country" value={profile?.country} />
-                  <Field label="City" value={profile?.city} />
-                  <Field label="Address" value={profile?.address} />
-                </>
-              ) : (
-                <>
-                  <TextInput label="Email Address" required type="email" value={email} onChange={setEmail} />
-                  <TextInput label="Phone Number" required value={phone} onChange={setPhone} placeholder="+251 …" />
-                  <TextInput label="Country" value={country} onChange={setCountry} />
-                  <TextInput label="City" value={city} onChange={setCity} />
-                  <TextInput label="Address" value={address} onChange={setAddress} />
-                </>
-              )}
-            </div>
-          </section>
-          )}
-
-          {embedded && panel !== "overview" ? null : (
-          <section id="account" className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h2 className="text-base font-bold text-slate-900">Account Information</h2>
-            <div className="mt-4 grid gap-3 md:grid-cols-2">
-              {!editMode ? (
-                <>
-                  <Field label="Account Status" value={user.accountStatus} />
-                    <Field label="Current Access" value={accessStatusLabel} />
-                          <Field label="Password" value="Hidden for security" />
-                    <Field label="Temporary Password" value={user.mustChangePassword ? "Temporary password active" : "Not active"} />
-                  <Field label="Role Status" value={roleStatusValue} />
-                  <Field label="Invite Status" value={inviteStatusValue} />
-                  <Field label="Last Login" value={user.lastLoginAt ? formatDateTime(user.lastLoginAt) : "Never logged in"} />
-                  <Field label="Created Date" value={user.createdAt ? formatDateTime(user.createdAt) : ""} />
-                  <Field label="Updated Date" value={user.updatedAt ? formatDateTime(user.updatedAt) : ""} />
-                </>
-              ) : (
-                <>
-                  <SelectInput
-                    label="Account Status"
-                    required
-                    value={accountStatus}
-                    onChange={setAccountStatus}
-                    options={[
-                      { value: "active", label: "Active" },
-                      { value: "invited", label: "Invited" },
-                      { value: "pending", label: "Inactive" },
-                    ]}
-                  />
-                  <TextInput label="Invite Status" value={inviteStatus} onChange={setInviteStatus} />
-                </>
-              )}
-            </div>
-          </section>
-          )}
-
-          {!embedded ? (
-          <section id="access" className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h2 className="text-base font-bold text-slate-900">Roles & Permissions</h2>
-
-            {String(roleStatusValue).toLowerCase() !== "assigned" || !assignedRole ? (
-              <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-5">
-                <h3 className="text-sm font-bold text-amber-900">No Role Assigned Yet</h3>
-                <p className="mt-1 text-sm text-amber-900/80">
-                  This employee account exists, but no role or permissions have been assigned yet. The employee can sign in, but dashboard
-                  access will remain pending until an administrator assigns a role.
-                </p>
-                <div className="mt-4">
-                  <Link
-                    href={canAssignRole ? `/admin/roles?tab=access&employeeId=${encodeURIComponent(user.id)}` : "#"}
-                    className={`inline-flex h-10 items-center rounded-xl bg-blue-900 px-4 text-sm font-semibold text-white shadow-sm shadow-blue-900/20 hover:bg-blue-950 ${
-                      canAssignRole ? "" : "pointer-events-none opacity-50"
-                    }`}
-                  >
-                    Assign Role
-                  </Link>
-                </div>
-              </div>
-            ) : (
-              <div className="mt-4 space-y-3">
-                <div className="grid gap-3 md:grid-cols-3">
-                  <Field label="Assigned Role" value={assignedRole?.name} />
-                  <Field label="Role Description" value={assignedRole?.description} />
-                  <Field label="Permissions Count" value={permissions.length ? String(permissions.length) : "0"} />
-                </div>
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <div className="text-xs font-semibold text-slate-600">Permission Keys</div>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {permissions.length ? (
-                      permissions.slice(0, 60).map((p) => (
-                        <span
-                          key={String(p)}
-                          className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-800"
-                        >
-                          {String(p)}
-                        </span>
-                      ))
-                    ) : (
-                      <div className="text-sm font-semibold text-slate-800">Not provided</div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
-          </section>
-          ) : null}
-
-          {!embedded ? (
-          <section id="activity" className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h2 className="text-base font-bold text-slate-900">Activity Logs</h2>
-            <div className="mt-4 overflow-x-auto">
-              <table className="w-full min-w-[900px] border-collapse text-left">
-                <thead className="bg-blue-50 text-slate-900">
-                  <tr className="border-b border-blue-100">
-                    <th className="px-4 py-3 text-sm font-semibold">Action</th>
-                    <th className="px-4 py-3 text-sm font-semibold">Module</th>
-                    <th className="px-4 py-3 text-sm font-semibold">Description</th>
-                    <th className="px-4 py-3 text-sm font-semibold">Date / Time</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {activity.length === 0 ? (
-                    <tr>
-                      <td colSpan={4} className="px-4 py-10 text-center text-sm text-muted-foreground">
-                        No activity found for this employee.
-                      </td>
-                    </tr>
-                  ) : (
-                    activity.map((row) => (
-                      <tr key={String(row.id)} className="border-b border-border last:border-b-0 hover:bg-blue-50/40">
-                        <td className="px-4 py-4 text-sm font-semibold text-slate-900">{String(row.action ?? "—")}</td>
-                        <td className="px-4 py-4 text-sm text-slate-700">{String(row.entityType ?? "—")}</td>
-                        <td className="px-4 py-4 text-sm text-slate-700">{String(row.details ?? "—")}</td>
-                        <td className="px-4 py-4 text-sm text-slate-700">
-                          {row.createdAt ? new Date(String(row.createdAt)).toLocaleString() : "—"}
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </section>
-          ) : null}
-
-          {embedded && panel !== "overview" ? null : (
-          <section id="notes" className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h2 className="text-base font-bold text-slate-900">Admin Notes</h2>
-            {!editMode ? (
-              <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
-                {profile?.notes ? profile.notes : "No internal notes added."}
-              </div>
-            ) : (
-              <label className="mt-3 block text-sm">
-                <span className="mb-1.5 block font-medium text-slate-700">Internal note</span>
-                <textarea
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  rows={4}
-                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-                />
-              </label>
-            )}
-          </section>
-          )}
-        </main>
-      </div>
-    </div>
+    </AdminDetailLayout>
   );
 }

@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { dashboardConfirm, dashboardError, dashboardSuccess } from "@/lib/dashboard-swal";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { AdminDetailLayout, AdminDetailHeader } from "@/components/admin/admin-detail-layout";
 import { cn } from "@/lib/utils";
 
 type Customer = Record<string, any>;
@@ -192,84 +193,69 @@ export function CustomerDetailClient({
   }
 
   return (
-    <div className={embedded ? "space-y-4" : "mx-auto w-full max-w-screen-2xl space-y-6 pb-20"}>
-      {!embedded && (
-        <header className="rounded-[2.5rem] border border-slate-200 bg-white p-8 shadow-xl border-l-4 border-l-primary">
-          <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex items-center gap-6">
-              <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary font-black text-2xl shadow-sm overflow-hidden">
-                {photoUrl ? <img src={photoUrl} alt="" className="h-full w-full object-cover" /> : initials(fullName, email)}
-              </div>
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-1">Management / Customers</p>
-                <h1 className="text-4xl font-black text-slate-900 uppercase tracking-tight">{fullName}</h1>
-                <p className="text-sm font-medium text-slate-500 mt-1">{email || "No Email"} • {phone || "No Phone"}</p>
+    <>
+    <AdminDetailLayout
+      embedded={embedded}
+      topHeader={
+        <AdminDetailHeader
+          icon={User2}
+          iconTheme="bg-primary/10 text-primary"
+          category="Customers"
+          title={fullName}
+          subtitle={`${email || "No Email"} • ${phone || "No Phone"}`}
+          onRefresh={refreshDetail}
+          onBack={() => router.back()}
+        />
+      }
+      profileCard={
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div className="flex items-center gap-6">
+             <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary font-black text-2xl shadow-sm overflow-hidden">
+               {photoUrl ? <img src={photoUrl} alt="" className="h-full w-full object-cover" /> : initials(fullName, email)}
+             </div>
+             <div>
+                <h2 className="text-2xl font-black text-slate-900 tracking-tight">{fullName}</h2>
+                <div className="flex flex-wrap gap-2 mt-2">
+                  <span className={cn("inline-flex items-center rounded-full border px-3 py-1 text-[10px] font-black uppercase", badgeTone("type", customerType))}>{customerType || "CUSTOMER"}</span>
+                  <span className={cn("inline-flex items-center rounded-full border px-3 py-1 text-[10px] font-black uppercase", badgeTone("account", accountStatus))}>{accountStatus}</span>
+                </div>
+             </div>
+          </div>
+          <div className="flex flex-col gap-4 items-end">
+            <div className="flex flex-wrap items-center justify-between gap-6 rounded-[2rem] border border-slate-100 bg-slate-50/50 p-4 px-8 shadow-inner w-full md:w-auto">
+              <div className="flex items-center gap-8">
+                 <div className="flex flex-col"><span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Orders</span><span className="text-xl font-black text-slate-900">{stats.totalOrders}</span></div>
+                 <div className="h-8 w-px bg-slate-200" />
+                 <div className="flex flex-col"><span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Spent</span><span className="text-xl font-black text-slate-900">${stats.totalSpent.toFixed(2)}</span></div>
               </div>
             </div>
-            <div className="flex flex-col items-end gap-3">
-              <div className="flex items-center gap-2">
-                <button onClick={() => refreshDetail()} className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-sm font-bold text-slate-900 shadow-sm hover:bg-slate-50 group transition-all">
-                  <RefreshCw className={cn("h-4 w-4 text-slate-400 group-hover:rotate-180 transition-transform duration-500", busy && "animate-spin")} /> Refresh
-                </button>
-                <button onClick={() => router.back()} className="inline-flex h-11 items-center gap-2 rounded-xl bg-slate-900 px-5 text-sm font-bold text-white shadow-lg hover:bg-slate-800 transition-all active:scale-95">
-                  <ArrowLeft className="h-4 w-4" /> Back
-                </button>
-              </div>
-              <div className="flex gap-2">
-                <span className={cn("inline-flex items-center rounded-full border px-3 py-1 text-[10px] font-black uppercase", badgeTone("type", customerType))}>{customerType || "CUSTOMER"}</span>
-                <span className={cn("inline-flex items-center rounded-full border px-3 py-1 text-[10px] font-black uppercase", badgeTone("account", accountStatus))}>{accountStatus}</span>
-              </div>
+            <div className="flex flex-wrap gap-2">
+              {!editMode ? (
+                <button onClick={() => setEditMode(true)} disabled={!canEdit} className="inline-flex h-11 items-center gap-2 rounded-xl bg-blue-600 px-5 text-sm font-bold text-white shadow-lg hover:bg-blue-700 transition-all active:scale-95 disabled:opacity-50"><Pencil className="h-4 w-4" /> Edit Profile</button>
+              ) : (
+                <>
+                  <button onClick={() => save()} disabled={busy} className="inline-flex h-11 items-center gap-2 rounded-xl bg-emerald-600 px-5 text-sm font-bold text-white shadow-lg hover:bg-emerald-700 transition-all active:scale-95"><ShieldCheck className="h-4 w-4" /> Save</button>
+                  <button onClick={() => setEditMode(false)} className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-sm font-bold text-slate-900 shadow-sm hover:bg-slate-50">Discard</button>
+                </>
+              )}
+              <div className="h-8 w-px bg-slate-200 mx-1" />
+              <button onClick={() => setResetOpen(true)} className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-sm font-bold text-slate-900 hover:bg-slate-50 transition-all"><Lock className="h-4 w-4 text-slate-400" /> Password</button>
+              <button onClick={() => toggleActive()} className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-sm font-bold text-slate-900 hover:bg-slate-50 transition-all"><Unlock className="h-4 w-4 text-slate-400" /> {accountStatus === "active" ? "Deactivate" : "Activate"}</button>
+              <button onClick={() => remove()} disabled={!canDelete} className="inline-flex h-11 items-center gap-2 rounded-xl border border-rose-200 bg-white px-5 text-sm font-bold text-rose-700 hover:bg-rose-50 transition-all active:scale-95 disabled:opacity-50"><Trash2 className="h-4 w-4" /> Delete</button>
             </div>
           </div>
-        </header>
-      )}
-
-      <div className="flex flex-wrap items-center justify-between gap-4 rounded-[2rem] border border-slate-100 bg-slate-50/50 p-4 px-8 shadow-inner">
-        <div className="flex items-center gap-8">
-           <div className="flex flex-col"><span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Orders</span><span className="text-xl font-black text-slate-900">{stats.totalOrders}</span></div>
-           <div className="h-8 w-px bg-slate-200" />
-           <div className="flex flex-col"><span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Spent</span><span className="text-xl font-black text-slate-900">${stats.totalSpent.toFixed(2)}</span></div>
         </div>
-        <div className="flex flex-wrap gap-2">
-          {!editMode ? (
-            <button onClick={() => setEditMode(true)} disabled={!canEdit} className="inline-flex h-11 items-center gap-2 rounded-xl bg-blue-600 px-5 text-sm font-bold text-white shadow-lg hover:bg-blue-700 transition-all active:scale-95 disabled:opacity-50"><Pencil className="h-4 w-4" /> Edit Profile</button>
-          ) : (
-            <>
-              <button onClick={() => save()} disabled={busy} className="inline-flex h-11 items-center gap-2 rounded-xl bg-emerald-600 px-5 text-sm font-bold text-white shadow-lg hover:bg-emerald-700 transition-all active:scale-95"><ShieldCheck className="h-4 w-4" /> Save Changes</button>
-              <button onClick={() => setEditMode(false)} className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-sm font-bold text-slate-900 shadow-sm hover:bg-slate-50">Discard</button>
-            </>
-          )}
-          <div className="h-8 w-px bg-slate-200 mx-1" />
-          <button onClick={() => setResetOpen(true)} className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-sm font-bold text-slate-900 hover:bg-slate-50 transition-all"><Lock className="h-4 w-4 text-slate-400" /> Password</button>
-          <button onClick={() => toggleActive()} className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-sm font-bold text-slate-900 hover:bg-slate-50 transition-all"><Unlock className="h-4 w-4 text-slate-400" /> {accountStatus === "active" ? "Deactivate" : "Activate"}</button>
-          <button onClick={() => remove()} disabled={!canDelete} className="inline-flex h-11 items-center gap-2 rounded-xl border border-rose-200 bg-white px-5 text-sm font-bold text-rose-700 hover:bg-rose-50 transition-all active:scale-95 disabled:opacity-50"><Trash2 className="h-4 w-4" /> Delete</button>
-        </div>
-      </div>
-
-      <div className={cn("grid gap-6", embedded ? "" : "lg:grid-cols-12")}>
-        <aside className={cn("space-y-6", embedded ? "" : "lg:col-span-4")}>
-          <section className="rounded-[2.5rem] border border-slate-200 bg-white p-4 shadow-sm">
-            <nav className="space-y-1">
-              {[
-                { id: "personal", label: "Identity Profile", icon: User2 },
-                { id: "contact", label: "Contact Details", icon: MapPin },
-                { id: "account", label: "Security & Type", icon: FileText },
-                { id: "orders", label: "Order History", icon: ShoppingBag },
-                { id: "notes", label: "Internal Notes", icon: NotebookPen },
-              ].map((item) => {
-                 const isSelected = activeSection === item.id;
-                 return (
-                  <button key={item.id} onClick={() => setActiveSection(item.id as any)} className={cn("flex w-full items-center gap-4 rounded-3xl px-5 py-4 text-left transition-all", isSelected ? "bg-slate-900 text-white shadow-xl" : "text-slate-600 hover:bg-slate-50")}>
-                    <item.icon className={cn("h-5 w-5", isSelected ? "text-white" : "text-slate-400")} />
-                    <span className="text-[10px] font-black uppercase tracking-widest">{item.label}</span>
-                  </button>
-                 );
-              })}
-            </nav>
-          </section>
-        </aside>
-
-        <main className={cn("space-y-6", embedded ? "" : "lg:col-span-8")}>
+      }
+      sections={[
+        { id: "personal", label: "Identity Profile", icon: User2 },
+        { id: "contact", label: "Contact Details", icon: MapPin },
+        { id: "account", label: "Security & Type", icon: FileText },
+        { id: "orders", label: "Order History", icon: ShoppingBag },
+        { id: "notes", label: "Internal Notes", icon: NotebookPen },
+      ]}
+      activeSection={activeSection}
+      onSectionChange={(id) => setActiveSection(id as any)}
+    >
           {activeSection === "personal" && (
             <section className="rounded-[2.5rem] border border-slate-200 bg-white p-8 shadow-sm">
               <h2 className="mb-8 flex items-center gap-2 text-sm font-black uppercase tracking-widest text-slate-400"><User2 className="h-4 w-4" /> Personal Profile</h2>
@@ -341,8 +327,7 @@ export function CustomerDetailClient({
                )}
             </section>
           )}
-        </main>
-      </div>
+    </AdminDetailLayout>
 
       {/* @ts-ignore */}
       <Dialog open={resetOpen} onOpenChange={setResetOpen}>
@@ -357,6 +342,6 @@ export function CustomerDetailClient({
            </div>
         </DialogContent>
       </Dialog>
-    </div>
+    </>
   );
 }
