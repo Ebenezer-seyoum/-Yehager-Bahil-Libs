@@ -3,6 +3,7 @@
 import { Check, Eye, KeyRound, Pencil, Plus, Trash2, UserCheck, UserX, XCircle, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ButtonHTMLAttributes, ReactNode } from "react";
+import Link from "next/link";
 
 type DashboardActionKind =
   | "view"
@@ -32,28 +33,46 @@ export function DashboardActionButton({
   children,
   className,
   compact = true,
+  href,
   ...props
 }: ButtonHTMLAttributes<HTMLButtonElement> & {
   action: DashboardActionKind;
   children?: ReactNode;
   compact?: boolean;
+  href?: string;
 }) {
   const meta = ACTION_META[action];
   const Icon = meta.icon;
 
+  const btnClass = cn(
+    "inline-flex items-center justify-center font-bold tracking-tight transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
+    compact ? "h-9 gap-2 rounded-xl px-4 text-xs" : "h-11 gap-2.5 rounded-2xl px-6 text-sm",
+    meta.className,
+    className,
+  );
+
+  const content = (
+    <>
+      <Icon className={cn("shrink-0", compact ? "h-3.5 w-3.5" : "h-4 w-4")} aria-hidden />
+      <span>{children ?? meta.label}</span>
+    </>
+  );
+
+  if (href) {
+    return (
+      <Link href={href} className={btnClass} onClick={props.onClick as any} aria-label={props["aria-label"]}>
+        {content}
+      </Link>
+    );
+  }
+
   return (
     <button
       type="button"
-      className={cn(
-        "inline-flex items-center justify-center font-bold tracking-tight transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
-        compact ? "h-9 gap-2 rounded-xl px-4 text-xs" : "h-11 gap-2.5 rounded-2xl px-6 text-sm",
-        meta.className,
-        className,
-      )}
+      className={btnClass}
       {...props}
     >
-      <Icon className={cn("shrink-0", compact ? "h-3.5 w-3.5" : "h-4 w-4")} aria-hidden />
-      <span>{children ?? meta.label}</span>
+      {content}
     </button>
   );
 }

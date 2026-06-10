@@ -260,14 +260,11 @@ export function AdminOrdersTable({
     return () => window.removeEventListener("admin-order-viewed", onViewed);
   }, []);
 
-  async function openOrder(orderId: string) {
+  function markOrderViewed(orderId: string) {
     window.dispatchEvent(new CustomEvent("admin-order-viewed", { detail: orderId }));
-    try {
-      await fetch(`/api/backend/orders/admin/${orderId}`);
-    } catch (err) {
+    fetch(`/api/backend/orders/admin/${orderId}`).catch(err => {
       console.error("Could not trigger alert resolution:", err);
-    }
-    router.push(`/admin/orders/${orderId}`);
+    });
   }
 
   const filteredOrders = useMemo(() => {
@@ -377,18 +374,18 @@ export function AdminOrdersTable({
                       className={`border-t border-border transition hover:bg-secondary/30 ${highlightRow ? "bg-red-950/25 ring-2 ring-inset ring-red-800/35 shadow-[inset_0_0_0_1px_rgba(127,29,29,0.35)]" : ""} ${isSelected ? "bg-primary/5 ring-1 ring-inset ring-primary/25" : ""}`}
                     >
                       <td className="px-4 py-5 align-middle">
-                        <button type="button" onClick={() => openOrder(order.id)} className="text-sm font-semibold text-slate-600 hover:text-primary transition-colors">
+                        <a href={`/admin/orders/${order.id}`} onClick={() => markOrderViewed(order.id)} className="text-sm font-semibold text-slate-600 hover:text-primary transition-colors inline-block">
                           {index + 1}
-                        </button>
+                        </a>
                       </td>
                       <td className="px-4 py-5 align-middle">
-                        <button type="button" onClick={() => openOrder(order.id)} className="text-left">
+                        <a href={`/admin/orders/${order.id}`} onClick={() => markOrderViewed(order.id)} className="text-left inline-block w-full">
                           <div className="flex items-center gap-2">
                             {highlightRow ? <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-red-700 shadow-[0_0_0_0_rgba(127,29,29,0.9)] animate-pulse" /> : null}
                             <p className="max-w-[120px] break-words font-mono text-xs font-black text-foreground">{shortOrderNumber(order.orderNumber ?? order.id)}</p>
                           </div>
                           <p className="mt-1 text-xs text-muted-foreground">{order.createdAt ? new Date(order.createdAt).toLocaleDateString() : "-"}</p>
-                        </button>
+                        </a>
                       </td>
                       <td className="px-4 py-5 align-middle">
                         <span className={`inline-flex rounded-full border px-3 py-1 text-[11px] font-black uppercase ${orderTypeClass(order.orderType ?? "catalog_order")}`}>
@@ -421,7 +418,7 @@ export function AdminOrdersTable({
                       </td>
                       <td className="px-4 py-5 align-middle">
                         <DashboardTableActions>
-                          <DashboardActionButton action="view" onClick={() => openOrder(order.id)} aria-label="Open order details" />
+                          <DashboardActionButton action="view" href={`/admin/orders/${order.id}`} onClick={() => markOrderViewed(order.id)} aria-label="Open order details" />
                         </DashboardTableActions>
                       </td>
                     </tr>

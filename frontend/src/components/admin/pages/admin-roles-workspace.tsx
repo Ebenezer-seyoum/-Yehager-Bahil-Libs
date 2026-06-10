@@ -72,20 +72,20 @@ export function AdminRolesWorkspace({
       initialData={data}
       hideKpis
       filterPlaceholder="Search roles, permissions, employees, or security logs..."
+      actions={
+        <button
+          type="button"
+          onClick={() => window.dispatchEvent(new Event(ADMIN_ROLE_CREATE_EVENT))}
+          className="inline-flex h-11 items-center gap-2 rounded-xl bg-blue-900 px-5 text-sm font-bold text-white shadow-lg transition hover:bg-blue-950 active:scale-95"
+          aria-label="Add Role"
+        >
+          <Plus className="h-4.5 w-4.5" />
+          Add Role
+        </button>
+      }
       filterActions={({ activeTab, search }) => (
         <div className="flex items-center gap-3 w-full">
           <SearchResultBadge query={search} activeTab={activeTab} />
-          <div className="ml-auto">
-            <button
-              type="button"
-              onClick={() => window.dispatchEvent(new Event(ADMIN_ROLE_CREATE_EVENT))}
-              className="btn btn-add"
-              aria-label="Add Role"
-            >
-              <Plus className="h-4 w-4" />
-              Add Role
-            </button>
-          </div>
         </div>
       )}
     >

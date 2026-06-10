@@ -13,7 +13,7 @@ export default async function AdminUploadedDesignDetailPage({ params }) {
 
   let design = null;
   try {
-    const response = await apiRequest(`/api/v1/uploaded-designs/${id}`);
+    const response = await apiRequest(`/api/v1/uploaded-designs/admin/${id}`);
     design = response?.data ?? response ?? null;
   } catch {
     design = null;

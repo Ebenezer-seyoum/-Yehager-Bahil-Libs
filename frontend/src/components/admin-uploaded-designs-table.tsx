@@ -145,13 +145,10 @@ export function AdminUploadedDesignsTable({ rows: initialRows, search }: { rows:
     });
   }, [currentTime, dateFilter, fabricFilter, rows, search, statusFilter]);
 
-  async function open(row: UploadedDesign) {
-    try {
-      await fetch(`/api/backend/admin/uploaded-designs/${row.id}`);
-    } catch (err) {
+  function markDesignViewed(row: UploadedDesign) {
+    fetch(`/api/backend/admin/uploaded-designs/${row.id}`).catch(err => {
       console.error("Alert resolution failed:", err);
-    }
-    router.push(`/admin/uploaded-designs/${row.id}`);
+    });
   }
 
   return (
@@ -209,17 +206,17 @@ export function AdminUploadedDesignsTable({ rows: initialRows, search }: { rows:
               {filtered.map((row, index) => (
                 <tr key={row.id} className={`border-b border-slate-200 last:border-b-0 hover:bg-blue-50/70 ${index % 2 === 0 ? "bg-white" : "bg-slate-50/50"}`}>
                   <td className="px-4 py-5 align-middle">
-                    <button onClick={() => open(row)} className="text-sm font-semibold text-slate-600 hover:text-blue-600 transition-colors">
+                    <a href={`/admin/uploaded-designs/${row.id}`} onClick={() => markDesignViewed(row)} className="text-sm font-semibold text-slate-600 hover:text-blue-600 transition-colors inline-block">
                       {index + 1}
-                    </button>
+                    </a>
                   </td>
                   <td className="px-4 py-5 align-middle">
-                    <button onClick={() => open(row)} className="text-left group">
+                    <a href={`/admin/uploaded-designs/${row.id}`} onClick={() => markDesignViewed(row)} className="text-left group inline-block w-full">
                       <p className="font-mono text-xs font-black text-blue-900 leading-none group-hover:text-blue-600 transition-colors">#{row.submissionNumber ?? "YBL-CD"}</p>
                       <p className="mt-1 text-[11px] text-slate-500 font-medium">
                         {row.submittedAt || row.createdAt ? new Date(String(row.submittedAt ?? row.createdAt)).toLocaleDateString() : "-"}
                       </p>
-                    </button>
+                    </a>
                   </td>
                   <td className="px-4 py-5 align-middle">
                     <span className="inline-flex rounded-full border border-primary/40 bg-primary/10 px-3 py-1 text-[10px] font-black text-primary uppercase">
@@ -260,7 +257,7 @@ export function AdminUploadedDesignsTable({ rows: initialRows, search }: { rows:
                   </td>
                   <td className="px-4 py-5 align-middle text-right">
                     <DashboardTableActions className="justify-end">
-                      <DashboardActionButton action="view" onClick={() => void open(row)} />
+                      <DashboardActionButton action="view" href={`/admin/uploaded-designs/${row.id}`} onClick={() => markDesignViewed(row)} aria-label="View custom design request" />
                     </DashboardTableActions>
                   </td>
                 </tr>
