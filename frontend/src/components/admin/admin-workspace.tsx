@@ -49,6 +49,7 @@ export function AdminWorkspace({
     filteredData: AdminWorkspaceData;
     search: string;
     dateRange: DateRangeKey;
+    setDisplayedRecordsCount: (count: number | null) => void;
   }) => ReactNode;
   hideTabs?: boolean;
   hideFilters?: boolean;
@@ -85,6 +86,7 @@ export function AdminWorkspace({
   const [data, setData] = useState(initialData ?? ({} as AdminWorkspaceData));
   const [search, setSearch] = useState("");
   const [dateRange, setDateRange] = useState<DateRangeKey>("Last 30 Days");
+  const [displayedRecordsCount, setDisplayedRecordsCount] = useState<number | null>(null);
 
   useEffect(() => {
     setData(initialData);
@@ -184,13 +186,13 @@ export function AdminWorkspace({
           placeholder={filterPlaceholder ?? filterPlaceholderFor(pageId)}
           showExport={showExport}
           onExport={onExport}
-          recordsCount={showRecordsBadge === false ? undefined : recordsCount}
+          recordsCount={showRecordsBadge === false ? undefined : (displayedRecordsCount ?? recordsCount)}
           actions={typeof filterActions === "function" ? filterActions({ activeTab, filteredData: tabFilteredData, search, dateRange }) : filterActions ?? primaryAction}
         />
       ) : null}
 
       {/* 5. Main content (tables) */}
-      <div className="min-w-0">{children({ activeTab, filteredData: tabFilteredData, search, dateRange })}</div>
+      <div className="min-w-0">{children({ activeTab, filteredData: tabFilteredData, search, dateRange, setDisplayedRecordsCount })}</div>
 
       {/* 6. Optional charts / insights */}
       {footer ? <div className="min-w-0 space-y-4">{footer}</div> : null}

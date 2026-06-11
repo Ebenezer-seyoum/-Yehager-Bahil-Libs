@@ -23,11 +23,11 @@ export async function listRolesForAdmin() {
   return listRolesWithPermissionKeys();
 }
 
-export async function createRoleForAdmin(payload: { key: string; name: string; description?: string | null }) {
+export async function createRoleForAdmin(payload: { key: string; name: string; description?: string | null; color?: string | null; icon?: string | null }) {
   return createRole(payload);
 }
 
-export async function updateRoleForAdmin(roleId: string, payload: { name: string; description?: string | null }) {
+export async function updateRoleForAdmin(roleId: string, payload: { name: string; description?: string | null; color?: string | null; icon?: string | null }) {
   return updateRole(roleId, payload);
 }
 

@@ -29,6 +29,13 @@
       "when": 1781031031021,
       "tag": "0003_lovely_groot",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1781199746300,
+      "tag": "0004_acoustic_starbolt",
+      "breakpoints": true
     }
   ]
 }

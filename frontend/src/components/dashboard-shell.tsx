@@ -568,12 +568,12 @@ export function DashboardShell({
               <div className="overflow-hidden rounded-2xl border border-border bg-card">
                 <div className="border-b border-border p-6">
                   <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Employee access</p>
-                  <h1 className="mt-2 text-3xl font-semibold">Access setup is pending</h1>
+                  <h1 className="mt-2 text-3xl font-semibold">Access denied</h1>
                   <p className="mt-2 text-sm text-muted-foreground">
-                    Your employee account has been created successfully, but no role or permissions have been assigned yet. Please wait until an administrator assigns your access level.
+                    Your employee account is active, but there are no active roles or permissions available for your account right now.
                   </p>
                   <p className="mt-3 text-sm text-muted-foreground">
-                    Once your role is assigned, your dashboard menu and available tools will appear automatically.
+                    Please contact your administrator to activate your assigned role or update your access permissions, then refresh this page.
                   </p>
                 </div>
                 <div className="flex flex-col gap-3 p-6 sm:flex-row sm:items-center sm:justify-between">

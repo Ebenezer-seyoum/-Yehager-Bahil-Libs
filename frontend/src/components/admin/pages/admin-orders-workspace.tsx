@@ -65,12 +65,13 @@ export function AdminOrdersWorkspace({
         </div>
       )}
     >
-      {({ filteredData, search }) => (
+      {({ filteredData, search, setDisplayedRecordsCount }) => (
         <AdminOrdersTable
           initialOrders={(filteredData.orders ?? []) as Parameters<typeof AdminOrdersTable>[0]["initialOrders"]}
           initialSelectedOrderId={initialSelectedOrderId}
           initialOrderType={initialOrderType}
           externalSearch={search}
+          onFilteredCountChange={setDisplayedRecordsCount}
           hideToolbar
         />
       )}

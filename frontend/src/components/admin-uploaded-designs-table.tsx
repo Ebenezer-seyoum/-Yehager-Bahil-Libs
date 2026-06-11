@@ -51,7 +51,7 @@ function prettyLabel(value?: string | null) {
   return (value ?? "submitted").replaceAll("_", " ");
 }
 
-export function AdminUploadedDesignsTable({ rows: initialRows, search }: { rows: UploadedDesign[]; search: string }) {
+export function AdminUploadedDesignsTable({ rows: initialRows, search, onFilteredCountChange }: { rows: UploadedDesign[]; search: string; onFilteredCountChange?: (count: number) => void }) {
   const router = useRouter();
   const [rows, setRows] = useState(initialRows);
   const [statusFilter, setStatusFilter] = useState("all");
@@ -144,6 +144,10 @@ export function AdminUploadedDesignsTable({ rows: initialRows, search }: { rows:
       return matchesSearch && matchesStatus && matchesFabric && matchesDate;
     });
   }, [currentTime, dateFilter, fabricFilter, rows, search, statusFilter]);
+
+  useEffect(() => {
+    onFilteredCountChange?.(filtered.length);
+  }, [filtered.length, onFilteredCountChange]);
 
   function markDesignViewed(row: UploadedDesign) {
     fetch(`/api/backend/admin/uploaded-designs/${row.id}`).catch(err => {

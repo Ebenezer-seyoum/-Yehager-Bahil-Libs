@@ -28,6 +28,8 @@ export const roles = pgTable(
     key: varchar("key", { length: 100 }).notNull(),
     name: varchar("name", { length: 255 }).notNull(),
     description: text("description"),
+    color: varchar("color", { length: 50 }),
+    icon: varchar("icon", { length: 50 }),
     isSystem: boolean("is_system").default(false).notNull(),
     ...timestamps,
   },

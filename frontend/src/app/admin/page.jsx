@@ -4,13 +4,20 @@ import { authOptions } from "@/auth-options";
 import { apiRequest } from "@/lib/api-client";
 import { AdminDashboardWorkspace } from "@/components/admin/pages/admin-dashboard-workspace";
 import { can } from "@/lib/permissions";
+import { AccessRestricted } from "@/components/admin/access-restricted";
 
 export default async function AdminPage() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) redirect("/signin?callbackUrl=/admin");
   if (session.user.role !== "admin" && session.user.role !== "employee") redirect("/");
   if (session.user.role === "employee" && !can(session.user.permissions, "dashboard.view")) {
-    return <div />;
+    return (
+      <AccessRestricted
+        requiredPermission="dashboard.view"
+        sectionName="Dashboard"
+        description="Your employee account is active, but dashboard access has not been assigned yet. Please contact your administrator, then refresh this page."
+      />
+    );
   }
 
   let orders = [];

@@ -4,6 +4,7 @@ import { authOptions } from "@/auth-options";
 import { apiRequest } from "@/lib/api-client";
 import { can } from "@/lib/permissions";
 import { AdminRolesWorkspace } from "@/components/admin/pages/admin-roles-workspace";
+import { AccessRestricted } from "@/components/admin/access-restricted";
 
 type User = {
   id: string;
@@ -49,7 +50,9 @@ type AuditLog = {
 export default async function AdminRolesPage() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) redirect("/signin?callbackUrl=/admin/roles");
-  if (!can(session.user.permissions, "roles.view")) redirect("/");
+  if (!can(session.user.permissions, "roles.view")) {
+    return <AccessRestricted requiredPermission="roles.view" sectionName="Role and permission" />;
+  }
 
   let users: User[] = [];
   let permissions: Permission[] = [];

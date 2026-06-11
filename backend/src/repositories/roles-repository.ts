@@ -9,25 +9,29 @@ export async function findRoleByKey(key: string) {
   });
 }
 
-export async function createRole(payload: { key: string; name: string; description?: string | null }) {
+export async function createRole(payload: { key: string; name: string; description?: string | null; color?: string | null; icon?: string | null }) {
   const [created] = await db
     .insert(roles)
     .values({
       key: payload.key,
       name: payload.name,
       description: payload.description ?? null,
+      color: payload.color ?? null,
+      icon: payload.icon ?? null,
       isSystem: false,
     })
     .returning();
   return created;
 }
 
-export async function updateRole(roleId: string, payload: { name: string; description?: string | null }) {
+export async function updateRole(roleId: string, payload: { name: string; description?: string | null; color?: string | null; icon?: string | null }) {
   const [updated] = await db
     .update(roles)
     .set({
       name: payload.name,
       description: payload.description ?? null,
+      color: payload.color ?? null,
+      icon: payload.icon ?? null,
       updatedAt: new Date(),
     })
     .where(eq(roles.id, roleId))

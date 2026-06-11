@@ -37,10 +37,11 @@ export function AdminPaymentsWorkspace({ data }: { data: AdminWorkspaceData }) {
         </div>
       }
     >
-      {({ filteredData, search }) => (
+      {({ filteredData, search, setDisplayedRecordsCount }) => (
         <AdminPaymentsTable
           initialOrders={(filteredData.orders ?? []) as any}
           externalSearch={search}
+          onFilteredCountChange={setDisplayedRecordsCount}
           viewMode="page"
         />
       )}

@@ -126,6 +126,8 @@ const createEmployeeSchema = z.object({
 const createRoleSchema = z.object({
   name: z.string().trim().min(1).max(255),
   description: z.string().trim().max(500).optional(),
+  color: z.string().trim().max(50).optional().nullable(),
+  icon: z.string().trim().max(50).optional().nullable(),
 });
 const userParamSchema = z.object({
   userId: z.string().uuid(),
@@ -196,6 +198,8 @@ const permissionIdParamSchema = z.object({
 const roleUpdateSchema = z.object({
   name: z.string().trim().min(1).max(255),
   description: z.string().trim().max(500).optional().nullable(),
+  color: z.string().trim().max(50).optional().nullable(),
+  icon: z.string().trim().max(50).optional().nullable(),
 });
 const rolePermissionsPatchSchema = z.object({
   permissions: z.array(z.string().trim().min(1)).max(100),
@@ -332,6 +336,8 @@ adminRouter.post(
       key,
       name: payload.name,
       description: payload.description,
+      color: payload.color,
+      icon: payload.icon,
     });
 
     await db.insert(auditLogs).values({

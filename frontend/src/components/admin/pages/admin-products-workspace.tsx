@@ -42,10 +42,11 @@ export function AdminProductsWorkspace({ data }: { data: AdminWorkspaceData }) {
         </button>
       }
     >
-      {({ filteredData, search }) => (
+      {({ filteredData, search, setDisplayedRecordsCount }) => (
         <AdminProductManager
           initialProducts={(filteredData.products ?? []) as any}
           externalSearch={search}
+          onFilteredCountChange={setDisplayedRecordsCount}
           viewMode="page"
         />
       )}

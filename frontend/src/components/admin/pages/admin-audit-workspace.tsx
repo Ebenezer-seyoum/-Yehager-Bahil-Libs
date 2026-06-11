@@ -55,10 +55,11 @@ export function AdminAuditWorkspace({ data }: { data: AdminWorkspaceData }) {
         </div>
       )}
     >
-      {({ filteredData, search }) => (
+      {({ filteredData, search, setDisplayedRecordsCount }) => (
         <AdminAuditTable
           logs={(filteredData.audit ?? []) as Parameters<typeof AdminAuditTable>[0]["logs"]}
           externalSearch={search}
+          onFilteredCountChange={setDisplayedRecordsCount}
         />
       )}
     </AdminWorkspace>

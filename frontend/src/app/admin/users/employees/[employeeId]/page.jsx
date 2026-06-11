@@ -4,11 +4,14 @@ import { authOptions } from "@/auth-options";
 import { apiRequest } from "@/lib/api-client";
 import { can } from "@/lib/permissions";
 import { EmployeeDetailClient } from "@/components/admin/employee-detail-client";
+import { AccessRestricted } from "@/components/admin/access-restricted";
 
 export default async function EmployeeDetailPage({ params, searchParams }) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) redirect("/signin?callbackUrl=/admin/users");
-  if (!can(session.user.permissions, "employees.view")) redirect("/");
+  if (!can(session.user.permissions, "employees.view")) {
+    return <AccessRestricted requiredPermission="employees.view" sectionName="Employee" />;
+  }
 
   const { employeeId } = await params;
   const query = (await searchParams) ?? {};

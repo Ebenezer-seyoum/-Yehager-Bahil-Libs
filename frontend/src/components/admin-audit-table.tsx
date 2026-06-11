@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { TableHeadCell, TableHeadRow, TableHeader } from "@/components/admin/table-header";
 import { ADMIN_TABLE_WRAPPER } from "@/lib/admin/admin-design-system";
 import { AlertTriangle, CheckCircle2, CreditCard, Package, ShieldCheck, Truck, UserRound } from "lucide-react";
@@ -37,7 +37,7 @@ const severityStyles: Record<string, string> = {
   critical: "bg-rose-100 text-rose-800",
 };
 
-export function AdminAuditTable({ logs, externalSearch }: { logs: AuditLog[]; externalSearch?: string }) {
+export function AdminAuditTable({ logs, externalSearch, onFilteredCountChange }: { logs: AuditLog[]; externalSearch?: string; onFilteredCountChange?: (count: number) => void }) {
   const [search, setSearch] = useState("");
   const effectiveSearch = externalSearch ?? search;
   const [category, setCategory] = useState("all");
@@ -53,6 +53,10 @@ export function AdminAuditTable({ logs, externalSearch }: { logs: AuditLog[]; ex
       return matchesSearch && matchesCategory;
     });
   }, [logs, effectiveSearch, category]);
+
+  useEffect(() => {
+    onFilteredCountChange?.(filtered.length);
+  }, [filtered.length, onFilteredCountChange]);
 
   return (
     <div className="space-y-4">

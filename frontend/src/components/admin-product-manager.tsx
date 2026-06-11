@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { TableHeadCell, TableHeadRow, TableHeader } from "@/components/admin/table-header";
 import { DashboardActionButton, DashboardTableActions } from "@/components/admin/dashboard-action-button";
@@ -38,10 +39,12 @@ function formatEtb(value: string | number | null | undefined) {
 export function AdminProductManager({
   initialProducts,
   externalSearch,
+  onFilteredCountChange,
 }: {
   initialProducts: Product[];
   externalSearch?: string;
   viewMode?: "modal" | "page";
+  onFilteredCountChange?: (count: number) => void;
 }) {
   const router = useRouter();
 
@@ -55,6 +58,10 @@ export function AdminProductManager({
       p.region.toLowerCase().includes(q)
     );
   });
+
+  useEffect(() => {
+    onFilteredCountChange?.(filteredProducts.length);
+  }, [filteredProducts.length, onFilteredCountChange]);
 
   function openProductDetail(productId: string) {
     router.push(`/admin/inventory/${productId}`);

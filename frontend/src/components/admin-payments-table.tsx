@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { TableHeadCell, TableHeadRow, TableHeader } from "@/components/admin/table-header";
 import { DashboardActionButton, DashboardTableActions } from "@/components/admin/dashboard-action-button";
 import { CreditCard, Landmark, Clock, CheckCircle2, XCircle, AlertCircle } from "lucide-react";
@@ -41,10 +41,12 @@ function formatUsd(value?: number | string | null) {
 export function AdminPaymentsTable({
   initialOrders,
   externalSearch,
+  onFilteredCountChange,
 }: {
   initialOrders: Order[];
   externalSearch?: string;
   viewMode?: "modal" | "page";
+  onFilteredCountChange?: (count: number) => void;
 }) {
   const router = useRouter();
 
@@ -60,6 +62,10 @@ export function AdminPaymentsTable({
       );
     });
   }, [initialOrders, externalSearch]);
+
+  useEffect(() => {
+    onFilteredCountChange?.(filteredOrders.length);
+  }, [filteredOrders.length, onFilteredCountChange]);
 
   function openPaymentDetail(orderId: string) {
     router.push(`/admin/payments/${orderId}`);

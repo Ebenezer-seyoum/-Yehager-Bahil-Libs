@@ -5,11 +5,14 @@ import { apiRequest } from "@/lib/api-client";
 import { can } from "@/lib/permissions";
 import { AdminEmployeesWorkspace } from "@/components/admin/pages/admin-employees-workspace";
 import { DashboardNotice } from "@/components/admin/dashboard-notice";
+import { AccessRestricted } from "@/components/admin/access-restricted";
 
 export default async function AdminUsersPage({ searchParams }) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) redirect("/signin?callbackUrl=/admin/users");
-  if (!can(session.user.permissions, "employees.view")) redirect("/");
+  if (!can(session.user.permissions, "employees.view")) {
+    return <AccessRestricted requiredPermission="employees.view" sectionName="Employee" />;
+  }
 
   const query = (await searchParams) ?? {};
   const canCreate = can(session.user.permissions, "employees.create");

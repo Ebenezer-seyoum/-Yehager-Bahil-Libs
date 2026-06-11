@@ -79,6 +79,10 @@ function productStock(product: Row) {
   return Number.isFinite(stock) ? stock : 999;
 }
 
+function norm(v: unknown) {
+  return String(v ?? "").toLowerCase().trim();
+}
+
 function buildDashboardKpis(data: AdminWorkspaceData): KpiCardModel[] {
   const orders = data.orders ?? [];
   const products = data.products ?? [];
@@ -87,7 +91,6 @@ function buildDashboardKpis(data: AdminWorkspaceData): KpiCardModel[] {
   const customers = users.filter((u) => String(u.role ?? "").toLowerCase() === "customer");
 
   const orderRows = orders as DatedRow[];
-  const revenue = periodCounts(orderRows, (row) => isPaid(row));
   const bounds = getComparisonPeriodBounds("Last 30 Days");
   const revCurrent = rowsBetweenDates(orderRows, bounds.currentStart, bounds.currentEnd)
     .filter(isPaid)
@@ -199,10 +202,6 @@ function buildOrdersKpis(data: AdminWorkspaceData): KpiCardModel[] {
     kpi({ id: "cancelled", title: "Cancelled Orders", value: String(count(isCancelled)), description: "Lost sales", color: "red", icon: XCircle, changePercent: 0, positiveIsGood: false }),
     kpi({ id: "value", title: "Total Order Value", value: money(totalValue), description: "Sum in current view", color: "green", icon: DollarSign, changePercent: 0, positiveIsGood: true }),
   ];
-}
-
-function norm(v: unknown) {
-  return String(v ?? "").toLowerCase().trim();
 }
 
 function buildProductsKpis(data: AdminWorkspaceData): KpiCardModel[] {
@@ -377,6 +376,34 @@ function buildSettingsKpis(): KpiCardModel[] {
   ];
 }
 
+function buildDocumentsKpis(data: AdminWorkspaceData): KpiCardModel[] {
+  const orders = data.orders ?? [];
+  const pickup = orders.filter((o) => norm(o.fulfillmentType) === "pickup");
+  const mailed = orders.filter((o) => norm(o.fulfillmentType) !== "pickup");
+  const needsReview = orders.filter((o) => {
+    const isPickup = norm(o.fulfillmentType) === "pickup";
+    const missingPickupDocs = isPickup && (!o.pickupIdUrl || !o.pickupSignedDocUrl);
+    const awaitingVerification = norm(o.paymentStatus) === "awaiting_verification";
+    return missingPickupDocs || awaitingVerification;
+  });
+  const withPaymentProof = orders.filter((o) => Boolean(o.paymentProofUrl));
+  const complete = orders.filter((o) => {
+    const isPickup = norm(o.fulfillmentType) === "pickup";
+    const pickupComplete = !isPickup || (Boolean(o.pickupIdUrl) && Boolean(o.pickupSignedDocUrl));
+    const shippingComplete = isPickup || (Array.isArray(o.shippingDocuments) && (o.shippingDocuments as unknown[]).length > 0);
+    return pickupComplete && shippingComplete;
+  });
+
+  return [
+    kpi({ id: "total", title: "Total Orders", value: String(orders.length), description: "With document tracking", color: "blue", icon: ClipboardList, changePercent: 0, positiveIsGood: true }),
+    kpi({ id: "needs_review", title: "Needs Review", value: String(needsReview.length), description: "Missing docs or proofs", color: "yellow", icon: AlertTriangle, changePercent: 0, positiveIsGood: false }),
+    kpi({ id: "payment_proof", title: "Payment Proofs", value: String(withPaymentProof.length), description: "ETB proofs submitted", color: "blue", icon: CreditCard, changePercent: 0, positiveIsGood: true }),
+    kpi({ id: "pickup", title: "Pickup Orders", value: String(pickup.length), description: "In-store fulfillment", color: "purple", icon: Package, changePercent: 0, positiveIsGood: true }),
+    kpi({ id: "mailed", title: "Mailed Orders", value: String(mailed.length), description: "Shipped via carrier", color: "blue", icon: Truck, changePercent: 0, positiveIsGood: true }),
+    kpi({ id: "complete", title: "Docs Complete", value: String(complete.length), description: "All files uploaded", color: "green", icon: CheckCircle2, changePercent: 0, positiveIsGood: true }),
+  ];
+}
+
 function buildGenericKpis(data: AdminWorkspaceData, color: KpiColor = "blue"): KpiCardModel[] {
   const count = (key: keyof AdminWorkspaceData) => (data[key] as Row[] | undefined)?.length ?? 0;
   return [
@@ -405,9 +432,7 @@ export function computePageKpis(pageId: AdminPageId, data: AdminWorkspaceData): 
     case "settings":
       return buildSettingsKpis();
     case "documents":
-    case "sections":
-    case "exchange-rate":
-      return buildGenericKpis(data);
+      return buildDocumentsKpis(data);
     case "uploaded-designs":
       return buildUploadedDesignKpis(data);
     default:

@@ -185,14 +185,14 @@ export function AdminAnalyticsWorkspace({
   const refresh = useCallback(() => {
     startTransition(async () => {
       try {
-        const [ordersRes, productsRes, usersRes] = await Promise.all([
-          fetch("/api/backend/orders?limit=500").then((r) => r.json()),
-          fetch("/api/backend/admin/products?limit=500").then((r) => r.json()),
-          fetch("/api/backend/admin/users?limit=500").then((r) => r.json()),
+        const [ordersRes, productsRes, usersRes] = await Promise.allSettled([
+          fetch("/api/backend/orders?limit=500").then((r) => { if (!r.ok) throw new Error(); return r.json(); }),
+          fetch("/api/backend/products?limit=500").then((r) => { if (!r.ok) throw new Error(); return r.json(); }),
+          fetch("/api/backend/admin/users?limit=500").then((r) => { if (!r.ok) throw new Error(); return r.json(); }),
         ]);
-        if (Array.isArray(ordersRes?.data)) setOrders(ordersRes.data);
-        if (Array.isArray(productsRes?.data)) setProducts(productsRes.data);
-        if (Array.isArray(usersRes?.data)) setUsers(usersRes.data);
+        if (ordersRes.status === "fulfilled") setOrders(Array.isArray(ordersRes.value?.data) ? ordersRes.value.data : (Array.isArray(ordersRes.value) ? ordersRes.value : []));
+        if (productsRes.status === "fulfilled") setProducts(Array.isArray(productsRes.value?.data) ? productsRes.value.data : (Array.isArray(productsRes.value) ? productsRes.value : []));
+        if (usersRes.status === "fulfilled") setUsers(Array.isArray(usersRes.value?.data) ? usersRes.value.data : (Array.isArray(usersRes.value) ? usersRes.value : []));
       } catch {
         router.refresh();
       }

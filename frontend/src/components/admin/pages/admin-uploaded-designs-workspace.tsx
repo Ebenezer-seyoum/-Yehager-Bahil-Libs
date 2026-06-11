@@ -57,10 +57,11 @@ export function AdminUploadedDesignsWorkspace({ data }: { data: AdminWorkspaceDa
         </div>
       )}
     >
-      {({ filteredData, search }) => (
+      {({ filteredData, search, setDisplayedRecordsCount }) => (
         <AdminUploadedDesignsTable
           rows={(filteredData.uploadedDesigns ?? []) as Parameters<typeof AdminUploadedDesignsTable>[0]["rows"]}
           search={search}
+          onFilteredCountChange={setDisplayedRecordsCount}
         />
       )}
     </AdminWorkspace>

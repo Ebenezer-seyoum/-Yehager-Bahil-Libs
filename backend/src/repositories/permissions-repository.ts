@@ -1,14 +1,17 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull, ne, or } from "drizzle-orm";
 import { db } from "../lib/db/drizzle.js";
-import { permissions, rolePermissions, userPermissions, userRoles } from "../lib/db/schema.js";
+import { permissions, rolePermissions, roles, userPermissions, userRoles } from "../lib/db/schema.js";
+
+const activeRoleCondition = or(isNull(roles.color), ne(roles.color, "inactive"));
 
 export async function listPermissionKeysForUser(userId: string) {
   const roleRows = await db
     .select({ key: permissions.key })
     .from(userRoles)
+    .innerJoin(roles, eq(roles.id, userRoles.roleId))
     .innerJoin(rolePermissions, eq(rolePermissions.roleId, userRoles.roleId))
     .innerJoin(permissions, eq(permissions.id, rolePermissions.permissionId))
-    .where(eq(userRoles.userId, userId));
+    .where(and(eq(userRoles.userId, userId), activeRoleCondition));
   const directRows = await db
     .select({ key: permissions.key })
     .from(userPermissions)
@@ -24,9 +27,10 @@ export async function userHasAnyPermission(userId: string, permissionKeys: strin
   const rows = await db
     .select({ key: permissions.key })
     .from(userRoles)
+    .innerJoin(roles, eq(roles.id, userRoles.roleId))
     .innerJoin(rolePermissions, eq(rolePermissions.roleId, userRoles.roleId))
     .innerJoin(permissions, eq(permissions.id, rolePermissions.permissionId))
-    .where(and(eq(userRoles.userId, userId), inArray(permissions.key, permissionKeys)))
+    .where(and(eq(userRoles.userId, userId), activeRoleCondition, inArray(permissions.key, permissionKeys)))
     .limit(1);
 
   if (rows.length > 0) return true;

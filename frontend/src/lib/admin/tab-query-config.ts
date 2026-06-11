@@ -167,6 +167,33 @@ function filterPayments(orders: Row[], tabId: string): Row[] {
   }
 }
 
+function filterDocuments(orders: Row[], tabId: string): Row[] {
+  switch (tabId) {
+    case "pickup":
+      return orders.filter((o) => norm(o.fulfillmentType) === "pickup");
+    case "mailed":
+      return orders.filter((o) => norm(o.fulfillmentType) !== "pickup");
+    case "needs_review":
+      return orders.filter((o) => {
+        const isPickup = norm(o.fulfillmentType) === "pickup";
+        const missingPickupDocs = isPickup && (!o.pickupIdUrl || !o.pickupSignedDocUrl);
+        const awaitingVerification = norm(o.paymentStatus) === "awaiting_verification";
+        return missingPickupDocs || awaitingVerification;
+      });
+    case "payment_proof":
+      return orders.filter((o) => Boolean(o.paymentProofUrl));
+    case "complete":
+      return orders.filter((o) => {
+        const isPickup = norm(o.fulfillmentType) === "pickup";
+        const pickupComplete = !isPickup || (Boolean(o.pickupIdUrl) && Boolean(o.pickupSignedDocUrl));
+        const shippingComplete = isPickup || (Array.isArray(o.shippingDocuments) && (o.shippingDocuments as unknown[]).length > 0);
+        return pickupComplete && shippingComplete;
+      });
+    default:
+      return orders;
+  }
+}
+
 function filterAudit(rows: Row[], tabId: string): Row[] {
   switch (tabId) {
     case "admin":
@@ -259,6 +286,8 @@ export function applyTabQuery(
       return { ...data, audit: filterAudit(audit, tabId) };
     case "uploaded-designs":
       return { ...data, uploadedDesigns: filterUploadedDesigns(uploadedDesigns, tabId) };
+    case "documents":
+      return { ...data, orders: filterDocuments(orders, tabId) };
     default:
       return data;
   }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type ComponentType, type PropsWithChildren } from "react";
-import { Edit3, Eye, Trash2 } from "lucide-react";
+import { Edit3, Eye, Trash2, Shield, ShieldAlert, Users, Store, Settings, Crown, Scissors, Briefcase, Shirt, Activity, ShieldCheck } from "lucide-react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 
 const TypedDialog = Dialog as ComponentType<PropsWithChildren<{ open?: boolean; onOpenChange?: (open: boolean) => void }>>;
@@ -42,6 +42,8 @@ type Role = {
   key: string;
   name: string;
   description: string | null;
+  color?: string | null;
+  icon?: string | null;
   isSystem: boolean;
   permissions?: string[];
   createdAt: string;
@@ -65,6 +67,8 @@ type RoleModalState = {
   role?: Role;
   name: string;
   description: string;
+  color: string;
+  icon: string;
 };
 
 type PermissionModalState = {
@@ -94,6 +98,30 @@ function titleCase(value: string) {
     .map((part) => part[0]?.toUpperCase() + part.slice(1))
     .join(" ");
 }
+
+const ROLE_COLORS: Record<string, string> = {
+  blue: "bg-blue-600",
+  rose: "bg-rose-600",
+  emerald: "bg-emerald-600",
+  amber: "bg-amber-600",
+  indigo: "bg-indigo-600",
+  cyan: "bg-cyan-600",
+  slate: "bg-slate-700",
+  purple: "bg-purple-600",
+};
+
+const ROLE_ICONS: Record<string, any> = {
+  shield: Shield,
+  "shield-alert": ShieldAlert,
+  users: Users,
+  store: Store,
+  settings: Settings,
+  crown: Crown,
+  scissors: Scissors,
+  briefcase: Briefcase,
+  shirt: Shirt,
+  activity: Activity,
+};
 
 export function ReferenceRolePermissionPanel({
   users,
@@ -239,7 +267,7 @@ export function ReferenceRolePermissionPanel({
   }
 
   function createRole() {
-    setRoleModal({ mode: "create", name: "", description: "" });
+    setRoleModal({ mode: "create", name: "", description: "", color: "blue", icon: "shield" });
   }
 
   useEffect(() => {
@@ -253,6 +281,8 @@ export function ReferenceRolePermissionPanel({
     const value = {
       name: roleModal.name.trim(),
       description: roleModal.description.trim(),
+      color: roleModal.color.trim() || null,
+      icon: roleModal.icon.trim() || null,
     };
     if (!value.name) {
       await dashboardError("Validation Error", "Role name is required.");
@@ -285,7 +315,7 @@ export function ReferenceRolePermissionPanel({
   }
 
   function editRole(role: Role) {
-    setRoleModal({ mode: "edit", role, name: role.name, description: role.description ?? "" });
+    setRoleModal({ mode: "edit", role, name: role.name, description: role.description ?? "", color: role.color ?? "blue", icon: role.icon ?? "shield" });
   }
 
   async function deleteRole(role: Role) {
@@ -678,28 +708,105 @@ export function ReferenceRolePermissionPanel({
             </button>
           </div>
           <div className="max-h-[680px] overflow-y-auto p-5">
-            <div className="space-y-3">
-            {filteredPermissions.map((permission) => (
-              <label key={permission.id} className="block cursor-pointer rounded-2xl border border-slate-200 bg-white p-4 transition hover:border-blue-300 hover:bg-blue-50/40">
-                <span className="flex items-start gap-4">
-                  <input type="checkbox" checked={selectedPermissions.includes(permission.key)} onChange={() => togglePermission(permission.key)} className="mt-1 h-4 w-4" />
-                  <span className="min-w-0 flex-1">
-                    <p className="text-sm font-bold text-slate-950">{titleCase(permission.key)}</p>
-                    <p className="mt-1 text-xs font-semibold uppercase tracking-wider text-blue-700">{permission.resource} · {permission.action}</p>
-                    <p className="mt-2 text-sm leading-6 text-slate-600">{permission.description ?? "Controls access to this dashboard feature."}</p>
-                  </span>
-                  <span className="flex shrink-0 flex-row flex-nowrap items-center gap-2 whitespace-nowrap">
-                    <button type="button" onClick={(event) => { event.preventDefault(); event.stopPropagation(); void editPermission(permission); }} className="inline-flex items-center gap-1.5 rounded-lg bg-blue-900 px-3 py-1.5 text-xs font-bold text-white hover:bg-blue-950"><Edit3 className="h-3.5 w-3.5" /> Edit</button>
-                    <button type="button" onClick={(event) => { event.preventDefault(); event.stopPropagation(); void deletePermission(permission); }} className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-800 hover:bg-rose-100"><Trash2 className="h-3.5 w-3.5" /> Delete</button>
-                  </span>
-                </span>
-              </label>
-            ))}
-            {filteredPermissions.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center text-sm text-muted-foreground">
-                No permissions match your search.
-              </div>
-            ) : null}
+            <div className="space-y-6">
+              {Array.from(
+                filteredPermissions.reduce((acc, perm) => {
+                  if (!acc.has(perm.resource)) acc.set(perm.resource, []);
+                  acc.get(perm.resource).push(perm);
+                  return acc;
+                }, new Map())
+              ).map(([resource, perms]) => {
+                const standardMap: Record<string, string> = { create: 'CREATE', view: 'READ', edit: 'UPDATE', manage: 'UPDATE', delete: 'DELETE' };
+                const grouped: Record<string, any> = { CREATE: null, READ: null, UPDATE: null, DELETE: null, OTHER: [] };
+                for (const p of (perms as Permission[])) {
+                  const std = standardMap[p.action];
+                  if (std) {
+                    if (!grouped[std]) grouped[std] = p;
+                    else grouped.OTHER.push(p);
+                  } else {
+                    grouped.OTHER.push(p);
+                  }
+                }
+                
+                return (
+                  <div key={resource as string} className="rounded-xl border border-slate-200 bg-white overflow-hidden shadow-sm">
+                    <div className="bg-slate-50 border-b border-slate-200 px-5 py-4 flex items-center justify-between">
+                      <h3 className="font-bold text-slate-800 text-lg flex items-center gap-2">
+                        {titleCase(resource as string)} Module
+                      </h3>
+                      <div className="flex gap-3">
+                        <button type="button" onClick={() => {
+                          const keys = (perms as Permission[]).map(p => p.key);
+                          setSelectedPermissions(curr => Array.from(new Set([...curr, ...keys])));
+                        }} className="text-xs font-semibold text-blue-600 hover:text-blue-800 bg-blue-50 px-3 py-1.5 rounded-lg transition-colors">Select All</button>
+                        <button type="button" onClick={() => {
+                          const keys = (perms as Permission[]).map(p => p.key);
+                          setSelectedPermissions(curr => curr.filter(k => !keys.includes(k)));
+                        }} className="text-xs font-semibold text-rose-600 hover:text-rose-800 bg-rose-50 px-3 py-1.5 rounded-lg transition-colors">Deselect All</button>
+                      </div>
+                    </div>
+                    
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-sm">
+                        <thead className="bg-white border-b border-slate-100">
+                          <tr>
+                            <th className="px-5 py-3 font-semibold text-slate-500 uppercase tracking-wider text-xs w-[30%]">Permission</th>
+                            <th className="px-5 py-3 font-semibold text-slate-500 uppercase tracking-wider text-xs text-center">Create</th>
+                            <th className="px-5 py-3 font-semibold text-slate-500 uppercase tracking-wider text-xs text-center">Read</th>
+                            <th className="px-5 py-3 font-semibold text-slate-500 uppercase tracking-wider text-xs text-center">Update</th>
+                            <th className="px-5 py-3 font-semibold text-slate-500 uppercase tracking-wider text-xs text-center">Delete</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          <tr>
+                            <td className="px-5 py-4 font-medium text-slate-700 flex items-center gap-2">
+                              Base Access
+                            </td>
+                            <td className="px-5 py-4 text-center">
+                              {grouped.CREATE ? (
+                                <input type="checkbox" className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer" checked={selectedPermissions.includes(grouped.CREATE.key)} onChange={() => togglePermission(grouped.CREATE.key)} />
+                              ) : <span className="text-slate-300">-</span>}
+                            </td>
+                            <td className="px-5 py-4 text-center">
+                              {grouped.READ ? (
+                                <input type="checkbox" className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer" checked={selectedPermissions.includes(grouped.READ.key)} onChange={() => togglePermission(grouped.READ.key)} />
+                              ) : <span className="text-slate-300">-</span>}
+                            </td>
+                            <td className="px-5 py-4 text-center">
+                              {grouped.UPDATE ? (
+                                <input type="checkbox" className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer" checked={selectedPermissions.includes(grouped.UPDATE.key)} onChange={() => togglePermission(grouped.UPDATE.key)} />
+                              ) : <span className="text-slate-300">-</span>}
+                            </td>
+                            <td className="px-5 py-4 text-center">
+                              {grouped.DELETE ? (
+                                <input type="checkbox" className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer" checked={selectedPermissions.includes(grouped.DELETE.key)} onChange={() => togglePermission(grouped.DELETE.key)} />
+                              ) : <span className="text-slate-300">-</span>}
+                            </td>
+                          </tr>
+                          {grouped.OTHER.map((p: any) => (
+                            <tr key={p.id}>
+                              <td className="px-5 py-4 font-medium text-slate-700 flex items-center justify-between">
+                                {titleCase(p.action)}
+                              </td>
+                              <td colSpan={4} className="px-5 py-4">
+                                <label className="flex items-center gap-3 cursor-pointer w-fit">
+                                  <input type="checkbox" className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" checked={selectedPermissions.includes(p.key)} onChange={() => togglePermission(p.key)} />
+                                  <span className="text-slate-600 text-xs font-medium">{p.description || "Custom module action"}</span>
+                                </label>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                );
+              })}
+              {filteredPermissions.length === 0 && (
+                <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center text-sm text-muted-foreground">
+                  No permissions match your search.
+                </div>
+              )}
             </div>
           </div>
         </section>
@@ -747,38 +854,73 @@ export function ReferenceRolePermissionPanel({
         </section>
       ) : (
         <section className="space-y-5">
-          <div className="overflow-hidden rounded-2xl border border-border bg-card">
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[720px] border-collapse text-left">
-                <TableHeader>
-                  <TableHeadRow>
-                    <TableHeadCell>Role</TableHeadCell>
-                    <TableHeadCell>Description</TableHeadCell>
-                    <TableHeadCell>Permissions</TableHeadCell>
-                    <TableHeadCell>Type</TableHeadCell>
-                    <TableHeadCell>Actions</TableHeadCell>
-                  </TableHeadRow>
-                </TableHeader>
-                <tbody>
-                  {filteredRoles.map((role) => (
-                    <tr key={role.id} className="border-b border-border last:border-b-0 hover:bg-blue-50/40">
-                      <td className="px-4 py-4 font-semibold text-slate-950">{role.name}</td>
-                      <td className="px-4 py-4 text-sm text-muted-foreground">{role.description ?? "No description"}</td>
-                      <td className="px-4 py-4 text-sm text-muted-foreground">{role.permissions?.length ?? 0}</td>
-                      <td className="px-4 py-4">
-                        <span className="rounded-full bg-secondary px-2.5 py-1 text-xs text-muted-foreground">{role.isSystem ? "System" : "Custom"}</span>
-                      </td>
-                      <td className="px-4 py-4">
-                        <div className="flex flex-nowrap items-center gap-2 whitespace-nowrap">
-                          <button type="button" onClick={() => void editRole(role)} className="inline-flex items-center gap-1.5 rounded-lg bg-blue-900 px-3 py-1.5 text-xs font-bold text-white hover:bg-blue-950"><Edit3 className="h-3.5 w-3.5" /> Edit</button>
-                          <button type="button" onClick={() => void deleteRole(role)} disabled={role.isSystem} className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-800 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-50"><Trash2 className="h-3.5 w-3.5" /> Delete</button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {filteredRoles.map((role) => {
+              const bgClass = ROLE_COLORS[role.color || "blue"] || ROLE_COLORS.slate;
+              const IconComp = ROLE_ICONS[role.icon || "shield"] || Shield;
+              const usersCount = userItems.filter(u => u.assignedRoleId === role.id).length;
+
+              return (
+                <div key={role.id} className="flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition-all hover:shadow-md">
+                  <div className={`p-5 relative ${bgClass}`}>
+                    <div className="flex items-start justify-between">
+                      <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/20 text-white backdrop-blur-sm shadow-inner">
+                        <IconComp className="h-6 w-6" />
+                      </div>
+                      {role.isSystem && (
+                        <span className="rounded-full bg-white/20 px-2.5 py-1 text-xs font-extrabold tracking-wider text-white backdrop-blur-sm shadow-sm">
+                          SYSTEM
+                        </span>
+                      )}
+                    </div>
+                    <h3 className="mt-5 text-xl font-bold text-white">{role.name}</h3>
+                    <p className="mt-1 text-sm text-white/90 line-clamp-2">{role.description || "No description provided."}</p>
+                  </div>
+                  
+                  <div className="flex-1 p-5">
+                    <div className="flex items-center gap-5 text-sm font-semibold text-slate-600">
+                      <div className="flex items-center gap-2">
+                        <Users className="h-4.5 w-4.5 text-slate-400" />
+                        {usersCount} {usersCount === 1 ? "User" : "Users"}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <ShieldCheck className="h-4.5 w-4.5 text-slate-400" />
+                        {role.permissions?.length ?? 0} Permissions
+                      </div>
+                    </div>
+                    
+                    <div className="mt-6">
+                      <p className="text-[11px] font-bold tracking-[0.15em] text-slate-400">KEY PERMISSIONS</p>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {role.permissions?.slice(0, 3).map((perm) => (
+                          <span key={perm} className="rounded-full bg-slate-100 border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm">
+                            {titleCase(perm)}
+                          </span>
+                        ))}
+                        {(role.permissions?.length ?? 0) > 3 && (
+                          <span className="rounded-full bg-slate-50 border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-500 shadow-sm">
+                            +{(role.permissions?.length ?? 0) - 3} more
+                          </span>
+                        )}
+                        {(!role.permissions || role.permissions.length === 0) && (
+                          <span className="text-sm text-slate-400 font-medium">No permissions assigned</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center justify-between border-t border-slate-100 bg-slate-50/50 p-2">
+                    <button type="button" onClick={() => void editRole(role)} className="flex flex-1 items-center justify-center gap-2 rounded-lg py-3 text-sm font-bold text-slate-600 transition hover:bg-slate-100 hover:text-slate-900">
+                      <Edit3 className="h-4 w-4" /> Edit Role
+                    </button>
+                    <div className="h-5 w-px bg-slate-200"></div>
+                    <button type="button" onClick={() => void deleteRole(role)} disabled={role.isSystem} className="flex flex-1 items-center justify-center gap-2 rounded-lg py-3 text-sm font-bold text-rose-600 transition hover:bg-rose-50 hover:text-rose-700 disabled:opacity-50 disabled:hover:bg-transparent">
+                      <Trash2 className="h-4 w-4" /> Delete Role
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </section>
       )}
@@ -802,12 +944,38 @@ export function ReferenceRolePermissionPanel({
                 className="h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-sm text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
               />
             </label>
+            <div className="grid grid-cols-2 gap-4">
+              <label className="block text-sm">
+                <span className="mb-2 block font-semibold text-slate-700">Color Profile</span>
+                <select
+                  value={roleModal?.color ?? "blue"}
+                  onChange={(event) => setRoleModal((current) => current ? { ...current, color: event.target.value } : current)}
+                  className="h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-sm text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                >
+                  {Object.keys(ROLE_COLORS).map(color => (
+                    <option key={color} value={color}>{titleCase(color)}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="block text-sm">
+                <span className="mb-2 block font-semibold text-slate-700">Icon</span>
+                <select
+                  value={roleModal?.icon ?? "shield"}
+                  onChange={(event) => setRoleModal((current) => current ? { ...current, icon: event.target.value } : current)}
+                  className="h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-sm text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                >
+                  {Object.keys(ROLE_ICONS).map(icon => (
+                    <option key={icon} value={icon}>{titleCase(icon)}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
             <label className="block text-sm">
               <span className="mb-2 block font-semibold text-slate-700">Description</span>
               <textarea
                 value={roleModal?.description ?? ""}
                 onChange={(event) => setRoleModal((current) => current ? { ...current, description: event.target.value } : current)}
-                rows={5}
+                rows={4}
                 placeholder="What should this employee role manage?"
                 className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
               />

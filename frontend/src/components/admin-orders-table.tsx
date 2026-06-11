@@ -197,12 +197,14 @@ export function AdminOrdersTable({
   initialOrderType,
   externalSearch,
   hideToolbar,
+  onFilteredCountChange,
 }: {
   initialOrders: Order[];
   initialSelectedOrderId?: string | null;
   initialOrderType?: string | null;
   externalSearch?: string;
   hideToolbar?: boolean;
+  onFilteredCountChange?: (count: number) => void;
 }) {
   const router = useRouter();
   const [orders, setOrders] = useState(initialOrders);
@@ -283,6 +285,10 @@ export function AdminOrdersTable({
       return matchesSearch && matchesFulfillment && matchesOrderType && matchesStatus && matchesPayment;
     });
   }, [effectiveSearch, fulfillmentFilter, orderTypeFilter, orders, paymentFilter, statusFilter]);
+
+  useEffect(() => {
+    onFilteredCountChange?.(filteredOrders.length);
+  }, [filteredOrders.length, onFilteredCountChange]);
 
   async function updateOrder(orderId: string, patch: Partial<Pick<Order, "status" | "paymentStatus">>) {
     const key = `${orderId}-${Object.keys(patch).join("-")}`;
