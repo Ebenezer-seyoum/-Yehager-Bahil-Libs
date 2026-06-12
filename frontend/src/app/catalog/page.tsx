@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { backendPublicRequest } from "@/lib/backend-public";
 import { ProductCard } from "@/components/product-card";
-import { REGIONS, TAXONOMY } from "@/lib/taxonomy";
 import { CatalogLabels } from "@/components/catalog-labels";
+import { collectionNamesForRegion, normalizePublicRegions, type PublicRegion } from "@/lib/public-collections";
 
 type SearchParams = Record<string, string | string[] | undefined>;
 
@@ -52,14 +52,16 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
   if (activeGender !== "all") query.set("gender", activeGender);
   query.set("limit", "120");
 
-  const [productsRes, rateRes] = await Promise.all([
+  const [productsRes, rateRes, sectionsRes] = await Promise.all([
     backendPublicRequest(`/api/v1/products?${query.toString()}`).catch(() => ({ data: [] })),
     backendPublicRequest("/api/v1/exchange-rate").catch(() => ({ data: null })),
+    backendPublicRequest("/api/v1/products/sections").catch(() => ({ data: [] })),
   ]);
 
   const products: Product[] = Array.isArray(productsRes?.data) ? productsRes.data : [];
   const etbRate = Number(rateRes?.data?.rate ?? 0) || null;
-  const subs = activeRegion ? TAXONOMY[activeRegion] ?? [] : [];
+  const regions = normalizePublicRegions(Array.isArray(sectionsRes?.data) ? (sectionsRes.data as PublicRegion[]) : []);
+  const subs = collectionNamesForRegion(regions, activeRegion);
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 sm:py-12">
@@ -81,13 +83,13 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
                 >
                   All Regions
                 </Link>
-                {REGIONS.map((region) => (
+                {regions.map((region) => (
                   <Link
-                    key={region}
-                    href={makeHref(region, null, activeGender, activeEventId, groupId, selectionMode)}
-                    className={`block rounded-lg px-3 py-1.5 text-sm transition-colors ${activeRegion === region ? "bg-primary font-medium text-primary-foreground" : "text-muted-foreground hover:bg-secondary hover:text-foreground"}`}
+                    key={region.id}
+                    href={makeHref(region.name, null, activeGender, activeEventId, groupId, selectionMode)}
+                    className={`block rounded-lg px-3 py-1.5 text-sm transition-colors ${activeRegion === region.name ? "bg-primary font-medium text-primary-foreground" : "text-muted-foreground hover:bg-secondary hover:text-foreground"}`}
                   >
-                    {region}
+                    {region.name}
                   </Link>
                 ))}
               </div>
@@ -95,7 +97,7 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
 
             {subs.length > 0 ? (
               <div>
-              <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Sub-Collection</p>
+                <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Collections</p>
                 <div className="space-y-1">
                   {subs.map((sub) => (
                     <Link
@@ -129,13 +131,13 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
 
         <div className="flex-1">
           <div className="mb-6 flex flex-wrap gap-2 lg:hidden">
-            {REGIONS.map((region) => (
+            {regions.map((region) => (
               <Link
-                key={region}
-                href={makeHref(region, null, activeGender, activeEventId, groupId, selectionMode)}
-                className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${activeRegion === region ? "border-primary bg-primary text-primary-foreground" : "border-border text-muted-foreground"}`}
+                key={region.id}
+                href={makeHref(region.name, null, activeGender, activeEventId, groupId, selectionMode)}
+                className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${activeRegion === region.name ? "border-primary bg-primary text-primary-foreground" : "border-border text-muted-foreground"}`}
               >
-                {region}
+                {region.name}
               </Link>
             ))}
           </div>

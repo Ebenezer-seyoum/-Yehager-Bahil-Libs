@@ -1,9 +1,9 @@
 import { Hono } from "hono";
-import { and, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq } from "drizzle-orm";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { db } from "../../lib/db/drizzle.js";
-import { products } from "../../lib/db/schema.js";
+import { homepageSections, products } from "../../lib/db/schema.js";
 import { getActiveProductById } from "../../repositories/products-repository.js";
 import type { AppBindings } from "../../types/hono.js";
 
@@ -24,6 +24,71 @@ const productIdParamSchema = z.object({
 });
 
 export const productsRouter = new Hono<AppBindings>();
+
+productsRouter.get("/sections", async (c) => {
+  const rows = await db
+    .select({
+      id: homepageSections.id,
+      name: homepageSections.name,
+      slug: homepageSections.slug,
+      isActive: homepageSections.isActive,
+      sortOrder: homepageSections.sortOrder,
+      collections: homepageSections.collections,
+    })
+    .from(homepageSections)
+    .orderBy(asc(homepageSections.sortOrder), asc(homepageSections.name));
+
+  if (rows.length > 0) {
+    return c.json({
+      data: rows
+        .filter((row) => row.isActive)
+        .map((row) => ({
+          ...row,
+          collections: (row.collections ?? []).filter((collection) => collection.isActive),
+          subsections: (row.collections ?? []).filter((collection) => collection.isActive),
+        })),
+    });
+  }
+
+  const productRows = await db
+    .select({
+      region: products.region,
+      subcategory: products.subcategory,
+    })
+    .from(products)
+    .where(eq(products.isActive, true));
+
+  const grouped = new Map<string, Set<string>>();
+  productRows.forEach((product) => {
+    const region = product.region?.trim();
+    if (!region) return;
+    const current = grouped.get(region) ?? new Set<string>();
+    if (product.subcategory?.trim()) current.add(product.subcategory.trim());
+    grouped.set(region, current);
+  });
+
+  return c.json({
+    data: Array.from(grouped.entries()).map(([name, subsections], index) => ({
+      id: name,
+      name,
+      slug: name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, ""),
+      isActive: true,
+      sortOrder: index,
+      collections: Array.from(subsections).sort().map((subsection, subIndex) => ({
+        id: `${name}-${subsection}`.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, ""),
+        name: subsection,
+        isActive: true,
+        sortOrder: subIndex,
+      })),
+      subsections: Array.from(subsections).sort().map((subsection, subIndex) => ({
+        id: `${name}-${subsection}`.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, ""),
+        name: subsection,
+        isActive: true,
+        sortOrder: subIndex,
+      })),
+    })),
+  });
+});
 
 productsRouter.get("/", zValidator("query", querySchema), async (c) => {
   const { featured, region, category, sub, gender, limit } = c.req.valid("query");

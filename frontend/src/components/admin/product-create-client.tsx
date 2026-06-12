@@ -1,16 +1,13 @@
 "use client";
 
-import { useMemo, useState, useEffect } from "react";
+import { useCallback, useMemo, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { 
-  ArrowLeft, 
   Loader2,
   Package,
   Plus,
   Trash2,
-  Star,
   DollarSign,
-  Clock,
   Shirt,
   Info,
   ShieldCheck,
@@ -52,6 +49,50 @@ type BulkProduct = {
   status: "pending" | "uploading" | "success" | "error";
   errorMsg?: string;
 };
+
+type HomepageSection = {
+  id: string;
+  name: string;
+  isActive: boolean;
+  sortOrder: number;
+  collections?: Array<{
+    id: string;
+    name: string;
+    isActive: boolean;
+    sortOrder: number;
+  }>;
+  subsections?: Array<{
+    id: string;
+    name: string;
+    isActive: boolean;
+    sortOrder: number;
+  }>;
+};
+
+type ExistingProduct = {
+  id: string;
+  region?: string | null;
+  subcategory?: string | null;
+};
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "Something went wrong";
+}
+
+function fallbackHomepageSections(): HomepageSection[] {
+  return REGIONS.map((name, index) => ({
+    id: `fallback-${name}`,
+    name,
+    isActive: true,
+    sortOrder: index,
+    collections: (TAXONOMY[name] ?? []).map((subsection, subIndex) => ({
+      id: `fallback-${name}-${subsection}`,
+      name: subsection,
+      isActive: true,
+      sortOrder: subIndex,
+    })),
+  }));
+}
 
 // Region & Subcategory Abbreviation Helpers
 function getRegionCode(r: string): string {
@@ -110,7 +151,8 @@ export function ProductCreateClient() {
   const [previewImage, setPreviewImage] = useState<{ name: string; url: string } | null>(null);
 
   // Existing products list for increment counts
-  const [existingProducts, setExistingProducts] = useState<any[]>([]);
+  const [existingProducts, setExistingProducts] = useState<ExistingProduct[]>([]);
+  const [homepageSections, setHomepageSections] = useState<HomepageSection[]>(() => fallbackHomepageSections());
 
   useEffect(() => {
     fetch("/api/backend/admin/products?limit=200")
@@ -121,6 +163,15 @@ export function ProductCreateClient() {
         }
       })
       .catch(err => console.error("Error fetching existing products for auto-increment number", err));
+
+    fetch("/api/backend/admin/homepage-sections")
+      .then(res => res.json())
+      .then(json => {
+        if (Array.isArray(json.data) && json.data.length) {
+          setHomepageSections(json.data);
+        }
+      })
+      .catch(err => console.error("Error fetching sections for product insert", err));
   }, []);
 
   // Helper to compute increment number (handling local batch offsets)
@@ -149,7 +200,41 @@ export function ProductCreateClient() {
   // Single mode 4 file slots
   const [singleFiles, setSingleFiles] = useState<(File | null)[]>([null, null, null, null]);
 
-  const subsections = TAXONOMY[region] ?? [];
+  const sectionOptions = useMemo(
+    () =>
+      homepageSections
+        .filter(section => section.isActive)
+        .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name)),
+    [homepageSections],
+  );
+  const sectionNames = sectionOptions.map(section => section.name);
+
+  const getSubsectionsForSection = useCallback((sectionName: string) => {
+    const section = sectionOptions.find(item => item.name === sectionName);
+    return (section?.collections ?? section?.subsections ?? [])
+      .filter(subsection => subsection.isActive)
+      .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name))
+      .map(subsection => subsection.name);
+  }, [sectionOptions]);
+
+  const subsections = getSubsectionsForSection(region);
+
+  useEffect(() => {
+    const firstSection = sectionOptions[0]?.name;
+    if (!firstSection) return;
+    if (!sectionOptions.some(section => section.name === region)) {
+      const firstSubsection = getSubsectionsForSection(firstSection)[0] ?? "";
+      setRegion(firstSection);
+      setSubcategory(firstSubsection);
+    }
+  }, [getSubsectionsForSection, region, sectionOptions]);
+
+  useEffect(() => {
+    const nextSubsections = getSubsectionsForSection(region);
+    if (nextSubsections.length && !nextSubsections.includes(subcategory)) {
+      setSubcategory(nextSubsections[0]);
+    }
+  }, [getSubsectionsForSection, region, subcategory, sectionOptions]);
 
   // --- Multiple Products State ---
   const [defaultRegion, setDefaultRegion] = useState(REGIONS[0]);
@@ -161,6 +246,20 @@ export function ProductCreateClient() {
   const [defaultTailoringDays, setDefaultTailoringDays] = useState("30");
   const [defaultFeatured, setDefaultFeatured] = useState(false);
   const [defaultActive, setDefaultActive] = useState(true);
+
+  useEffect(() => {
+    const firstSection = sectionOptions[0]?.name;
+    if (!firstSection) return;
+    if (!sectionOptions.some(section => section.name === defaultRegion)) {
+      setDefaultRegion(firstSection);
+      setDefaultSubcategory(getSubsectionsForSection(firstSection)[0] ?? "");
+      return;
+    }
+    const nextSubsections = getSubsectionsForSection(defaultRegion);
+    if (nextSubsections.length && !nextSubsections.includes(defaultSubcategory)) {
+      setDefaultSubcategory(nextSubsections[0]);
+    }
+  }, [defaultRegion, defaultSubcategory, getSubsectionsForSection, sectionOptions]);
 
   const [bulkProducts, setBulkProducts] = useState<BulkProduct[]>([]);
   const [bulkProgress, setBulkProgress] = useState<{ current: number; total: number } | null>(null);
@@ -205,6 +304,10 @@ export function ProductCreateClient() {
   // --- Handle Single Product Create ---
   async function handleSingleCreate() {
     // 1. Validations
+    if (!region || !subcategory) {
+      setFormNotice({ tone: "error", title: "Missing Region", message: "Please select a region and collection before inserting a product." });
+      return;
+    }
     if (!middleText.trim()) {
       setFormNotice({ tone: "error", title: "Missing Data", message: "Please enter product name middle text." });
       return;
@@ -266,8 +369,8 @@ export function ProductCreateClient() {
 
       setFormNotice({ tone: "success", title: "Success", message: "Product added to catalog successfully" });
       setTimeout(() => router.push("/admin/inventory"), 1000);
-    } catch (error: any) {
-      setFormNotice({ tone: "error", title: "Error", message: error.message });
+    } catch (error: unknown) {
+      setFormNotice({ tone: "error", title: "Error", message: errorMessage(error) });
     } finally {
       setBusy(false);
     }
@@ -337,13 +440,13 @@ export function ProductCreateClient() {
   }
 
   // Update a single property for an item in bulk list
-  function updateBulkProduct(id: string, key: keyof BulkProduct, value: any) {
+  function updateBulkProduct(id: string, key: keyof BulkProduct, value: BulkProduct[keyof BulkProduct]) {
     setBulkProducts(prev => prev.map(p => {
       if (p.id !== id) return p;
-      const updated = { ...p, [key]: value };
+      const updated = { ...p, [key]: value } as BulkProduct;
       // Keep subcategory in sync with region if region changes
       if (key === "region") {
-        updated.subcategory = TAXONOMY[value]?.[0] || "";
+        updated.subcategory = getSubsectionsForSection(String(value))?.[0] || "";
       }
       return updated;
     }));
@@ -363,6 +466,11 @@ export function ProductCreateClient() {
         "Invalid Data",
         `Product "${invalid.folderName}" needs a middle name, a price, and exactly 4 images (detected ${invalid.files.length}).`
       );
+      return;
+    }
+    const missingCollection = activeProducts.find(p => !p.region || !p.subcategory);
+    if (missingCollection) {
+      void dashboardError("Missing Region", `Product "${missingCollection.folderName}" needs a region and collection before import.`);
       return;
     }
 
@@ -441,9 +549,9 @@ export function ProductCreateClient() {
 
         successCount++;
         setBulkProducts(prev => prev.map(item => item.id === prod.id ? { ...item, status: "success" } : item));
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error("Failed to import product", prod.folderName, error);
-        setBulkProducts(prev => prev.map(item => item.id === prod.id ? { ...item, status: "error", errorMsg: error.message } : item));
+        setBulkProducts(prev => prev.map(item => item.id === prod.id ? { ...item, status: "error", errorMsg: errorMessage(error) } : item));
       }
     }
 
@@ -468,7 +576,7 @@ export function ProductCreateClient() {
       return {
         ...p,
         region: defaultRegion,
-        subcategory: TAXONOMY[defaultRegion]?.includes(p.subcategory) ? p.subcategory : (TAXONOMY[defaultRegion]?.[0] || ""),
+        subcategory: getSubsectionsForSection(defaultRegion).includes(p.subcategory) ? p.subcategory : (getSubsectionsForSection(defaultRegion)[0] || ""),
         priceUsd: defaultPrice,
         gender: defaultGender,
         fabricType: defaultFabric,
@@ -579,19 +687,20 @@ export function ProductCreateClient() {
                       value={region}
                       onChange={e => {
                         setRegion(e.target.value);
-                        setSubcategory(TAXONOMY[e.target.value]?.[0] || "");
+                        setSubcategory(getSubsectionsForSection(e.target.value)?.[0] || "");
                       }}
                       className="w-full rounded-2xl border border-slate-100 bg-slate-50/50 p-4 font-bold outline-none"
                     >
-                      {REGIONS.map(r => <option key={r} value={r}>{r}</option>)}
+                      {sectionNames.map(r => <option key={r} value={r}>{r}</option>)}
                     </select>
                   </div>
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase text-slate-400">Specific Sub-category</label>
+                    <label className="text-[10px] font-black uppercase text-slate-400">Collection</label>
                     <select
                       value={subcategory}
                       onChange={e => setSubcategory(e.target.value)}
                       className="w-full rounded-2xl border border-slate-100 bg-slate-50/50 p-4 font-bold outline-none"
+                      disabled={!subsections.length}
                     >
                       {subsections.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
@@ -648,7 +757,7 @@ export function ProductCreateClient() {
                       <div key={idx} className="relative group aspect-[3/4] rounded-2xl overflow-hidden border border-slate-200 bg-slate-50 flex flex-col items-center justify-center p-3 text-center shadow-sm">
                         {fileUrl ? (
                           <>
-                            <img src={fileUrl} className="absolute inset-0 h-full w-full object-cover" />
+                            <img src={fileUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />
                             <button
                               onClick={() => handleSingleFileChange(idx, null)}
                               className="absolute top-2 right-2 h-8 w-8 rounded-xl bg-rose-600 text-white flex items-center justify-center shadow hover:bg-rose-700 transition-colors"
@@ -804,21 +913,22 @@ export function ProductCreateClient() {
                   value={defaultRegion}
                   onChange={e => {
                     setDefaultRegion(e.target.value);
-                    setDefaultSubcategory(TAXONOMY[e.target.value]?.[0] || "");
+                    setDefaultSubcategory(getSubsectionsForSection(e.target.value)?.[0] || "");
                   }}
                   className="w-full rounded-xl border border-slate-100 bg-slate-50 p-3 text-xs font-bold"
                 >
-                  {REGIONS.map(r => <option key={r} value={r}>{r}</option>)}
+                  {sectionNames.map(r => <option key={r} value={r}>{r}</option>)}
                 </select>
               </div>
               <div className="space-y-1">
-                <label className="text-[10px] font-black uppercase text-slate-400">Sub-category</label>
+                <label className="text-[10px] font-black uppercase text-slate-400">Collection</label>
                 <select
                   value={defaultSubcategory}
                   onChange={e => setDefaultSubcategory(e.target.value)}
                   className="w-full rounded-xl border border-slate-100 bg-slate-50 p-3 text-xs font-bold"
+                  disabled={!getSubsectionsForSection(defaultRegion).length}
                 >
-                  {(TAXONOMY[defaultRegion] ?? []).map(s => <option key={s} value={s}>{s}</option>)}
+                  {getSubsectionsForSection(defaultRegion).map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
               </div>
               <div className="space-y-1">
@@ -911,7 +1021,7 @@ export function ProductCreateClient() {
               <FolderOpen className="h-4 w-4" /> Select Root Directory
               <input
                 type="file"
-                // @ts-ignore
+                // @ts-expect-error webkitdirectory is supported by Chromium for folder import.
                 webkitdirectory=""
                 directory=""
                 multiple
@@ -939,7 +1049,7 @@ export function ProductCreateClient() {
                       <th className="px-6 py-4 font-bold text-slate-400 uppercase tracking-widest w-12">Import</th>
                       <th className="px-6 py-4 font-bold text-slate-400 uppercase tracking-widest w-40">Subfolder Name</th>
                       <th className="px-6 py-4 font-bold text-slate-400 uppercase tracking-widest min-w-[200px]">Images Previews</th>
-                      <th className="px-6 py-4 font-bold text-slate-400 uppercase tracking-widest">Region / Subcategory</th>
+                      <th className="px-6 py-4 font-bold text-slate-400 uppercase tracking-widest">Region / Collection</th>
                       <th className="px-6 py-4 font-bold text-slate-400 uppercase tracking-widest">Custom Middle Name</th>
                       <th className="px-6 py-4 font-bold text-slate-400 uppercase tracking-widest w-24">Price (USD)</th>
                       <th className="px-6 py-4 font-bold text-slate-400 uppercase tracking-widest w-28">Status</th>
@@ -947,7 +1057,7 @@ export function ProductCreateClient() {
                   </thead>
                   <tbody className="divide-y divide-slate-100 font-bold">
                     {bulkProducts.map(prod => {
-                      const subsections = TAXONOMY[prod.region] ?? [];
+                      const subsections = getSubsectionsForSection(prod.region);
                       return (
                         <tr key={prod.id} className={cn("hover:bg-slate-50 transition-colors", !prod.import && "opacity-50")}>
                           <td className="px-6 py-6">
@@ -980,7 +1090,7 @@ export function ProductCreateClient() {
                                     className="relative h-20 w-16 rounded-lg border border-slate-200 overflow-hidden bg-slate-50 shrink-0 cursor-zoom-in hover:scale-105 hover:border-emerald-500 hover:shadow-md transition-all duration-200"
                                     title="Click to cross-check image"
                                   >
-                                    <img src={fileUrl} className="h-full w-full object-cover" />
+                                    <img src={fileUrl} alt="" className="h-full w-full object-cover" />
                                     <div className="absolute bottom-0 inset-x-0 bg-black/40 text-[8px] font-black text-white text-center py-0.5 uppercase tracking-wider opacity-0 hover:opacity-100 transition-opacity">
                                       View
                                     </div>
@@ -1001,11 +1111,11 @@ export function ProductCreateClient() {
                               onChange={e => updateBulkProduct(prod.id, "region", e.target.value)}
                               className="w-full rounded border border-slate-200 p-1.5 text-[11px] outline-none"
                             >
-                              {REGIONS.map(r => <option key={r} value={r}>{r}</option>)}
+                              {sectionNames.map(r => <option key={r} value={r}>{r}</option>)}
                             </select>
                             <select
                               value={prod.subcategory}
-                              disabled={busy}
+                              disabled={busy || !subsections.length}
                               onChange={e => updateBulkProduct(prod.id, "subcategory", e.target.value)}
                               className="w-full rounded border border-slate-200 p-1.5 text-[11px] outline-none"
                             >

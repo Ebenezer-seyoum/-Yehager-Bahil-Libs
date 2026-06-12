@@ -183,18 +183,14 @@ function SignInForm() {
         return;
       }
 
-      if (session?.user?.role === "employee" && (session.user.roleStatus === "unassigned" || (session.user.permissions ?? []).length === 0)) {
-        await signOut({ redirect: false });
-        setFeedback({
-          type: "error",
-          message: "Access denied. Your employee role is inactive or no active permissions are assigned. Please contact your administrator.",
-        });
-        setSubmitting(false);
-        return;
-      }
-
       window.setTimeout(() => {
-        window.location.href = getPostLoginRedirect(session?.user?.role, callbackUrl);
+        window.location.href =
+          session?.user?.role === "employee" &&
+          (session.user.roleStatus === "unassigned" ||
+            session.user.assignedRoleActive === false ||
+            (session.user.permissions ?? []).length === 0)
+            ? "/employee/access-pending"
+            : getPostLoginRedirect(session?.user?.role, callbackUrl, session?.user?.permissions ?? []);
       }, 650);
     } catch {
       setFeedback({

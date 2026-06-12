@@ -25,9 +25,9 @@ export default async function AdminAnalyticsPage() {
 
   try {
     const [ordersResult, productsResult, usersResult] = await Promise.allSettled([
-      apiRequest("/api/v1/orders?limit=500"),
-      apiRequest("/api/v1/products?limit=500"),
-      apiRequest("/api/v1/admin/users?limit=500"),
+      apiRequest("/api/v1/orders?limit=200"),
+      apiRequest("/api/v1/admin/products?limit=200"),
+      apiRequest("/api/v1/admin/users?limit=200"),
     ]);
     
     orders = ordersResult.status === "fulfilled" 

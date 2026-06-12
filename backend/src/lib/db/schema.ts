@@ -206,6 +206,31 @@ export const products = pgTable(
   (table) => [index("products_region_idx").on(table.region), index("products_active_idx").on(table.isActive)],
 );
 
+export type HomepageCollection = {
+  id: string;
+  name: string;
+  isActive: boolean;
+  sortOrder: number;
+};
+
+export const homepageSections = pgTable(
+  "homepage_sections",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    name: text("name").notNull(),
+    slug: varchar("slug", { length: 160 }).notNull(),
+    isActive: boolean("is_active").default(true).notNull(),
+    sortOrder: integer("sort_order").default(0).notNull(),
+    collections: jsonb("collections").$type<HomepageCollection[]>().default([]).notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("homepage_sections_slug_unique").on(table.slug),
+    index("homepage_sections_active_idx").on(table.isActive),
+    index("homepage_sections_sort_idx").on(table.sortOrder),
+  ],
+);
+
 export const measurements = pgTable(
   "measurements",
   {

@@ -64,8 +64,13 @@ export async function getCurrentUserByEmail(email?: string) {
   }
   const user = await getUserByEmail(normalizeEmail(email));
   if (!user) return null;
+  const assignedRole = user.assignedRoleId
+    ? await db.query.roles.findFirst({ where: eq(roles.id, user.assignedRoleId) })
+    : null;
   return {
     ...toPublicUser(user),
+    assignedRoleActive: assignedRole ? assignedRole.color !== "inactive" : null,
+    assignedRoleName: assignedRole?.name ?? null,
     permissions: await getEffectivePermissionsForUser(user.id),
   };
 }
@@ -145,8 +150,14 @@ export async function authenticateUser(payload: { email: string; password: strin
   await ensureSystemRoleAssignment(user.id, user.role);
   await updateLastLoginAt(user.id);
 
+  const assignedRole = user.assignedRoleId
+    ? await db.query.roles.findFirst({ where: eq(roles.id, user.assignedRoleId) })
+    : null;
+
   return {
     ...toPublicUser(user),
+    assignedRoleActive: assignedRole ? assignedRole.color !== "inactive" : null,
+    assignedRoleName: assignedRole?.name ?? null,
     permissions: await getEffectivePermissionsForUser(user.id),
   };
 }
@@ -377,6 +388,14 @@ export async function assignEmployeeAccessForAdmin(payload: {
   if (!user) throw new HTTPException(404, { message: "User not found" });
   if (user.role !== "employee") {
     throw new HTTPException(400, { message: "Access assignment is only supported for employee accounts" });
+  }
+
+  if (payload.roleId) {
+    const role = await db.query.roles.findFirst({ where: eq(roles.id, payload.roleId) });
+    if (!role) throw new HTTPException(400, { message: "Selected role was not found" });
+    if (role.color === "inactive") {
+      throw new HTTPException(400, { message: "Inactive roles cannot be assigned to employees. Activate the role before assigning it." });
+    }
   }
 
   const roleIds = payload.roleId ? [payload.roleId] : [];

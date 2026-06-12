@@ -16,7 +16,7 @@ export const TRANSLATIONS: Record<string, TranslationMap> = {
     "catalog.pieces": "pieces",
     "catalog.region": "Region",
     "catalog.allRegions": "All Regions",
-    "catalog.subCollection": "Sub-Collection",
+    "catalog.subCollection": "Collections",
     "catalog.gender": "Gender",
     "catalog.all": "All",
     "catalog.women": "Women",

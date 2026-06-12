@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState, useTransition, useMemo } from "react";
+import { useCallback, useState, useTransition, useMemo, type ComponentType, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import {
   BarChart2, TrendingUp, Users, ShoppingBag, DollarSign, Package,
@@ -13,12 +13,38 @@ import { cn } from "@/lib/utils";
 /* ─────────────────────────────────────────────────────────────
    Types & Helpers
 ───────────────────────────────────────────────────────────── */
-type Order = Record<string, any>;
-type Product = Record<string, any>;
-type User = Record<string, any>;
+type DataRow = Record<string, unknown>;
+type Order = DataRow;
+type Product = DataRow;
+type User = DataRow;
 type DateRange = "7d" | "30d" | "90d" | "1y" | "all";
+type IconComponent = ComponentType<{ className?: string }>;
 
-function norm(v: any) { return String(v ?? "").toLowerCase().trim(); }
+function norm(v: unknown) { return String(v ?? "").toLowerCase().trim(); }
+
+function rowDate(row: DataRow) {
+  const raw = row.createdAt ?? row.created_at ?? row.created ?? row.date ?? row.updatedAt ?? row.updated_at;
+  const value = typeof raw === "string" || typeof raw === "number" || raw instanceof Date ? raw : 0;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? new Date(0) : date;
+}
+
+function orderAmount(order: Order) {
+  return Number(order.totalUsd ?? order.total_usd ?? order.total ?? order.amount ?? order.amountUsd ?? order.amount_usd ?? 0) || 0;
+}
+
+function isPaidOrder(order: Order) {
+  return ["paid", "succeeded", "success", "complete", "completed", "verified"].includes(norm(order.paymentStatus ?? order.payment_status));
+}
+
+function isCustomer(user: User) {
+  const role = norm(user.role ?? user.roleName ?? user.role_name ?? user.accountType ?? user.account_type);
+  return !role || role === "customer" || role === "user";
+}
+
+function rowArray(value: unknown): DataRow[] {
+  return Array.isArray(value) ? value.filter((item): item is DataRow => typeof item === "object" && item !== null) : [];
+}
 
 function money(n: number) {
   if (!Number.isFinite(n) || n === 0) return "$0.00";
@@ -56,7 +82,7 @@ function EmptyState({ label }: { label: string }) {
 function KpiHero({
   label, value, sub, icon: Icon, gradient, trend, trendUp,
 }: {
-  label: string; value: string; sub: string; icon: any;
+  label: string; value: string; sub: string; icon: IconComponent;
   gradient: string; trend?: string; trendUp?: boolean;
 }) {
   return (
@@ -89,7 +115,7 @@ function KpiHero({
 }
 
 function SectionCard({ title, subtitle, icon: Icon, children }: {
-  title: string; subtitle: string; icon: any; children: React.ReactNode;
+  title: string; subtitle: string; icon: IconComponent; children: ReactNode;
 }) {
   return (
     <div className="rounded-[2rem] border border-slate-200 bg-white p-7 shadow-sm">
@@ -175,7 +201,7 @@ export function AdminAnalyticsWorkspace({
 }) {
   const router = useRouter();
   const [isRefreshing, startTransition] = useTransition();
-  const [range, setRange] = useState<DateRange>("30d");
+  const [range, setRange] = useState<DateRange>("all");
 
   const [orders, setOrders] = useState<Order[]>(initialOrders ?? []);
   const [products, setProducts] = useState<Product[]>(initialProducts ?? []);
@@ -186,9 +212,9 @@ export function AdminAnalyticsWorkspace({
     startTransition(async () => {
       try {
         const [ordersRes, productsRes, usersRes] = await Promise.allSettled([
-          fetch("/api/backend/orders?limit=500").then((r) => { if (!r.ok) throw new Error(); return r.json(); }),
-          fetch("/api/backend/products?limit=500").then((r) => { if (!r.ok) throw new Error(); return r.json(); }),
-          fetch("/api/backend/admin/users?limit=500").then((r) => { if (!r.ok) throw new Error(); return r.json(); }),
+          fetch("/api/backend/orders?limit=200").then((r) => { if (!r.ok) throw new Error(); return r.json(); }),
+          fetch("/api/backend/admin/products?limit=200").then((r) => { if (!r.ok) throw new Error(); return r.json(); }),
+          fetch("/api/backend/admin/users?limit=200").then((r) => { if (!r.ok) throw new Error(); return r.json(); }),
         ]);
         if (ordersRes.status === "fulfilled") setOrders(Array.isArray(ordersRes.value?.data) ? ordersRes.value.data : (Array.isArray(ordersRes.value) ? ordersRes.value : []));
         if (productsRes.status === "fulfilled") setProducts(Array.isArray(productsRes.value?.data) ? productsRes.value.data : (Array.isArray(productsRes.value) ? productsRes.value : []));
@@ -210,26 +236,24 @@ export function AdminAnalyticsWorkspace({
   }, [range]);
 
   const filteredOrders = useMemo(() =>
-    orders.filter((o) => new Date(o.createdAt ?? o.created_at ?? 0) >= cutoff),
+    orders.filter((o) => rowDate(o) >= cutoff),
     [orders, cutoff]
   );
 
   /* ── Core metrics ── */
   const m = useMemo(() => {
-    const isPaid = (o: Order) =>
-      ["paid", "succeeded", "complete", "completed"].includes(norm(o.paymentStatus));
-    const revenue = filteredOrders.filter(isPaid).reduce((s, o) => s + Number(o.totalUsd ?? o.total ?? 0), 0);
+    const revenue = filteredOrders.filter(isPaidOrder).reduce((s, o) => s + orderAmount(o), 0);
     const totalOrders = filteredOrders.length;
-    const paidOrders = filteredOrders.filter(isPaid).length;
+    const paidOrders = filteredOrders.filter(isPaidOrder).length;
     const pendingCount = filteredOrders.filter((o) => norm(o.status) === "pending").length;
     const deliveredCount = filteredOrders.filter((o) =>
-      ["delivered", "picked_up", "completed"].includes(norm(o.status))
+      ["delivered", "picked_up", "completed", "fulfilled"].includes(norm(o.status))
     ).length;
-    const failedCount = filteredOrders.filter((o) => norm(o.paymentStatus) === "failed").length;
+    const failedCount = filteredOrders.filter((o) => norm(o.paymentStatus ?? o.payment_status) === "failed").length;
     const avgOrderValue = paidOrders ? revenue / paidOrders : 0;
     const conversionRate = totalOrders ? pct(paidOrders, totalOrders) : 0;
-    const customers = users.filter((u) => norm(u.role) === "customer");
-    const newCustomers = customers.filter((u) => new Date(u.createdAt ?? 0) >= cutoff).length;
+    const customers = users.filter(isCustomer);
+    const newCustomers = customers.filter((u) => rowDate(u) >= cutoff).length;
     return {
       revenue, totalOrders, paidOrders, pendingCount, deliveredCount, failedCount,
       avgOrderValue, conversionRate, customers: customers.length, newCustomers,
@@ -250,10 +274,10 @@ export function AdminAnalyticsWorkspace({
     const now = new Date();
     const buckets = monthBuckets();
     orders.forEach((o) => {
-      if (!["paid", "succeeded", "complete", "completed"].includes(norm(o.paymentStatus))) return;
-      const d = new Date(o.createdAt ?? o.created_at ?? 0);
+      if (!isPaidOrder(o)) return;
+      const d = rowDate(o);
       const ago = (now.getFullYear() - d.getFullYear()) * 12 + (now.getMonth() - d.getMonth());
-      if (ago >= 0 && ago < 12) buckets[11 - ago].value += Number(o.totalUsd ?? o.total ?? 0);
+      if (ago >= 0 && ago < 12) buckets[11 - ago].value += orderAmount(o);
     });
     return buckets;
   }, [orders]);
@@ -262,7 +286,7 @@ export function AdminAnalyticsWorkspace({
     const now = new Date();
     const buckets = monthBuckets();
     orders.forEach((o) => {
-      const d = new Date(o.createdAt ?? o.created_at ?? 0);
+      const d = rowDate(o);
       const ago = (now.getFullYear() - d.getFullYear()) * 12 + (now.getMonth() - d.getMonth());
       if (ago >= 0 && ago < 12) buckets[11 - ago].value++;
     });
@@ -272,8 +296,8 @@ export function AdminAnalyticsWorkspace({
   const customersByMonth = useMemo(() => {
     const now = new Date();
     const buckets = monthBuckets();
-    users.filter((u) => norm(u.role) === "customer").forEach((u) => {
-      const d = new Date(u.createdAt ?? 0);
+    users.filter(isCustomer).forEach((u) => {
+      const d = rowDate(u);
       const ago = (now.getFullYear() - d.getFullYear()) * 12 + (now.getMonth() - d.getMonth());
       if (ago >= 0 && ago < 12) buckets[11 - ago].value++;
     });
@@ -307,8 +331,8 @@ export function AdminAnalyticsWorkspace({
   const topProducts = useMemo(() => {
     const salesMap: Record<string, number> = {};
     orders.forEach((o) => {
-      (o.items ?? []).forEach((item: any) => {
-        const name = item.productName ?? item.name ?? "Unknown";
+      rowArray(o.items).forEach((item) => {
+        const name = String(item.productName ?? item.name ?? "Unknown");
         salesMap[name] = (salesMap[name] ?? 0) + 1;
       });
     });

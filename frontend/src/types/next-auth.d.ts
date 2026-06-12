@@ -8,6 +8,9 @@ declare module "next-auth" {
       role: "admin" | "customer" | "employee";
       permissions: string[];
       roleStatus?: "unassigned" | "assigned";
+      assignedRoleId?: string | null;
+      assignedRoleActive?: boolean | null;
+      assignedRoleName?: string | null;
       accountStatus?: string;
       email?: string | null;
       name?: string | null;
@@ -21,6 +24,9 @@ declare module "next-auth/jwt" {
     role?: "admin" | "customer" | "employee";
     permissions?: string[];
     roleStatus?: "unassigned" | "assigned";
+    assignedRoleId?: string | null;
+    assignedRoleActive?: boolean | null;
+    assignedRoleName?: string | null;
     accountStatus?: string;
   }
 }

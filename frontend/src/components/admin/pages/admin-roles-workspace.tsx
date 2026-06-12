@@ -7,7 +7,6 @@ import {
   ClipboardList,
   KeyRound,
   Plus,
-  RefreshCw,
   Save,
   ScrollText,
   Search,
@@ -162,6 +161,10 @@ function roleSearchText(role: Role) {
 
 function isCustomerRole(role: Role) {
   return [role.key, role.name].some((value) => String(value ?? "").toLowerCase().includes("customer"));
+}
+
+function isAssignableEmployeeRole(role: Role) {
+  return !role.isSystem && !["admin", "employee", "customer"].includes(String(role.key ?? "").toLowerCase());
 }
 
 function roleStatusLabel(role?: Role) {
@@ -331,13 +334,6 @@ export function AdminRolesWorkspace({
       return;
     }
 
-    if (form.status === "Active" && !selectedPermissions.includes("dashboard.view")) {
-      const text = "Active employee roles need dashboard.view so assigned employees can enter the admin dashboard after login.";
-      setMessage({ tone: "error", text });
-      await dashboardError("Missing Base Permission", text);
-      return;
-    }
-
     setBusy(true);
     setMessage(null);
 
@@ -442,6 +438,17 @@ export function AdminRolesWorkspace({
   }
 
   async function saveEmployeeRole(user: User, nextRoleId: string) {
+    const nextRole = nextRoleId ? roleItems.find((role) => role.id === nextRoleId && isAssignableEmployeeRole(role)) : null;
+    if (nextRoleId && !nextRole) {
+      await dashboardError("Role Unavailable", "The selected role no longer exists. Refresh the page and try again.");
+      return false;
+    }
+
+    if (nextRole && roleStatusLabel(nextRole) === "Inactive") {
+      await dashboardError("Inactive Role", "Inactive roles cannot be assigned to employees. Activate the role before assigning it.");
+      return false;
+    }
+
     setBusy(true);
     setMessage(null);
     try {
@@ -675,7 +682,7 @@ export function AdminRolesWorkspace({
         {activeTab === "employee-access" ? (
           <EmployeeAccessTable
             busy={busy}
-            roleItems={roleItems}
+            roleItems={roleItems.filter(isAssignableEmployeeRole)}
             users={filteredEmployees}
             deleteEmployeeRole={deleteEmployeeRole}
             saveEmployeeRole={saveEmployeeRole}
@@ -1098,6 +1105,7 @@ function EmployeeAccessTable({
                 <th className="px-5 py-4">Email</th>
                 <th className="px-5 py-4">Status</th>
                 <th className="px-5 py-4">Assigned Role</th>
+                <th className="px-5 py-4">Role Permissions</th>
                 <th className="px-5 py-4">Role Status</th>
                 <th className="px-5 py-4">Actions</th>
               </tr>
@@ -1129,6 +1137,27 @@ function EmployeeAccessTable({
                       </span>
                     </td>
                     <td className="px-5 py-4">
+                      {assignedRole ? (
+                        <div className="flex flex-wrap gap-1.5">
+                          {(assignedRole.permissions ?? []).slice(0, 3).map((permission) => (
+                            <span key={permission} className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-black text-slate-600">
+                              {permission}
+                            </span>
+                          ))}
+                          {(assignedRole.permissions?.length ?? 0) > 3 ? (
+                            <span className="rounded-full bg-blue-50 px-2 py-1 text-[10px] font-black text-blue-700">
+                              +{(assignedRole.permissions?.length ?? 0) - 3}
+                            </span>
+                          ) : null}
+                          {(assignedRole.permissions?.length ?? 0) === 0 ? (
+                            <span className="rounded-full bg-amber-50 px-2 py-1 text-[10px] font-black text-amber-700">No permissions</span>
+                          ) : null}
+                        </div>
+                      ) : (
+                        <span className="text-xs font-bold text-slate-400">No inherited permissions</span>
+                      )}
+                    </td>
+                    <td className="px-5 py-4">
                       <span
                         className={cn(
                           "rounded-full px-3 py-1 text-xs font-bold",
@@ -1155,7 +1184,7 @@ function EmployeeAccessTable({
               })}
               {users.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-5 py-10 text-center font-semibold text-slate-500">
+                  <td colSpan={8} className="px-5 py-10 text-center font-semibold text-slate-500">
                     No employees match your search.
                   </td>
                 </tr>
@@ -1165,7 +1194,11 @@ function EmployeeAccessTable({
         </div>
       </div>
 
-      {editingUser ? (
+  {editingUser ? (
+        (() => {
+          const selectedRole = roleItems.find((role) => role.id === editingRoleId);
+          const selectedRolePermissions = selectedRole?.permissions ?? [];
+          return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4 py-6">
           <div className="w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl">
             <div className="border-b border-slate-200 px-6 py-5">
@@ -1184,12 +1217,35 @@ function EmployeeAccessTable({
                 >
                   <option value="">No role / Access pending</option>
                   {roleItems.map((role) => (
-                    <option key={role.id} value={role.id}>
-                      {role.name}
+                    <option key={role.id} value={role.id} disabled={roleStatusLabel(role) === "Inactive"}>
+                      {role.name}{roleStatusLabel(role) === "Inactive" ? " (Inactive)" : ""}
                     </option>
                   ))}
                 </select>
               </label>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-xs font-black uppercase tracking-wide text-slate-500">Role permission preview</p>
+                {selectedRole ? (
+                  <>
+                    <p className="mt-1 text-sm font-bold text-slate-900">
+                      {selectedRole.name} grants {selectedRolePermissions.length} permission{selectedRolePermissions.length === 1 ? "" : "s"}.
+                    </p>
+                    <div className="mt-3 flex max-h-36 flex-wrap gap-1.5 overflow-y-auto">
+                      {selectedRolePermissions.length ? selectedRolePermissions.map((permission) => (
+                        <span key={permission} className="rounded-full bg-white px-2.5 py-1 text-[10px] font-black text-slate-700 ring-1 ring-slate-200">
+                          {permission}
+                        </span>
+                      )) : (
+                        <span className="rounded-full bg-amber-50 px-2.5 py-1 text-[10px] font-black text-amber-700 ring-1 ring-amber-200">
+                          This role has no permissions yet
+                        </span>
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <p className="mt-1 text-sm font-bold text-amber-700">No role selected. Employee access will remain pending.</p>
+                )}
+              </div>
             </div>
             <div className="flex items-center justify-end gap-3 border-t border-slate-200 bg-slate-50 px-6 py-4">
               <button
@@ -1210,6 +1266,8 @@ function EmployeeAccessTable({
             </div>
           </div>
         </div>
+          );
+        })()
       ) : null}
     </>
   );

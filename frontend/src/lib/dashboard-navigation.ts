@@ -54,7 +54,7 @@ export const adminNavigation: readonly NavigationGroup[] = [
     label: "Product Management",
     items: [
       { href: "/admin/inventory", label: "Catalog", icon: "products", permission: "products.view" },
-      { href: "/admin/sections", label: "Sections", icon: "sections", permission: "products.view" },
+      { href: "/admin/sections", label: "Collections", icon: "sections", permission: "products.view" },
     ],
   },
   {
@@ -63,12 +63,16 @@ export const adminNavigation: readonly NavigationGroup[] = [
       { href: "/admin/orders?type=catalog", label: "Catalog Orders", icon: "orders", permission: "orders.view" },
       { href: "/admin/uploaded-designs", label: "Custom orders", icon: "documents", permission: "uploaded_designs.view" },
       { href: "/admin/orders/documents", label: "Order Documents", icon: "documents", permission: "documents.view" },
+      { href: "/admin/orders/returns-refunds", label: "Returns & Refunds", icon: "orders", permission: "returns.view" },
+      { href: "/admin/orders/shipping-delivery", label: "Shipping & Delivery", icon: "orders", permission: "shipping.view" },
     ],
   },
   {
     label: "Finance",
     items: [
       { href: "/admin/payments", label: "Payments", icon: "payments", permission: "payments.view" },
+      { href: "/admin/finance/transactions", label: "Transactions", icon: "payments", permission: "transactions.view" },
+      { href: "/admin/finance/coupons-discounts", label: "Coupons & Discounts", icon: "payments", permission: "coupons.view" },
       { href: "/admin/exchange-rate", label: "Exchange Rates", icon: "exchange", permission: "exchange.view" },
     ],
   },
@@ -88,6 +92,7 @@ export const adminNavigation: readonly NavigationGroup[] = [
     label: "System",
     items: [
       { href: "/admin/settings", label: "Settings", icon: "settings", permission: "settings.view" },
+      { href: "/admin/system/backup-restore", label: "Backup & Restore", icon: "settings", permission: "backup.view" },
       { href: "/admin/audit", label: "Activity Logs", icon: "audit", permission: "audit.view" },
     ],
   },

@@ -1,12 +1,12 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import { zValidator } from "@hono/zod-validator";
-import { desc, eq } from "drizzle-orm";
+import { asc, desc, eq } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
 import { requireAuth } from "../../middleware/auth.js";
 import { requirePermission } from "../../middleware/permissions.js";
 import { db } from "../../lib/db/drizzle.js";
-import { auditLogs, orders, products, systemAlerts } from "../../lib/db/schema.js";
+import { auditLogs, homepageSections, orders, products, systemAlerts } from "../../lib/db/schema.js";
 import { USER_ROLES } from "../../lib/auth/roles.js";
 import { PERMISSIONS } from "../../lib/auth/permissions.js";
 import {
@@ -208,6 +208,22 @@ const employeeAccessPatchSchema = z.object({
   roleId: z.string().uuid().nullable().optional(),
   permissions: z.array(z.string().trim().min(1)).max(100).optional(),
 });
+const homepageCollectionSchema = z.object({
+  id: z.string().trim().min(1).max(160),
+  name: z.string().trim().min(1).max(160),
+  isActive: z.boolean().default(true),
+  sortOrder: z.coerce.number().int().min(0).default(0),
+});
+const homepageSectionPayloadSchema = z.object({
+  name: z.string().trim().min(1).max(160),
+  isActive: z.boolean().optional(),
+  sortOrder: z.coerce.number().int().min(0).optional(),
+  collections: z.array(homepageCollectionSchema).max(80).optional(),
+  subsections: z.array(homepageCollectionSchema).max(80).optional(),
+});
+const homepageSectionParamSchema = z.object({
+  sectionId: z.string().uuid(),
+});
 const permissionUpdateSchema = z.object({
   key: z.string().trim().min(1).max(150),
   resource: z.string().trim().min(1).max(100),
@@ -220,6 +236,10 @@ const orderReportQuerySchema = z.object({
   customer: z.string().optional(),
   country: z.string().optional(),
 });
+
+function toSlug(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "").slice(0, 150);
+}
 
 export const adminRouter = new Hono<AppBindings>();
 
@@ -719,6 +739,70 @@ adminRouter.delete(
       performedBy: authUser?.email,
     });
     return c.json({ data });
+  },
+);
+
+adminRouter.get("/homepage-sections", requirePermission(PERMISSIONS.PRODUCTS_VIEW), async (c) => {
+  const rows = await db
+    .select()
+    .from(homepageSections)
+    .orderBy(asc(homepageSections.sortOrder), asc(homepageSections.name));
+  return c.json({ data: rows });
+});
+
+adminRouter.post(
+  "/homepage-sections",
+  requirePermission(PERMISSIONS.PRODUCTS_EDIT),
+  zValidator("json", homepageSectionPayloadSchema),
+  async (c) => {
+    const body = c.req.valid("json");
+    const [created] = await db
+      .insert(homepageSections)
+      .values({
+        name: body.name,
+        slug: `${toSlug(body.name)}-${Date.now()}`,
+        isActive: body.isActive ?? true,
+        sortOrder: body.sortOrder ?? 0,
+        collections: body.collections ?? body.subsections ?? [],
+      })
+      .returning();
+    return c.json({ data: created }, 201);
+  },
+);
+
+adminRouter.patch(
+  "/homepage-sections/:sectionId",
+  requirePermission(PERMISSIONS.PRODUCTS_EDIT),
+  zValidator("param", homepageSectionParamSchema),
+  zValidator("json", homepageSectionPayloadSchema.partial()),
+  async (c) => {
+    const { sectionId } = c.req.valid("param");
+    const body = c.req.valid("json");
+    const [updated] = await db
+      .update(homepageSections)
+      .set({
+        ...(body.name ? { name: body.name } : {}),
+        ...(typeof body.isActive === "boolean" ? { isActive: body.isActive } : {}),
+        ...(typeof body.sortOrder === "number" ? { sortOrder: body.sortOrder } : {}),
+        ...(body.collections || body.subsections ? { collections: body.collections ?? body.subsections ?? [] } : {}),
+        updatedAt: new Date(),
+      })
+      .where(eq(homepageSections.id, sectionId))
+      .returning();
+    if (!updated) throw new HTTPException(404, { message: "Homepage section not found" });
+    return c.json({ data: updated });
+  },
+);
+
+adminRouter.delete(
+  "/homepage-sections/:sectionId",
+  requirePermission(PERMISSIONS.PRODUCTS_DELETE),
+  zValidator("param", homepageSectionParamSchema),
+  async (c) => {
+    const { sectionId } = c.req.valid("param");
+    const [deleted] = await db.delete(homepageSections).where(eq(homepageSections.id, sectionId)).returning();
+    if (!deleted) throw new HTTPException(404, { message: "Homepage section not found" });
+    return c.json({ data: deleted });
   },
 );
 

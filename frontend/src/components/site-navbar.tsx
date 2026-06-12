@@ -2,16 +2,18 @@
 
 import Link from "next/link";
 import { ChevronDown, ChevronRight, Menu, ShoppingBag, Sparkles, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { signOut, useSession } from "next-auth/react";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { CreateGroupOrderModal } from "@/components/create-group-order-modal";
-import { REGIONS, TAXONOMY } from "@/lib/taxonomy";
+import { defaultPublicRegions, normalizePublicRegionsForTopBar, type PublicRegion } from "@/lib/public-collections";
 
 export function SiteNavbar() {
   const [open, setOpen] = useState(false);
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [openRegion, setOpenRegion] = useState<string | null>(null);
+  const [regions, setRegions] = useState<PublicRegion[]>(() => defaultPublicRegions());
+  const [regionWindow, setRegionWindow] = useState(0);
   const [groupOrderOpen, setGroupOrderOpen] = useState(false);
   const [cartCount, setCartCount] = useState(0);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -26,6 +28,35 @@ export function SiteNavbar() {
       .then((payload) => setCartCount(Array.isArray(payload?.data) ? payload.data.length : 0))
       .catch(() => setCartCount(0));
   }, [isAuthed]);
+
+  useEffect(() => {
+    fetch("/api/backend/products/sections")
+      .then((response) => (response.ok ? response.json() : null))
+      .then((payload) => {
+        if (Array.isArray(payload?.data)) {
+          setRegions(normalizePublicRegionsForTopBar(payload.data));
+          setRegionWindow(0);
+        }
+      })
+      .catch(() => setRegions(defaultPublicRegions()));
+  }, []);
+
+  useEffect(() => {
+    if (regions.length <= 9) {
+      return;
+    }
+    const intervalId = window.setInterval(() => {
+      setRegionWindow((current) => (current + 9) % regions.length);
+      setActiveMenu(null);
+    }, 30000);
+    return () => window.clearInterval(intervalId);
+  }, [regions.length]);
+
+  const topBarRegions = useMemo(() => {
+    if (regions.length <= 9) return regions;
+    const doubled = [...regions, ...regions];
+    return doubled.slice(regionWindow, regionWindow + 9);
+  }, [regionWindow, regions]);
 
   function handleMouseEnter(region: string) {
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
@@ -48,52 +79,53 @@ export function SiteNavbar() {
             />
           </Link>
 
-          <nav className="hidden items-center gap-1 lg:flex">
+          <nav className="hidden min-w-0 flex-1 items-center gap-2 lg:flex">
             <Link href="/" className="rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground">
               Home
             </Link>
-            {REGIONS.map((region) => {
-              const subs = TAXONOMY[region] ?? [];
-              const label = region === "Mila's Choice" ? "Designer's Choice" : region;
-              return (
-                <div key={region} className="relative" onMouseEnter={() => handleMouseEnter(region)} onMouseLeave={handleMouseLeave}>
-                  <Link
-                    href={`/catalog?region=${encodeURIComponent(region)}`}
-                    onClick={() => setActiveMenu(null)}
-                    className="flex items-center gap-1 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-                  >
-                    {label}
-                    {subs.length > 0 ? <ChevronDown className="h-3 w-3" /> : null}
-                  </Link>
-                  {activeMenu === region && subs.length > 0 ? (
-                    <div
-                      className="absolute left-0 top-full z-50 mt-1 min-w-[180px] rounded-xl border border-border bg-card p-3 shadow-xl"
-                      onMouseEnter={() => handleMouseEnter(region)}
-                      onMouseLeave={handleMouseLeave}
+            <div className="flex min-w-0 flex-1 items-center gap-1 overflow-visible">
+              {topBarRegions.map((region) => {
+                const subs = region.collections?.map((collection) => collection.name) ?? [];
+                return (
+                  <div key={region.id} className="relative shrink-0" onMouseEnter={() => handleMouseEnter(region.name)} onMouseLeave={handleMouseLeave}>
+                    <Link
+                      href={`/catalog?region=${encodeURIComponent(region.name)}`}
+                      onClick={() => setActiveMenu(null)}
+                      className="flex min-h-10 max-w-[118px] items-center gap-1 rounded-md px-2.5 py-2 text-sm font-medium leading-tight text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
                     >
-                      {subs.map((sub) => (
-                        <Link
-                          key={sub}
-                          href={`/catalog?region=${encodeURIComponent(region)}&sub=${encodeURIComponent(sub)}`}
-                          onClick={() => setActiveMenu(null)}
-                          className="block rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-                        >
-                          {sub}
-                        </Link>
-                      ))}
-                      <div className="mt-2 border-t border-border pt-2">
-                        <Link href={`/catalog?region=${encodeURIComponent(region)}`} className="block px-3 py-2 text-xs font-medium text-primary hover:underline">
-                          View All {region} →
-                        </Link>
+                      <span className="whitespace-normal text-center">{region.name}</span>
+                      {subs.length > 0 ? <ChevronDown className="h-3 w-3 shrink-0" /> : null}
+                    </Link>
+                    {activeMenu === region.name && subs.length > 0 ? (
+                      <div
+                        className="absolute left-0 top-full z-50 mt-1 min-w-[180px] rounded-xl border border-border bg-card p-3 shadow-xl"
+                        onMouseEnter={() => handleMouseEnter(region.name)}
+                        onMouseLeave={handleMouseLeave}
+                      >
+                        {subs.map((sub) => (
+                          <Link
+                            key={sub}
+                            href={`/catalog?region=${encodeURIComponent(region.name)}&sub=${encodeURIComponent(sub)}`}
+                            onClick={() => setActiveMenu(null)}
+                            className="block rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                          >
+                            {sub}
+                          </Link>
+                        ))}
+                        <div className="mt-2 border-t border-border pt-2">
+                          <Link href={`/catalog?region=${encodeURIComponent(region.name)}`} className="block px-3 py-2 text-xs font-medium text-primary hover:underline">
+                            View All {region.name}
+                          </Link>
+                        </div>
                       </div>
-                    </div>
-                  ) : null}
-                </div>
-              );
-            })}
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
             <Link
               href={uploadDesignHref}
-              className="inline-flex h-11 items-center justify-center gap-1 rounded-md border-2 border-primary bg-primary/10 px-3 text-center text-xs font-black leading-tight text-primary transition-colors hover:bg-primary hover:text-primary-foreground"
+              className="ml-2 inline-flex h-11 shrink-0 items-center justify-center gap-1 rounded-md border-2 border-primary bg-primary/10 px-3 text-center text-xs font-black leading-tight text-primary transition-colors hover:bg-primary hover:text-primary-foreground"
             >
               <Sparkles className="h-4 w-4 shrink-0" />
               <span className="max-w-[72px]">Upload Your Design</span>
@@ -101,7 +133,7 @@ export function SiteNavbar() {
             <button
               type="button"
               onClick={() => setGroupOrderOpen(true)}
-              className="inline-flex h-11 items-center justify-center rounded-md bg-primary px-4 text-center text-xs font-semibold leading-tight text-primary-foreground transition-colors hover:bg-primary/90"
+              className="inline-flex h-11 shrink-0 items-center justify-center rounded-md bg-primary px-4 text-center text-xs font-semibold leading-tight text-primary-foreground transition-colors hover:bg-primary/90"
             >
               Create Group Order
             </button>
@@ -159,36 +191,36 @@ export function SiteNavbar() {
             <Link href="/" onClick={() => setOpen(false)} className="flex h-11 items-center rounded-lg px-3 text-sm font-semibold hover:bg-secondary">
               Home
             </Link>
-            {REGIONS.map((region) => {
-              const subs = TAXONOMY[region] ?? [];
+            {regions.map((region) => {
+              const subs = region.collections?.map((collection) => collection.name) ?? [];
               const hasSubs = subs.length > 0;
-              const isOpen = openRegion === region;
-              const label = region === "Mila's Choice" ? "Designer's Choice" : region;
+              const isOpen = openRegion === region.name;
+              const label = region.name === "Mila's Choice" ? "Designer's Choice" : region.name;
               return (
-                <div key={region}>
+                <div key={region.id}>
                   {hasSubs ? (
                     <button
                       type="button"
-                      onClick={() => setOpenRegion(isOpen ? null : region)}
+                      onClick={() => setOpenRegion(isOpen ? null : region.name)}
                       className="flex h-11 w-full items-center justify-between rounded-lg px-3 text-sm font-semibold hover:bg-secondary"
                     >
                       <span>{label}</span>
                       {isOpen ? <ChevronDown className="h-4 w-4 text-primary" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
                     </button>
                   ) : (
-                    <Link href={`/catalog?region=${encodeURIComponent(region)}`} onClick={() => setOpen(false)} className="flex h-11 items-center rounded-lg px-3 text-sm font-semibold hover:bg-secondary">
+                    <Link href={`/catalog?region=${encodeURIComponent(region.name)}`} onClick={() => setOpen(false)} className="flex h-11 items-center rounded-lg px-3 text-sm font-semibold hover:bg-secondary">
                       {label}
                     </Link>
                   )}
                   {isOpen && hasSubs ? (
                     <div className="mb-1 ml-4 border-l border-border pl-2">
-                      <Link href={`/catalog?region=${encodeURIComponent(region)}`} onClick={() => setOpen(false)} className="flex h-9 items-center rounded-lg px-3 text-xs font-semibold text-primary hover:bg-secondary">
-                        View All {region} →
+                      <Link href={`/catalog?region=${encodeURIComponent(region.name)}`} onClick={() => setOpen(false)} className="flex h-9 items-center rounded-lg px-3 text-xs font-semibold text-primary hover:bg-secondary">
+                        View All {region.name}
                       </Link>
                       {subs.map((sub) => (
                         <Link
                           key={sub}
-                          href={`/catalog?region=${encodeURIComponent(region)}&sub=${encodeURIComponent(sub)}`}
+                          href={`/catalog?region=${encodeURIComponent(region.name)}&sub=${encodeURIComponent(sub)}`}
                           onClick={() => setOpen(false)}
                           className="flex h-9 items-center rounded-lg px-3 text-sm text-muted-foreground hover:bg-secondary hover:text-foreground"
                         >

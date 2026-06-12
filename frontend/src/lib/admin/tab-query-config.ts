@@ -99,6 +99,17 @@ function filterProducts(products: Row[], tabId: string): Row[] {
   }
 }
 
+function filterSections(sections: Row[], tabId: string): Row[] {
+  switch (tabId) {
+    case "active":
+      return sections.filter((section) => section.isActive !== false);
+    case "inactive":
+      return sections.filter((section) => section.isActive === false);
+    default:
+      return sections;
+  }
+}
+
 function filterUsers(users: Row[], tabId: string, kind: "employee" | "customer"): Row[] {
   const base = users.filter(kind === "employee" ? isEmployee : isCustomer);
   switch (tabId) {
@@ -268,6 +279,7 @@ export function applyTabQuery(
   const users = data.users ?? [];
   const audit = data.audit ?? [];
   const uploadedDesigns = data.uploadedDesigns ?? [];
+  const sections = data.sections ?? [];
 
   switch (pageId) {
     case "dashboard":
@@ -278,6 +290,8 @@ export function applyTabQuery(
       return { ...data, orders: filterPayments(orders, tabId) };
     case "products":
       return { ...data, products: filterProducts(products, tabId) };
+    case "sections":
+      return { ...data, sections: filterSections(sections, tabId) };
     case "employees":
       return { ...data, users: filterUsers(users, tabId, "employee") };
     case "customers":

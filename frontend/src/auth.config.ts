@@ -68,6 +68,9 @@ const providers: NonNullable<NextAuthOptions["providers"]> = [
           role?: "admin" | "customer" | "employee";
           permissions?: string[];
           roleStatus?: "unassigned" | "assigned";
+          assignedRoleId?: string | null;
+          assignedRoleActive?: boolean | null;
+          assignedRoleName?: string | null;
           accountStatus?: string;
         };
       };
@@ -89,6 +92,9 @@ const providers: NonNullable<NextAuthOptions["providers"]> = [
         role: user.role,
         permissions: user.permissions ?? [],
         roleStatus: user.roleStatus ?? "assigned",
+        assignedRoleId: user.assignedRoleId ?? null,
+        assignedRoleActive: user.assignedRoleActive ?? null,
+        assignedRoleName: user.assignedRoleName ?? null,
         accountStatus: user.accountStatus ?? "active",
       };
     },
@@ -116,7 +122,15 @@ export const authConfig = {
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
-        const authUser = user as { role?: unknown; permissions?: unknown; roleStatus?: unknown; accountStatus?: unknown };
+        const authUser = user as {
+          role?: unknown;
+          permissions?: unknown;
+          roleStatus?: unknown;
+          assignedRoleId?: unknown;
+          assignedRoleActive?: unknown;
+          assignedRoleName?: unknown;
+          accountStatus?: unknown;
+        };
         token.role = normalizeRole(authUser.role);
         token.permissions = Array.isArray(authUser.permissions)
           ? authUser.permissions
@@ -124,6 +138,9 @@ export const authConfig = {
         token.roleStatus = authUser.roleStatus === "unassigned" || authUser.roleStatus === "assigned"
           ? authUser.roleStatus
           : "assigned";
+        token.assignedRoleId = typeof authUser.assignedRoleId === "string" ? authUser.assignedRoleId : null;
+        token.assignedRoleActive = typeof authUser.assignedRoleActive === "boolean" ? authUser.assignedRoleActive : null;
+        token.assignedRoleName = typeof authUser.assignedRoleName === "string" ? authUser.assignedRoleName : null;
         token.accountStatus = String(authUser.accountStatus ?? "active");
       }
 
@@ -138,6 +155,9 @@ export const authConfig = {
         session.user.roleStatus = token.roleStatus === "unassigned" || token.roleStatus === "assigned"
           ? token.roleStatus
           : "assigned";
+        session.user.assignedRoleId = typeof token.assignedRoleId === "string" ? token.assignedRoleId : null;
+        session.user.assignedRoleActive = typeof token.assignedRoleActive === "boolean" ? token.assignedRoleActive : null;
+        session.user.assignedRoleName = typeof token.assignedRoleName === "string" ? token.assignedRoleName : null;
         session.user.accountStatus = String(token.accountStatus ?? "active");
       }
       return session;

@@ -7,30 +7,66 @@ import type { AdminWorkspaceData } from "@/lib/admin/types";
 
 export const ADMIN_SECTION_SAVE_EVENT = "admin-sections:save-section";
 
+type HomepageSection = {
+  id: string;
+  name: string;
+  slug?: string;
+  isActive: boolean;
+  sortOrder: number;
+  collections?: Array<{
+    id: string;
+    name: string;
+    isActive: boolean;
+    sortOrder: number;
+  }>;
+  subsections?: Array<{
+    id: string;
+    name: string;
+    isActive: boolean;
+    sortOrder: number;
+  }>;
+};
+
+type ProductItem = {
+  id: string;
+  name: string;
+  region?: string | null;
+  subcategory?: string | null;
+  category?: string | null;
+  images?: string[] | null;
+  priceUsd?: string | number | null;
+  uniqueId?: string | null;
+  isActive?: boolean;
+};
+
 export function AdminSectionsWorkspace({ data }: { data: AdminWorkspaceData }) {
   return (
     <AdminWorkspace
       pageId="sections"
       initialData={data}
+      hideFilters
       hideKpis
-      filterPlaceholder="Search sections or subsections..."
-      filterActions={() => (
-        <div className="flex items-center gap-3 w-full">
-          <div className="ml-auto">
-            <button
-              type="button"
-              onClick={() => window.dispatchEvent(new Event(ADMIN_SECTION_SAVE_EVENT))}
-              className="btn btn-add"
-              aria-label="Add Section"
-            >
-              <Plus className="h-4 w-4" />
-              Add Section
-            </button>
-          </div>
-        </div>
-      )}
+      title="Regions & Collections"
+      subtitle="Organize customer-facing regions, collections, and homepage category visibility."
+      actions={
+        <button
+          type="button"
+          onClick={() => window.dispatchEvent(new Event(ADMIN_SECTION_SAVE_EVENT))}
+          className="inline-flex h-11 items-center gap-2 rounded-xl bg-emerald-800 px-5 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-900 active:scale-95"
+          aria-label="Add Region"
+        >
+          <Plus className="h-4 w-4" />
+          Add Region
+        </button>
+      }
     >
-      {({ search }) => <AdminSectionManager externalSearch={search} />}
+      {({ search }) => (
+        <AdminSectionManager
+          externalSearch={search}
+          initialSections={(data.sections ?? []) as HomepageSection[]}
+          products={(data.products ?? []) as ProductItem[]}
+        />
+      )}
     </AdminWorkspace>
   );
 }

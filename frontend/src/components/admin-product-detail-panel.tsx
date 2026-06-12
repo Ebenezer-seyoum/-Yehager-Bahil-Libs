@@ -361,7 +361,7 @@ export function AdminProductDetailPanel({ product: initialProduct }: { product: 
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <ReadOnlyField label="Section / Region" value={product.region} />
-              <ReadOnlyField label="Subsection / Category" value={product.subcategory || "—"} />
+              <ReadOnlyField label="Collection / Category" value={product.subcategory || "—"} />
             </div>
           </div>
         )}
