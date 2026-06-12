@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Edit, FileText, KeyRound, Power, Route, Save, ShieldCheck, Trash2, X } from "lucide-react";
 import { AdminDetailHeader, AdminDetailLayout } from "@/components/admin/admin-detail-layout";
 import { dashboardAlert, dashboardConfirm, dashboardError, dashboardLoading, dashboardSuccess } from "@/lib/dashboard-swal";
-import type { PermissionRequirement } from "@/lib/admin/permission-coverage";
+import { coverageRowId, type PermissionRequirement } from "@/lib/admin/permission-coverage";
 import { cn } from "@/lib/utils";
 
 type Permission = {
@@ -253,7 +253,7 @@ export function PermissionCoverageDetailClient({
                 <ShieldCheck className="h-5 w-5 text-slate-600" />
                 <span>{effectiveRow.permissionKey}</span>
               </h1>
-              <div className="mt-1 text-sm text-slate-600">Coverage ID: {effectiveRow.id}</div>
+              <div className="mt-1 text-sm text-slate-600">Coverage ID: {coverageRowId(effectiveRow)}</div>
               <div className="mt-2 flex flex-wrap gap-2">
                 <span className={cn("rounded-full border px-2.5 py-1 text-xs font-semibold", statusTone)}>
                   {statusLabel}
