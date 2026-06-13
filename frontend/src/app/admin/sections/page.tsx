@@ -61,19 +61,13 @@ export default async function AdminSectionsPage() {
   if (!can(session.user.permissions, "products.view")) {
     return <AccessRestricted requiredPermission="products.view" sectionName="Homepage collections" />;
   }
-  if (!can(session.user.permissions, "products.edit")) {
-    return <AccessRestricted requiredPermission="products.edit" sectionName="Homepage collections" />;
-  }
-  if (!can(session.user.permissions, "products.delete")) {
-    return <AccessRestricted requiredPermission="products.delete" sectionName="Homepage collections" />;
-  }
 
   let sections: HomepageSection[] = [];
   let products: Product[] = [];
   try {
     const sectionsResponse = await apiRequest<{ data: HomepageSection[] }>("/api/v1/admin/homepage-sections");
     sections = sectionsResponse.data ?? [];
-    if (sections.length === 0) {
+    if (sections.length === 0 && can(session.user.permissions, "products.edit")) {
       const createdSections = await Promise.all(
         defaultHomepageSections().map((section) =>
           apiRequest<{ data: HomepageSection }>("/api/v1/admin/homepage-sections", { method: "POST", body: section }),
@@ -92,5 +86,11 @@ export default async function AdminSectionsPage() {
     products = [];
   }
 
-  return <AdminSectionsWorkspace data={{ sections, products }} />;
+  return (
+    <AdminSectionsWorkspace
+      data={{ sections, products }}
+      canEdit={can(session.user.permissions, "products.edit")}
+      canDelete={can(session.user.permissions, "products.delete")}
+    />
+  );
 }

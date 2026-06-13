@@ -272,6 +272,27 @@ export async function listUsersForAdmin(limit = 200) {
   return listUsers(limit);
 }
 
+export async function listCustomersForAdmin(limit = 200) {
+  const users = await listUsers(limit);
+  return users.filter((user) => user.role === "customer");
+}
+
+async function requireCustomerForAdmin(userId: string) {
+  const user = await getUserById(userId);
+  if (!user || user.role !== "customer") {
+    throw new HTTPException(404, { message: "Customer not found" });
+  }
+  return user;
+}
+
+export async function getCustomerDetailForAdmin(userId: string) {
+  const user = await requireCustomerForAdmin(userId);
+  return {
+    user: toPublicUser(user),
+    permissions: await getEffectivePermissionsForUser(user.id),
+  };
+}
+
 export async function getEmployeeDetailForAdmin(userId: string) {
   const user = await getUserById(userId);
   if (!user) {
@@ -651,6 +672,15 @@ export async function updateUserProfileForAdminService(payload: {
   return toPublicUser(updated);
 }
 
+export async function updateCustomerProfileForAdmin(payload: Parameters<typeof updateUserProfileForAdminService>[0]) {
+  await requireCustomerForAdmin(payload.userId);
+  const updated = await updateUserProfileForAdminService(payload);
+  if (!updated || updated.role !== "customer") {
+    throw new HTTPException(404, { message: "Customer not found" });
+  }
+  return updated;
+}
+
 export async function updateUserStatusForAdmin(payload: {
   userId: string;
   status: "active" | "inactive" | "suspended";
@@ -683,6 +713,15 @@ export async function updateUserStatusForAdmin(payload: {
   return toPublicUser(updated);
 }
 
+export async function updateCustomerStatusForAdmin(payload: Parameters<typeof updateUserStatusForAdmin>[0]) {
+  await requireCustomerForAdmin(payload.userId);
+  const updated = await updateUserStatusForAdmin(payload);
+  if (!updated || updated.role !== "customer") {
+    throw new HTTPException(404, { message: "Customer not found" });
+  }
+  return updated;
+}
+
 export async function resetUserPasswordForAdmin(payload: {
   userId: string;
   password: string;
@@ -713,6 +752,15 @@ export async function resetUserPasswordForAdmin(payload: {
   });
 
   return toPublicUser(updated);
+}
+
+export async function resetCustomerPasswordForAdmin(payload: Parameters<typeof resetUserPasswordForAdmin>[0]) {
+  await requireCustomerForAdmin(payload.userId);
+  const updated = await resetUserPasswordForAdmin(payload);
+  if (!updated || updated.role !== "customer") {
+    throw new HTTPException(404, { message: "Customer not found" });
+  }
+  return updated;
 }
 
 function sha256Hex(value: string) {
@@ -806,4 +854,13 @@ export async function deleteUserForAdmin(payload: { userId: string; performedBy?
   });
 
   return toPublicUser(deleted);
+}
+
+export async function deleteCustomerForAdmin(payload: { userId: string; performedBy?: string }) {
+  await requireCustomerForAdmin(payload.userId);
+  const deleted = await deleteUserForAdmin(payload);
+  if (!deleted || deleted.role !== "customer") {
+    throw new HTTPException(404, { message: "Customer not found" });
+  }
+  return deleted;
 }

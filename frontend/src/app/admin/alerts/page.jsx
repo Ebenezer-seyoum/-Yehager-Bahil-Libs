@@ -2,7 +2,9 @@ import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/auth-options";
 import { apiRequest } from "@/lib/api-client";
+import { can } from "@/lib/permissions";
 import { AdminAlertsPanel } from "@/components/admin-alerts-panel";
+import { AccessRestricted } from "@/components/admin/access-restricted";
 
 export default async function AdminAlertsPage() {
   const session = await getServerSession(authOptions);
@@ -11,6 +13,9 @@ export default async function AdminAlertsPage() {
   }
   if (session.user.role !== "admin" && session.user.role !== "employee") {
     redirect("/");
+  }
+  if (!can(session.user.permissions, "alerts.view")) {
+    return <AccessRestricted requiredPermission="alerts.view" sectionName="Alerts" />;
   }
 
   let alerts = [];

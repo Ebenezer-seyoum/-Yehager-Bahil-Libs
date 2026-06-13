@@ -94,7 +94,15 @@ function draftFromProduct(product: Product) {
   };
 }
 
-export function AdminProductDetailPanel({ product: initialProduct }: { product: Product }) {
+export function AdminProductDetailPanel({
+  product: initialProduct,
+  canEdit = false,
+  canDelete = false,
+}: {
+  product: Product;
+  canEdit?: boolean;
+  canDelete?: boolean;
+}) {
   const router = useRouter();
   const swalTargetRef = useRef<HTMLDivElement | null>(null);
   const [product, setProduct] = useState(initialProduct);
@@ -159,6 +167,10 @@ export function AdminProductDetailPanel({ product: initialProduct }: { product: 
   }
 
   async function patchProduct(patch: Partial<Product>, successMessage: string) {
+    if (!canEdit) {
+      showResult("error", "You do not have permission to edit products.");
+      return;
+    }
     setBusy("patch");
     try {
       const response = await fetch(`/api/backend/admin/products/${product.id}`, {
@@ -186,6 +198,7 @@ export function AdminProductDetailPanel({ product: initialProduct }: { product: 
   }
 
   async function toggleActive() {
+    if (!canEdit) return;
     const nextActive = !product.isActive;
     const confirmed = await confirmAction(
       nextActive ? "Activate product?" : "Deactivate product?",
@@ -196,6 +209,7 @@ export function AdminProductDetailPanel({ product: initialProduct }: { product: 
   }
 
   async function toggleFeatured() {
+    if (!canEdit) return;
     const nextFeatured = !product.isFeatured;
     const confirmed = await confirmAction(
       nextFeatured ? "Feature product?" : "Remove feature?",
@@ -207,6 +221,10 @@ export function AdminProductDetailPanel({ product: initialProduct }: { product: 
   }
 
   async function deleteProduct() {
+    if (!canDelete) {
+      showResult("error", "You do not have permission to delete products.");
+      return;
+    }
     const confirmed = await confirmAction(
       "Delete product?",
       "This will hide the product from the storefront. You can manage archived products from the backend records.",
@@ -231,6 +249,7 @@ export function AdminProductDetailPanel({ product: initialProduct }: { product: 
   }
 
   async function saveEdit() {
+    if (!canEdit) return;
     const confirmed = await confirmAction("Save product changes?", "This will update the product information shown in admin and storefront.", "Save", "question");
     if (!confirmed) return;
     await patchProduct(
@@ -287,6 +306,7 @@ export function AdminProductDetailPanel({ product: initialProduct }: { product: 
   }
 
   async function uploadFiles(files: FileList | null) {
+    if (!canEdit) return;
     if (!files?.length) return;
     setUploading(true);
     try {
@@ -456,17 +476,19 @@ export function AdminProductDetailPanel({ product: initialProduct }: { product: 
               </p>
               <p className="text-[10px] font-bold text-slate-400">Home page hero boost</p>
             </div>
-            <button
-              onClick={() => void toggleFeatured()}
-              disabled={Boolean(busy)}
-              className={cn(
-                "relative inline-flex h-7 w-12 rounded-full p-1 transition-all duration-300",
-                product.isFeatured ? "bg-amber-500 shadow-amber-200 shadow-md" : "bg-slate-200",
-                busy && "opacity-50"
-              )}
-            >
-              <span className={cn("h-5 w-5 rounded-full bg-white shadow transition-all duration-300", product.isFeatured ? "translate-x-5" : "translate-x-0")} />
-            </button>
+            {canEdit ? (
+              <button
+                onClick={() => void toggleFeatured()}
+                disabled={Boolean(busy)}
+                className={cn(
+                  "relative inline-flex h-7 w-12 rounded-full p-1 transition-all duration-300",
+                  product.isFeatured ? "bg-amber-500 shadow-amber-200 shadow-md" : "bg-slate-200",
+                  busy && "opacity-50"
+                )}
+              >
+                <span className={cn("h-5 w-5 rounded-full bg-white shadow transition-all duration-300", product.isFeatured ? "translate-x-5" : "translate-x-0")} />
+              </button>
+            ) : null}
           </div>
 
           {/* Active Toggle */}
@@ -477,17 +499,19 @@ export function AdminProductDetailPanel({ product: initialProduct }: { product: 
               </p>
               <p className="text-[10px] font-bold text-slate-400">Visible for customers</p>
             </div>
-            <button
-              onClick={() => void toggleActive()}
-              disabled={Boolean(busy)}
-              className={cn(
-                "relative inline-flex h-7 w-12 rounded-full p-1 transition-all duration-300",
-                product.isActive ? "bg-emerald-500 shadow-emerald-200 shadow-md" : "bg-slate-200",
-                busy && "opacity-50"
-              )}
-            >
-              <span className={cn("h-5 w-5 rounded-full bg-white shadow transition-all duration-300", product.isActive ? "translate-x-5" : "translate-x-0")} />
-            </button>
+            {canEdit ? (
+              <button
+                onClick={() => void toggleActive()}
+                disabled={Boolean(busy)}
+                className={cn(
+                  "relative inline-flex h-7 w-12 rounded-full p-1 transition-all duration-300",
+                  product.isActive ? "bg-emerald-500 shadow-emerald-200 shadow-md" : "bg-slate-200",
+                  busy && "opacity-50"
+                )}
+              >
+                <span className={cn("h-5 w-5 rounded-full bg-white shadow transition-all duration-300", product.isActive ? "translate-x-5" : "translate-x-0")} />
+              </button>
+            ) : null}
           </div>
         </div>
 
@@ -675,6 +699,7 @@ export function AdminProductDetailPanel({ product: initialProduct }: { product: 
           </div>
 
           {/* Right: Vertical Button Stack */}
+          {(canEdit || canDelete) && (
           <div className="flex flex-col gap-2 shrink-0 lg:w-44">
             {editing ? (
               <>
@@ -698,40 +723,47 @@ export function AdminProductDetailPanel({ product: initialProduct }: { product: 
               </>
             ) : (
               <>
-                <button
-                  type="button"
-                  onClick={() => setEditing(true)}
-                  className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 text-sm font-bold text-white shadow-md hover:bg-slate-800 transition-all active:scale-95 w-full"
-                >
-                  <Pencil className="h-4 w-4" />
-                  Edit Product
-                </button>
-                <button
-                  type="button"
-                  disabled={Boolean(busy)}
-                  onClick={() => void toggleActive()}
-                  className={cn(
-                    "inline-flex h-11 items-center justify-center gap-2 rounded-xl border px-4 text-sm font-bold shadow-sm transition-all active:scale-95 w-full disabled:opacity-50",
-                    product.isActive
-                      ? "border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100"
-                      : "border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100"
-                  )}
-                >
-                  <Power className="h-4 w-4" />
-                  {product.isActive ? "Deactivate" : "Activate"}
-                </button>
-                <button
-                  type="button"
-                  disabled={Boolean(busy)}
-                  onClick={() => void deleteProduct()}
-                  className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-rose-600 px-4 text-sm font-bold text-white shadow-md hover:bg-rose-700 transition-all active:scale-95 w-full disabled:opacity-60"
-                >
-                  <Trash2 className="h-4 w-4" />
-                  Delete Product
-                </button>
+                {canEdit ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setEditing(true)}
+                      className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 text-sm font-bold text-white shadow-md hover:bg-slate-800 transition-all active:scale-95 w-full"
+                    >
+                      <Pencil className="h-4 w-4" />
+                      Edit Product
+                    </button>
+                    <button
+                      type="button"
+                      disabled={Boolean(busy)}
+                      onClick={() => void toggleActive()}
+                      className={cn(
+                        "inline-flex h-11 items-center justify-center gap-2 rounded-xl border px-4 text-sm font-bold shadow-sm transition-all active:scale-95 w-full disabled:opacity-50",
+                        product.isActive
+                          ? "border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100"
+                          : "border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100"
+                      )}
+                    >
+                      <Power className="h-4 w-4" />
+                      {product.isActive ? "Deactivate" : "Activate"}
+                    </button>
+                  </>
+                ) : null}
+                {canDelete ? (
+                  <button
+                    type="button"
+                    disabled={Boolean(busy)}
+                    onClick={() => void deleteProduct()}
+                    className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-rose-600 px-4 text-sm font-bold text-white shadow-md hover:bg-rose-700 transition-all active:scale-95 w-full disabled:opacity-60"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Delete Product
+                  </button>
+                ) : null}
               </>
             )}
           </div>
+          )}
         </div>
       </div>
 

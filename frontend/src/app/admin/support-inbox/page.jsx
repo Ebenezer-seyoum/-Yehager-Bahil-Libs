@@ -29,6 +29,8 @@ import {
 } from "lucide-react";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { DashboardModalBody, DashboardModalFrame, DashboardModalHeader } from "@/components/admin/dashboard-modal";
+import { AccessRestricted } from "@/components/admin/access-restricted";
+import { can } from "@/lib/permissions";
 
 const SUPPORT_TABS = [
   { id: "all", label: "All Messages", icon: Mail },
@@ -74,6 +76,11 @@ const getInitials = (name) => {
 
 export default function SupportInboxPage() {
   const { data: session } = useSession();
+  const permissions = session?.user?.permissions ?? [];
+  const canViewSupport = can(permissions, "support.view");
+  const canReplySupport = can(permissions, "support.reply");
+  const canAssignSupport = can(permissions, "support.assign");
+  const canResolveSupport = can(permissions, "support.resolve");
   const [tickets, setTickets] = useState([]);
   const [admins, setAdmins] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -106,6 +113,10 @@ export default function SupportInboxPage() {
   const [successToast, setSuccessToast] = useState(null);
 
   const fileInputRef = useRef(null);
+
+  if (session?.user && !canViewSupport) {
+    return <AccessRestricted requiredPermission="support.view" sectionName="Support Inbox" />;
+  }
 
   // 1. Fetch tickets and KPIs
   const fetchData = async () => {
@@ -167,6 +178,7 @@ export default function SupportInboxPage() {
 
   // 2. Fetch admins / employees list
   const fetchAdmins = async () => {
+    if (!canAssignSupport) return;
     try {
       const res = await fetch("/api/v1/admin/users?limit=100");
       const data = await res.json();
@@ -231,6 +243,7 @@ export default function SupportInboxPage() {
   // 5. Send Reply (with custom failure/retry draft state)
   const handleSendReply = async (e) => {
     e.preventDefault();
+    if (!canReplySupport) return;
     if (!replyBody.trim()) return;
 
     setReplySubmitting(true);
@@ -278,6 +291,7 @@ export default function SupportInboxPage() {
 
   // 6. Handle status change directly
   const handleUpdateTicketStatus = async (statusVal) => {
+    if (!canResolveSupport) return;
     if (!selectedTicket) return;
     try {
       await fetch(`/api/backend/admin/support/tickets/${selectedTicket.id}`, {
@@ -754,17 +768,18 @@ export default function SupportInboxPage() {
                   </div>
 
                   {/* Reply Form */}
-                  <form onSubmit={handleSendReply} className="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
-                    <div className="flex flex-col gap-2">
-                      {/* Text area */}
-                      <textarea
-                        rows="3"
-                        placeholder="Write your email reply to the customer..."
-                        value={replyBody}
-                        onChange={(e) => setReplyBody(e.target.value)}
-                        className="w-full rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 p-3 text-xs text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:border-blue-500 focus:bg-white focus:outline-none"
-                        required
-                      />
+                  {canReplySupport ? (
+                    <form onSubmit={handleSendReply} className="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
+                      <div className="flex flex-col gap-2">
+                        {/* Text area */}
+                        <textarea
+                          rows="3"
+                          placeholder="Write your email reply to the customer..."
+                          value={replyBody}
+                          onChange={(e) => setReplyBody(e.target.value)}
+                          className="w-full rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 p-3 text-xs text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:border-blue-500 focus:bg-white focus:outline-none"
+                          required
+                        />
 
                       {/* Internal Note field */}
                       <input
@@ -824,7 +839,8 @@ export default function SupportInboxPage() {
                         </button>
                       </div>
                     </div>
-                  </form>
+                    </form>
+                  ) : null}
 
                 </div>
 
@@ -852,23 +868,25 @@ export default function SupportInboxPage() {
                     <h3 className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Ticket Administration</h3>
                     
                     {/* Status Select */}
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-[10px] text-slate-500 font-medium">Ticket Status</label>
-                      <select
-                        value={replyStatus}
-                        onChange={(e) => {
-                          setReplyStatus(e.target.value);
-                          handleUpdateTicketStatus(e.target.value);
-                        }}
-                        className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-1.5 text-xs text-slate-800 focus:outline-none"
-                      >
-                        <option value="new">New</option>
-                        <option value="open">Open / Active</option>
-                        <option value="pending_reply">Pending Reply</option>
-                        <option value="resolved">Resolved</option>
-                        <option value="archived">Archived / Spam</option>
-                      </select>
-                    </div>
+                    {canResolveSupport ? (
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-[10px] text-slate-500 font-medium">Ticket Status</label>
+                        <select
+                          value={replyStatus}
+                          onChange={(e) => {
+                            setReplyStatus(e.target.value);
+                            handleUpdateTicketStatus(e.target.value);
+                          }}
+                          className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-1.5 text-xs text-slate-800 focus:outline-none"
+                        >
+                          <option value="new">New</option>
+                          <option value="open">Open / Active</option>
+                          <option value="pending_reply">Pending Reply</option>
+                          <option value="resolved">Resolved</option>
+                          <option value="archived">Archived / Spam</option>
+                        </select>
+                      </div>
+                    ) : null}
 
                     {/* Priority Select */}
                     <div className="flex flex-col gap-1.5">
@@ -886,19 +904,21 @@ export default function SupportInboxPage() {
                     </div>
 
                     {/* Assigned Employee Select */}
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-[10px] text-slate-500 font-medium">Assign Ticket to Staff</label>
-                      <select
-                        value={replyAssignee}
-                        onChange={(e) => setReplyAssignee(e.target.value)}
-                        className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-1.5 text-xs text-slate-800 focus:outline-none"
-                      >
-                        <option value="">Unassigned</option>
-                        {admins.map(admin => (
-                          <option key={admin.id} value={admin.id}>{admin.name || admin.email}</option>
-                        ))}
-                      </select>
-                    </div>
+                    {canAssignSupport ? (
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-[10px] text-slate-500 font-medium">Assign Ticket to Staff</label>
+                        <select
+                          value={replyAssignee}
+                          onChange={(e) => setReplyAssignee(e.target.value)}
+                          className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-1.5 text-xs text-slate-800 focus:outline-none"
+                        >
+                          <option value="">Unassigned</option>
+                          {admins.map(admin => (
+                            <option key={admin.id} value={admin.id}>{admin.name || admin.email}</option>
+                          ))}
+                        </select>
+                      </div>
+                    ) : null}
                   </div>
 
                   <hr className="border-slate-200 dark:border-slate-800" />

@@ -4,7 +4,7 @@ import { zValidator } from "@hono/zod-validator";
 import { eq, or, and, like, desc, sql, count } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
 import { requireAuth } from "../../middleware/auth.js";
-import { requirePermission } from "../../middleware/permissions.js";
+import { requireAnyPermission, requirePermission } from "../../middleware/permissions.js";
 import { db } from "../../lib/db/drizzle.js";
 import {
   supportTickets,
@@ -109,7 +109,7 @@ function autoDetectCategory(subject: string, message: string, sourcePage?: strin
 }
 
 // 1. Get Support KPIs
-supportRouter.get("/kpis", async (c) => {
+supportRouter.get("/kpis", requirePermission(PERMISSIONS.SUPPORT_VIEW), async (c) => {
   const allTickets = await db.select().from(supportTickets);
   
   const total = allTickets.length;
@@ -138,7 +138,7 @@ supportRouter.get("/kpis", async (c) => {
 });
 
 // 2. Get unread ticket count for sidebar/header badge
-supportRouter.get("/unread-count", async (c) => {
+supportRouter.get("/unread-count", requirePermission(PERMISSIONS.SUPPORT_VIEW), async (c) => {
   const [row] = await db
     .select({ count: count() })
     .from(supportTickets)
@@ -148,7 +148,7 @@ supportRouter.get("/unread-count", async (c) => {
 });
 
 // 3. List Support Tickets (with filtering & search)
-supportRouter.get("/tickets", zValidator("query", listQuerySchema), async (c) => {
+supportRouter.get("/tickets", requirePermission(PERMISSIONS.SUPPORT_VIEW), zValidator("query", listQuerySchema), async (c) => {
   const { status, priority, category, search, unreadOnly, limit, offset } = c.req.valid("query");
   
   const conditions = [];
@@ -208,7 +208,7 @@ supportRouter.get("/tickets", zValidator("query", listQuerySchema), async (c) =>
 });
 
 // 4. Get ticket detail (ticket + messages + attachments)
-supportRouter.get("/tickets/:ticketId", zValidator("param", ticketIdParamSchema), async (c) => {
+supportRouter.get("/tickets/:ticketId", requirePermission(PERMISSIONS.SUPPORT_VIEW), zValidator("param", ticketIdParamSchema), async (c) => {
   const { ticketId } = c.req.valid("param");
   
   const ticket = await db.query.supportTickets.findFirst({
@@ -249,7 +249,12 @@ supportRouter.get("/tickets/:ticketId", zValidator("param", ticketIdParamSchema)
 });
 
 // 5. Update support ticket fields
-supportRouter.patch("/tickets/:ticketId", zValidator("param", ticketIdParamSchema), zValidator("json", patchTicketSchema), async (c) => {
+supportRouter.patch(
+  "/tickets/:ticketId",
+  requireAnyPermission([PERMISSIONS.SUPPORT_ASSIGN, PERMISSIONS.SUPPORT_RESOLVE]),
+  zValidator("param", ticketIdParamSchema),
+  zValidator("json", patchTicketSchema),
+  async (c) => {
   const authUser = c.get("authUser");
   const { ticketId } = c.req.valid("param");
   const body = c.req.valid("json");
@@ -290,10 +295,16 @@ supportRouter.patch("/tickets/:ticketId", zValidator("param", ticketIdParamSchem
   });
 
   return c.json({ data: updated });
-});
+  },
+);
 
 // 6. Submit Admin Reply (Saves message, updates ticket, sends email)
-supportRouter.post("/tickets/:ticketId/reply", zValidator("param", ticketIdParamSchema), zValidator("json", replySchema), async (c) => {
+supportRouter.post(
+  "/tickets/:ticketId/reply",
+  requirePermission(PERMISSIONS.SUPPORT_REPLY),
+  zValidator("param", ticketIdParamSchema),
+  zValidator("json", replySchema),
+  async (c) => {
   const authUser = c.get("authUser");
   const { ticketId } = c.req.valid("param");
   const body = c.req.valid("json");

@@ -158,10 +158,14 @@ export function AdminSectionManager({
   externalSearch,
   initialSections,
   products = [],
+  canEdit = false,
+  canDelete = false,
 }: {
   externalSearch?: string;
   initialSections?: SectionInput[];
   products?: ProductItem[];
+  canEdit?: boolean;
+  canDelete?: boolean;
 }) {
   const [sections, setSections] = useState<SectionItem[]>(() => normalizeSections(initialSections));
   const [selectedId, setSelectedId] = useState("");
@@ -207,6 +211,7 @@ export function AdminSectionManager({
   }
 
   const writeSection = useCallback(async (section: SectionItem, patch: Partial<SectionItem>) => {
+    if (!canEdit) throw new Error("You do not have permission to edit homepage collections.");
     const body = {
       name: patch.name ?? section.name,
       isActive: patch.isActive ?? section.isActive,
@@ -224,7 +229,7 @@ export function AdminSectionManager({
     const payload = await response.json().catch(() => null);
     if (!response.ok) throw new Error(apiErrorMessage(payload, "Could not save homepage collection."));
     return normalizeSection(payload.data as SectionItem);
-  }, []);
+  }, [canEdit]);
 
   const createSectionByName = useCallback(async (name: string, isActive = true) => {
     const draft: SectionItem = {
@@ -245,6 +250,7 @@ export function AdminSectionManager({
   }, [sections.length, writeSection]);
 
   function startSectionCreate() {
+    if (!canEdit) return;
     setIsCreatingSection(true);
     setSelectedId("");
     setSectionFormName("");
@@ -254,6 +260,7 @@ export function AdminSectionManager({
   }
 
   async function saveSectionChanges() {
+    if (!canEdit) return;
     const name = sectionFormName.trim();
     if (!name) {
       await dashboardAlert("Validation Error", "Region name is required.", { icon: "error", tone: "danger" });
@@ -290,6 +297,7 @@ export function AdminSectionManager({
   }
 
   async function toggleSectionFormActive() {
+    if (!canEdit) return;
     const nextActive = !sectionFormActive;
     const confirmed = await dashboardConfirm({
       title: nextActive ? "Activate this region?" : "Deactivate this region?",
@@ -303,11 +311,13 @@ export function AdminSectionManager({
   }
 
   useEffect(() => {
+    if (!canEdit) return;
     window.addEventListener(ADMIN_SECTION_SAVE_EVENT, startSectionCreate);
     return () => window.removeEventListener(ADMIN_SECTION_SAVE_EVENT, startSectionCreate);
-  }, []);
+  }, [canEdit]);
 
   async function deleteSection(section: SectionItem) {
+    if (!canDelete) return;
     const confirmed = await dashboardConfirm({
       title: "Delete this region?",
       text: `The region "${section.name}" and its collections will be removed from homepage Categories.`,
@@ -345,6 +355,7 @@ export function AdminSectionManager({
   }
 
   async function patchSection(section: SectionItem, patch: Partial<SectionItem>, successMessage: string) {
+    if (!canEdit) return;
     setBusy(true);
     try {
       const saved = await writeSection(section, patch);
@@ -359,6 +370,7 @@ export function AdminSectionManager({
   }
 
   async function saveSubsection() {
+    if (!canEdit) return;
     if (!selectedSection) return;
     const name = subsectionName.trim();
     if (!name) {
@@ -379,6 +391,7 @@ export function AdminSectionManager({
   }
 
   async function deleteSubsection(section: SectionItem, subsection: SubsectionItem) {
+    if (!canDelete) return;
     const confirmed = await dashboardConfirm({
       title: "Delete this collection?",
       text: `"${subsection.name}" will be removed from ${section.name}.`,
@@ -409,6 +422,7 @@ export function AdminSectionManager({
   }
 
   async function toggleSubsectionActive(section: SectionItem, subsection: SubsectionItem) {
+    if (!canEdit) return;
     const nextActive = !subsection.isActive;
     const confirmed = await dashboardConfirm({
       title: nextActive ? "Activate this collection?" : "Deactivate this collection?",
@@ -542,30 +556,45 @@ export function AdminSectionManager({
                       value={sectionFormName}
                       onChange={(event) => setSectionFormName(event.target.value)}
                       placeholder="Enter region name"
+                      readOnly={!canEdit}
                       className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-900 outline-none focus:border-emerald-700 focus:ring-2 focus:ring-emerald-100"
                     />
                   </label>
-                  <button
-                    type="button"
-                    onClick={() => void toggleSectionFormActive()}
-                    className={cn(
-                      "inline-flex h-12 items-center justify-center gap-2 rounded-xl px-4 text-sm font-black transition",
-                      sectionFormActive ? "bg-emerald-100 text-emerald-800" : "bg-red-100 text-red-800",
-                    )}
-                  >
-                    {sectionFormActive ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-                    {sectionFormActive ? "Active" : "Inactive"}
-                  </button>
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => void saveSectionChanges()}
-                    className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-emerald-800 px-5 text-sm font-black text-white transition hover:bg-emerald-900 disabled:opacity-60"
-                  >
-                    <Save className="h-4 w-4" />
-                    Save Changes
-                  </button>
-                  {!isCreatingSection && selectedSection ? (
+                  {canEdit ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => void toggleSectionFormActive()}
+                        className={cn(
+                          "inline-flex h-12 items-center justify-center gap-2 rounded-xl px-4 text-sm font-black transition",
+                          sectionFormActive ? "bg-emerald-100 text-emerald-800" : "bg-red-100 text-red-800",
+                        )}
+                      >
+                        {sectionFormActive ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                        {sectionFormActive ? "Active" : "Inactive"}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void saveSectionChanges()}
+                        className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-emerald-800 px-5 text-sm font-black text-white transition hover:bg-emerald-900 disabled:opacity-60"
+                      >
+                        <Save className="h-4 w-4" />
+                        Save Changes
+                      </button>
+                    </>
+                  ) : (
+                    <span
+                      className={cn(
+                        "inline-flex h-12 items-center justify-center gap-2 rounded-xl px-4 text-sm font-black",
+                        sectionFormActive ? "bg-emerald-100 text-emerald-800" : "bg-red-100 text-red-800",
+                      )}
+                    >
+                      {sectionFormActive ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                      {sectionFormActive ? "Active" : "Inactive"}
+                    </span>
+                  )}
+                  {!isCreatingSection && selectedSection && canDelete ? (
                     <button
                       type="button"
                       disabled={busy}
@@ -590,7 +619,7 @@ export function AdminSectionManager({
 
                 {!isCreatingSection && selectedSection ? (
                   <>
-                    <div className="grid gap-3 xl:grid-cols-[minmax(180px,0.9fr)_minmax(220px,1fr)_auto_auto]">
+                    <div className={canEdit ? "grid gap-3 xl:grid-cols-[minmax(180px,0.9fr)_minmax(220px,1fr)_auto_auto]" : "grid gap-3"}>
                       <label className="relative block">
                         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                         <input
@@ -600,34 +629,38 @@ export function AdminSectionManager({
                           className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-3 text-sm font-semibold text-slate-900 outline-none focus:border-emerald-700 focus:bg-white focus:ring-2 focus:ring-emerald-100"
                         />
                       </label>
-                      <input
-                        value={subsectionName}
-                        onChange={(event) => setSubsectionName(event.target.value)}
-                        placeholder={editingSubsection ? "Update collection name" : "New collection name"}
-                        className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-900 outline-none focus:border-emerald-700 focus:ring-2 focus:ring-emerald-100"
-                      />
-                      {editingSubsection ? (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEditingSubsection(null);
-                            setSubsectionName("");
-                          }}
-                          className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 hover:bg-slate-100"
-                        >
-                          <X className="h-4 w-4" />
-                          Cancel
-                        </button>
+                      {canEdit ? (
+                        <>
+                          <input
+                            value={subsectionName}
+                            onChange={(event) => setSubsectionName(event.target.value)}
+                            placeholder={editingSubsection ? "Update collection name" : "New collection name"}
+                            className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-900 outline-none focus:border-emerald-700 focus:ring-2 focus:ring-emerald-100"
+                          />
+                          {editingSubsection ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingSubsection(null);
+                                setSubsectionName("");
+                              }}
+                              className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 hover:bg-slate-100"
+                            >
+                              <X className="h-4 w-4" />
+                              Cancel
+                            </button>
+                          ) : null}
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => void saveSubsection()}
+                            className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-700 px-5 py-3 text-sm font-black text-white hover:bg-emerald-800 disabled:opacity-60"
+                          >
+                            {editingSubsection ? <Save className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+                            {editingSubsection ? "Update" : "Add Collection"}
+                          </button>
+                        </>
                       ) : null}
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() => void saveSubsection()}
-                        className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-700 px-5 py-3 text-sm font-black text-white hover:bg-emerald-800 disabled:opacity-60"
-                      >
-                        {editingSubsection ? <Save className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-                        {editingSubsection ? "Update" : "Add Collection"}
-                      </button>
                     </div>
 
                     <div className="overflow-hidden rounded-2xl border border-slate-200">
@@ -661,36 +694,42 @@ export function AdminSectionManager({
                                       >
                                         {subsection.isActive ? "Active" : "Inactive"}
                                       </span>
-                                      <button
-                                        type="button"
-                                        disabled={busy}
-                                        title={subsection.isActive ? "Deactivate" : "Activate"}
-                                        onClick={() => void toggleSubsectionActive(selectedSection, subsection)}
-                                        className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-                                      >
-                                        {subsection.isActive ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                                      </button>
-                                      <button
-                                        type="button"
-                                        disabled={busy}
-                                        title="Edit"
-                                        onClick={() => {
-                                          setEditingSubsection({ sectionId: selectedSection.id, subsectionId: subsection.id });
-                                          setSubsectionName(subsection.name);
-                                        }}
-                                        className="rounded-xl bg-blue-600 px-3 py-2 text-white hover:bg-blue-700 disabled:opacity-60"
-                                      >
-                                        <Edit3 className="h-4 w-4" />
-                                      </button>
-                                      <button
-                                        type="button"
-                                        disabled={busy}
-                                        title="Delete"
-                                        onClick={() => void deleteSubsection(selectedSection, subsection)}
-                                        className="rounded-xl bg-red-600 px-3 py-2 text-white hover:bg-red-700 disabled:opacity-60"
-                                      >
-                                        <Trash2 className="h-4 w-4" />
-                                      </button>
+                                      {canEdit ? (
+                                        <>
+                                          <button
+                                            type="button"
+                                            disabled={busy}
+                                            title={subsection.isActive ? "Deactivate" : "Activate"}
+                                            onClick={() => void toggleSubsectionActive(selectedSection, subsection)}
+                                            className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                                          >
+                                            {subsection.isActive ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                          </button>
+                                          <button
+                                            type="button"
+                                            disabled={busy}
+                                            title="Edit"
+                                            onClick={() => {
+                                              setEditingSubsection({ sectionId: selectedSection.id, subsectionId: subsection.id });
+                                              setSubsectionName(subsection.name);
+                                            }}
+                                            className="rounded-xl bg-blue-600 px-3 py-2 text-white hover:bg-blue-700 disabled:opacity-60"
+                                          >
+                                            <Edit3 className="h-4 w-4" />
+                                          </button>
+                                        </>
+                                      ) : null}
+                                      {canDelete ? (
+                                        <button
+                                          type="button"
+                                          disabled={busy}
+                                          title="Delete"
+                                          onClick={() => void deleteSubsection(selectedSection, subsection)}
+                                          className="rounded-xl bg-red-600 px-3 py-2 text-white hover:bg-red-700 disabled:opacity-60"
+                                        >
+                                          <Trash2 className="h-4 w-4" />
+                                        </button>
+                                      ) : null}
                                       <button
                                         type="button"
                                         onClick={() => setExpandedSubsectionId(expanded ? null : subsection.id)}

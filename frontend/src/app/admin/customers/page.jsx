@@ -2,15 +2,21 @@ import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/auth-options";
 import { apiRequest } from "@/lib/api-client";
+import { can } from "@/lib/permissions";
 import { AdminCustomersWorkspace } from "@/components/admin/pages/admin-customers-workspace";
 import { DashboardNotice } from "@/components/admin/dashboard-notice";
+import { AccessRestricted } from "@/components/admin/access-restricted";
 
 export default async function AdminCustomersPage({ searchParams }) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) redirect("/signin?callbackUrl=/admin/customers");
   if (session.user.role !== "admin" && session.user.role !== "employee") redirect("/");
+  if (!can(session.user.permissions, "customers.view")) {
+    return <AccessRestricted requiredPermission="customers.view" sectionName="Customer" />;
+  }
 
   const query = (await searchParams) ?? {};
+  const canCreate = can(session.user.permissions, "customers.create");
 
   let users = [];
   let orders = [];
@@ -18,7 +24,7 @@ export default async function AdminCustomersPage({ searchParams }) {
 
   // Fetch users
   try {
-    const usersResponse = await apiRequest("/api/v1/admin/users?limit=200");
+    const usersResponse = await apiRequest("/api/v1/admin/customers?limit=200");
     users = Array.isArray(usersResponse?.data) ? usersResponse.data : [];
   } catch (err) {
     console.error("Failed to fetch users for admin customers page:", err);
@@ -69,7 +75,7 @@ export default async function AdminCustomersPage({ searchParams }) {
         <DashboardNotice tone="error">Error! Please review the customer details and try again.</DashboardNotice>
       ) : null}
 
-      <AdminCustomersWorkspace data={{ users: customers, orders, alerts }} />
+      <AdminCustomersWorkspace data={{ users: customers, orders, alerts }} canCreate={canCreate} />
     </div>
   );
 }

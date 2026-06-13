@@ -2,6 +2,8 @@ import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/auth-options";
 import { apiRequest } from "@/lib/api-client";
+import { can } from "@/lib/permissions";
+import { AccessRestricted } from "@/components/admin/access-restricted";
 import { AdminProductDetailPanel } from "@/components/admin-product-detail-panel";
 
 interface PageProps {
@@ -19,6 +21,9 @@ export default async function AdminProductDetailPage({ params }: PageProps) {
   }
   if (session.user.role !== "admin" && session.user.role !== "employee") {
     redirect("/");
+  }
+  if (!can(session.user.permissions, "products.view")) {
+    return <AccessRestricted requiredPermission="products.view" sectionName="Product detail" />;
   }
 
   const { id } = await params;
@@ -49,7 +54,11 @@ export default async function AdminProductDetailPage({ params }: PageProps) {
 
   return (
     <div className="mx-auto w-full max-w-7xl space-y-6">
-      <AdminProductDetailPanel product={product} />
+      <AdminProductDetailPanel
+        product={product}
+        canEdit={can(session.user.permissions, "products.edit")}
+        canDelete={can(session.user.permissions, "products.delete")}
+      />
     </div>
   );
 }

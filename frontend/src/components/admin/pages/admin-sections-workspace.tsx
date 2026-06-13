@@ -39,7 +39,15 @@ type ProductItem = {
   isActive?: boolean;
 };
 
-export function AdminSectionsWorkspace({ data }: { data: AdminWorkspaceData }) {
+export function AdminSectionsWorkspace({
+  data,
+  canEdit = false,
+  canDelete = false,
+}: {
+  data: AdminWorkspaceData;
+  canEdit?: boolean;
+  canDelete?: boolean;
+}) {
   return (
     <AdminWorkspace
       pageId="sections"
@@ -48,7 +56,7 @@ export function AdminSectionsWorkspace({ data }: { data: AdminWorkspaceData }) {
       hideKpis
       title="Regions & Collections"
       subtitle="Organize customer-facing regions, collections, and homepage category visibility."
-      actions={
+      actions={canEdit ? (
         <button
           type="button"
           onClick={() => window.dispatchEvent(new Event(ADMIN_SECTION_SAVE_EVENT))}
@@ -58,13 +66,15 @@ export function AdminSectionsWorkspace({ data }: { data: AdminWorkspaceData }) {
           <Plus className="h-4 w-4" />
           Add Region
         </button>
-      }
+      ) : null}
     >
       {({ search }) => (
         <AdminSectionManager
           externalSearch={search}
           initialSections={(data.sections ?? []) as HomepageSection[]}
           products={(data.products ?? []) as ProductItem[]}
+          canEdit={canEdit}
+          canDelete={canDelete}
         />
       )}
     </AdminWorkspace>

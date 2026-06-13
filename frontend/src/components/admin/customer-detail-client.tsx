@@ -75,8 +75,8 @@ function Field({ label, value }: { label: string; value?: string | null }) {
 export function CustomerDetailClient({
   initialCustomer,
   orders = [],
-  canEdit = true,
-  canDelete = true,
+  canEdit = false,
+  canDelete = false,
   embedded = false,
 }: {
   initialCustomer: Customer;
@@ -131,16 +131,18 @@ export function CustomerDetailClient({
   async function refreshDetail() {
     setBusy(true);
     try {
-      const res = await fetch(`/api/backend/admin/users/${customer.id}`);
+      const res = await fetch(`/api/backend/admin/customers/${customer.id}`);
       const json = await res.json();
-      if (res.ok && json.data) setCustomer(json.data);
+      const nextCustomer = json?.data?.user ?? json?.data;
+      if (res.ok && nextCustomer) setCustomer(nextCustomer);
     } catch { /* ignore */ } finally { setBusy(false); }
   }
 
   async function save() {
+    if (!canEdit) return;
     setBusy(true);
     try {
-      const res = await fetch(`/api/backend/admin/users/${customer.id}`, {
+      const res = await fetch(`/api/backend/admin/customers/${customer.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ firstName, fatherName, grandfatherName, email, phone, gender, dateOfBirth, country, city, address, accountStatus, customerType, notes }),
@@ -153,10 +155,11 @@ export function CustomerDetailClient({
   }
 
   async function resetPassword() {
+    if (!canEdit) return;
     if (newPassword !== confirmPassword) return dashboardError("Error", "Passwords mismatch");
     setBusy(true);
     try {
-      const res = await fetch(`/api/backend/admin/users/${customer.id}/password`, {
+      const res = await fetch(`/api/backend/admin/customers/${customer.id}/password`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ password: newPassword }),
@@ -168,10 +171,11 @@ export function CustomerDetailClient({
   }
 
   async function toggleActive() {
+    if (!canEdit) return;
     const next = accountStatus === "active" ? "inactive" : "active";
     setBusy(true);
     try {
-      await fetch(`/api/backend/admin/users/${customer.id}/status`, {
+      await fetch(`/api/backend/admin/customers/${customer.id}/status`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: next }),
@@ -182,11 +186,12 @@ export function CustomerDetailClient({
   }
 
   async function remove() {
+    if (!canDelete) return;
     const ok = await dashboardConfirm({ title: "Delete?", text: "Permanent.", confirmButtonText: "Yes, Delete", tone: "danger" });
     if (ok) {
        setBusy(true);
        try {
-         await fetch(`/api/backend/admin/users/${customer.id}`, { method: "DELETE" });
+         await fetch(`/api/backend/admin/customers/${customer.id}`, { method: "DELETE" });
          router.push("/admin/customers");
        } catch { /* ignore */ } finally { setBusy(false); }
     }
@@ -231,17 +236,25 @@ export function CustomerDetailClient({
             </div>
             <div className="flex flex-wrap gap-2">
               {!editMode ? (
-                <button onClick={() => setEditMode(true)} disabled={!canEdit} className="inline-flex h-11 items-center gap-2 rounded-xl bg-blue-600 px-5 text-sm font-bold text-white shadow-lg hover:bg-blue-700 transition-all active:scale-95 disabled:opacity-50"><Pencil className="h-4 w-4" /> Edit Profile</button>
+                canEdit ? (
+                  <button onClick={() => setEditMode(true)} className="inline-flex h-11 items-center gap-2 rounded-xl bg-blue-600 px-5 text-sm font-bold text-white shadow-lg hover:bg-blue-700 transition-all active:scale-95"><Pencil className="h-4 w-4" /> Edit Profile</button>
+                ) : null
               ) : (
                 <>
                   <button onClick={() => save()} disabled={busy} className="inline-flex h-11 items-center gap-2 rounded-xl bg-emerald-600 px-5 text-sm font-bold text-white shadow-lg hover:bg-emerald-700 transition-all active:scale-95"><ShieldCheck className="h-4 w-4" /> Save</button>
                   <button onClick={() => setEditMode(false)} className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-sm font-bold text-slate-900 shadow-sm hover:bg-slate-50">Discard</button>
                 </>
               )}
-              <div className="h-8 w-px bg-slate-200 mx-1" />
-              <button onClick={() => setResetOpen(true)} className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-sm font-bold text-slate-900 hover:bg-slate-50 transition-all"><Lock className="h-4 w-4 text-slate-400" /> Password</button>
-              <button onClick={() => toggleActive()} className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-sm font-bold text-slate-900 hover:bg-slate-50 transition-all"><Unlock className="h-4 w-4 text-slate-400" /> {accountStatus === "active" ? "Deactivate" : "Activate"}</button>
-              <button onClick={() => remove()} disabled={!canDelete} className="inline-flex h-11 items-center gap-2 rounded-xl border border-rose-200 bg-white px-5 text-sm font-bold text-rose-700 hover:bg-rose-50 transition-all active:scale-95 disabled:opacity-50"><Trash2 className="h-4 w-4" /> Delete</button>
+              {(canEdit || canDelete) ? <div className="h-8 w-px bg-slate-200 mx-1" /> : null}
+              {canEdit ? (
+                <>
+                  <button onClick={() => setResetOpen(true)} className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-sm font-bold text-slate-900 hover:bg-slate-50 transition-all"><Lock className="h-4 w-4 text-slate-400" /> Password</button>
+                  <button onClick={() => toggleActive()} className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-sm font-bold text-slate-900 hover:bg-slate-50 transition-all"><Unlock className="h-4 w-4 text-slate-400" /> {accountStatus === "active" ? "Deactivate" : "Activate"}</button>
+                </>
+              ) : null}
+              {canDelete ? (
+                <button onClick={() => remove()} className="inline-flex h-11 items-center gap-2 rounded-xl border border-rose-200 bg-white px-5 text-sm font-bold text-rose-700 hover:bg-rose-50 transition-all active:scale-95"><Trash2 className="h-4 w-4" /> Delete</button>
+              ) : null}
             </div>
           </div>
         </div>

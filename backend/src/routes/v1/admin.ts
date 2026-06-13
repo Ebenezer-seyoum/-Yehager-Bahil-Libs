@@ -13,11 +13,17 @@ import {
   assignEmployeeAccessForAdmin,
   createEmployeeForAdmin,
   createCustomerForAdmin,
+  deleteCustomerForAdmin,
   deleteUserForAdmin,
+  getCustomerDetailForAdmin,
   getEmployeeDetailForAdmin,
+  listCustomersForAdmin,
   listUsersForAdmin,
+  resetCustomerPasswordForAdmin,
   resetUserPasswordForAdmin,
   sendPasswordResetLinkForAdmin,
+  updateCustomerProfileForAdmin,
+  updateCustomerStatusForAdmin,
   updateUserProfileForAdminService,
   updateRoleForAdmin as updateUserRoleForAdmin,
   updateUserStatusForAdmin,
@@ -335,6 +341,87 @@ adminRouter.get("/users/:userId", requirePermission(PERMISSIONS.EMPLOYEES_VIEW),
   return c.json({ data });
 });
 
+adminRouter.get("/customers", requirePermission(PERMISSIONS.CUSTOMERS_VIEW), zValidator("query", listQuerySchema), async (c) => {
+  const { limit } = c.req.valid("query");
+  const data = await listCustomersForAdmin(limit ?? 200);
+  return c.json({ data });
+});
+
+adminRouter.get("/customers/:userId", requirePermission(PERMISSIONS.CUSTOMERS_VIEW), zValidator("param", userParamSchema), async (c) => {
+  const { userId } = c.req.valid("param");
+  const data = await getCustomerDetailForAdmin(userId);
+  return c.json({ data });
+});
+
+adminRouter.patch(
+  "/customers/:userId",
+  requirePermission(PERMISSIONS.CUSTOMERS_EDIT),
+  zValidator("param", userParamSchema),
+  zValidator("json", userProfilePatchSchema),
+  async (c) => {
+    const authUser = c.get("authUser");
+    const { userId } = c.req.valid("param");
+    const body = c.req.valid("json");
+    const data = await updateCustomerProfileForAdmin({
+      userId,
+      ...body,
+      performedBy: authUser?.email,
+    });
+    return c.json({ data });
+  },
+);
+
+adminRouter.patch(
+  "/customers/:userId/status",
+  requirePermission(PERMISSIONS.CUSTOMERS_EDIT),
+  zValidator("param", userParamSchema),
+  zValidator("json", userStatusPatchSchema),
+  async (c) => {
+    const authUser = c.get("authUser");
+    const { userId } = c.req.valid("param");
+    const { status } = c.req.valid("json");
+    const data = await updateCustomerStatusForAdmin({
+      userId,
+      status,
+      performedBy: authUser?.email,
+    });
+    return c.json({ data });
+  },
+);
+
+adminRouter.patch(
+  "/customers/:userId/password",
+  requirePermission(PERMISSIONS.CUSTOMERS_EDIT),
+  zValidator("param", userParamSchema),
+  zValidator("json", userPasswordResetSchema),
+  async (c) => {
+    const authUser = c.get("authUser");
+    const { userId } = c.req.valid("param");
+    const { password } = c.req.valid("json");
+    const data = await resetCustomerPasswordForAdmin({
+      userId,
+      password,
+      performedBy: authUser?.email,
+    });
+    return c.json({ data });
+  },
+);
+
+adminRouter.delete(
+  "/customers/:userId",
+  requirePermission(PERMISSIONS.CUSTOMERS_DELETE),
+  zValidator("param", userParamSchema),
+  async (c) => {
+    const authUser = c.get("authUser");
+    const { userId } = c.req.valid("param");
+    const data = await deleteCustomerForAdmin({
+      userId,
+      performedBy: authUser?.email,
+    });
+    return c.json({ data });
+  },
+);
+
 adminRouter.get("/roles", requirePermission(PERMISSIONS.ROLES_VIEW), async (c) => {
   const data = await listRolesForAdmin();
   return c.json({ data });
@@ -583,7 +670,7 @@ adminRouter.post("/users/employees", requirePermission(PERMISSIONS.EMPLOYEES_CRE
   return c.json({ data }, 201);
 });
 
-adminRouter.post("/users/customers", requirePermission(PERMISSIONS.EMPLOYEES_CREATE), zValidator("json", createEmployeeSchema), async (c) => {
+adminRouter.post("/users/customers", requirePermission(PERMISSIONS.CUSTOMERS_CREATE), zValidator("json", createEmployeeSchema), async (c) => {
   const authUser = c.get("authUser");
   const data = await createCustomerForAdmin({
     ...c.req.valid("json"),

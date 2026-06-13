@@ -9,7 +9,7 @@ import { DashboardActionButton, DashboardTableActions } from "@/components/admin
 import type { AdminWorkspaceData } from "@/lib/admin/types";
 import type { UploadedDesign } from "@/components/admin-uploaded-design-dialogs";
 
-export function AdminProductsWorkspace({ data }: { data: AdminWorkspaceData }) {
+export function AdminProductsWorkspace({ data, canCreate = false }: { data: AdminWorkspaceData; canCreate?: boolean }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const activeTab = searchParams.get("tab") || "all";
@@ -32,14 +32,16 @@ export function AdminProductsWorkspace({ data }: { data: AdminWorkspaceData }) {
         { id: "low-stock", label: "Low Stock", icon: Package },
       ]}
       actions={
-        <button
-          type="button"
-          onClick={() => router.push("/admin/inventory/create")}
-          className="inline-flex h-10 items-center gap-2 rounded-xl bg-emerald-800 px-4 text-sm font-bold text-white shadow-lg hover:bg-emerald-900 transition-all active:scale-95"
-        >
-          <Plus className="h-4 w-4" />
-          Add Product
-        </button>
+        canCreate ? (
+          <button
+            type="button"
+            onClick={() => router.push("/admin/inventory/create")}
+            className="inline-flex h-10 items-center gap-2 rounded-xl bg-emerald-800 px-4 text-sm font-bold text-white shadow-lg hover:bg-emerald-900 transition-all active:scale-95"
+          >
+            <Plus className="h-4 w-4" />
+            Add Product
+          </button>
+        ) : null
       }
     >
       {({ filteredData, search, setDisplayedRecordsCount }) => (

@@ -15,6 +15,7 @@ export const PERMISSIONS = {
   CUSTOMERS_VIEW: "customers.view",
   CUSTOMERS_CREATE: "customers.create",
   CUSTOMERS_EDIT: "customers.edit",
+  CUSTOMERS_DELETE: "customers.delete",
   PRODUCTS_VIEW: "products.view",
   PRODUCTS_CREATE: "products.create",
   PRODUCTS_EDIT: "products.edit",
