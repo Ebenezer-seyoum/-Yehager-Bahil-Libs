@@ -278,6 +278,7 @@ export function EmployeeDetailClient({
   backTab,
   canAssignRole,
   canEdit,
+  canUpdateStatus,
   canDelete,
   currentUserId,
   embedded = false,
@@ -286,6 +287,7 @@ export function EmployeeDetailClient({
   backTab: string;
   canAssignRole: boolean;
   canEdit: boolean;
+  canUpdateStatus: boolean;
   canDelete: boolean;
   currentUserId?: string;
   embedded?: boolean;
@@ -586,6 +588,7 @@ export function EmployeeDetailClient({
   }
 
   async function toggleBlock() {
+    if (!canUpdateStatus) return;
     const currentStatus = String(user.status ?? "").toLowerCase();
     const currentAccountStatus = String(user.accountStatus ?? "").toLowerCase();
     const isBlocked =
@@ -947,45 +950,52 @@ export function EmployeeDetailClient({
           <div className="flex w-full flex-col items-stretch gap-2 md:w-auto"> 
             {!editMode ? (
               <>
-                <button
-                  type="button"
-                  disabled={!canEdit}
-                  onClick={enterEditMode}
-                  className="inline-flex h-10 items-center gap-2 rounded-xl bg-[#2563EB] px-4 text-sm font-semibold text-white shadow-sm hover:bg-[#1D4ED8] disabled:opacity-50"
-                >
-                  <Edit className="h-4 w-4" />
-                  Edit User
-                </button>
-                <button
-                  type="button"
-                  onClick={openResetPasswordModal}
-                  disabled={!canEdit || busy}
-                  className="inline-flex h-10 items-center gap-2 rounded-xl bg-[#7C3AED] px-4 text-sm font-semibold text-white shadow-sm hover:bg-[#6D28D9] disabled:opacity-50"
-                >
-                  <RotateCcw className="h-4 w-4" />
-                  Reset Password
-                </button>
-                <button
-                  type="button"
-                  onClick={toggleBlock}
-                  disabled={busy}
-                  className={cn(
-                    "inline-flex h-10 items-center gap-2 rounded-xl px-4 text-sm font-semibold text-white shadow-sm",
-                    isBlockedForUi ? "bg-[#16A34A] hover:bg-[#15803D]" : "bg-[#EA580C] hover:bg-[#C2410C]",
-                  )}
-                >
-                  {isBlockedForUi ? <Unlock className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
-                  {isBlockedForUi ? "Unblock User" : "Block User"}
-                </button>
-                <button
-                  type="button"
-                  onClick={deleteEmployee}
-                  disabled={!canDelete || busy}
-                  className="inline-flex h-10 items-center gap-2 rounded-xl bg-[#DC2626] px-4 text-sm font-semibold text-white shadow-sm hover:bg-[#B91C1C] disabled:opacity-50"
-                >
-                  <Trash2 className="h-4 w-4" />
-                  Delete User
-                </button>
+                {canEdit ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={enterEditMode}
+                      className="inline-flex h-10 items-center gap-2 rounded-xl bg-[#2563EB] px-4 text-sm font-semibold text-white shadow-sm hover:bg-[#1D4ED8]"
+                    >
+                      <Edit className="h-4 w-4" />
+                      Edit User
+                    </button>
+                    <button
+                      type="button"
+                      onClick={openResetPasswordModal}
+                      disabled={busy}
+                      className="inline-flex h-10 items-center gap-2 rounded-xl bg-[#7C3AED] px-4 text-sm font-semibold text-white shadow-sm hover:bg-[#6D28D9] disabled:opacity-50"
+                    >
+                      <RotateCcw className="h-4 w-4" />
+                      Reset Password
+                    </button>
+                  </>
+                ) : null}
+                {canUpdateStatus ? (
+                  <button
+                    type="button"
+                    onClick={toggleBlock}
+                    disabled={busy}
+                    className={cn(
+                      "inline-flex h-10 items-center gap-2 rounded-xl px-4 text-sm font-semibold text-white shadow-sm disabled:opacity-50",
+                      isBlockedForUi ? "bg-[#16A34A] hover:bg-[#15803D]" : "bg-[#EA580C] hover:bg-[#C2410C]",
+                    )}
+                  >
+                    {isBlockedForUi ? <Unlock className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
+                    {isBlockedForUi ? "Unblock User" : "Block User"}
+                  </button>
+                ) : null}
+                {canDelete ? (
+                  <button
+                    type="button"
+                    onClick={deleteEmployee}
+                    disabled={busy}
+                    className="inline-flex h-10 items-center gap-2 rounded-xl bg-[#DC2626] px-4 text-sm font-semibold text-white shadow-sm hover:bg-[#B91C1C] disabled:opacity-50"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Delete User
+                  </button>
+                ) : null}
               </>
             ) : (
               <>

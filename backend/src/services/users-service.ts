@@ -48,6 +48,20 @@ function employeeDisplayName(
   return firstFather || fallback || null;
 }
 
+const BLOCKED_EMPLOYEE_ASSIGNMENT_ROLE_KEYS = new Set(["admin", "employee", "customer"]);
+
+async function getAssignableEmployeeRole(roleId: string) {
+  const role = await db.query.roles.findFirst({ where: eq(roles.id, roleId) });
+  if (!role) throw new HTTPException(400, { message: "Selected role was not found" });
+  if (role.isSystem || BLOCKED_EMPLOYEE_ASSIGNMENT_ROLE_KEYS.has(role.key)) {
+    throw new HTTPException(400, { message: "Admin, employee, and customer roles cannot be assigned as employee work roles." });
+  }
+  if (role.color === "inactive") {
+    throw new HTTPException(400, { message: "Inactive roles cannot be assigned to employees. Activate the role before assigning it." });
+  }
+  return role;
+}
+
 export async function syncCurrentUserFromAuth(payload: {
   sub: string;
   email?: string;
@@ -334,6 +348,7 @@ export async function createEmployeeForAdmin(payload: {
   if (existing) {
     throw new HTTPException(409, { message: "An account with this email already exists" });
   }
+  const assignedRole = payload.roleId ? await getAssignableEmployeeRole(payload.roleId) : null;
 
   const user = await createUser({
     email,
@@ -351,8 +366,15 @@ export async function createEmployeeForAdmin(payload: {
     throw new HTTPException(409, { message: "An account with this email already exists" });
   }
   await ensureSystemRoleAssignment(user.id, user.role);
-  if (payload.roleId) {
-    await assignAdditionalRoleToUser(user.id, payload.roleId);
+  let createdUser = user;
+  if (assignedRole) {
+    await assignAdditionalRoleToUser(user.id, assignedRole.id);
+    const updatedAccess = await updateEmployeeAccess({
+      userId: user.id,
+      roleStatus: "assigned",
+      assignedRoleId: assignedRole.id,
+    });
+    if (updatedAccess) createdUser = updatedAccess;
   }
 
   if (payload.profile) {
@@ -389,7 +411,7 @@ export async function createEmployeeForAdmin(payload: {
     },
   });
 
-  return toPublicUser(user);
+  return toPublicUser(createdUser);
 }
 
 export async function createCustomerForAdmin(payload: {
@@ -482,13 +504,7 @@ export async function assignEmployeeAccessForAdmin(payload: {
     throw new HTTPException(400, { message: "Access assignment is only supported for employee accounts" });
   }
 
-  if (payload.roleId) {
-    const role = await db.query.roles.findFirst({ where: eq(roles.id, payload.roleId) });
-    if (!role) throw new HTTPException(400, { message: "Selected role was not found" });
-    if (role.color === "inactive") {
-      throw new HTTPException(400, { message: "Inactive roles cannot be assigned to employees. Activate the role before assigning it." });
-    }
-  }
+  if (payload.roleId) await getAssignableEmployeeRole(payload.roleId);
 
   const roleIds = payload.roleId ? [payload.roleId] : [];
   await replaceUserAdditionalRolesForAdmin(user.id, roleIds);

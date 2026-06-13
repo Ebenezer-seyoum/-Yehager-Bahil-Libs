@@ -57,6 +57,7 @@ export function SiteNavbar() {
     const doubled = [...regions, ...regions];
     return doubled.slice(regionWindow, regionWindow + 9);
   }, [regionWindow, regions]);
+  const desktopRegions = topBarRegions;
 
   function handleMouseEnter(region: string) {
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
@@ -69,9 +70,9 @@ export function SiteNavbar() {
 
   return (
     <header className="sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur-lg">
-      <div className="w-full px-6 sm:px-8 lg:px-12">
-        <div className="flex h-16 items-center justify-between sm:h-20">
-          <Link href="/" className="flex items-center">
+      <div className="w-full px-4 sm:px-6 lg:px-8">
+        <div className="flex h-16 items-center justify-between sm:h-[88px]">
+          <Link href="/" className="flex shrink-0 items-center xl:mr-5">
             <img
               src="https://media.base44.com/images/public/69cc55fa50bba233144fe99d/5050da81c_YeHagerBahilLibs-03.png"
               alt="Yehager Bahil Libs"
@@ -79,68 +80,71 @@ export function SiteNavbar() {
             />
           </Link>
 
-          <nav className="hidden min-w-0 flex-1 items-center gap-2 lg:flex">
-            <Link href="/" className="rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground">
-              Home
-            </Link>
-            <div className="flex min-w-0 flex-1 items-center gap-1 overflow-visible">
-              {topBarRegions.map((region) => {
-                const subs = region.collections?.map((collection) => collection.name) ?? [];
-                return (
-                  <div key={region.id} className="relative shrink-0" onMouseEnter={() => handleMouseEnter(region.name)} onMouseLeave={handleMouseLeave}>
-                    <Link
-                      href={`/catalog?region=${encodeURIComponent(region.name)}`}
-                      onClick={() => setActiveMenu(null)}
-                      className="flex min-h-10 max-w-[118px] items-center gap-1 rounded-md px-2.5 py-2 text-sm font-medium leading-tight text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-                    >
-                      <span className="whitespace-normal text-center">{region.name}</span>
-                      {subs.length > 0 ? <ChevronDown className="h-3 w-3 shrink-0" /> : null}
-                    </Link>
-                    {activeMenu === region.name && subs.length > 0 ? (
-                      <div
-                        className="absolute left-0 top-full z-50 mt-1 min-w-[180px] rounded-xl border border-border bg-card p-3 shadow-xl"
-                        onMouseEnter={() => handleMouseEnter(region.name)}
-                        onMouseLeave={handleMouseLeave}
+          <nav className="hidden min-w-0 flex-1 items-stretch justify-center gap-1 xl:flex">
+            <div className="flex min-w-0 flex-1 items-center gap-2">
+              <Link href="/" className="shrink-0 rounded-md px-2 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground">
+                Home
+              </Link>
+              <div className="flex min-w-0 flex-1 items-center justify-center gap-1 overflow-visible">
+                {desktopRegions.map((region) => {
+                  const subs = region.collections?.map((collection) => collection.name) ?? [];
+                  const label = region.name === "Mila's Choice" ? "Designer's Choice" : region.name;
+                  return (
+                    <div key={region.id} className="relative shrink-0" onMouseEnter={() => handleMouseEnter(region.name)} onMouseLeave={handleMouseLeave}>
+                      <Link
+                        href={`/catalog?region=${encodeURIComponent(region.name)}`}
+                        onClick={() => setActiveMenu(null)}
+                        className="flex min-h-10 max-w-[96px] items-center gap-1 rounded-md px-2 py-2 text-sm font-medium leading-tight text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
                       >
-                        {subs.map((sub) => (
-                          <Link
-                            key={sub}
-                            href={`/catalog?region=${encodeURIComponent(region.name)}&sub=${encodeURIComponent(sub)}`}
-                            onClick={() => setActiveMenu(null)}
-                            className="block rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-                          >
-                            {sub}
-                          </Link>
-                        ))}
-                        <div className="mt-2 border-t border-border pt-2">
-                          <Link href={`/catalog?region=${encodeURIComponent(region.name)}`} className="block px-3 py-2 text-xs font-medium text-primary hover:underline">
-                            View All {region.name}
-                          </Link>
+                        <span className="whitespace-normal text-center">{label}</span>
+                        {subs.length > 0 ? <ChevronDown className="h-3 w-3 shrink-0" /> : null}
+                      </Link>
+                      {activeMenu === region.name && subs.length > 0 ? (
+                        <div
+                          className="absolute left-0 top-full z-50 mt-1 min-w-[180px] rounded-xl border border-border bg-card p-3 shadow-xl"
+                          onMouseEnter={() => handleMouseEnter(region.name)}
+                          onMouseLeave={handleMouseLeave}
+                        >
+                          {subs.map((sub) => (
+                            <Link
+                              key={sub}
+                              href={`/catalog?region=${encodeURIComponent(region.name)}&sub=${encodeURIComponent(sub)}`}
+                              onClick={() => setActiveMenu(null)}
+                              className="block rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                            >
+                              {sub}
+                            </Link>
+                          ))}
+                          <div className="mt-2 border-t border-border pt-2">
+                            <Link href={`/catalog?region=${encodeURIComponent(region.name)}`} className="block px-3 py-2 text-xs font-medium text-primary hover:underline">
+                              View All {label}
+                            </Link>
+                          </div>
                         </div>
-                      </div>
-                    ) : null}
-                  </div>
-                );
-              })}
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
             <Link
               href={uploadDesignHref}
-              className="ml-2 inline-flex h-11 shrink-0 items-center justify-center gap-1 rounded-md border-2 border-primary bg-primary/10 px-3 text-center text-xs font-black leading-tight text-primary transition-colors hover:bg-primary hover:text-primary-foreground"
+              className="inline-flex h-[58px] w-[96px] shrink-0 items-center justify-center gap-1.5 rounded-lg border border-primary bg-primary/10 px-3 text-center text-xs font-black leading-tight text-primary transition-colors hover:bg-primary hover:text-primary-foreground"
             >
               <Sparkles className="h-4 w-4 shrink-0" />
-              <span className="max-w-[72px]">Upload Your Design</span>
+              <span className="max-w-[56px]">Upload Your Design</span>
             </Link>
             <button
               type="button"
               onClick={() => setGroupOrderOpen(true)}
-              className="inline-flex h-11 shrink-0 items-center justify-center rounded-md bg-primary px-4 text-center text-xs font-semibold leading-tight text-primary-foreground transition-colors hover:bg-primary/90"
+              className="inline-flex h-[58px] w-[110px] shrink-0 items-center justify-center rounded-lg bg-primary px-3 text-center text-sm font-semibold leading-tight text-primary-foreground transition-colors hover:bg-primary/90"
             >
               Create Group Order
             </button>
           </nav>
 
-          <div className="flex items-center gap-2">
-            <LanguageSwitcher />
+          <div className="flex shrink-0 items-center gap-1.5 xl:ml-2">
+            <LanguageSwitcher navbar />
             <Link href="/cart" className="relative rounded-full p-2 transition-colors hover:bg-secondary" aria-label="Cart">
               <ShoppingBag className="h-5 w-5" />
               {cartCount > 0 ? (
@@ -149,32 +153,32 @@ export function SiteNavbar() {
                 </span>
               ) : null}
             </Link>
-            <div className="hidden items-center gap-2 sm:flex">
+            <div className="hidden items-center gap-1.5 sm:flex">
               {isAuthed ? (
                 <>
-                  <Link href="/my-account" className="inline-flex items-center justify-center whitespace-nowrap rounded-lg px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground">
+                  <Link href="/my-account" className="inline-flex items-center justify-center whitespace-nowrap rounded-lg px-2.5 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground">
                     Account
                   </Link>
                   <button
                     type="button"
                     onClick={() => signOut({ callbackUrl: "/" })}
-                    className="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-1.5 text-center text-sm font-semibold leading-tight text-primary-foreground transition-colors hover:bg-primary/90"
+                    className="inline-flex min-h-12 items-center justify-center rounded-lg bg-primary px-4 py-1.5 text-center text-sm font-semibold leading-tight text-primary-foreground transition-colors hover:bg-primary/90"
                   >
                     Sign Out
                   </button>
                 </>
               ) : (
                 <>
-                  <Link href="/signin" className="inline-flex items-center justify-center whitespace-nowrap rounded-lg px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground">
+                  <Link href="/signin" className="inline-flex items-center justify-center whitespace-nowrap rounded-lg px-2.5 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground">
                     Sign In
                   </Link>
-                  <Link href="/register" className="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-1.5 text-center text-sm font-semibold leading-tight text-primary-foreground transition-colors hover:bg-primary/90">
+                  <Link href="/register" className="inline-flex h-[58px] w-[110px] items-center justify-center rounded-lg bg-primary px-3 text-center text-sm font-semibold leading-tight text-primary-foreground transition-colors hover:bg-primary/90">
                     Create Account
                   </Link>
                 </>
               )}
             </div>
-            <button type="button" onClick={() => setOpen((value) => !value)} className="rounded-md p-2 hover:bg-secondary lg:hidden">
+            <button type="button" onClick={() => setOpen((value) => !value)} className="rounded-md p-2 hover:bg-secondary xl:hidden">
               {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
             </button>
           </div>
@@ -182,7 +186,7 @@ export function SiteNavbar() {
       </div>
 
       {open ? (
-        <div className="max-h-[calc(100vh-80px)] overflow-y-auto border-t border-border bg-background lg:hidden">
+        <div className="max-h-[calc(100vh-80px)] overflow-y-auto border-t border-border bg-background xl:hidden">
           <nav className="px-3 py-2">
             <div className="mb-1 flex items-center justify-between px-3 py-2">
               <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Language</span>
@@ -215,7 +219,7 @@ export function SiteNavbar() {
                   {isOpen && hasSubs ? (
                     <div className="mb-1 ml-4 border-l border-border pl-2">
                       <Link href={`/catalog?region=${encodeURIComponent(region.name)}`} onClick={() => setOpen(false)} className="flex h-9 items-center rounded-lg px-3 text-xs font-semibold text-primary hover:bg-secondary">
-                        View All {region.name}
+                        View All {label}
                       </Link>
                       {subs.map((sub) => (
                         <Link

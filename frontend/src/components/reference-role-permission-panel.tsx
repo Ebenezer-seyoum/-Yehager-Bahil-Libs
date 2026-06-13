@@ -16,6 +16,7 @@ import {
 import { TableHeadCell, TableHeadRow, TableHeader } from "@/components/admin/table-header";
 import { employeeNavigation } from "@/lib/dashboard-navigation";
 import { dashboardConfirm, dashboardError, dashboardLoading, dashboardSuccess } from "@/lib/dashboard-swal";
+import { isAssignableEmployeeRole } from "@/lib/admin/assignable-roles";
 
 const ADMIN_ROLE_CREATE_EVENT = "admin-roles:create-role";
 
@@ -556,7 +557,7 @@ export function ReferenceRolePermissionPanel({
               <span className="mb-2 block font-semibold">Role</span>
               <select value={selectedRoleId} onChange={(event) => setSelectedRoleId(event.target.value)} className="h-12 w-full rounded-xl border border-input bg-background px-4 text-sm">
                 <option value="">No role / access pending</option>
-                {roleItems.filter((role) => !role.isSystem).map((role) => (
+                {roleItems.filter(isAssignableEmployeeRole).map((role) => (
                   <option key={role.id} value={role.id}>
                     {role.name}
                   </option>
@@ -698,7 +699,7 @@ export function ReferenceRolePermissionPanel({
                 className="h-12 w-full rounded-xl border border-input bg-background px-4"
               >
                 <option value="">Select a role</option>
-                {roleItems.filter((role) => !role.isSystem).map((role) => (
+                {roleItems.filter(isAssignableEmployeeRole).map((role) => (
                   <option key={role.id} value={role.id}>{role.name}</option>
                 ))}
               </select>
@@ -1058,7 +1059,7 @@ export function ReferenceRolePermissionPanel({
               className="h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-sm text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
             >
               <option value="">No role / access pending</option>
-              {roleItems.filter((role) => !role.isSystem).map((role) => (
+              {roleItems.filter(isAssignableEmployeeRole).map((role) => (
                 <option key={role.id} value={role.id}>{role.name}</option>
               ))}
             </select>

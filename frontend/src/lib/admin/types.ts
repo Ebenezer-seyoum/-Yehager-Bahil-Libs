@@ -89,7 +89,7 @@ export type AdminWorkspaceData = {
   sections?: Record<string, unknown>[];
 };
 
-export type Role = { id: string; name: string };
+export type Role = { id: string; name: string; key?: string | null; isSystem?: boolean | null };
 export type AccountStatus = "active" | "invited" | "pending" | "inactive" | "blocked" | "suspended";
 
 export type User = {

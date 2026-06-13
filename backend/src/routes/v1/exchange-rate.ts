@@ -1,7 +1,9 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import { zValidator } from "@hono/zod-validator";
-import { requireAuth, requireRole } from "../../middleware/auth.js";
+import { requireAuth } from "../../middleware/auth.js";
+import { requirePermission } from "../../middleware/permissions.js";
+import { PERMISSIONS } from "../../lib/auth/permissions.js";
 import { getPublicUsdEtb, refreshUsdEtbFromOpenEr, setManualUsdEtbRate } from "../../services/exchange-rate-service.js";
 import type { AppBindings } from "../../types/hono.js";
 
@@ -15,7 +17,7 @@ exchangeRateRouter.get("/", async (c) => {
   return c.json({ data });
 });
 
-exchangeRateRouter.post("/refresh", requireAuth, requireRole("admin"), async (c) => {
+exchangeRateRouter.post("/refresh", requireAuth, requirePermission(PERMISSIONS.EXCHANGE_EDIT), async (c) => {
   const data = await refreshUsdEtbFromOpenEr();
   return c.json({ data }, 201);
 });
@@ -23,7 +25,7 @@ exchangeRateRouter.post("/refresh", requireAuth, requireRole("admin"), async (c)
 exchangeRateRouter.patch(
   "/",
   requireAuth,
-  requireRole("admin"),
+  requirePermission(PERMISSIONS.EXCHANGE_EDIT),
   zValidator("json", z.object({ rate: z.coerce.number().positive() })),
   async (c) => {
     const authUser = c.get("authUser");

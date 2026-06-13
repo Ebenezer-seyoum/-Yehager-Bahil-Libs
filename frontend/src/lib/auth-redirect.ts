@@ -2,6 +2,7 @@ export type AppRole = "admin" | "customer" | "employee";
 
 const EMPLOYEE_PERMISSION_ROUTES: Array<{ permission: string; href: string }> = [
   { permission: "dashboard.view", href: "/admin" },
+  { permission: "employees.view", href: "/admin/users" },
   { permission: "orders.view", href: "/admin/orders" },
   { permission: "returns.view", href: "/admin/orders/returns-refunds" },
   { permission: "shipping.view", href: "/admin/orders/shipping-delivery" },
@@ -10,6 +11,7 @@ const EMPLOYEE_PERMISSION_ROUTES: Array<{ permission: string; href: string }> = 
   { permission: "payments.view", href: "/admin/payments" },
   { permission: "transactions.view", href: "/admin/finance/transactions" },
   { permission: "coupons.view", href: "/admin/finance/coupons-discounts" },
+  { permission: "exchange.view", href: "/admin/exchange-rate" },
   { permission: "documents.view", href: "/admin/orders/documents" },
   { permission: "reports.view", href: "/admin/reports" },
   { permission: "support.view", href: "/admin/support-inbox" },

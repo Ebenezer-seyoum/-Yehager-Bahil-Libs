@@ -25,6 +25,7 @@ import type { AccountStatus, Role } from "@/lib/admin/types";
 import { COUNTRY_CALLING_CODES } from "@/lib/country-calling-codes";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { safeIso2 } from "@/lib/utils/phone-utils";
+import { filterAssignableEmployeeRoles } from "@/lib/admin/assignable-roles";
 
 const TypedPopoverContent = PopoverContent as ComponentType<PropsWithChildren<{ align?: string; className?: string; sideOffset?: number }>>;
 
@@ -81,6 +82,7 @@ export function EmployeeCreateClient({ roles }: { roles: Role[] }) {
   const [notes, setNotes] = useState("");
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const assignableRoles = useMemo(() => filterAssignableEmployeeRoles(roles), [roles]);
 
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [formNotice, setFormNotice] = useState<{ tone: "success" | "error"; title: string; message: string } | null>(null);
@@ -347,7 +349,7 @@ export function EmployeeCreateClient({ roles }: { roles: Role[] }) {
                   className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-900 outline-none focus:bg-white focus:ring-2 focus:ring-primary/20 transition-all"
                 >
                   <option value="">No Role Assigned</option>
-                  {roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                  {assignableRoles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
                 </select>
               </div>
               <div>

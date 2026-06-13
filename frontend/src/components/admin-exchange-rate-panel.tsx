@@ -10,7 +10,7 @@ type ExchangeRate = {
   lastUpdated?: string | null;
 };
 
-export function AdminExchangeRatePanel({ exchangeRate }: { exchangeRate: ExchangeRate | null }) {
+export function AdminExchangeRatePanel({ exchangeRate, canEdit }: { exchangeRate: ExchangeRate | null; canEdit: boolean }) {
   const router = useRouter();
   const [manualRate, setManualRate] = useState("");
   const [busy, setBusy] = useState<"refresh" | "save" | null>(null);
@@ -18,6 +18,7 @@ export function AdminExchangeRatePanel({ exchangeRate }: { exchangeRate: Exchang
   const [error, setError] = useState<string | null>(null);
 
   async function refreshLiveRate() {
+    if (!canEdit) return;
     setBusy("refresh");
     setMessage(null);
     setError(null);
@@ -34,6 +35,7 @@ export function AdminExchangeRatePanel({ exchangeRate }: { exchangeRate: Exchang
   }
 
   async function saveManualRate() {
+    if (!canEdit) return;
     const rate = Number(manualRate);
     if (!Number.isFinite(rate) || rate <= 0) {
       setError("Enter a valid positive exchange rate.");
@@ -85,48 +87,52 @@ export function AdminExchangeRatePanel({ exchangeRate }: { exchangeRate: Exchang
             <p className="mt-2 text-sm text-muted-foreground">No rate configured yet.</p>
           )}
         </div>
-        <div className="rounded-xl border border-border p-4">
-          <p className="text-xs uppercase tracking-widest text-muted-foreground">Live refresh</p>
-          <button
-            type="button"
-            onClick={() => void refreshLiveRate()}
-            disabled={busy !== null}
-            className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
-          >
-            <RefreshCw className={`h-4 w-4 ${busy === "refresh" ? "animate-spin" : ""}`} />
-            {busy === "refresh" ? "Fetching..." : "Fetch live rate"}
-          </button>
-          <p className="mt-2 text-xs text-muted-foreground">Uses the same live source as the legacy workflow.</p>
-        </div>
+        {canEdit ? (
+          <div className="rounded-xl border border-border p-4">
+            <p className="text-xs uppercase tracking-widest text-muted-foreground">Live refresh</p>
+            <button
+              type="button"
+              onClick={() => void refreshLiveRate()}
+              disabled={busy !== null}
+              className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+            >
+              <RefreshCw className={`h-4 w-4 ${busy === "refresh" ? "animate-spin" : ""}`} />
+              {busy === "refresh" ? "Fetching..." : "Fetch live rate"}
+            </button>
+            <p className="mt-2 text-xs text-muted-foreground">Uses the same live source as the legacy workflow.</p>
+          </div>
+        ) : null}
       </div>
 
-      <div className="rounded-xl border border-border p-4">
-        <p className="font-medium">Manual override</p>
-        <p className="mt-1 text-sm text-muted-foreground">Use this when operations need to pin a known current rate manually.</p>
-        <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center">
-          <div className="flex flex-1 items-center gap-2">
-            <span className="text-sm text-muted-foreground">1 USD =</span>
-            <input
-              type="number"
-              min="0.01"
-              step="0.01"
-              value={manualRate}
-              onChange={(event) => setManualRate(event.target.value)}
-              placeholder="125.50"
-              className="h-10 flex-1 rounded-md border border-input bg-background px-3"
-            />
-            <span className="text-sm text-muted-foreground">ETB</span>
+      {canEdit ? (
+        <div className="rounded-xl border border-border p-4">
+          <p className="font-medium">Manual override</p>
+          <p className="mt-1 text-sm text-muted-foreground">Use this when operations need to pin a known current rate manually.</p>
+          <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div className="flex flex-1 items-center gap-2">
+              <span className="text-sm text-muted-foreground">1 USD =</span>
+              <input
+                type="number"
+                min="0.01"
+                step="0.01"
+                value={manualRate}
+                onChange={(event) => setManualRate(event.target.value)}
+                placeholder="125.50"
+                className="h-10 flex-1 rounded-md border border-input bg-background px-3"
+              />
+              <span className="text-sm text-muted-foreground">ETB</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => void saveManualRate()}
+              disabled={busy !== null || !manualRate}
+              className="rounded-md border border-border px-4 py-2 text-sm hover:bg-secondary disabled:opacity-60"
+            >
+              {busy === "save" ? "Saving..." : "Save rate"}
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={() => void saveManualRate()}
-            disabled={busy !== null || !manualRate}
-            className="rounded-md border border-border px-4 py-2 text-sm hover:bg-secondary disabled:opacity-60"
-          >
-            {busy === "save" ? "Saving..." : "Save rate"}
-          </button>
         </div>
-      </div>
+      ) : null}
 
       {message ? <p className="text-sm text-primary">{message}</p> : null}
       {error ? <p className="text-sm text-destructive">{error}</p> : null}

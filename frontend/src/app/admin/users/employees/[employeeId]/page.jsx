@@ -36,6 +36,7 @@ export default async function EmployeeDetailPage({ params, searchParams }) {
 
   const canAssignRole = can(session.user.permissions, "roles.assign");
   const canEdit = can(session.user.permissions, "employees.edit");
+  const canUpdateStatus = can(session.user.permissions, "employees.status.update");
   const canDelete = can(session.user.permissions, "employees.delete");
 
   return (
@@ -44,6 +45,7 @@ export default async function EmployeeDetailPage({ params, searchParams }) {
       backTab={backTab}
       canAssignRole={canAssignRole}
       canEdit={canEdit}
+      canUpdateStatus={canUpdateStatus}
       canDelete={canDelete}
       currentUserId={session.user.id}
     />

@@ -3,6 +3,7 @@ export const PERMISSIONS = {
   EMPLOYEES_VIEW: "employees.view",
   EMPLOYEES_CREATE: "employees.create",
   EMPLOYEES_EDIT: "employees.edit",
+  EMPLOYEES_STATUS_UPDATE: "employees.status.update",
   EMPLOYEES_DELETE: "employees.delete",
   EMPLOYEES_ASSIGN: "roles.assign",
   ROLES_VIEW: "roles.view",

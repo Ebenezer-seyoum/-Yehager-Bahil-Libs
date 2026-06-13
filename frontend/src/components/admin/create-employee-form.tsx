@@ -5,8 +5,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Briefcase, Eye, EyeOff, Loader2, Shield, UserRound } from "lucide-react";
 import { createEmployeeAction } from "@/lib/admin/actions/user-actions";
 import { useFormStatus } from "react-dom";
+import { filterAssignableEmployeeRoles } from "@/lib/admin/assignable-roles";
 
-type Role = { id: string; name: string };
+type Role = { id: string; name: string; key?: string | null; isSystem?: boolean | null };
 
 const STATUS_OPTIONS = ["active", "inactive", "suspended"] as const;
 
@@ -63,6 +64,7 @@ export function CreateEmployeeForm({
   const searchParams = useSearchParams();
   const error = searchParams.get("error");
   const [showPassword, setShowPassword] = useState(false);
+  const assignableRoles = useMemo(() => filterAssignableEmployeeRoles(roles), [roles]);
 
   const errorMessage = useMemo(() => {
     if (error === "validation") return "Please fill in all required fields.";
@@ -175,7 +177,7 @@ export function CreateEmployeeForm({
                 className="h-11 w-full rounded-xl border border-blue-100 px-3 text-sm outline-none focus:border-blue-800 focus:ring-2 focus:ring-blue-800/20 disabled:opacity-50"
               >
                 <option value="">Default employee</option>
-                {roles.map((role) => (
+                {assignableRoles.map((role) => (
                   <option key={role.id} value={role.id}>
                     {role.name}
                   </option>

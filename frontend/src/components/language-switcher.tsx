@@ -7,7 +7,7 @@ import { useT } from "@/lib/i18n/I18nContext";
 
 const HINT_KEY = "ybl_lang_hint_dismissed";
 
-export function LanguageSwitcher({ compact = false }: { compact?: boolean }) {
+export function LanguageSwitcher({ compact = false, navbar = false }: { compact?: boolean; navbar?: boolean }) {
   const { language, setLanguage } = useT();
   const [open, setOpen] = useState(false);
   const [showHint, setShowHint] = useState(false);
@@ -60,12 +60,28 @@ export function LanguageSwitcher({ compact = false }: { compact?: boolean }) {
           dismissHint();
         }}
         className={`relative flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm transition-colors ${
-          showHint ? "bg-primary/15 text-primary ring-1 ring-primary/40" : "text-muted-foreground hover:bg-secondary hover:text-foreground"
-        }`}
+          navbar ? "xl:h-[58px] xl:w-[160px] xl:justify-between xl:rounded-lg xl:border xl:border-primary xl:bg-[#2a2014] xl:px-3 xl:text-primary" : ""
+        } ${showHint ? "bg-primary/15 text-primary ring-1 ring-primary/40" : "text-muted-foreground hover:bg-secondary hover:text-foreground"}`}
       >
-        <Globe className="h-4 w-4" />
-        {!compact ? <span className="hidden font-medium sm:inline">{currentLanguage.nativeName}</span> : null}
-        <span className="text-xs font-bold uppercase sm:hidden">{language}</span>
+        <span className="flex items-center gap-1.5">
+          <Globe className="h-4 w-4" />
+          {!compact ? <span className="hidden font-medium sm:inline">{currentLanguage.nativeName}</span> : null}
+          <span className="text-xs font-bold uppercase sm:hidden">{language}</span>
+        </span>
+        {navbar ? (
+          <span
+            aria-hidden="true"
+            className={`hidden h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary text-center text-[8px] font-black uppercase leading-[1.12] text-primary-foreground shadow-[0_0_0_1px_rgba(0,0,0,0.35)] xl:flex ${
+              showHint ? "ring-1 ring-primary-foreground/70" : ""
+            }`}
+          >
+            ET
+            <br />
+            AM/ORO/
+            <br />
+            TI
+          </span>
+        ) : null}
       </button>
 
       {open ? (

@@ -678,7 +678,7 @@ adminRouter.patch(
 
 adminRouter.patch(
   "/users/:userId/status",
-  requirePermission(PERMISSIONS.EMPLOYEES_EDIT),
+  requirePermission(PERMISSIONS.EMPLOYEES_STATUS_UPDATE),
   zValidator("param", userParamSchema),
   zValidator("json", userStatusPatchSchema),
   async (c) => {

@@ -23,14 +23,18 @@ export default async function AdminUsersPage({ searchParams }) {
   let users = [];
   let roles = [];
   try {
-    const [response, rolesResponse] = await Promise.all([
-      apiRequest("/api/v1/admin/users?limit=200"),
-      apiRequest("/api/v1/admin/roles"),
-    ]);
+    const response = await apiRequest("/api/v1/admin/users?limit=200");
     users = Array.isArray(response?.data) ? response.data : [];
-    roles = Array.isArray(rolesResponse?.data) ? rolesResponse.data : [];
   } catch {
     users = [];
+  }
+
+  try {
+    const rolesResponse = canAssignRole || session.user.role === "admin"
+      ? await apiRequest("/api/v1/admin/roles")
+      : null;
+    roles = Array.isArray(rolesResponse?.data) ? rolesResponse.data : [];
+  } catch {
     roles = [];
   }
 
