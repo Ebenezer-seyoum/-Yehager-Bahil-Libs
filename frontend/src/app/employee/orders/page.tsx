@@ -1,7 +1,5 @@
-import { redirect } from "next/navigation";
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/auth-options";
 import { apiRequest } from "@/lib/api-client";
+import { requireEmployeePageAccess } from "@/lib/employee-access";
 
 function formatCurrency(value: unknown) {
   const amount = Number(value);
@@ -9,15 +7,21 @@ function formatCurrency(value: unknown) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(amount);
 }
 
-export default async function EmployeeOrdersPage() {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) redirect("/signin?callbackUrl=/employee/orders");
-  if (session.user.role !== "employee" && session.user.role !== "admin") redirect("/");
-  if (session.user.role === "employee" && session.user.roleStatus === "unassigned") redirect("/employee/access-pending");
+type EmployeeOrder = {
+  id: string;
+  orderNumber?: string | null;
+  customerName?: string | null;
+  totalUsd?: string | number | null;
+  status?: string | null;
+  fulfillmentType?: string | null;
+};
 
-  let orders: any[] = [];
+export default async function EmployeeOrdersPage() {
+  await requireEmployeePageAccess("/employee/orders", "orders.view");
+
+  let orders: EmployeeOrder[] = [];
   try {
-    const response = (await apiRequest("/api/v1/orders?limit=100")) as { data?: any[] };
+    const response = await apiRequest<{ data?: EmployeeOrder[] }>("/api/v1/orders?limit=100");
     orders = Array.isArray(response?.data) ? response.data : [];
   } catch {
     orders = [];

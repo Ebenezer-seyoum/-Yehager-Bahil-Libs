@@ -1,7 +1,5 @@
-import { redirect } from "next/navigation";
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/auth-options";
 import { apiRequest } from "@/lib/api-client";
+import { requireEmployeePageAccess } from "@/lib/employee-access";
 
 function formatCurrency(value: unknown) {
   const amount = Number(value);
@@ -9,15 +7,21 @@ function formatCurrency(value: unknown) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(amount);
 }
 
-export default async function EmployeeProductsPage() {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) redirect("/signin?callbackUrl=/employee/products");
-  if (session.user.role !== "employee" && session.user.role !== "admin") redirect("/");
-  if (session.user.role === "employee" && session.user.roleStatus === "unassigned") redirect("/employee/access-pending");
+type EmployeeProduct = {
+  id: string;
+  name?: string | null;
+  region?: string | null;
+  category?: string | null;
+  priceUsd?: string | number | null;
+  isActive?: boolean | null;
+};
 
-  let products: any[] = [];
+export default async function EmployeeProductsPage() {
+  await requireEmployeePageAccess("/employee/products", "products.view");
+
+  let products: EmployeeProduct[] = [];
   try {
-    const response = (await apiRequest("/api/v1/admin/products?limit=200")) as { data?: any[] };
+    const response = await apiRequest<{ data?: EmployeeProduct[] }>("/api/v1/admin/products?limit=200");
     products = Array.isArray(response?.data) ? response.data : [];
   } catch {
     products = [];

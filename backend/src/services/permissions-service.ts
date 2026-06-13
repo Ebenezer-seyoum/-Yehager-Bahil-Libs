@@ -1,5 +1,8 @@
-import { deletePermission, listPermissionKeysForUser, listPermissions, replaceUserPermissions, updatePermission, userHasAnyPermission } from "../repositories/permissions-repository.js";
+import { deletePermission, listPermissionKeysForUser, listPermissions, replaceUserPermissions, updatePermission } from "../repositories/permissions-repository.js";
 import { getUserById } from "../repositories/users-repository.js";
+import { roles } from "../lib/db/schema.js";
+import { db } from "../lib/db/drizzle.js";
+import { eq } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
 
 export async function getEffectivePermissionsForUser(userId: string) {
@@ -7,15 +10,21 @@ export async function getEffectivePermissionsForUser(userId: string) {
   if (user?.role === "employee" && user.roleStatus === "unassigned") {
     return [];
   }
+  if (user?.role === "employee" && user.assignedRoleId) {
+    const assignedRole = await db.query.roles.findFirst({ where: eq(roles.id, user.assignedRoleId) });
+    if (assignedRole?.color === "inactive") return [];
+  }
   return listPermissionKeysForUser(userId);
 }
 
 export async function hasPermission(userId: string, permissionKey: string) {
-  return userHasAnyPermission(userId, [permissionKey]);
+  const permissions = await getEffectivePermissionsForUser(userId);
+  return permissions.includes(permissionKey);
 }
 
 export async function hasAnyPermission(userId: string, permissionKeys: string[]) {
-  return userHasAnyPermission(userId, permissionKeys);
+  const permissions = await getEffectivePermissionsForUser(userId);
+  return permissionKeys.some((permissionKey) => permissions.includes(permissionKey));
 }
 
 export async function listPermissionsForAdmin() {

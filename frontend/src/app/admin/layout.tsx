@@ -5,15 +5,10 @@ import { apiRequest } from "@/lib/api-client";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/auth-options";
 
-type Order = {
-  id?: string | null;
-  orderType?: string | null;
-  status?: string | null;
-  paymentStatus?: string | null;
-};
-
-type Alert = {
-  isResolved?: boolean | null;
+type AdminProfilePayload = {
+  name?: string | null;
+  displayName?: string | null;
+  avatarUrl?: string | null;
 };
 
 async function getAdminNotificationCounts() {
@@ -35,9 +30,21 @@ async function getAdminNotificationCounts() {
   }
 }
 
+async function getAdminProfile() {
+  try {
+    const response = await apiRequest<{ data: AdminProfilePayload | null }>("/api/v1/users/me");
+    return response.data ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions);
-  const notificationCounts = session?.user?.role === "admin" ? await getAdminNotificationCounts() : {};
+  const [notificationCounts, profile] = await Promise.all([
+    session?.user?.role === "admin" ? getAdminNotificationCounts() : Promise.resolve({}),
+    getAdminProfile(),
+  ]);
 
   return (
     <Suspense
@@ -52,6 +59,10 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         title="Admin workspace"
         variant="admin"
         notificationCounts={notificationCounts}
+        accountProfile={{
+          displayName: profile?.displayName ?? profile?.name ?? null,
+          avatarUrl: profile?.avatarUrl ?? null,
+        }}
       >
         {children}
       </DashboardShell>

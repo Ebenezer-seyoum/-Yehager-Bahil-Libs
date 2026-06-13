@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/auth-options";
+import { apiRequest } from "@/lib/api-client";
+import type { EmployeeAccessProfile } from "@/lib/employee-access";
 import { Clock3, LockKeyhole, ShieldAlert } from "lucide-react";
 import { EmployeeAccessActions } from "@/components/employee-access-actions";
 
@@ -9,16 +11,29 @@ export default async function EmployeeAccessPendingPage() {
   if (!session?.user?.id) redirect("/signin?callbackUrl=/employee/access-pending");
   if (session.user.role !== "employee" && session.user.role !== "admin") redirect("/");
 
-  const noRole = session.user.roleStatus === "unassigned" || !session.user.assignedRoleId;
-  const inactiveRole = session.user.assignedRoleActive === false;
-  const noPermissions = !inactiveRole && !noRole && (session.user.permissions ?? []).length === 0;
+  let profile: EmployeeAccessProfile | null = null;
+  try {
+    const response = await apiRequest<{ data: EmployeeAccessProfile | null }>("/api/v1/users/me");
+    profile = response.data ?? null;
+  } catch {
+    profile = null;
+  }
+
+  const roleStatus = profile?.roleStatus ?? session.user.roleStatus;
+  const assignedRoleId = profile?.assignedRoleId ?? session.user.assignedRoleId;
+  const assignedRoleActive = profile?.assignedRoleActive ?? session.user.assignedRoleActive;
+  const assignedRoleName = profile?.assignedRoleName ?? session.user.assignedRoleName;
+  const permissions = Array.isArray(profile?.permissions) ? profile.permissions : session.user.permissions ?? [];
+  const noRole = roleStatus === "unassigned" || (!assignedRoleId && permissions.length === 0);
+  const inactiveRole = assignedRoleActive === false;
+  const noPermissions = !inactiveRole && !noRole && permissions.length === 0;
   const title = inactiveRole ? "Access Unavailable" : noRole || noPermissions ? "Access Pending" : "Access Restricted";
   const description = inactiveRole
-    ? `Your assigned role${session.user.assignedRoleName ? ` (${session.user.assignedRoleName})` : ""} is currently inactive. Please contact an administrator to restore access.`
+    ? `Your assigned role${assignedRoleName ? ` (${assignedRoleName})` : ""} is currently inactive. Please contact an administrator to restore access.`
     : noRole
       ? "Your employee account is active, but no permission role has been assigned yet. Please contact an administrator."
       : noPermissions
-        ? `Your assigned role${session.user.assignedRoleName ? ` (${session.user.assignedRoleName})` : ""} has no active permissions yet. Please contact an administrator.`
+        ? `Your assigned role${assignedRoleName ? ` (${assignedRoleName})` : ""} has no active permissions yet. Please contact an administrator.`
         : "Your account does not have access to this area. Please contact an administrator if you need access.";
   const Icon = inactiveRole ? LockKeyhole : ShieldAlert;
 

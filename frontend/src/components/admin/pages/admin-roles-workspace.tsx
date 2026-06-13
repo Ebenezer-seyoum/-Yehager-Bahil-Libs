@@ -71,11 +71,11 @@ type RoleFormState = {
   status: "Active" | "Inactive";
 };
 
-type MatrixAction = "view" | "create" | "edit" | "delete";
+type MatrixAction = "view" | "create" | "edit" | "delete" | "manage" | "approve" | "upload" | "export" | "verify" | "refund" | "assign" | "close";
 type MatrixRow = {
   resource: string;
   moduleName: string;
-  permissions: Partial<Record<MatrixAction, Permission>>;
+  permissions: Partial<Record<MatrixAction, Permission[]>>;
 };
 type PermissionCoverageRow = PermissionRequirement & {
   permission?: Permission;
@@ -97,13 +97,29 @@ const ACTION_LABELS: Record<MatrixAction, string> = {
   create: "CREATE",
   edit: "EDIT",
   delete: "DELETE",
+  manage: "MANAGE",
+  approve: "APPROVE",
+  upload: "UPLOAD",
+  export: "EXPORT",
+  verify: "VERIFY",
+  refund: "REFUND",
+  assign: "ASSIGN",
+  close: "CLOSE",
 };
 
 const ACTION_ALIASES: Record<MatrixAction, string[]> = {
   view: ["view", "read", "list"],
   create: ["create", "add", "write"],
-  edit: ["edit", "update", "manage", "approve", "assign"],
+  edit: ["edit", "update"],
   delete: ["delete", "remove"],
+  manage: ["manage", "status.update"],
+  approve: ["approve"],
+  upload: ["upload"],
+  export: ["export", "download"],
+  verify: ["verify"],
+  refund: ["refund"],
+  assign: ["assign"],
+  close: ["close", "resolve"],
 };
 
 const PRIORITY_TO_COLOR: Record<RoleFormState["priority"], string> = {
@@ -148,7 +164,7 @@ function groupPermissions(permissions: Permission[]): MatrixRow[] {
     const resource = permission.resource || permission.key.split(".")[0] || "general";
     const moduleName = titleCase(resource);
     const row = rows.get(resource) ?? { resource, moduleName, permissions: {} };
-    row.permissions[action] = permission;
+    row.permissions[action] = [...(row.permissions[action] ?? []), permission];
     rows.set(resource, row);
   });
 
@@ -227,8 +243,8 @@ export function AdminRolesWorkspace({
       [
         row.moduleName,
         row.resource,
-        ...Object.values(row.permissions).flatMap((permission) =>
-          permission ? [permission.key, permission.description, permission.action, permission.resource] : [],
+        ...Object.values(row.permissions).flatMap((permissionsForAction) =>
+          permissionsForAction?.flatMap((permission) => [permission.key, permission.description, permission.action, permission.resource]) ?? [],
         ),
       ].some((value) => String(value ?? "").toLowerCase().includes(matrixSearchNeedle)),
     );
@@ -860,7 +876,7 @@ function RoleEditor({
         <div className="flex min-h-[70px] flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
           <div>
             <h2 className="text-lg font-bold">Permissions Matrix</h2>
-            <p className="text-xs font-semibold text-slate-500">View, create, edit, and delete access by module.</p>
+            <p className="text-xs font-semibold text-slate-500">Assign dashboard and workflow permissions by module.</p>
           </div>
           <label className="relative block w-full sm:max-w-sm">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -895,13 +911,13 @@ function MatrixTable({
   togglePermission: (key: string) => void;
 }) {
   return (
-    <div className="overflow-x-auto p-4">
-      <table className="w-full min-w-[700px] border-collapse text-left text-sm">
-        <thead>
+    <div className="max-h-[620px] overflow-auto p-4">
+      <table className="w-full min-w-[2200px] border-collapse text-left text-sm">
+        <thead className="sticky top-0 z-20">
           <tr className="bg-slate-50 text-xs font-bold text-slate-500">
-            <th className="px-5 py-4">MODULE NAME</th>
+            <th className="sticky left-0 z-30 w-[180px] min-w-[180px] bg-slate-50 px-5 py-4">MODULE NAME</th>
             {(Object.keys(ACTION_LABELS) as MatrixAction[]).map((action) => (
-              <th key={action} className="px-5 py-4 text-center">
+              <th key={action} className="w-[165px] min-w-[165px] px-4 py-4 text-left">
                 {ACTION_LABELS[action]}
               </th>
             ))}
@@ -911,22 +927,34 @@ function MatrixTable({
           {matrixRows.length ? (
             matrixRows.map((row) => (
               <tr key={row.resource} className="border-t border-slate-200">
-                <td className="px-5 py-4 font-medium text-slate-950">{row.moduleName}</td>
+                <td className="sticky left-0 z-10 w-[180px] min-w-[180px] bg-white px-5 py-4 font-medium text-slate-950 shadow-[8px_0_16px_rgba(15,23,42,0.04)]">{row.moduleName}</td>
                 {(Object.keys(ACTION_LABELS) as MatrixAction[]).map((action) => {
-                  const permission = row.permissions[action];
+                  const permissionsForAction = row.permissions[action] ?? [];
                   return (
-                    <td key={action} className="px-5 py-4 text-center">
-                      {permission ? (
-                        <input
-                          type="checkbox"
-                          checked={selectedPermissions.includes(permission.key)}
-                          disabled={readOnly}
-                          onChange={() => togglePermission(permission.key)}
-                          className="h-4 w-4 cursor-pointer rounded border-slate-400 text-blue-600 focus:ring-blue-500 disabled:cursor-not-allowed"
-                          aria-label={`${ACTION_LABELS[action]} ${row.moduleName}`}
-                        />
+                    <td key={action} className="w-[165px] min-w-[165px] px-3 py-4 align-top">
+                      {permissionsForAction.length ? (
+                        <div className="flex flex-col items-start gap-2">
+                          {permissionsForAction.map((permission) => (
+                            <label
+                              key={permission.key}
+                              className="inline-flex max-w-full items-center gap-2 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 shadow-sm transition hover:border-blue-200 hover:bg-blue-50"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={selectedPermissions.includes(permission.key)}
+                                disabled={readOnly}
+                                onChange={() => togglePermission(permission.key)}
+                                className="h-4 w-4 shrink-0 cursor-pointer rounded border-slate-400 text-blue-600 focus:ring-blue-500 disabled:cursor-not-allowed"
+                                aria-label={`${permission.key} permission`}
+                              />
+                              <span className="whitespace-nowrap font-mono text-[11px] font-bold leading-4 text-slate-700">
+                                {permission.key}
+                              </span>
+                            </label>
+                          ))}
+                        </div>
                       ) : (
-                        <span className="text-slate-300">-</span>
+                        <span className="flex justify-center text-slate-300">-</span>
                       )}
                     </td>
                   );
@@ -935,7 +963,7 @@ function MatrixTable({
             ))
           ) : (
             <tr>
-              <td colSpan={5} className="px-5 py-10 text-center text-sm font-medium text-slate-500">
+              <td colSpan={Object.keys(ACTION_LABELS).length + 1} className="px-5 py-10 text-center text-sm font-medium text-slate-500">
                 No permissions are available.
               </td>
             </tr>
@@ -1081,6 +1109,7 @@ function EmployeeAccessTable({
 }) {
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [editingRoleId, setEditingRoleId] = useState("");
+  const [viewingUser, setViewingUser] = useState<User | null>(null);
 
   function openEdit(user: User) {
     setEditingUser(user);
@@ -1097,7 +1126,7 @@ function EmployeeAccessTable({
     <>
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1000px] text-left text-sm">
+          <table className="w-full min-w-[900px] text-left text-sm">
             <thead className="bg-slate-50 text-xs font-black uppercase tracking-wide text-slate-500">
               <tr>
                 <th className="w-[72px] px-5 py-4">No</th>
@@ -1105,7 +1134,6 @@ function EmployeeAccessTable({
                 <th className="px-5 py-4">Email</th>
                 <th className="px-5 py-4">Status</th>
                 <th className="px-5 py-4">Assigned Role</th>
-                <th className="px-5 py-4">Role Permissions</th>
                 <th className="px-5 py-4">Role Status</th>
                 <th className="px-5 py-4">Actions</th>
               </tr>
@@ -1137,27 +1165,6 @@ function EmployeeAccessTable({
                       </span>
                     </td>
                     <td className="px-5 py-4">
-                      {assignedRole ? (
-                        <div className="flex flex-wrap gap-1.5">
-                          {(assignedRole.permissions ?? []).slice(0, 3).map((permission) => (
-                            <span key={permission} className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-black text-slate-600">
-                              {permission}
-                            </span>
-                          ))}
-                          {(assignedRole.permissions?.length ?? 0) > 3 ? (
-                            <span className="rounded-full bg-blue-50 px-2 py-1 text-[10px] font-black text-blue-700">
-                              +{(assignedRole.permissions?.length ?? 0) - 3}
-                            </span>
-                          ) : null}
-                          {(assignedRole.permissions?.length ?? 0) === 0 ? (
-                            <span className="rounded-full bg-amber-50 px-2 py-1 text-[10px] font-black text-amber-700">No permissions</span>
-                          ) : null}
-                        </div>
-                      ) : (
-                        <span className="text-xs font-bold text-slate-400">No inherited permissions</span>
-                      )}
-                    </td>
-                    <td className="px-5 py-4">
                       <span
                         className={cn(
                           "rounded-full px-3 py-1 text-xs font-bold",
@@ -1170,7 +1177,10 @@ function EmployeeAccessTable({
                       </span>
                     </td>
                     <td className="px-5 py-4">
-                      <DashboardTableActions className="min-w-[160px]">
+                      <DashboardTableActions className="min-w-[240px]">
+                        <DashboardActionButton action="view" disabled={!assignedRole} onClick={() => setViewingUser(user)}>
+                          View
+                        </DashboardActionButton>
                         <DashboardActionButton action="update" disabled={busy} onClick={() => openEdit(user)}>
                           Edit
                         </DashboardActionButton>
@@ -1184,7 +1194,7 @@ function EmployeeAccessTable({
               })}
               {users.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-5 py-10 text-center font-semibold text-slate-500">
+                  <td colSpan={7} className="px-5 py-10 text-center font-semibold text-slate-500">
                     No employees match your search.
                   </td>
                 </tr>
@@ -1193,6 +1203,59 @@ function EmployeeAccessTable({
           </table>
         </div>
       </div>
+
+      {viewingUser ? (
+        (() => {
+          const assignedRole = roleItems.find((role) => role.id === viewingUser.assignedRoleId);
+          const rolePermissions = assignedRole?.permissions ?? [];
+          return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4 py-6">
+              <div className="w-full max-w-xl overflow-hidden rounded-2xl bg-white shadow-2xl">
+                <div className="border-b border-slate-200 px-6 py-5">
+                  <p className="text-xs font-black uppercase tracking-wide text-slate-500">Role permissions</p>
+                  <h2 className="mt-1 text-xl font-black text-slate-950">{assignedRole?.name ?? "No role assigned"}</h2>
+                  <p className="mt-1 text-sm font-medium text-slate-500">
+                    {viewingUser.name ?? viewingUser.email}
+                  </p>
+                </div>
+                <div className="px-6 py-5">
+                  {assignedRole ? (
+                    <>
+                      <p className="text-sm font-bold text-slate-900">
+                        {assignedRole.name} grants {rolePermissions.length} permission{rolePermissions.length === 1 ? "" : "s"}.
+                      </p>
+                      <div className="mt-4 flex max-h-72 flex-wrap gap-2 overflow-y-auto rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                        {rolePermissions.length ? rolePermissions.map((permission) => (
+                          <span key={permission} className="rounded-full bg-white px-3 py-1.5 text-xs font-black text-slate-700 ring-1 ring-slate-200">
+                            {permission}
+                          </span>
+                        )) : (
+                          <span className="rounded-full bg-amber-50 px-3 py-1.5 text-xs font-black text-amber-700 ring-1 ring-amber-200">
+                            This role has no permissions yet
+                          </span>
+                        )}
+                      </div>
+                    </>
+                  ) : (
+                    <p className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-800">
+                      No role selected. Employee access is pending.
+                    </p>
+                  )}
+                </div>
+                <div className="flex items-center justify-end border-t border-slate-200 bg-slate-50 px-6 py-4">
+                  <button
+                    type="button"
+                    onClick={() => setViewingUser(null)}
+                    className="inline-flex h-10 items-center rounded-xl bg-slate-700 px-5 text-sm font-bold text-white transition hover:bg-slate-800"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })()
+      ) : null}
 
   {editingUser ? (
         (() => {

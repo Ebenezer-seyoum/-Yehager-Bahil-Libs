@@ -13,7 +13,28 @@ import type { AppBindings } from "../../types/hono.js";
 export const usersRouter = new Hono<AppBindings>();
 
 const profilePatchSchema = z.object({
-  name: z.string().trim().min(1).max(255),
+  name: z.string().trim().min(1).max(255).optional(),
+  phone: z.string().trim().max(50).nullable().optional(),
+  avatarUrl: z.string().trim().url().nullable().optional(),
+  profile: z
+    .object({
+      firstName: z.string().trim().min(1).max(120).optional(),
+      fatherName: z.string().trim().min(1).max(120).optional(),
+      grandfatherName: z.string().trim().max(120).nullable().optional(),
+      gender: z.string().trim().min(1).max(20).optional(),
+      dateOfBirth: z.string().trim().nullable().optional(),
+      maritalStatus: z.string().trim().nullable().optional(),
+      country: z.string().trim().nullable().optional(),
+      city: z.string().trim().nullable().optional(),
+      address: z.string().trim().nullable().optional(),
+      employmentType: z.string().trim().nullable().optional(),
+      startDate: z.string().trim().nullable().optional(),
+      inviteStatus: z.string().trim().nullable().optional(),
+      notes: z.string().trim().nullable().optional(),
+    })
+    .optional(),
+}).refine((value) => Boolean(value.name || value.phone !== undefined || value.avatarUrl !== undefined || value.profile), {
+  message: "At least one field must be provided",
 });
 
 const passwordPatchSchema = z.object({
@@ -29,10 +50,10 @@ usersRouter.get("/me", requireAuth, async (c) => {
 
 usersRouter.patch("/me", requireAuth, zValidator("json", profilePatchSchema), async (c) => {
   const authUser = c.get("authUser");
-  const { name } = c.req.valid("json");
+  const body = c.req.valid("json");
   const user = await updateCurrentUserProfile({
     email: authUser?.email ?? "",
-    name,
+    ...body,
   });
   return c.json({ data: user });
 });

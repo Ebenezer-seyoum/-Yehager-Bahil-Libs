@@ -65,6 +65,7 @@ const providers: NonNullable<NextAuthOptions["providers"]> = [
           id?: string;
           email?: string;
           name?: string | null;
+          displayName?: string | null;
           role?: "admin" | "customer" | "employee";
           permissions?: string[];
           roleStatus?: "unassigned" | "assigned";
@@ -88,7 +89,7 @@ const providers: NonNullable<NextAuthOptions["providers"]> = [
       return {
         id: user.id,
         email: user.email,
-        name: user.name ?? undefined,
+        name: user.displayName ?? user.name ?? undefined,
         role: user.role,
         permissions: user.permissions ?? [],
         roleStatus: user.roleStatus ?? "assigned",

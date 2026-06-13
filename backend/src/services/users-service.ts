@@ -37,6 +37,17 @@ function toPublicUser<T extends { passwordHash?: string | null }>(user: T | unde
   return safeUser;
 }
 
+function employeeDisplayName(
+  profile?: { firstName?: string | null; fatherName?: string | null } | null,
+  fallback?: string | null,
+) {
+  const firstFather = [profile?.firstName, profile?.fatherName]
+    .map((part) => String(part ?? "").trim())
+    .filter(Boolean)
+    .join(" ");
+  return firstFather || fallback || null;
+}
+
 export async function syncCurrentUserFromAuth(payload: {
   sub: string;
   email?: string;
@@ -67,26 +78,102 @@ export async function getCurrentUserByEmail(email?: string) {
   const assignedRole = user.assignedRoleId
     ? await db.query.roles.findFirst({ where: eq(roles.id, user.assignedRoleId) })
     : null;
+  const profile = user.role === "employee"
+    ? await db.query.employeeProfiles.findFirst({ where: eq(employeeProfiles.userId, user.id) })
+    : null;
   return {
     ...toPublicUser(user),
+    displayName: user.role === "employee" ? employeeDisplayName(profile, user.name) : user.name,
+    profile,
     assignedRoleActive: assignedRole ? assignedRole.color !== "inactive" : null,
     assignedRoleName: assignedRole?.name ?? null,
     permissions: await getEffectivePermissionsForUser(user.id),
   };
 }
 
-export async function updateCurrentUserProfile(payload: { email: string; name: string }) {
+export async function updateCurrentUserProfile(payload: {
+  email: string;
+  name?: string;
+  phone?: string | null;
+  avatarUrl?: string | null;
+  profile?: Partial<{
+    firstName: string;
+    fatherName: string;
+    grandfatherName: string | null;
+    gender: string;
+    dateOfBirth: string | null;
+    maritalStatus: string | null;
+    country: string | null;
+    city: string | null;
+    address: string | null;
+    employmentType: string | null;
+    startDate: string | null;
+    inviteStatus: string | null;
+    notes: string | null;
+  }>;
+}) {
   const user = await getUserByEmail(normalizeEmail(payload.email));
   if (!user) {
     throw new HTTPException(404, { message: "User not found" });
   }
 
-  const updated = await updateUserProfileForAdmin({
+  const updated = await updateEmployeeCoreForAdmin({
     userId: user.id,
-    name: payload.name.trim(),
-    email: user.email,
+    name: payload.name?.trim(),
+    phone: payload.phone ?? undefined,
+    avatarUrl: payload.avatarUrl ?? undefined,
   });
-  return toPublicUser(updated);
+
+  if (user.role === "employee" && payload.profile) {
+    const currentProfile = await db.query.employeeProfiles.findFirst({
+      where: eq(employeeProfiles.userId, user.id),
+    });
+    const profilePatch = payload.profile;
+    const toTs = (value?: string | null) => (value ? new Date(value) : value === null ? null : undefined);
+
+    if (currentProfile) {
+      await db
+        .update(employeeProfiles)
+        .set({
+          ...(profilePatch.firstName !== undefined ? { firstName: profilePatch.firstName.trim() } : {}),
+          ...(profilePatch.fatherName !== undefined ? { fatherName: profilePatch.fatherName.trim() } : {}),
+          ...(profilePatch.grandfatherName !== undefined ? { grandfatherName: profilePatch.grandfatherName?.trim() || null } : {}),
+          ...(profilePatch.gender !== undefined ? { gender: profilePatch.gender.trim() } : {}),
+          ...(profilePatch.dateOfBirth !== undefined ? { dateOfBirth: toTs(profilePatch.dateOfBirth) } : {}),
+          ...(profilePatch.maritalStatus !== undefined ? { maritalStatus: profilePatch.maritalStatus?.trim() || null } : {}),
+          ...(profilePatch.country !== undefined ? { country: profilePatch.country?.trim() || null } : {}),
+          ...(profilePatch.city !== undefined ? { city: profilePatch.city?.trim() || null } : {}),
+          ...(profilePatch.address !== undefined ? { address: profilePatch.address?.trim() || null } : {}),
+          ...(profilePatch.employmentType !== undefined ? { employmentType: profilePatch.employmentType?.trim() || null } : {}),
+          ...(profilePatch.startDate !== undefined ? { startDate: toTs(profilePatch.startDate) } : {}),
+          ...(profilePatch.inviteStatus !== undefined ? { inviteStatus: profilePatch.inviteStatus?.trim() || "none" } : {}),
+          ...(profilePatch.notes !== undefined ? { notes: profilePatch.notes?.trim() || null } : {}),
+          updatedAt: new Date(),
+        })
+        .where(eq(employeeProfiles.userId, user.id));
+    } else if (profilePatch.firstName && profilePatch.fatherName && profilePatch.gender) {
+      await db.insert(employeeProfiles).values({
+        userId: user.id,
+        firstName: profilePatch.firstName.trim(),
+        fatherName: profilePatch.fatherName.trim(),
+        grandfatherName: profilePatch.grandfatherName?.trim() || null,
+        gender: profilePatch.gender.trim(),
+        dateOfBirth: toTs(profilePatch.dateOfBirth),
+        maritalStatus: profilePatch.maritalStatus?.trim() || null,
+        country: profilePatch.country?.trim() || null,
+        city: profilePatch.city?.trim() || null,
+        address: profilePatch.address?.trim() || null,
+        employmentType: profilePatch.employmentType?.trim() || null,
+        startDate: toTs(profilePatch.startDate),
+        inviteStatus: profilePatch.inviteStatus?.trim() || "none",
+        notes: profilePatch.notes?.trim() || null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+    }
+  }
+
+  return getCurrentUserByEmail(updated.email);
 }
 
 export async function changeCurrentUserPassword(payload: {
@@ -153,9 +240,14 @@ export async function authenticateUser(payload: { email: string; password: strin
   const assignedRole = user.assignedRoleId
     ? await db.query.roles.findFirst({ where: eq(roles.id, user.assignedRoleId) })
     : null;
+  const profile = user.role === "employee"
+    ? await db.query.employeeProfiles.findFirst({ where: eq(employeeProfiles.userId, user.id) })
+    : null;
 
   return {
     ...toPublicUser(user),
+    displayName: user.role === "employee" ? employeeDisplayName(profile, user.name) : user.name,
+    profile,
     assignedRoleActive: assignedRole ? assignedRole.color !== "inactive" : null,
     assignedRoleName: assignedRole?.name ?? null,
     permissions: await getEffectivePermissionsForUser(user.id),

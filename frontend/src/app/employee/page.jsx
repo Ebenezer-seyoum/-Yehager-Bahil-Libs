@@ -1,7 +1,5 @@
-import { redirect } from "next/navigation";
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/auth-options";
 import { apiRequest } from "@/lib/api-client";
+import { requireEmployeePageAccess } from "@/lib/employee-access";
 
 function formatCurrency(value) {
   const amount = Number(value);
@@ -13,16 +11,7 @@ function formatCurrency(value) {
 }
 
 export default async function EmployeePage() {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
-    redirect("/signin?callbackUrl=/employee");
-  }
-  if (session.user.role !== "employee" && session.user.role !== "admin") {
-    redirect("/");
-  }
-  if (session.user.role === "employee" && session.user.roleStatus === "unassigned") {
-    redirect("/employee/access-pending");
-  }
+  await requireEmployeePageAccess("/employee", "dashboard.view");
 
   let orders = [];
   try {

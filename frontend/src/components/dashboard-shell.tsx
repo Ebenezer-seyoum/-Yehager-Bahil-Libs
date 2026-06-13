@@ -64,6 +64,7 @@ export function DashboardShell({
   subtitle,
   variant,
   notificationCounts,
+  accountProfile,
 }: {
   children: React.ReactNode;
   navigation: readonly NavigationGroup[];
@@ -71,6 +72,14 @@ export function DashboardShell({
   subtitle?: string;
   variant: "admin" | "employee";
   notificationCounts?: NotificationCounts;
+  accountProfile?: {
+    displayName?: string | null;
+    avatarUrl?: string | null;
+    assignedRoleName?: string | null;
+    assignedRoleActive?: boolean | null;
+    roleStatus?: "unassigned" | "assigned" | null;
+    permissions?: string[] | null;
+  };
 }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -81,25 +90,40 @@ export function DashboardShell({
   const [profileOpen, setProfileOpen] = useState(false);
   const [refreshedPermissions, setRefreshedPermissions] = useState<string[] | null>(null);
   const [refreshedRoleStatus, setRefreshedRoleStatus] = useState<"unassigned" | "assigned" | null>(null);
+  const [refreshedAssignedRoleName, setRefreshedAssignedRoleName] = useState<string | null>(accountProfile?.assignedRoleName ?? null);
+  const [refreshedAssignedRoleActive, setRefreshedAssignedRoleActive] = useState<boolean | null>(accountProfile?.assignedRoleActive ?? null);
+  const [refreshedName, setRefreshedName] = useState<string | null>(accountProfile?.displayName ?? null);
+  const [refreshedAvatarUrl, setRefreshedAvatarUrl] = useState<string | null>(accountProfile?.avatarUrl ?? null);
   const permissions = useMemo(
-    () => refreshedPermissions ?? session?.user?.permissions ?? [],
-    [refreshedPermissions, session?.user?.permissions],
+    () => refreshedPermissions ?? accountProfile?.permissions ?? session?.user?.permissions ?? [],
+    [accountProfile?.permissions, refreshedPermissions, session?.user?.permissions],
   );
   const isUnassignedEmployee =
     session?.user?.role === "employee" &&
-    ((refreshedRoleStatus ?? session.user.roleStatus) === "unassigned" || permissions.length === 0);
-  const showPendingAccess = isUnassignedEmployee && pathname !== "/admin/profile";
+    ((refreshedRoleStatus ?? accountProfile?.roleStatus ?? session.user.roleStatus) === "unassigned" ||
+      (refreshedAssignedRoleActive ?? session.user.assignedRoleActive) === false ||
+      permissions.length === 0);
+  const showPendingAccess = isUnassignedEmployee && pathname !== "/admin/profile" && pathname !== "/employee/settings";
   const isFullAdmin = session?.user?.role === "admin";
+  const assignedRoleLabel =
+    session?.user?.role === "employee"
+      ? refreshedAssignedRoleName ?? session.user.assignedRoleName ?? (isUnassignedEmployee ? "Access pending" : "Assigned employee")
+      : session?.user?.role ?? variant;
   const visibleGroups = useMemo(
     () =>
       isFullAdmin
         ? navigation
         : isUnassignedEmployee
-        ? []
+        ? navigation
+            .map((group) => ({
+              ...group,
+              items: group.items.filter((item) => item.href === "/employee/settings"),
+            }))
+            .filter((group) => group.items.length > 0)
         : navigation
             .map((group) => ({
               ...group,
-              items: group.items.filter((item) => can(permissions, item.permission)),
+              items: group.items.filter((item) => item.href === "/employee/settings" || can(permissions, item.permission)),
             }))
             .filter((group) => group.items.length > 0),
     [isFullAdmin, isUnassignedEmployee, navigation, permissions],
@@ -147,8 +171,8 @@ export function DashboardShell({
     }
     return true;
   }
-  const profileHref = session?.user?.role === "employee" ? "/admin/profile" : "/admin/settings";
-  const adminTopBar = variant === "admin";
+  const profileHref = session?.user?.role === "employee" ? "/employee/settings" : "/admin/settings";
+  const adminTopBar = variant === "admin" || variant === "employee";
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const counts = notificationCounts ?? {};
   const [viewedOrderIds, setViewedOrderIds] = useState<string[]>([]);
@@ -167,8 +191,9 @@ export function DashboardShell({
     if (href === "/admin/support-inbox") return counts.support ?? 0;
     return 0;
   };
+  const displayAccountName = refreshedName ?? session?.user?.name ?? "Account";
   const initials =
-    session?.user?.name
+    displayAccountName
       ?.split(" ")
       .map((part) => part[0])
       .join("")
@@ -177,6 +202,7 @@ export function DashboardShell({
     session?.user?.email?.slice(0, 2).toUpperCase() ||
     "U";
   const profileImage =
+    refreshedAvatarUrl ||
     (session?.user as { image?: string | null; avatarUrl?: string | null } | undefined)?.image ||
     (session?.user as { image?: string | null; avatarUrl?: string | null } | undefined)?.avatarUrl ||
     null;
@@ -190,8 +216,28 @@ export function DashboardShell({
         .then((payload) => {
           const nextPermissions = payload?.profile?.permissions;
           const nextRoleStatus = payload?.profile?.roleStatus;
+          const nextAssignedRoleName = payload?.profile?.assignedRoleName;
+          const nextAssignedRoleActive = payload?.profile?.assignedRoleActive;
+          const nextEmployeeProfile = payload?.profile?.profile;
+          const nextProfileDisplayName = [
+            nextEmployeeProfile?.firstName,
+            nextEmployeeProfile?.fatherName,
+          ]
+            .map((part) => String(part ?? "").trim())
+            .filter(Boolean)
+            .join(" ");
+          const nextName = nextProfileDisplayName || payload?.profile?.displayName || payload?.profile?.name;
+          const nextAvatarUrl = payload?.profile?.avatarUrl;
           if (Array.isArray(nextPermissions)) setRefreshedPermissions(nextPermissions);
           if (nextRoleStatus === "assigned" || nextRoleStatus === "unassigned") setRefreshedRoleStatus(nextRoleStatus);
+          if (typeof nextAssignedRoleName === "string") setRefreshedAssignedRoleName(nextAssignedRoleName);
+          if (nextAssignedRoleName === null) setRefreshedAssignedRoleName(null);
+          if (typeof nextAssignedRoleActive === "boolean") setRefreshedAssignedRoleActive(nextAssignedRoleActive);
+          if (nextAssignedRoleActive === null) setRefreshedAssignedRoleActive(null);
+          if (typeof nextName === "string") setRefreshedName(nextName);
+          if (nextName === null) setRefreshedName(null);
+          if (typeof nextAvatarUrl === "string") setRefreshedAvatarUrl(nextAvatarUrl);
+          if (nextAvatarUrl === null) setRefreshedAvatarUrl(null);
         })
         .catch(() => undefined);
     };
@@ -204,6 +250,18 @@ export function DashboardShell({
       window.removeEventListener("focus", refreshAccess);
     };
   }, [session?.user?.id]);
+
+  useEffect(() => {
+    const onProfileUpdated = (event: Event) => {
+      const detail = (event as CustomEvent<{ name?: string | null; avatarUrl?: string | null }>).detail;
+      if (typeof detail?.name === "string") setRefreshedName(detail.name);
+      if (detail?.name === null) setRefreshedName(null);
+      if (typeof detail?.avatarUrl === "string") setRefreshedAvatarUrl(detail.avatarUrl);
+      if (detail?.avatarUrl === null) setRefreshedAvatarUrl(null);
+    };
+    window.addEventListener("dashboard-profile-updated", onProfileUpdated);
+    return () => window.removeEventListener("dashboard-profile-updated", onProfileUpdated);
+  }, []);
 
   useEffect(() => {
     if (variant !== "admin") return;
@@ -380,7 +438,8 @@ export function DashboardShell({
       <div className="border-t border-sidebar-border p-4">
         <div className="rounded-xl bg-sidebar-accent p-3">
           <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">{variant}</p>
-          <p className="mt-1 truncate text-sm font-medium">{session?.user?.email ?? "Signed in"}</p>
+          <p className="mt-1 truncate text-sm font-medium">{refreshedName ?? session?.user?.name ?? session?.user?.email ?? "Signed in"}</p>
+          <p className="mt-1 truncate text-xs font-semibold text-sidebar-foreground/60">{assignedRoleLabel}</p>
         </div>
       </div>
     </aside>
@@ -494,7 +553,7 @@ export function DashboardShell({
                 }
               >
                 {profileImage ? (
-                  <img src={profileImage} alt={session?.user?.name ?? "Account"} className="h-9 w-9 rounded-full object-cover ring-2 ring-white/20" />
+                  <img src={profileImage} alt={displayAccountName} className="h-9 w-9 rounded-full object-cover ring-2 ring-white/20" />
                 ) : (
                   <span
                     className={
@@ -507,7 +566,7 @@ export function DashboardShell({
                   </span>
                 )}
                 <span className={adminTopBar ? "hidden max-w-[120px] truncate text-sm font-medium text-white sm:block" : "hidden max-w-[120px] truncate text-sm sm:block"}>
-                  {session?.user?.name ?? "Account"}
+                  {displayAccountName}
                 </span>
                 <ChevronDown className={adminTopBar ? "hidden h-4 w-4 text-sidebar-foreground/60 sm:block" : "hidden h-4 w-4 text-muted-foreground sm:block"} />
               </button>
@@ -520,12 +579,12 @@ export function DashboardShell({
                   }
                 >
                   <div className="px-3 py-2">
-                    <p className="text-sm font-medium">{session?.user?.name ?? "Account"}</p>
+                    <p className="text-sm font-medium">{displayAccountName}</p>
                     <p className={adminTopBar ? "truncate text-xs text-sidebar-foreground/65" : "truncate text-xs text-muted-foreground"}>
                       {session?.user?.email}
                     </p>
                     <p className={adminTopBar ? "mt-1 text-[11px] font-bold uppercase tracking-wider text-sidebar-primary" : "mt-1 text-[11px] font-bold uppercase tracking-wider text-primary"}>
-                      {session?.user?.role ?? variant}
+                      {assignedRoleLabel}
                     </p>
                   </div>
                   <div className={adminTopBar ? "my-1 h-px bg-sidebar-border" : "my-1 h-px bg-border"} />
@@ -534,8 +593,8 @@ export function DashboardShell({
                     onClick={() => setProfileOpen(false)}
                     className={
                       adminTopBar
-                        ? "block rounded-xl px-3 py-2 text-sm transition hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                        : "block rounded-xl px-3 py-2 text-sm transition hover:bg-secondary"
+                        ? "mb-1 block rounded-xl bg-emerald-800 px-3 py-2 text-sm font-bold text-white transition hover:bg-emerald-900"
+                        : "mb-1 block rounded-xl bg-emerald-800 px-3 py-2 text-sm font-bold text-white transition hover:bg-emerald-900"
                     }
                   >
                     Profile settings
@@ -545,8 +604,8 @@ export function DashboardShell({
                     onClick={() => signOut({ callbackUrl: "/" })}
                     className={
                       adminTopBar
-                        ? "block w-full rounded-xl px-3 py-2 text-left text-sm transition hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                        : "block w-full rounded-xl px-3 py-2 text-left text-sm transition hover:bg-secondary"
+                        ? "block w-full rounded-xl bg-red-800 px-3 py-2 text-left text-sm font-bold text-white transition hover:bg-red-900"
+                        : "block w-full rounded-xl bg-red-800 px-3 py-2 text-left text-sm font-bold text-white transition hover:bg-red-900"
                     }
                   >
                     Sign out
