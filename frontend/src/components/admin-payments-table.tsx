@@ -68,6 +68,10 @@ export function AdminPaymentsTable({
   }, [filteredOrders.length, onFilteredCountChange]);
 
   function openPaymentDetail(orderId: string) {
+    window.dispatchEvent(new CustomEvent("admin-order-viewed", { detail: orderId }));
+    fetch(`/api/backend/orders/admin/${orderId}`).catch((err) => {
+      console.error("Could not mark payment notification read:", err);
+    });
     router.push(`/admin/payments/${orderId}`);
   }
 

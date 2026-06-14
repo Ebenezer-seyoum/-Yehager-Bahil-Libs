@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 
 export default function NotFound() {
   const pathname = usePathname();
-  const pageName = pathname.replace("/", "");
+  const pageName = (pathname ?? "/").replace("/", "");
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-50 p-6">

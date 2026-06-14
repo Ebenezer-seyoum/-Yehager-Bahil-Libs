@@ -9,7 +9,7 @@ import type { AdminWorkspaceData } from "@/lib/admin/types";
 
 export function AdminPaymentsWorkspace({ data }: { data: AdminWorkspaceData }) {
   const router = useRouter();
-  const searchParams = useSearchParams();
+  const searchParams = useSearchParams()!;
   const activeTab = searchParams.get("tab") || "pending";
 
   const orders = useMemo(() => (data.orders ?? []), [data.orders]);

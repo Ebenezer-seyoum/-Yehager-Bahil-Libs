@@ -11,8 +11,8 @@ import { getPageMeta } from "@/lib/admin/page-tabs-config";
 export function AdminSettingsChrome({ children }: { children: ReactNode }) {
   const meta = getPageMeta("settings");
   const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
+  const pathname = usePathname()!;
+  const searchParams = useSearchParams()!;
   const activeTab = searchParams.get("tab") ?? meta.defaultTab;
   // KPIs removed from settings chrome
 

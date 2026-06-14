@@ -61,7 +61,7 @@ export function CreateEmployeeForm({
   canCreate?: boolean;
 }) {
   const router = useRouter();
-  const searchParams = useSearchParams();
+  const searchParams = useSearchParams()!;
   const error = searchParams.get("error");
   const [showPassword, setShowPassword] = useState(false);
   const assignableRoles = useMemo(() => filterAssignableEmployeeRoles(roles), [roles]);

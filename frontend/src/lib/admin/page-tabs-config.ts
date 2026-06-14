@@ -217,9 +217,10 @@ export const PAGE_TABS: Record<AdminPageId, AdminTabConfig[]> = {
     { id: "errors", label: "Error Logs", icon: AlertTriangle },
   ),
   alerts: tabs(
-    { id: "all", label: "All Alerts", icon: Bell },
-    { id: "unread", label: "Unread", icon: AlertTriangle },
-    { id: "resolved", label: "Resolved", icon: CheckCircle2 },
+    { id: "all", label: "All Notifications", icon: Bell },
+    { id: "new", label: "New", icon: AlertTriangle },
+    { id: "read", label: "Read", icon: CheckCircle2 },
+    { id: "archived", label: "Archived", icon: FileText },
   ),
 };
 
@@ -386,11 +387,11 @@ export const PAGE_META: Record<AdminPageId, Omit<AdminPageMeta, "tabs">> = {
   },
   alerts: {
     id: "alerts",
-    section: "Operations",
+    section: "System",
     icon: Bell,
     title: "Alerts",
-    subtitle: "Monitor system alerts, warnings, and error notifications.",
-    defaultTab: "all",
+    subtitle: "Review actionable admin notifications that need attention.",
+    defaultTab: "new",
   },
 };
 

@@ -80,8 +80,8 @@ export function AdminWorkspace({
 }) {
   const meta = getPageMeta(pageId);
   const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
+  const pathname = usePathname()!;
+  const searchParams = useSearchParams()!;
   const [isRefreshing, startTransition] = useTransition();
   const [data, setData] = useState(initialData ?? ({} as AdminWorkspaceData));
   const [search, setSearch] = useState("");
@@ -140,6 +140,8 @@ export function AdminWorkspace({
         return (tabFilteredData.uploadedDesigns ?? []).length;
       case "activity-logs":
         return (tabFilteredData.audit ?? []).length;
+      case "alerts":
+        return (tabFilteredData.alerts ?? []).length;
       case "documents":
         return (tabFilteredData.documents ?? []).length;
       case "products":

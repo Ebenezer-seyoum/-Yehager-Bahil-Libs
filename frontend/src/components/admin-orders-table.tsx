@@ -377,7 +377,7 @@ export function AdminOrdersTable({
                   return (
                     <tr
                       key={order.id}
-                      className={`border-t border-border transition hover:bg-secondary/30 ${highlightRow ? "bg-red-950/25 ring-2 ring-inset ring-red-800/35 shadow-[inset_0_0_0_1px_rgba(127,29,29,0.35)]" : ""} ${isSelected ? "bg-primary/5 ring-1 ring-inset ring-primary/25" : ""}`}
+                      className={`border-t border-border transition hover:bg-blue-50/70 ${highlightRow ? "border-l-4 border-l-blue-500 bg-blue-50/70" : ""} ${isSelected ? "bg-primary/5 ring-1 ring-inset ring-primary/25" : ""}`}
                     >
                       <td className="px-4 py-5 align-middle">
                         <a href={`/admin/orders/${order.id}`} onClick={() => markOrderViewed(order.id)} className="text-sm font-semibold text-slate-600 hover:text-primary transition-colors inline-block">
@@ -387,7 +387,7 @@ export function AdminOrdersTable({
                       <td className="px-4 py-5 align-middle">
                         <a href={`/admin/orders/${order.id}`} onClick={() => markOrderViewed(order.id)} className="text-left inline-block w-full">
                           <div className="flex items-center gap-2">
-                            {highlightRow ? <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-red-700 shadow-[0_0_0_0_rgba(127,29,29,0.9)] animate-pulse" /> : null}
+                            {highlightRow ? <span className="rounded-full border border-blue-200 bg-blue-600 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-white">New</span> : null}
                             <p className="max-w-[120px] break-words font-mono text-xs font-black text-foreground">{shortOrderNumber(order.orderNumber ?? order.id)}</p>
                           </div>
                           <p className="mt-1 text-xs text-muted-foreground">{order.createdAt ? new Date(order.createdAt).toLocaleDateString() : "-"}</p>

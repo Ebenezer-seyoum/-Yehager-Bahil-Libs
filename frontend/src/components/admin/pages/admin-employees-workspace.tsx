@@ -23,7 +23,7 @@ export function AdminEmployeesWorkspace({
   canAssignRole?: boolean;
 }) {
   const router = useRouter();
-  const searchParams = useSearchParams();
+  const searchParams = useSearchParams()!;
   const activeTab = searchParams.get("tab") || "all";
   const search = searchParams.get("search") || "";
 

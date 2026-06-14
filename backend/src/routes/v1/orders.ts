@@ -110,17 +110,10 @@ ordersRouter.get("/", requireAuth, requirePermission(PERMISSIONS.ORDERS_VIEW), z
   return c.json({ data });
 });
 
-ordersRouter.get("/:orderId", requireAuth, requirePermission(PERMISSIONS.ORDERS_VIEW), async (c) => {
-  const orderId = c.req.param("orderId");
-  const data = await getOrderDetailsForAdmin(orderId);
-  return c.json({ data });
-});
-
 ordersRouter.get("/admin/:orderId", requireAuth, requirePermission(PERMISSIONS.ORDERS_VIEW), async (c) => {
   const orderId = c.req.param("orderId");
   const data = await getOrderDetailsForAdmin(orderId);
 
-  // Auto-resolve alerts related to this order
   await db
     .update(systemAlerts)
     .set({
@@ -130,11 +123,17 @@ ordersRouter.get("/admin/:orderId", requireAuth, requirePermission(PERMISSIONS.O
     })
     .where(
       and(
-        sql`${systemAlerts.type} IN ('new_catalog_order', 'payment_proof_uploaded')`,
+        sql`${systemAlerts.type} IN ('new_order', 'new_catalog_order', 'payment_review', 'payment_proof_uploaded', 'refund_issue', 'refund_requested', 'return_refund', 'refund_pending')`,
         eq(systemAlerts.entityId, orderId)
       )
     );
 
+  return c.json({ data });
+});
+
+ordersRouter.get("/:orderId", requireAuth, requirePermission(PERMISSIONS.ORDERS_VIEW), async (c) => {
+  const orderId = c.req.param("orderId");
+  const data = await getOrderDetailsForAdmin(orderId);
   return c.json({ data });
 });
 

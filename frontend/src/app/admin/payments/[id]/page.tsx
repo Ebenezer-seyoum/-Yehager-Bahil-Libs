@@ -17,7 +17,7 @@ export default async function PaymentVerificationPage({
 
   let orderData: any = null;
   try {
-    const response: any = await apiRequest(`/api/v1/orders/${id}`);
+    const response: any = await apiRequest(`/api/v1/orders/admin/${id}`);
     orderData = response?.data ?? null;
   } catch (err) {
     console.error("Failed fetching order for payment detail:", err);

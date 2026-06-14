@@ -4,7 +4,7 @@ import { usePathname } from "next/navigation";
 import { SiteShell } from "@/components/site-shell";
 
 export function AppFrame({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname();
+  const pathname = usePathname()!;
   const isStandaloneRoute =
     pathname === "/signin" ||
     pathname === "/register" ||

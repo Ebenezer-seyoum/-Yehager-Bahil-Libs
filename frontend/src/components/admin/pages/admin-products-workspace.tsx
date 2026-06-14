@@ -11,7 +11,7 @@ import type { UploadedDesign } from "@/components/admin-uploaded-design-dialogs"
 
 export function AdminProductsWorkspace({ data, canCreate = false }: { data: AdminWorkspaceData; canCreate?: boolean }) {
   const router = useRouter();
-  const searchParams = useSearchParams();
+  const searchParams = useSearchParams()!;
   const activeTab = searchParams.get("tab") || "all";
 
   const products = useMemo(() => (data.products ?? []), [data.products]);

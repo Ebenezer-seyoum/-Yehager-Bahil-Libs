@@ -150,6 +150,7 @@ export function AdminUploadedDesignsTable({ rows: initialRows, search, onFiltere
   }, [filtered.length, onFilteredCountChange]);
 
   function markDesignViewed(row: UploadedDesign) {
+    window.dispatchEvent(new CustomEvent("admin-custom-design-viewed", { detail: row.id }));
     fetch(`/api/backend/admin/uploaded-designs/${row.id}`).catch(err => {
       console.error("Alert resolution failed:", err);
     });

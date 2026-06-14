@@ -17,6 +17,7 @@ import {
   deleteUserForAdmin,
   getCustomerDetailForAdmin,
   getEmployeeDetailForAdmin,
+  listCustomerMeasurementsForAdmin,
   listCustomersForAdmin,
   listUsersForAdmin,
   resetCustomerPasswordForAdmin,
@@ -260,6 +261,21 @@ adminRouter.get("/alerts", requirePermission(PERMISSIONS.ALERTS_VIEW), zValidato
   return c.json({ data });
 });
 
+adminRouter.patch("/alerts/mark-all-read", requirePermission(PERMISSIONS.ALERTS_MANAGE), async (c) => {
+  const authUser = c.get("authUser");
+  const rows = await db
+    .update(systemAlerts)
+    .set({
+      isResolved: true,
+      resolvedBy: authUser?.email ?? "admin",
+      updatedAt: new Date(),
+    })
+    .where(eq(systemAlerts.isResolved, false))
+    .returning();
+
+  return c.json({ data: rows, count: rows.length });
+});
+
 adminRouter.patch("/alerts/:alertId", requirePermission(PERMISSIONS.ALERTS_MANAGE), zValidator("param", alertParamSchema), zValidator("json", resolveAlertSchema), async (c) => {
   const authUser = c.get("authUser");
   const { alertId } = c.req.valid("param");
@@ -287,24 +303,62 @@ adminRouter.get("/summary-counts", requirePermission(PERMISSIONS.ALERTS_VIEW), a
   const unresolvedAlerts = await db.query.systemAlerts.findMany({
     where: eq(systemAlerts.isResolved, false),
   });
+  const orderRows = await db.query.orders.findMany({
+    orderBy: [desc(orders.createdAt)],
+    limit: 200,
+  });
+  const orderById = new Map(orderRows.map((order) => [String(order.id), order]));
+
+  const paymentTypes = new Set(["payment_review", "payment_proof_uploaded"]);
+  const customTypes = new Set(["custom_design_submitted", "design_review", "custom_design_awaiting_payment"]);
+  const catalogTypes = new Set(["new_order", "new_catalog_order"]);
+  const refundTypes = new Set(["refund_issue", "refund_requested", "return_refund", "refund_pending"]);
 
   const counts = {
     payment: 0,
     custom_order: 0,
     catalog_order: 0,
+    refund_issue: 0,
     total: 0,
+    paymentIds: [] as string[],
+    customOrderIds: [] as string[],
+    catalogOrderIds: [] as string[],
+    refundIssueIds: [] as string[],
   };
 
   unresolvedAlerts.forEach((alert) => {
-    counts.total++;
-    if (alert.type === "payment_proof_uploaded") {
+    const entityId = alert.entityId ? String(alert.entityId) : null;
+    const order = entityId ? orderById.get(entityId) : null;
+    const type = String(alert.type ?? "");
+
+    if (paymentTypes.has(type)) {
       counts.payment++;
-    } else if (["custom_design_submitted", "design_review"].includes(alert.type)) {
+      if (entityId) counts.paymentIds.push(entityId);
+      return;
+    }
+    if (customTypes.has(type)) {
       counts.custom_order++;
-    } else if (alert.type === "new_catalog_order") {
-      counts.catalog_order++;
+      if (entityId) counts.customOrderIds.push(entityId);
+      return;
+    }
+    if (refundTypes.has(type)) {
+      counts.refund_issue++;
+      if (entityId) counts.refundIssueIds.push(entityId);
+      return;
+    }
+    if (catalogTypes.has(type)) {
+      const orderType = String(order?.orderType ?? "catalog_order");
+      if (orderType === "custom_design_order") {
+        counts.custom_order++;
+        if (entityId) counts.customOrderIds.push(entityId);
+      } else {
+        counts.catalog_order++;
+        if (entityId) counts.catalogOrderIds.push(entityId);
+      }
     }
   });
+
+  counts.total = counts.payment + counts.custom_order + counts.catalog_order + counts.refund_issue;
 
   return c.json({ data: counts });
 });
@@ -350,6 +404,12 @@ adminRouter.get("/customers", requirePermission(PERMISSIONS.CUSTOMERS_VIEW), zVa
 adminRouter.get("/customers/:userId", requirePermission(PERMISSIONS.CUSTOMERS_VIEW), zValidator("param", userParamSchema), async (c) => {
   const { userId } = c.req.valid("param");
   const data = await getCustomerDetailForAdmin(userId);
+  return c.json({ data });
+});
+
+adminRouter.get("/customers/:userId/measurements", requirePermission(PERMISSIONS.CUSTOMERS_VIEW), zValidator("param", userParamSchema), async (c) => {
+  const { userId } = c.req.valid("param");
+  const data = await listCustomerMeasurementsForAdmin(userId);
   return c.json({ data });
 });
 
@@ -401,6 +461,21 @@ adminRouter.patch(
     const data = await resetCustomerPasswordForAdmin({
       userId,
       password,
+      performedBy: authUser?.email,
+    });
+    return c.json({ data });
+  },
+);
+
+adminRouter.post(
+  "/customers/:userId/password-reset-link",
+  requirePermission(PERMISSIONS.CUSTOMERS_EDIT),
+  zValidator("param", userParamSchema),
+  async (c) => {
+    const authUser = c.get("authUser");
+    const { userId } = c.req.valid("param");
+    const data = await sendPasswordResetLinkForAdmin({
+      userId,
       performedBy: authUser?.email,
     });
     return c.json({ data });

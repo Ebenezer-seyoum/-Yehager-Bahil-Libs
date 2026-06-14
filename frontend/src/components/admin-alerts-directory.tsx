@@ -7,10 +7,9 @@ import { DashboardActionButton, DashboardTableActions } from "@/components/admin
 import { StatusBadge } from "@/components/admin/status-badge";
 import {
   ADMIN_TABLE_WRAPPER,
-  DASHBOARD_TABLE_ACTIONS_HEAD,
-  DASHBOARD_TABLE_NUMBER_HEAD,
 } from "@/lib/admin/admin-design-system";
 import { dashboardSuccess, dashboardError } from "@/lib/dashboard-swal";
+import { cn } from "@/lib/utils";
 
 type Alert = {
   id: string;
@@ -73,15 +72,15 @@ export function AdminAlertsDirectory({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ isResolved: true }),
       });
-      if (!res.ok) throw new Error("Could not resolve alert");
+      if (!res.ok) throw new Error("Could not mark notification as read");
       const payload = (await res.json()) as { data?: Alert };
       if (payload.data) {
         setLocalAlerts((current) => current.map((alert) => (alert.id === alertId ? payload.data! : alert)));
       }
-      void dashboardSuccess("Resolved", "Alert marked as resolved.");
+      void dashboardSuccess("Marked Read", "Notification marked as read.");
       router.refresh();
     } catch (e) {
-      void dashboardError("Could not resolve alert", e instanceof Error ? e.message : "Please try again.");
+      void dashboardError("Could not mark read", e instanceof Error ? e.message : "Please try again.");
     } finally {
       setBusyId(null);
     }
@@ -93,27 +92,32 @@ export function AdminAlertsDirectory({
         <table className="w-full min-w-[860px] text-sm">
           <TableHeader>
             <TableHeadRow>
-              <TableHeadCell className="w-14">{DASHBOARD_TABLE_NUMBER_HEAD}</TableHeadCell>
+              <TableHeadCell className="w-14">No</TableHeadCell>
               <TableHeadCell>Alert</TableHeadCell>
               <TableHeadCell>Type</TableHeadCell>
               <TableHeadCell>Severity</TableHeadCell>
               <TableHeadCell>Date</TableHeadCell>
-              <TableHeadCell className="w-[7.5rem]">{DASHBOARD_TABLE_ACTIONS_HEAD}</TableHeadCell>
+              <TableHeadCell className="w-[7.5rem]">Actions</TableHeadCell>
             </TableHeadRow>
           </TableHeader>
           <tbody>
             {filtered.length === 0 ? (
               <tr>
                 <td colSpan={6} className="px-4 py-12 text-center text-muted-foreground">
-                  No alerts match this view.
+                  No notifications match this view.
                 </td>
               </tr>
             ) : (
-              filtered.map((alert, index) => (
-                <tr key={alert.id} className="border-t border-border transition hover:bg-blue-50/40">
+              filtered.map((alert, index) => {
+                const isUnread = !alert.isResolved;
+                return (
+                <tr key={alert.id} className={cn("border-t border-border transition hover:bg-blue-50/40", isUnread ? "border-l-4 border-l-blue-500 bg-blue-50/60" : "")}>
                   <td className="px-4 py-4 text-sm font-semibold text-slate-600">{index + 1}</td>
                   <td className="px-4 py-4">
-                    <p className="font-semibold text-slate-950">{alert.title}</p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {isUnread ? <span className="rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-white">New</span> : null}
+                      <p className="font-semibold text-slate-950">{alert.title}</p>
+                    </div>
                     <p className="mt-1 line-clamp-2 text-xs text-slate-600">{alert.message}</p>
                   </td>
                   <td className="px-4 py-4 capitalize text-slate-700">
@@ -131,15 +135,16 @@ export function AdminAlertsDirectory({
                           onClick={() => void resolveAlert(alert.id)}
                           disabled={busyId !== null}
                         >
-                          Resolve
+                          Mark read
                         </DashboardActionButton>
                       </DashboardTableActions>
                     ) : (
-                      <StatusBadge value="Resolved" tone="success" />
+                      <StatusBadge value="Read" tone="success" />
                     )}
                   </td>
                 </tr>
-              ))
+                );
+              })
             )}
           </tbody>
         </table>

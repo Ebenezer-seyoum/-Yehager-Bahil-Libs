@@ -26,7 +26,7 @@ export const PAGE_HEADER_CONFIG: Record<
   settings: { theme: "slate", section: "System" },
   "backup-restore": { theme: "slate", section: "System" },
   "activity-logs": { theme: "slate", section: "System" },
-  alerts: { theme: "orange", section: "Operations" },
+  alerts: { theme: "slate", section: "System" },
 };
 
 export const THEME_STYLES: Record<

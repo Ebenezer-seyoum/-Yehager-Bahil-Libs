@@ -34,9 +34,14 @@ type NotificationCounts = {
   orderIds?: Array<string | null | undefined>;
   groupOrders?: number;
   payments?: number;
+  paymentIds?: Array<string | null | undefined>;
   alerts?: number;
   support?: number;
   customDesigns?: number;
+  customDesignIds?: Array<string | null | undefined>;
+  refundIssues?: number;
+  refundIssueIds?: Array<string | null | undefined>;
+  total?: number;
 };
 
 const icons = {
@@ -81,8 +86,8 @@ export function DashboardShell({
     permissions?: string[] | null;
   };
 }) {
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
+  const pathname = usePathname()!;
+  const searchParams = useSearchParams()!;
   const { data: session } = useSession();
   const isReportsRoute = pathname.startsWith("/admin/reports");
   const shellTitle = isReportsRoute ? "Reports Center" : title;
@@ -176,18 +181,32 @@ export function DashboardShell({
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const counts = notificationCounts ?? {};
   const [viewedOrderIds, setViewedOrderIds] = useState<string[]>([]);
+  const [viewedCustomDesignIds, setViewedCustomDesignIds] = useState<string[]>([]);
   const activeOrderIds = (counts.orderIds ?? []).filter(Boolean).map(String);
+  const activePaymentIds = (counts.paymentIds ?? []).filter(Boolean).map(String);
+  const activeCustomDesignIds = (counts.customDesignIds ?? []).filter(Boolean).map(String);
+  const activeRefundIssueIds = (counts.refundIssueIds ?? []).filter(Boolean).map(String);
   const visibleOrderCount = activeOrderIds.length > 0
     ? activeOrderIds.filter((id) => !viewedOrderIds.includes(id)).length
     : Math.max((counts.orders ?? 0) - viewedOrderIds.length, 0);
-  const totalNotifications = visibleOrderCount + (counts.payments ?? 0) + (counts.customDesigns ?? 0);
+  const visiblePaymentCount = activePaymentIds.length > 0
+    ? activePaymentIds.filter((id) => !viewedOrderIds.includes(id)).length
+    : counts.payments ?? 0;
+  const visibleCustomDesignCount = activeCustomDesignIds.length > 0
+    ? activeCustomDesignIds.filter((id) => !viewedCustomDesignIds.includes(id)).length
+    : Math.max((counts.customDesigns ?? 0) - viewedCustomDesignIds.length, 0);
+  const visibleRefundIssueCount = activeRefundIssueIds.length > 0
+    ? activeRefundIssueIds.filter((id) => !viewedOrderIds.includes(id)).length
+    : counts.refundIssues ?? 0;
+  const totalNotifications = visibleOrderCount + visiblePaymentCount + visibleCustomDesignCount + visibleRefundIssueCount;
   const badgeForHref = (href: string) => {
     if (variant !== "admin") return 0;
     if (href === "/admin/orders") return visibleOrderCount;
     if (href === "/admin/group-orders") return counts.groupOrders ?? 0;
-    if (href === "/admin/payments") return counts.payments ?? 0;
-    if (href === "/admin/uploaded-designs") return counts.customDesigns ?? 0;
-    if (href === "/admin/alerts") return counts.alerts ?? 0;
+    if (href === "/admin/payments") return visiblePaymentCount;
+    if (href === "/admin/uploaded-designs") return visibleCustomDesignCount;
+    if (href === "/admin/orders/returns-refunds") return visibleRefundIssueCount;
+    if (href === "/admin/alerts") return totalNotifications;
     if (href === "/admin/support-inbox") return counts.support ?? 0;
     return 0;
   };
@@ -265,27 +284,28 @@ export function DashboardShell({
 
   useEffect(() => {
     if (variant !== "admin") return;
-    const key = "admin-viewed-order-notifications";
-    const readStored = () => {
-      try {
-        const value = window.localStorage.getItem(key);
-        setViewedOrderIds(value ? JSON.parse(value) : []);
-      } catch {
-        setViewedOrderIds([]);
-      }
-    };
     const onViewed = (event: Event) => {
       const orderId = (event as CustomEvent<string>).detail;
       if (!orderId) return;
       setViewedOrderIds((current) => {
         const next = Array.from(new Set([...current, orderId]));
-        window.localStorage.setItem(key, JSON.stringify(next));
         return next;
       });
     };
-    readStored();
+    const onCustomViewed = (event: Event) => {
+      const designId = (event as CustomEvent<string>).detail;
+      if (!designId) return;
+      setViewedCustomDesignIds((current) => {
+        const next = Array.from(new Set([...current, designId]));
+        return next;
+      });
+    };
     window.addEventListener("admin-order-viewed", onViewed);
-    return () => window.removeEventListener("admin-order-viewed", onViewed);
+    window.addEventListener("admin-custom-design-viewed", onCustomViewed);
+    return () => {
+      window.removeEventListener("admin-order-viewed", onViewed);
+      window.removeEventListener("admin-custom-design-viewed", onCustomViewed);
+    };
   }, [variant]);
 
   useEffect(() => {
@@ -397,7 +417,7 @@ export function DashboardShell({
                           <Icon className="h-4 w-4 shrink-0" />
                           <span className="min-w-0 flex-1 truncate">{item.label}</span>
                           {badgeCount > 0 ? (
-                            <span className="rounded-full bg-red-600 px-2 py-0.5 text-xs font-black text-white shadow-sm shadow-red-950/20">
+                            <span className="rounded-full bg-blue-600 px-2 py-0.5 text-xs font-black text-white shadow-sm shadow-blue-950/30">
                               {badgeCount > 99 ? "99+" : badgeCount}
                             </span>
                           ) : null}
@@ -510,34 +530,80 @@ export function DashboardShell({
               >
                 <Bell className="h-4 w-4" />
                 {totalNotifications > 0 ? (
-                  <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-black text-white">
+                  <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-blue-600 px-1 text-[10px] font-black text-white shadow-sm shadow-blue-950/30">
                     {totalNotifications > 99 ? "99+" : totalNotifications}
                   </span>
                 ) : null}
               </button>
               {notificationsOpen ? (
-                <div className="absolute right-0 top-full z-40 mt-2 w-80 rounded-2xl border border-red-500/30 bg-sidebar p-2 text-sidebar-foreground shadow-2xl">
+                <div className="absolute right-0 top-full z-40 mt-2 w-96 rounded-2xl border border-sidebar-border bg-sidebar p-2 text-sidebar-foreground shadow-2xl">
                   <div className="px-3 py-2">
                     <p className="text-sm font-bold text-white">Admin notifications</p>
-                    <p className="text-xs text-red-200">Items that need attention now.</p>
+                    <p className="text-xs text-sidebar-foreground/65">Items that need attention now.</p>
                   </div>
                   <div className="my-1 h-px bg-sidebar-border" />
                   {[
-                    { href: "/admin/payments", label: "Payments awaiting verification", value: counts.payments ?? 0 },
-                    { href: "/admin/orders", label: "New or active orders to review", value: visibleOrderCount },
+                    {
+                      href: "/admin/payments?filter=awaiting-verification",
+                      label: "Payments awaiting verification",
+                      value: visiblePaymentCount,
+                      Icon: CreditCard,
+                      accent: "bg-amber-400",
+                      active: "border-amber-400/30 bg-amber-400/10 text-amber-50",
+                      badge: "bg-amber-400 text-slate-950",
+                    },
+                    {
+                      href: "/admin/uploaded-designs?filter=new",
+                      label: "Custom orders to review",
+                      value: visibleCustomDesignCount,
+                      Icon: FileText,
+                      accent: "bg-violet-400",
+                      active: "border-violet-400/30 bg-violet-400/10 text-violet-50",
+                      badge: "bg-violet-400 text-slate-950",
+                    },
+                    {
+                      href: "/admin/orders?filter=new-catalog",
+                      label: "Catalog orders to review",
+                      value: visibleOrderCount,
+                      Icon: ClipboardList,
+                      accent: "bg-blue-400",
+                      active: "border-blue-400/30 bg-blue-400/10 text-blue-50",
+                      badge: "bg-blue-400 text-slate-950",
+                    },
+                    {
+                      href: "/admin/orders/returns-refunds?filter=needs-review",
+                      label: "Refund issues needing review",
+                      value: visibleRefundIssueCount,
+                      Icon: ArrowLeftRight,
+                      accent: "bg-rose-400",
+                      active: "border-rose-400/30 bg-rose-400/10 text-rose-50",
+                      badge: "bg-rose-400 text-white",
+                    },
                   ].map((item) => (
                     <Link
                       key={item.href}
                       href={item.href}
                       onClick={() => setNotificationsOpen(false)}
-                      className={item.value > 0 ? "mt-1 flex items-center justify-between gap-3 rounded-xl border border-red-500/25 bg-red-500/15 px-3 py-2.5 text-sm text-red-50 transition hover:bg-red-500/25" : "mt-1 flex items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-sm transition hover:bg-sidebar-accent hover:text-white"}
+                      className={item.value > 0 ? `mt-1 flex items-center justify-between gap-3 rounded-xl border px-3 py-2.5 text-sm transition hover:bg-sidebar-accent ${item.active}` : "mt-1 flex items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-sm transition hover:bg-sidebar-accent hover:text-white"}
                     >
-                      <span>{item.label}</span>
-                      <span className={item.value > 0 ? "rounded-full bg-red-600 px-2 py-0.5 text-xs font-black text-white" : "text-xs text-sidebar-foreground/55"}>
+                      <span className="flex min-w-0 items-center gap-3">
+                        <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${item.value > 0 ? item.accent : "bg-sidebar-accent text-sidebar-foreground/60"}`}>
+                          <item.Icon className="h-4 w-4" />
+                        </span>
+                        <span className="min-w-0 truncate font-semibold">{item.label}</span>
+                      </span>
+                      <span className={item.value > 0 ? `rounded-full px-2 py-0.5 text-xs font-black ${item.badge}` : "text-xs text-sidebar-foreground/55"}>
                         {item.value}
                       </span>
                     </Link>
                   ))}
+                  <Link
+                    href="/admin/alerts"
+                    onClick={() => setNotificationsOpen(false)}
+                    className="mt-2 block rounded-xl border border-sidebar-border px-3 py-2 text-center text-xs font-bold text-sidebar-foreground/75 transition hover:bg-sidebar-accent hover:text-white"
+                  >
+                    View all notifications
+                  </Link>
                 </div>
               ) : null}
             </div>

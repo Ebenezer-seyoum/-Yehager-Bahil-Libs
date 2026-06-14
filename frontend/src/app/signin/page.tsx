@@ -79,7 +79,7 @@ function FeedbackBanner({ feedback }: { feedback: Feedback }) {
 }
 
 function SignInForm() {
-  const searchParams = useSearchParams();
+  const searchParams = useSearchParams()!;
   const callbackUrl = getSafeCallbackUrl(searchParams.get("callbackUrl"));
   const initialFeedback = (() => {
     if (searchParams.get("registered") === "1") {

@@ -24,7 +24,7 @@ function SubmitButton() {
 /** Compact customer registration — simpler than employee form */
 export function CreateCustomerForm() {
   const router = useRouter();
-  const searchParams = useSearchParams();
+  const searchParams = useSearchParams()!;
   const error = searchParams.get("error");
   const [showPassword, setShowPassword] = useState(false);
 

@@ -105,7 +105,7 @@ export function AdminReportsDashboard({
   initialReport?: ReportKey;
 }) {
   const router = useRouter();
-  const searchParams = useSearchParams();
+  const searchParams = useSearchParams()!;
 
   const urlCategory = parseCategory(searchParams.get("category") ?? initialCategory);
   const urlReport = parseReportKey(

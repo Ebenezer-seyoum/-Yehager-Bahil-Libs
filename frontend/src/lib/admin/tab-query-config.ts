@@ -110,6 +110,32 @@ function filterSections(sections: Row[], tabId: string): Row[] {
   }
 }
 
+function filterAlerts(alerts: Row[], tabId: string): Row[] {
+  const actionableTypes = new Set([
+    "payment_review",
+    "payment_proof_uploaded",
+    "custom_design_submitted",
+    "design_review",
+    "custom_design_awaiting_payment",
+    "new_order",
+    "new_catalog_order",
+    "refund_issue",
+    "refund_requested",
+    "return_refund",
+    "refund_pending",
+  ]);
+  switch (tabId) {
+    case "new":
+      return alerts.filter((alert) => !alert.isResolved && actionableTypes.has(norm(alert.type)));
+    case "read":
+      return alerts.filter((alert) => Boolean(alert.isResolved));
+    case "archived":
+      return [];
+    default:
+      return alerts;
+  }
+}
+
 function filterUsers(users: Row[], tabId: string, kind: "employee" | "customer"): Row[] {
   const base = users.filter(kind === "employee" ? isEmployee : isCustomer);
   switch (tabId) {
@@ -280,6 +306,7 @@ export function applyTabQuery(
   const audit = data.audit ?? [];
   const uploadedDesigns = data.uploadedDesigns ?? [];
   const sections = data.sections ?? [];
+  const alerts = data.alerts ?? [];
 
   switch (pageId) {
     case "dashboard":
@@ -298,6 +325,8 @@ export function applyTabQuery(
       return { ...data, users: filterUsers(users, tabId, "customer") };
     case "activity-logs":
       return { ...data, audit: filterAudit(audit, tabId) };
+    case "alerts":
+      return { ...data, alerts: filterAlerts(alerts, tabId) };
     case "uploaded-designs":
       return { ...data, uploadedDesigns: filterUploadedDesigns(uploadedDesigns, tabId) };
     case "documents":

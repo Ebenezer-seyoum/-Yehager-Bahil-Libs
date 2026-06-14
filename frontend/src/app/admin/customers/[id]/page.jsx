@@ -20,16 +20,32 @@ export default async function AdminCustomerDetailPage({ params, searchParams }) 
 
   let customer = null;
   let orders = [];
+  let measurements = [];
   try {
     const customerResponse = await apiRequest(`/api/v1/admin/customers/${id}`);
     customer = customerResponse?.data?.user ?? customerResponse?.data ?? null;
-    if (can(session.user.permissions, "orders.view")) {
+  } catch (err) {
+    console.error("Failed fetching customer in customer page:", err);
+    customer = null;
+  }
+  if (customer) {
+    try {
+      const measurementsResponse = await apiRequest(`/api/v1/admin/customers/${id}/measurements`);
+      measurements = Array.isArray(measurementsResponse?.data) ? measurementsResponse.data : [];
+    } catch (err) {
+      console.error("Failed fetching customer measurements in customer page:", err);
+      measurements = [];
+    }
+  }
+  if (customer && can(session.user.permissions, "orders.view")) {
+    try {
       const ordersResponse = await apiRequest("/api/v1/orders?limit=200");
       orders = Array.isArray(ordersResponse?.data) ? ordersResponse.data : [];
+    } catch (err) {
+      console.error("Failed fetching customer orders in customer page:", err);
+      orders = [];
     }
-  } catch (err) {
-    console.error("Failed fetching customer/orders in customer page:", err);
-    customer = null;
+  } else {
     orders = [];
   }
   if (!customer || String(customer.role ?? "").toLowerCase() !== "customer") redirect("/admin/customers");
@@ -38,6 +54,7 @@ export default async function AdminCustomerDetailPage({ params, searchParams }) 
     <CustomerDetailClient
       initialCustomer={customer}
       orders={orders}
+      measurements={measurements}
       backTab={backTab}
       canEdit={can(session.user.permissions, "customers.edit")}
       canDelete={can(session.user.permissions, "customers.delete")}

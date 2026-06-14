@@ -13,20 +13,37 @@ type AdminProfilePayload = {
 
 async function getAdminNotificationCounts() {
   try {
-    const response = await apiRequest<{ data?: { payment: number; custom_order: number; catalog_order: number; total: number } }>("/api/v1/admin/summary-counts");
+    const response = await apiRequest<{
+      data?: {
+        payment: number;
+        custom_order: number;
+        catalog_order: number;
+        refund_issue: number;
+        total: number;
+        paymentIds?: string[];
+        customOrderIds?: string[];
+        catalogOrderIds?: string[];
+        refundIssueIds?: string[];
+      };
+    }>("/api/v1/admin/summary-counts");
     const counts = response?.data;
     
     return {
       orders: counts?.catalog_order ?? 0,
+      orderIds: counts?.catalogOrderIds ?? [],
       payments: counts?.payment ?? 0,
+      paymentIds: counts?.paymentIds ?? [],
       customDesigns: counts?.custom_order ?? 0,
+      customDesignIds: counts?.customOrderIds ?? [],
+      refundIssues: counts?.refund_issue ?? 0,
+      refundIssueIds: counts?.refundIssueIds ?? [],
       total: counts?.total ?? 0,
       // Keep other placeholders for now if needed by DashboardShell
       alerts: 0,
       support: 0,
     };
   } catch {
-    return { orders: 0, payments: 0, customDesigns: 0, total: 0, alerts: 0, support: 0 };
+    return { orders: 0, orderIds: [], payments: 0, paymentIds: [], customDesigns: 0, customDesignIds: [], refundIssues: 0, refundIssueIds: [], total: 0, alerts: 0, support: 0 };
   }
 }
 

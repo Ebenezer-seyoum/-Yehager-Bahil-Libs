@@ -14,8 +14,8 @@ export function DashboardQueryToasts({
   messages?: Partial<Record<(typeof NOTICE_KEYS)[number], { title: string; text: string }>>;
 }) {
   const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
+  const pathname = usePathname()!;
+  const searchParams = useSearchParams()!;
   const handled = useRef<string | null>(null);
 
   useEffect(() => {

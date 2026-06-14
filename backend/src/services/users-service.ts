@@ -1,7 +1,7 @@
 import { HTTPException } from "hono/http-exception";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, or } from "drizzle-orm";
 import { db } from "../lib/db/drizzle.js";
-import { auditLogs, employeeProfiles, orders, roles } from "../lib/db/schema.js";
+import { auditLogs, employeeProfiles, measurements, orders, roles } from "../lib/db/schema.js";
 import { hashPassword, verifyPassword } from "../lib/auth/password.js";
 import { isUserRole, type UserRole } from "../lib/auth/roles.js";
 import crypto from "node:crypto";
@@ -291,6 +291,19 @@ export async function getCustomerDetailForAdmin(userId: string) {
     user: toPublicUser(user),
     permissions: await getEffectivePermissionsForUser(user.id),
   };
+}
+
+export async function listCustomerMeasurementsForAdmin(userId: string) {
+  const user = await requireCustomerForAdmin(userId);
+  const email = String(user.email ?? "").trim().toLowerCase();
+  const filters = email
+    ? or(eq(measurements.userId, user.id), eq(measurements.userEmail, email))
+    : eq(measurements.userId, user.id);
+
+  return db.query.measurements.findMany({
+    where: filters,
+    orderBy: [desc(measurements.updatedAt)],
+  });
 }
 
 export async function getEmployeeDetailForAdmin(userId: string) {
