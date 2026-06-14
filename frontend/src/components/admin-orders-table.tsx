@@ -68,6 +68,7 @@ type Order = {
   totalEtb?: number | string | null;
   totalAmount?: number | string | null;
   orderType?: string | null;
+  orderMode?: string | null;
   status?: string | null;
   paymentStatus?: string | null;
   paymentMethod?: string | null;
@@ -96,7 +97,7 @@ type Order = {
 
 const ORDER_STATUSES = ["pending", "tailoring", "quality_check", "shipped", "delivered", "ready_for_pickup", "picked_up"];
 const PAYMENT_STATUSES = ["pending", "awaiting_verification", "paid", "failed", "refunded", "unpaid"];
-const ORDER_TYPES = ["catalog_order", "custom_design_order", "group_order"] as const;
+const ORDER_MODES = ["individual", "group"] as const;
 
 const STATUS_STYLES: Record<string, string> = {
   pending: "bg-yellow-100 text-yellow-900 border-yellow-200",
@@ -163,19 +164,37 @@ function itemTitle(item: OrderItem, index: number) {
   return item.productName ?? item.name ?? `Item ${index + 1}`;
 }
 
+function hasUploadedDesign(order: Order) {
+  return Boolean(
+    order.items?.some((item) => {
+      const row = item as Record<string, unknown>;
+      return row.uploaded_design_id || row.uploadedDesignId || row.item_type === "custom_design" || row.itemType === "custom_design";
+    }),
+  );
+}
+
+function normalizedOrderType(order: Order) {
+  const type = order.orderType ?? "catalog_order";
+  if (type === "custom_order" || type === "custom_design_order") return "custom_order";
+  if (type === "group_order") return hasUploadedDesign(order) ? "custom_order" : "catalog_order";
+  return "catalog_order";
+}
+
+function normalizedOrderMode(order: Order) {
+  const mode = order.orderMode;
+  if (mode === "group" || order.orderType === "group_order" || Boolean(order.members?.length)) return "group";
+  return "individual";
+}
+
 function orderTypeLabel(order: Order) {
-  const isGroup = order.orderType === "group_order";
-  return isGroup ? "Group Catalog" : "Individual Catalog";
+  const typeLabel = normalizedOrderType(order) === "custom_order" ? "Custom" : "Catalog";
+  const modeLabel = normalizedOrderMode(order) === "group" ? "Group" : "Individual";
+  return `${modeLabel} ${typeLabel}`;
 }
 
-function orderTypeClass(type: string) {
-  return type === "group_order" ? "border-purple-200 bg-purple-50 text-purple-700" : "border-blue-200 bg-blue-50 text-blue-700";
-}
-
-function getShortOrderTypeLabel(type: string) {
-  if (type === "custom_design_order") return "IND-CUSTOM";
-  if (type === "group_order") return "GRP-ORDER";
-  return "IND-CATALOG";
+function orderTypeClass(order: Order) {
+  if (normalizedOrderType(order) === "custom_order") return "border-violet-200 bg-violet-50 text-violet-700";
+  return "border-blue-200 bg-blue-50 text-blue-700";
 }
 
 function itemImage(item: OrderItem) {
@@ -195,6 +214,7 @@ export function AdminOrdersTable({
   initialOrders,
   initialSelectedOrderId,
   initialOrderType,
+  lockedOrderType,
   externalSearch,
   hideToolbar,
   onFilteredCountChange,
@@ -202,6 +222,7 @@ export function AdminOrdersTable({
   initialOrders: Order[];
   initialSelectedOrderId?: string | null;
   initialOrderType?: string | null;
+  lockedOrderType?: "catalog_order" | "custom_order" | null;
   externalSearch?: string;
   hideToolbar?: boolean;
   onFilteredCountChange?: (count: number) => void;
@@ -211,7 +232,7 @@ export function AdminOrdersTable({
   const [search, setSearch] = useState("");
   const effectiveSearch = externalSearch ?? search;
   const [fulfillmentFilter, setFulfillmentFilter] = useState("all");
-  const [orderTypeFilter, setOrderTypeFilter] = useState(initialOrderType ?? "all");
+  const [modeFilter, setModeFilter] = useState(initialOrderType === "group_order" ? "group" : "all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [paymentFilter, setPaymentFilter] = useState("all");
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(initialSelectedOrderId ?? null);
@@ -234,7 +255,7 @@ export function AdminOrdersTable({
   }, [initialSelectedOrderId]);
 
   useEffect(() => {
-    const timeout = window.setTimeout(() => setOrderTypeFilter(initialOrderType ?? "all"), 0);
+    const timeout = window.setTimeout(() => setModeFilter(initialOrderType === "group_order" ? "group" : "all"), 0);
     return () => window.clearTimeout(timeout);
   }, [initialOrderType]);
 
@@ -279,12 +300,13 @@ export function AdminOrdersTable({
           .some((value) => String(value).toLowerCase().includes(needle));
       const isPickup = order.fulfillmentType === "pickup";
       const matchesFulfillment = fulfillmentFilter === "all" || (fulfillmentFilter === "pickup" ? isPickup : !isPickup);
-      const matchesOrderType = orderTypeFilter === "all" || (order.orderType ?? "catalog_order") === orderTypeFilter;
+      const matchesLockedType = !lockedOrderType || normalizedOrderType(order) === lockedOrderType;
+      const matchesMode = modeFilter === "all" || normalizedOrderMode(order) === modeFilter;
       const matchesStatus = statusFilter === "all" || order.status === statusFilter;
       const matchesPayment = paymentFilter === "all" || order.paymentStatus === paymentFilter;
-      return matchesSearch && matchesFulfillment && matchesOrderType && matchesStatus && matchesPayment;
+      return matchesSearch && matchesFulfillment && matchesLockedType && matchesMode && matchesStatus && matchesPayment;
     });
-  }, [effectiveSearch, fulfillmentFilter, orderTypeFilter, orders, paymentFilter, statusFilter]);
+  }, [effectiveSearch, fulfillmentFilter, lockedOrderType, modeFilter, orders, paymentFilter, statusFilter]);
 
   useEffect(() => {
     onFilteredCountChange?.(filteredOrders.length);
@@ -337,9 +359,9 @@ export function AdminOrdersTable({
             <option value="all">All Payments</option>
             {PAYMENT_STATUSES.map((status) => <option key={status} value={status}>{prettyLabel(status)}</option>)}
           </select>
-          <select value={orderTypeFilter} onChange={(event) => setOrderTypeFilter(event.target.value)} className="h-9 rounded-lg border border-input bg-background px-3 text-sm font-medium">
-            <option value="all">All Order Types</option>
-            {ORDER_TYPES.map((type) => <option key={type} value={type}>{getShortOrderTypeLabel(type)}</option>)}
+          <select value={modeFilter} onChange={(event) => setModeFilter(event.target.value)} className="h-9 rounded-lg border border-input bg-background px-3 text-sm font-medium">
+            <option value="all">All Modes</option>
+            {ORDER_MODES.map((mode) => <option key={mode} value={mode}>{prettyLabel(mode)}</option>)}
           </select>
           <select value={fulfillmentFilter} onChange={(event) => setFulfillmentFilter(event.target.value)} className="h-9 rounded-lg border border-input bg-background px-3 text-sm font-medium">
             <option value="all">All Types</option>
@@ -394,7 +416,7 @@ export function AdminOrdersTable({
                         </a>
                       </td>
                       <td className="px-4 py-5 align-middle">
-                        <span className={`inline-flex rounded-full border px-3 py-1 text-[11px] font-black uppercase ${orderTypeClass(order.orderType ?? "catalog_order")}`}>
+                        <span className={`inline-flex rounded-full border px-3 py-1 text-[11px] font-black uppercase ${orderTypeClass(order)}`}>
                           {orderTypeLabel(order)}
                         </span>
                       </td>
@@ -470,7 +492,7 @@ function OrderDetailDrawer({
 }: OrderDetailDrawerProps) {
   const [section, setSection] = useState<"info" | "customer" | "measurements" | "payment" | "production" | "shipping" | "timeline" | "attachments">("info");
   const [activeMemberIdx, setActiveMemberIdx] = useState<number>(0);
-  const isGroup = order.orderType === "group_order";
+  const isGroup = normalizedOrderMode(order) === "group";
 
   const sections = [
     { id: "info", label: "Order Information", hint: "Core metadata", icon: ShoppingBag },

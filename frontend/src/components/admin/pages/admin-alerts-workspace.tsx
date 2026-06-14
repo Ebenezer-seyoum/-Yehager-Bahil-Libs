@@ -43,9 +43,10 @@ export function AdminAlertsWorkspace({
           >
             <option value="">Notification queues</option>
             <option value="/admin/payments?filter=awaiting-verification">Payments awaiting verification</option>
-            <option value="/admin/uploaded-designs?filter=new">Custom orders to review</option>
-            <option value="/admin/orders?filter=new-catalog">Catalog orders to review</option>
-            <option value="/admin/orders/returns-refunds?filter=needs-review">Refund issues needing review</option>
+            <option value="/admin/custom-orders?tab=requests&filter=awaiting-review">Custom requests awaiting review</option>
+            <option value="/admin/custom-orders?tab=orders&filter=awaiting-review">Custom orders awaiting review</option>
+            <option value="/admin/catalog-orders?filter=awaiting-review">Catalog orders awaiting review</option>
+            <option value="/admin/orders/returns-refunds?filter=awaiting-review">Refund issues awaiting review</option>
           </select>
           <select
             value={activeTab}

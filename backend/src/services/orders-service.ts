@@ -238,11 +238,9 @@ export async function createCheckoutIntent(payload: {
     });
 
     const lines = buildCheckoutLines(lineInputs);
-    const orderType = lines.some((line) => line.itemType === "custom_design" || line.uploadedDesignId)
-      ? "custom_design_order"
-      : lines.some((line) => line.itemType === "group_order") || primaryEventId
-        ? "group_order"
-        : "catalog_order";
+    const isCustomOrder = lines.some((line) => line.itemType === "custom_design" || line.uploadedDesignId);
+    const orderType = isCustomOrder ? "custom_order" : "catalog_order";
+    const orderMode = lines.some((line) => line.itemType === "group_order") || primaryEventId ? "group" : "individual";
     const totalItems = lines.reduce((sum, line) => sum + line.quantity, 0);
     const fulfillmentType = payload.fulfillmentType ?? "mail";
     const carrier = fulfillmentType === "pickup" ? "pickup" : payload.carrier ?? "Ethiopian Mail Service";
@@ -294,6 +292,7 @@ export async function createCheckoutIntent(payload: {
         totalUsd: numberToMoney(totals.totalUsd),
         shippingCostUsd: numberToMoney(totals.shippingCostUsd),
         orderType,
+        orderMode,
         totalEtb,
         etbExchangeRate,
         status: "pending",
@@ -337,6 +336,7 @@ export async function createCheckoutIntent(payload: {
       metadata: {
         order_number: order.orderNumber,
         order_type: orderType,
+        order_mode: orderMode,
         cart_item_ids: payload.cartItemIds,
         total_usd: totals.totalUsd,
         total_etb: totalEtb,

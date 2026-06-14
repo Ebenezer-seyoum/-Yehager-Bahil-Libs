@@ -54,6 +54,7 @@ export type AdminTabConfig = {
   id: string;
   label: string;
   icon: LucideIcon;
+  badgeCount?: number;
   accent?: TabAccent;
   /** Primary CTA tab (e.g. + Add Employee) — styled like a top action button */
   variant?: AdminTabVariant;

@@ -52,6 +52,16 @@ function TabButton({
     <button type="button" onClick={() => onChange(tab.id)} className={buttonClass}>
       <Icon className={iconClass} />
       <span className="whitespace-nowrap">{tab.label}</span>
+      {typeof tab.badgeCount === "number" && tab.badgeCount > 0 ? (
+        <span
+          className={cn(
+            "ml-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-black",
+            active ? "bg-white text-blue-700" : "bg-blue-600 text-white",
+          )}
+        >
+          {tab.badgeCount > 99 ? "99+" : tab.badgeCount}
+        </span>
+      ) : null}
     </button>
   );
 }

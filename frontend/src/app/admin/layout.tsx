@@ -16,11 +16,13 @@ async function getAdminNotificationCounts() {
     const response = await apiRequest<{
       data?: {
         payment: number;
+        custom_request: number;
         custom_order: number;
         catalog_order: number;
         refund_issue: number;
         total: number;
         paymentIds?: string[];
+        customRequestIds?: string[];
         customOrderIds?: string[];
         catalogOrderIds?: string[];
         refundIssueIds?: string[];
@@ -33,8 +35,10 @@ async function getAdminNotificationCounts() {
       orderIds: counts?.catalogOrderIds ?? [],
       payments: counts?.payment ?? 0,
       paymentIds: counts?.paymentIds ?? [],
-      customDesigns: counts?.custom_order ?? 0,
-      customDesignIds: counts?.customOrderIds ?? [],
+      customDesigns: counts?.custom_request ?? counts?.custom_order ?? 0,
+      customDesignIds: counts?.customRequestIds ?? [],
+      customOrders: counts?.custom_order ?? 0,
+      customOrderIds: counts?.customOrderIds ?? [],
       refundIssues: counts?.refund_issue ?? 0,
       refundIssueIds: counts?.refundIssueIds ?? [],
       total: counts?.total ?? 0,
@@ -43,7 +47,7 @@ async function getAdminNotificationCounts() {
       support: 0,
     };
   } catch {
-    return { orders: 0, orderIds: [], payments: 0, paymentIds: [], customDesigns: 0, customDesignIds: [], refundIssues: 0, refundIssueIds: [], total: 0, alerts: 0, support: 0 };
+    return { orders: 0, orderIds: [], payments: 0, paymentIds: [], customDesigns: 0, customDesignIds: [], customOrders: 0, customOrderIds: [], refundIssues: 0, refundIssueIds: [], total: 0, alerts: 0, support: 0 };
   }
 }
 

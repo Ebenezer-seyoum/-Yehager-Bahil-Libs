@@ -6,7 +6,7 @@ import { computePageKpis } from "@/lib/admin/kpi-compute";
 import { getPageMeta } from "@/lib/admin/page-tabs-config";
 import { filterPlaceholderFor } from "@/lib/admin/filter-config";
 import { applyTabQuery } from "@/lib/admin/tab-query-config";
-import type { AdminPageId, AdminWorkspaceData } from "@/lib/admin/types";
+import type { AdminPageId, AdminTabConfig, AdminWorkspaceData } from "@/lib/admin/types";
 import type { DateRangeKey } from "@/lib/reports/utils";
 import { rowsInDateRange } from "@/lib/reports/utils";
 import { cn } from "@/lib/utils";
@@ -74,7 +74,7 @@ export function AdminWorkspace({
   subtitle?: string;
   icon?: any;
   defaultTab?: string;
-  tabs?: { id: string; label: string; icon: any }[];
+  tabs?: AdminTabConfig[];
   actions?: ReactNode;
   pageClassName?: string;
 }) {
@@ -92,7 +92,7 @@ export function AdminWorkspace({
     setData(initialData);
   }, [initialData]);
 
-  const activeTab = searchParams.get("tab") ?? defaultTab ?? meta.defaultTab;
+  const activeTab = hideTabs ? (defaultTab ?? meta.defaultTab) : (searchParams.get("tab") ?? defaultTab ?? meta.defaultTab);
 
   const setActiveTab = useCallback(
     (tabId: string) => {

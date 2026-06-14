@@ -60,8 +60,8 @@ export const adminNavigation: readonly NavigationGroup[] = [
   {
     label: "Order Management",
     items: [
-      { href: "/admin/orders?type=catalog", label: "Catalog Orders", icon: "orders", permission: "orders.view" },
-      { href: "/admin/uploaded-designs", label: "Custom orders", icon: "documents", permission: "uploaded_designs.view" },
+      { href: "/admin/catalog-orders", label: "Catalog Orders", icon: "orders", permission: "orders.view" },
+      { href: "/admin/custom-orders", label: "Custom Orders", icon: "documents", permission: "uploaded_designs.view" },
       { href: "/admin/orders/documents", label: "Order Documents", icon: "documents", permission: "documents.view" },
       { href: "/admin/orders/returns-refunds", label: "Returns & Refunds", icon: "orders", permission: "returns.view" },
       { href: "/admin/orders/shipping-delivery", label: "Shipping & Delivery", icon: "orders", permission: "shipping.view" },
@@ -71,7 +71,6 @@ export const adminNavigation: readonly NavigationGroup[] = [
     label: "Finance",
     items: [
       { href: "/admin/payments", label: "Payments", icon: "payments", permission: "payments.view" },
-      { href: "/admin/finance/transactions", label: "Transactions", icon: "payments", permission: "transactions.view" },
       { href: "/admin/finance/coupons-discounts", label: "Coupons & Discounts", icon: "payments", permission: "coupons.view" },
       { href: "/admin/exchange-rate", label: "Exchange Rates", icon: "exchange", permission: "exchange.view" },
     ],

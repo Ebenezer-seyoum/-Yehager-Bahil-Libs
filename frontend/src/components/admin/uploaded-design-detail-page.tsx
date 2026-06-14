@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  ArrowLeft,
   CheckCircle2,
   ChevronRight,
   ClipboardList,
@@ -21,6 +20,7 @@ import {
   UserRound,
   XCircle,
 } from "lucide-react";
+import { AdminDetailHeader } from "@/components/admin/admin-detail-layout";
 
 export type UploadedDesignDetailData = {
   id: string;
@@ -89,14 +89,14 @@ export function UploadedDesignDetailPage({
   const canReview = ["submitted", "in_review"].includes(String(design.status ?? "submitted"));
 
   const sections = [
-    { id: "info", label: "Order Information", hint: "Core metadata", icon: Palette },
-    { id: "customer", label: "Customer Detail", hint: "Contact & address", icon: UserRound },
-    { id: "measurements", label: "Measurement Details", hint: "Sizing data", icon: Ruler },
-    { id: "payment", label: "Payment Information", hint: "Transaction detail", icon: CreditCard },
-    { id: "production", label: "Production Tracking", hint: "Workflow status", icon: Package },
-    { id: "shipping", label: "Shipping Information", hint: "Carrier & tracking", icon: Truck },
-    { id: "timeline", label: "Order Timeline", hint: "Lifecycle stages", icon: ClipboardList },
-    { id: "attachments", label: "Document Attachments", hint: "Images & files", icon: Eye },
+    { id: "info", label: "Overview", hint: "Request metadata", icon: Palette },
+    { id: "customer", label: "Customer", hint: "Contact & address", icon: UserRound },
+    { id: "measurements", label: "Measurements", hint: "Sizing data", icon: Ruler },
+    { id: "payment", label: "Pricing", hint: "Quote and payment", icon: CreditCard },
+    { id: "production", label: "Review", hint: "Decision workflow", icon: Package },
+    { id: "shipping", label: "Fulfillment", hint: "Future logistics", icon: Truck },
+    { id: "timeline", label: "Timeline", hint: "Lifecycle stages", icon: ClipboardList },
+    { id: "attachments", label: "Design Images", hint: "Images & files", icon: Eye },
   ] as const;
 
   const timelineStages = [
@@ -113,41 +113,17 @@ export function UploadedDesignDetailPage({
 
   return (
     <div className="min-h-screen bg-[#f8fafc]">
-      {/* Page Header */}
-      <div className="bg-[#0f172a] border-b border-white/10">
-        <div className="mx-auto max-w-[1600px] px-8 py-6 flex items-center gap-6">
-          <button
-            onClick={() => router.push(backUrl)}
-            className="flex items-center gap-2 text-slate-400 hover:text-white transition-all group shrink-0"
-          >
-            <div className="h-10 w-10 rounded-2xl bg-white/10 flex items-center justify-center group-hover:bg-blue-600 transition-all">
-              <ArrowLeft className="h-5 w-5" />
-            </div>
-            <span className="text-sm font-black uppercase tracking-widest hidden sm:block">Back to Designs</span>
-          </button>
-          <div className="flex-1 min-w-0">
-            <h1 className="text-3xl font-black text-white tracking-tight uppercase truncate">Custom Design Workspace</h1>
-            <p className="text-sm text-slate-400 font-medium mt-1">Manage custom creation requests, technical specifications, and client communication.</p>
-          </div>
-          <div className="flex items-center gap-3 shrink-0">
-            {canReview && (
-              <>
-                <button
-                  onClick={handleApprove}
-                  className="h-11 px-6 rounded-2xl bg-blue-600 text-sm font-black text-white hover:bg-blue-700 shadow-lg transition-all flex items-center gap-2"
-                >
-                  <CheckCircle2 className="h-4 w-4" /> Issue Quote
-                </button>
-                <button
-                  onClick={handleDecline}
-                  className="h-11 px-6 rounded-2xl bg-slate-700 text-sm font-black text-white hover:bg-slate-800 shadow-lg transition-all flex items-center gap-2"
-                >
-                  <XCircle className="h-4 w-4" /> Decline
-                </button>
-              </>
-            )}
-          </div>
-        </div>
+      <div className="mx-auto max-w-[1600px] px-8 pt-8">
+        <AdminDetailHeader
+          icon={Palette}
+          iconTheme="bg-orange-50 text-orange-600 border-orange-100"
+          category="Custom Request Review"
+          title={`Request #${design.submissionNumber || design.id.slice(0, 10)}`}
+          subtitle="Review uploaded designs, quote custom work, and notify the customer."
+          onRefresh={() => router.refresh()}
+          onBack={() => router.push(backUrl)}
+          backLabel="Back to Custom Orders"
+        />
       </div>
 
       <div className="mx-auto max-w-[1600px] px-8 py-10 pb-20">
@@ -191,6 +167,22 @@ export function UploadedDesignDetailPage({
               </div>
             </div>
           </div>
+          {canReview ? (
+            <div className="flex w-full flex-col gap-3 lg:w-auto lg:min-w-[180px]">
+              <button
+                onClick={handleApprove}
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 text-sm font-black text-white shadow-lg transition-all hover:bg-emerald-700"
+              >
+                <CheckCircle2 className="h-4 w-4" /> Approve
+              </button>
+              <button
+                onClick={handleDecline}
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-rose-600 px-5 text-sm font-black text-white shadow-lg transition-all hover:bg-rose-700"
+              >
+                <XCircle className="h-4 w-4" /> Decline
+              </button>
+            </div>
+          ) : null}
         </div>
 
         {/* Sidebar + Main */}

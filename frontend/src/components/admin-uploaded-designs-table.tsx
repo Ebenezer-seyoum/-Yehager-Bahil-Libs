@@ -51,6 +51,10 @@ function prettyLabel(value?: string | null) {
   return (value ?? "submitted").replaceAll("_", " ");
 }
 
+function needsReview(row: UploadedDesign) {
+  return ["submitted", "in_review", "under_review", "needs_changes"].includes(String(row.status ?? "").toLowerCase());
+}
+
 export function AdminUploadedDesignsTable({ rows: initialRows, search, onFilteredCountChange }: { rows: UploadedDesign[]; search: string; onFilteredCountChange?: (count: number) => void }) {
   const router = useRouter();
   const [rows, setRows] = useState(initialRows);
@@ -59,6 +63,7 @@ export function AdminUploadedDesignsTable({ rows: initialRows, search, onFiltere
   const [dateFilter, setDateFilter] = useState("all");
   const [currentTime, setCurrentTime] = useState<number | null>(null);
   const [busyKey, setBusyKey] = useState<string | null>(null);
+  const [viewedDesignIdsLocal, setViewedDesignIdsLocal] = useState<string[]>([]);
 
   useEffect(() => {
     setRows(initialRows);
@@ -67,6 +72,30 @@ export function AdminUploadedDesignsTable({ rows: initialRows, search, onFiltere
   useEffect(() => {
     const timeout = window.setTimeout(() => setCurrentTime(Date.now()), 0);
     return () => window.clearTimeout(timeout);
+  }, []);
+
+  useEffect(() => {
+    const key = "admin-viewed-custom-design-notifications";
+    const read = () => {
+      try {
+        const raw = window.localStorage.getItem(key);
+        setViewedDesignIdsLocal(raw ? JSON.parse(raw) : []);
+      } catch {
+        setViewedDesignIdsLocal([]);
+      }
+    };
+    const onViewed = (event: Event) => {
+      const id = (event as CustomEvent<string>).detail;
+      if (!id) return;
+      setViewedDesignIdsLocal((current) => {
+        const next = Array.from(new Set([...current, id]));
+        try { window.localStorage.setItem(key, JSON.stringify(next)); } catch {}
+        return next;
+      });
+    };
+    read();
+    window.addEventListener("admin-custom-design-viewed", onViewed);
+    return () => window.removeEventListener("admin-custom-design-viewed", onViewed);
   }, []);
 
   async function updateDesign(id: string, patch: { status: string }) {
@@ -199,17 +228,19 @@ export function AdminUploadedDesignsTable({ rows: initialRows, search, onFiltere
             <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-600">
               <tr className="border-b border-slate-200">
                 <th className="px-4 py-4 font-bold text-xs uppercase w-14">No</th>
-                <th className="px-4 py-4 font-bold text-xs uppercase">Order ID</th>
-                <th className="px-4 py-4 font-bold text-xs uppercase">Order Type</th>
+                <th className="px-4 py-4 font-bold text-xs uppercase">Request #</th>
+                <th className="px-4 py-4 font-bold text-xs uppercase">Mode</th>
                 <th className="px-4 py-4 font-bold text-xs uppercase">Customer Name</th>
-                <th className="px-4 py-4 font-bold text-xs uppercase">Order Status</th>
-                <th className="px-4 py-4 font-bold text-xs uppercase">Payment Status</th>
+                <th className="px-4 py-4 font-bold text-xs uppercase">Request Status</th>
+                <th className="px-4 py-4 font-bold text-xs uppercase">Checkout State</th>
                 <th className="px-4 py-4 text-right font-bold text-xs uppercase">Detail</th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map((row, index) => (
-                <tr key={row.id} className={`border-b border-slate-200 last:border-b-0 hover:bg-blue-50/70 ${index % 2 === 0 ? "bg-white" : "bg-slate-50/50"}`}>
+              {filtered.map((row, index) => {
+                const highlightRow = needsReview(row) && !viewedDesignIdsLocal.includes(row.id);
+                return (
+                <tr key={row.id} className={`border-b border-slate-200 last:border-b-0 hover:bg-blue-50/70 ${highlightRow ? "border-l-4 border-l-blue-500 bg-blue-50/70" : index % 2 === 0 ? "bg-white" : "bg-slate-50/50"}`}>
                   <td className="px-4 py-5 align-middle">
                     <a href={`/admin/uploaded-designs/${row.id}`} onClick={() => markDesignViewed(row)} className="text-sm font-semibold text-slate-600 hover:text-blue-600 transition-colors inline-block">
                       {index + 1}
@@ -217,7 +248,10 @@ export function AdminUploadedDesignsTable({ rows: initialRows, search, onFiltere
                   </td>
                   <td className="px-4 py-5 align-middle">
                     <a href={`/admin/uploaded-designs/${row.id}`} onClick={() => markDesignViewed(row)} className="text-left group inline-block w-full">
-                      <p className="font-mono text-xs font-black text-blue-900 leading-none group-hover:text-blue-600 transition-colors">#{row.submissionNumber ?? "YBL-CD"}</p>
+                      <div className="flex items-center gap-2">
+                        {highlightRow ? <span className="rounded-full border border-blue-200 bg-blue-600 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-white">New</span> : null}
+                        <p className="font-mono text-xs font-black text-blue-900 leading-none group-hover:text-blue-600 transition-colors">#{row.submissionNumber ?? "YBL-CD"}</p>
+                      </div>
                       <p className="mt-1 text-[11px] text-slate-500 font-medium">
                         {row.submittedAt || row.createdAt ? new Date(String(row.submittedAt ?? row.createdAt)).toLocaleDateString() : "-"}
                       </p>
@@ -225,7 +259,7 @@ export function AdminUploadedDesignsTable({ rows: initialRows, search, onFiltere
                   </td>
                   <td className="px-4 py-5 align-middle">
                     <span className="inline-flex rounded-full border border-primary/40 bg-primary/10 px-3 py-1 text-[10px] font-black text-primary uppercase">
-                      { (row as any).familyGroupId || (row as any).eventId ? "Group Custom" : "Individual Custom" }
+                      { (row as any).familyGroupId || (row as any).eventId ? "Group" : "Individual" }
                     </span>
                   </td>
                   <td className="px-4 py-5 align-middle">
@@ -266,7 +300,8 @@ export function AdminUploadedDesignsTable({ rows: initialRows, search, onFiltere
                     </DashboardTableActions>
                   </td>
                 </tr>
-              ))}
+              );
+              })}
               {filtered.length === 0 ? (
                 <tr><td colSpan={7} className="px-4 py-12 text-center text-sm text-slate-500">No custom designs found for this filter.</td></tr>
               ) : null}

@@ -39,6 +39,8 @@ type NotificationCounts = {
   support?: number;
   customDesigns?: number;
   customDesignIds?: Array<string | null | undefined>;
+  customOrders?: number;
+  customOrderIds?: Array<string | null | undefined>;
   refundIssues?: number;
   refundIssueIds?: Array<string | null | undefined>;
   total?: number;
@@ -181,30 +183,35 @@ export function DashboardShell({
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const counts = notificationCounts ?? {};
   const [viewedOrderIds, setViewedOrderIds] = useState<string[]>([]);
+  const [viewedPaymentIds, setViewedPaymentIds] = useState<string[]>([]);
   const [viewedCustomDesignIds, setViewedCustomDesignIds] = useState<string[]>([]);
   const activeOrderIds = (counts.orderIds ?? []).filter(Boolean).map(String);
   const activePaymentIds = (counts.paymentIds ?? []).filter(Boolean).map(String);
   const activeCustomDesignIds = (counts.customDesignIds ?? []).filter(Boolean).map(String);
+  const activeCustomOrderIds = (counts.customOrderIds ?? []).filter(Boolean).map(String);
   const activeRefundIssueIds = (counts.refundIssueIds ?? []).filter(Boolean).map(String);
   const visibleOrderCount = activeOrderIds.length > 0
     ? activeOrderIds.filter((id) => !viewedOrderIds.includes(id)).length
     : Math.max((counts.orders ?? 0) - viewedOrderIds.length, 0);
   const visiblePaymentCount = activePaymentIds.length > 0
-    ? activePaymentIds.filter((id) => !viewedOrderIds.includes(id)).length
+    ? activePaymentIds.filter((id) => !viewedPaymentIds.includes(id)).length
     : counts.payments ?? 0;
   const visibleCustomDesignCount = activeCustomDesignIds.length > 0
     ? activeCustomDesignIds.filter((id) => !viewedCustomDesignIds.includes(id)).length
     : Math.max((counts.customDesigns ?? 0) - viewedCustomDesignIds.length, 0);
+  const visibleCustomOrderCount = activeCustomOrderIds.length > 0
+    ? activeCustomOrderIds.filter((id) => !viewedOrderIds.includes(id)).length
+    : Math.max((counts.customOrders ?? 0) - viewedOrderIds.length, 0);
   const visibleRefundIssueCount = activeRefundIssueIds.length > 0
     ? activeRefundIssueIds.filter((id) => !viewedOrderIds.includes(id)).length
     : counts.refundIssues ?? 0;
-  const totalNotifications = visibleOrderCount + visiblePaymentCount + visibleCustomDesignCount + visibleRefundIssueCount;
+  const totalNotifications = visibleOrderCount + visiblePaymentCount + visibleCustomDesignCount + visibleCustomOrderCount + visibleRefundIssueCount;
   const badgeForHref = (href: string) => {
     if (variant !== "admin") return 0;
-    if (href === "/admin/orders") return visibleOrderCount;
+    if (href === "/admin/orders" || href === "/admin/catalog-orders") return visibleOrderCount;
     if (href === "/admin/group-orders") return counts.groupOrders ?? 0;
     if (href === "/admin/payments") return visiblePaymentCount;
-    if (href === "/admin/uploaded-designs") return visibleCustomDesignCount;
+    if (href === "/admin/uploaded-designs" || href === "/admin/custom-orders") return visibleCustomDesignCount + visibleCustomOrderCount;
     if (href === "/admin/orders/returns-refunds") return visibleRefundIssueCount;
     if (href === "/admin/alerts") return totalNotifications;
     if (href === "/admin/support-inbox") return counts.support ?? 0;
@@ -284,11 +291,33 @@ export function DashboardShell({
 
   useEffect(() => {
     if (variant !== "admin") return;
+    try {
+      const viewedOrdersRaw = window.localStorage.getItem("admin-viewed-order-notifications");
+      const viewedPaymentsRaw = window.localStorage.getItem("admin-viewed-payment-notifications");
+      const viewedDesignsRaw = window.localStorage.getItem("admin-viewed-custom-design-notifications");
+      setViewedOrderIds(viewedOrdersRaw ? JSON.parse(viewedOrdersRaw) : []);
+      setViewedPaymentIds(viewedPaymentsRaw ? JSON.parse(viewedPaymentsRaw) : []);
+      setViewedCustomDesignIds(viewedDesignsRaw ? JSON.parse(viewedDesignsRaw) : []);
+    } catch {
+      setViewedOrderIds([]);
+      setViewedPaymentIds([]);
+      setViewedCustomDesignIds([]);
+    }
     const onViewed = (event: Event) => {
       const orderId = (event as CustomEvent<string>).detail;
       if (!orderId) return;
       setViewedOrderIds((current) => {
         const next = Array.from(new Set([...current, orderId]));
+        try { window.localStorage.setItem("admin-viewed-order-notifications", JSON.stringify(next)); } catch {}
+        return next;
+      });
+    };
+    const onPaymentViewed = (event: Event) => {
+      const orderId = (event as CustomEvent<string>).detail;
+      if (!orderId) return;
+      setViewedPaymentIds((current) => {
+        const next = Array.from(new Set([...current, orderId]));
+        try { window.localStorage.setItem("admin-viewed-payment-notifications", JSON.stringify(next)); } catch {}
         return next;
       });
     };
@@ -297,13 +326,16 @@ export function DashboardShell({
       if (!designId) return;
       setViewedCustomDesignIds((current) => {
         const next = Array.from(new Set([...current, designId]));
+        try { window.localStorage.setItem("admin-viewed-custom-design-notifications", JSON.stringify(next)); } catch {}
         return next;
       });
     };
     window.addEventListener("admin-order-viewed", onViewed);
+    window.addEventListener("admin-payment-viewed", onPaymentViewed);
     window.addEventListener("admin-custom-design-viewed", onCustomViewed);
     return () => {
       window.removeEventListener("admin-order-viewed", onViewed);
+      window.removeEventListener("admin-payment-viewed", onPaymentViewed);
       window.removeEventListener("admin-custom-design-viewed", onCustomViewed);
     };
   }, [variant]);
@@ -544,8 +576,8 @@ export function DashboardShell({
                   <div className="my-1 h-px bg-sidebar-border" />
                   {[
                     {
-                      href: "/admin/payments?filter=awaiting-verification",
-                      label: "Payments awaiting verification",
+                      href: "/admin/payments",
+                      label: "New payments received",
                       value: visiblePaymentCount,
                       Icon: CreditCard,
                       accent: "bg-amber-400",
@@ -553,8 +585,8 @@ export function DashboardShell({
                       badge: "bg-amber-400 text-slate-950",
                     },
                     {
-                      href: "/admin/uploaded-designs?filter=new",
-                      label: "Custom orders to review",
+                      href: "/admin/custom-orders?tab=requests&filter=awaiting-review",
+                      label: "Custom requests awaiting review",
                       value: visibleCustomDesignCount,
                       Icon: FileText,
                       accent: "bg-violet-400",
@@ -562,8 +594,17 @@ export function DashboardShell({
                       badge: "bg-violet-400 text-slate-950",
                     },
                     {
-                      href: "/admin/orders?filter=new-catalog",
-                      label: "Catalog orders to review",
+                      href: "/admin/custom-orders?tab=orders&filter=awaiting-review",
+                      label: "Custom orders awaiting review",
+                      value: visibleCustomOrderCount,
+                      Icon: ClipboardList,
+                      accent: "bg-fuchsia-400",
+                      active: "border-fuchsia-400/30 bg-fuchsia-400/10 text-fuchsia-50",
+                      badge: "bg-fuchsia-400 text-slate-950",
+                    },
+                    {
+                      href: "/admin/catalog-orders?filter=awaiting-review",
+                      label: "Catalog orders awaiting review",
                       value: visibleOrderCount,
                       Icon: ClipboardList,
                       accent: "bg-blue-400",
@@ -571,8 +612,8 @@ export function DashboardShell({
                       badge: "bg-blue-400 text-slate-950",
                     },
                     {
-                      href: "/admin/orders/returns-refunds?filter=needs-review",
-                      label: "Refund issues needing review",
+                      href: "/admin/orders/returns-refunds?filter=awaiting-review",
+                      label: "Refund issues awaiting review",
                       value: visibleRefundIssueCount,
                       Icon: ArrowLeftRight,
                       accent: "bg-rose-400",

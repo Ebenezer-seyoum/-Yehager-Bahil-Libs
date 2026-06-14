@@ -6,7 +6,7 @@ import { HTTPException } from "hono/http-exception";
 import { requireAuth } from "../../middleware/auth.js";
 import { requirePermission } from "../../middleware/permissions.js";
 import { db } from "../../lib/db/drizzle.js";
-import { auditLogs, homepageSections, orders, products, systemAlerts } from "../../lib/db/schema.js";
+import { auditLogs, homepageSections, orders, products, systemAlerts, uploadedDesigns } from "../../lib/db/schema.js";
 import { USER_ROLES } from "../../lib/auth/roles.js";
 import { PERMISSIONS } from "../../lib/auth/permissions.js";
 import {
@@ -307,38 +307,81 @@ adminRouter.get("/summary-counts", requirePermission(PERMISSIONS.ALERTS_VIEW), a
     orderBy: [desc(orders.createdAt)],
     limit: 200,
   });
+  const designRows = await db.query.uploadedDesigns.findMany({
+    orderBy: [desc(uploadedDesigns.createdAt)],
+    limit: 200,
+  });
   const orderById = new Map(orderRows.map((order) => [String(order.id), order]));
 
-  const paymentTypes = new Set(["payment_review", "payment_proof_uploaded"]);
-  const customTypes = new Set(["custom_design_submitted", "design_review", "custom_design_awaiting_payment"]);
+  const customRequestTypes = new Set(["custom_design_submitted", "design_review"]);
   const catalogTypes = new Set(["new_order", "new_catalog_order"]);
   const refundTypes = new Set(["refund_issue", "refund_requested", "return_refund", "refund_pending"]);
 
   const counts = {
     payment: 0,
+    custom_request: 0,
     custom_order: 0,
     catalog_order: 0,
     refund_issue: 0,
     total: 0,
     paymentIds: [] as string[],
+    customRequestIds: [] as string[],
     customOrderIds: [] as string[],
     catalogOrderIds: [] as string[],
     refundIssueIds: [] as string[],
   };
+
+  function orderHasUploadedDesign(order: typeof orderRows[number] | null | undefined) {
+    if (!order || !Array.isArray(order.items)) return false;
+    return order.items.some((item) => {
+      if (!item || typeof item !== "object") return false;
+      const row = item as Record<string, unknown>;
+      return Boolean(row.uploaded_design_id || row.uploadedDesignId || row.item_type === "custom_design" || row.itemType === "custom_design");
+    });
+  }
+
+  function isCustomOrder(order: typeof orderRows[number] | null | undefined) {
+    const orderType = String(order?.orderType ?? "catalog_order");
+    if (orderType === "custom_order" || orderType === "custom_design_order") return true;
+    if (orderType === "group_order") return orderHasUploadedDesign(order);
+    return false;
+  }
+
+  function orderNeedsReview(order: typeof orderRows[number]) {
+    return ["pending", "processing"].includes(String(order.status ?? "").toLowerCase()) ||
+      String(order.paymentStatus ?? "").toLowerCase() === "awaiting_verification";
+  }
+
+  function hasPaymentRecord(order: typeof orderRows[number]) {
+    return Boolean(order.paymentStatus || order.paymentMethod || order.paymentCurrency);
+  }
+
+  const customRequestRows = designRows.filter((design) =>
+    ["submitted", "in_review", "under_review", "needs_changes"].includes(String(design.status ?? "").toLowerCase()),
+  );
+  const customOrderRows = orderRows.filter((order) => isCustomOrder(order) && orderNeedsReview(order));
+  const catalogOrderRows = orderRows.filter((order) => !isCustomOrder(order) && orderNeedsReview(order));
+  const paymentRows = orderRows.filter((order) => hasPaymentRecord(order));
+
+  counts.custom_request = customRequestRows.length;
+  counts.customRequestIds = customRequestRows.map((design) => String(design.id));
+  counts.custom_order = customOrderRows.length;
+  counts.customOrderIds = customOrderRows.map((order) => String(order.id));
+  counts.catalog_order = catalogOrderRows.length;
+  counts.catalogOrderIds = catalogOrderRows.map((order) => String(order.id));
+  counts.payment = paymentRows.length;
+  counts.paymentIds = paymentRows.map((order) => String(order.id));
 
   unresolvedAlerts.forEach((alert) => {
     const entityId = alert.entityId ? String(alert.entityId) : null;
     const order = entityId ? orderById.get(entityId) : null;
     const type = String(alert.type ?? "");
 
-    if (paymentTypes.has(type)) {
-      counts.payment++;
-      if (entityId) counts.paymentIds.push(entityId);
-      return;
-    }
-    if (customTypes.has(type)) {
-      counts.custom_order++;
-      if (entityId) counts.customOrderIds.push(entityId);
+    if (customRequestTypes.has(type)) {
+      if (entityId && !counts.customRequestIds.includes(entityId)) {
+        counts.custom_request++;
+        counts.customRequestIds.push(entityId);
+      }
       return;
     }
     if (refundTypes.has(type)) {
@@ -347,18 +390,21 @@ adminRouter.get("/summary-counts", requirePermission(PERMISSIONS.ALERTS_VIEW), a
       return;
     }
     if (catalogTypes.has(type)) {
-      const orderType = String(order?.orderType ?? "catalog_order");
-      if (orderType === "custom_design_order") {
-        counts.custom_order++;
-        if (entityId) counts.customOrderIds.push(entityId);
+      if (isCustomOrder(order)) {
+        if (entityId && !counts.customOrderIds.includes(entityId)) {
+          counts.custom_order++;
+          counts.customOrderIds.push(entityId);
+        }
       } else {
-        counts.catalog_order++;
-        if (entityId) counts.catalogOrderIds.push(entityId);
+        if (entityId && !counts.catalogOrderIds.includes(entityId)) {
+          counts.catalog_order++;
+          counts.catalogOrderIds.push(entityId);
+        }
       }
     }
   });
 
-  counts.total = counts.payment + counts.custom_order + counts.catalog_order + counts.refund_issue;
+  counts.total = counts.payment + counts.custom_request + counts.custom_order + counts.catalog_order + counts.refund_issue;
 
   return c.json({ data: counts });
 });

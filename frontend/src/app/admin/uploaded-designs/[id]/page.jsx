@@ -19,7 +19,7 @@ export default async function AdminUploadedDesignDetailPage({ params }) {
     design = null;
   }
 
-  if (!design) redirect("/admin/uploaded-designs");
+  if (!design) redirect("/admin/custom-orders?tab=requests");
 
-  return <UploadedDesignDetailPage initialDesign={design} backUrl="/admin/uploaded-designs" />;
+  return <UploadedDesignDetailPage initialDesign={design} backUrl="/admin/custom-orders?tab=requests" />;
 }
