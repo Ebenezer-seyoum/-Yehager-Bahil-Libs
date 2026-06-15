@@ -14,6 +14,10 @@ type Product = {
   gender?: string | null;
   images?: string[] | null;
   priceUsd?: number | null;
+  originalPriceUsd?: number | string | null;
+  finalPriceUsd?: number | string | null;
+  effectivePriceUsd?: number | string | null;
+  discount?: { label?: string | null; savingsUsd?: number | string | null } | null;
   familyRoles?: FamilyRole[] | null;
   isCouple?: boolean | null;
   groomPriceUsd?: number | null;
@@ -46,7 +50,9 @@ export function ProductCard({ product, eventId, groupId, selectionMode, etbRate 
   if (selectionMode) context.set("selectionMode", selectionMode);
   const href = `/product/${product.id}${context.size ? `?${context}` : ""}`;
   const image = product.images?.[0] ?? DEFAULT_IMAGE;
-  const basePrice = Number(product.priceUsd ?? 0);
+  const basePrice = Number(product.effectivePriceUsd ?? product.finalPriceUsd ?? product.priceUsd ?? 0);
+  const originalPrice = Number(product.originalPriceUsd ?? product.priceUsd ?? basePrice);
+  const hasDiscount = Boolean(product.discount && originalPrice > basePrice);
   const explicitRolePrices = product.familyRoles?.map((role) => Number(role.price ?? 0)).filter((price) => price > 0) ?? [];
   const rolePrices = explicitRolePrices.length > 0 ? explicitRolePrices : product.isCouple && product.groomPriceUsd ? [basePrice, Number(product.groomPriceUsd)] : [];
   const shareUrl = typeof window === "undefined" ? "" : `${window.location.origin}/product/${product.id}`;
@@ -73,6 +79,7 @@ export function ProductCard({ product, eventId, groupId, selectionMode, etbRate 
               <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${REGION_BADGE[product.region] ?? "bg-gray-100 text-gray-700"}`}>{product.region}</span>
             ) : null}
             {product.subcategory ? <span className="rounded-full bg-black/40 px-2 py-0.5 text-[10px] font-medium text-white backdrop-blur-sm">{product.subcategory}</span> : null}
+            {hasDiscount ? <span className="rounded-full bg-rose-600 px-2 py-0.5 text-[10px] font-black text-white shadow-lg">{product.discount?.label ?? "SALE"}</span> : null}
           </div>
 
           <div className="absolute right-3 top-3 flex flex-col gap-1.5">
@@ -106,6 +113,7 @@ export function ProductCard({ product, eventId, groupId, selectionMode, etbRate 
                 <p className="text-lg font-bold text-primary transition-colors duration-300 group-hover:text-amber-300">
                   {minPrice === maxPrice ? `$${minPrice.toFixed(2)}` : `$${minPrice.toFixed(2)} – $${maxPrice.toFixed(2)}`}
                 </p>
+                {hasDiscount ? <p className="text-xs font-bold text-white/60 line-through">${originalPrice.toFixed(2)}</p> : null}
                 {rolePrices.length > 1 ? (
                   <p className="text-[10px] text-white/50">{product.familyRoles?.map((role) => role.label).filter(Boolean).join(" / ") || "Couple"}</p>
                 ) : etbRate ? (

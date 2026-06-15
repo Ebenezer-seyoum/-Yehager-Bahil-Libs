@@ -26,6 +26,12 @@ import {
 import { getEffectivePermissionsForUser } from "./permissions-service.js";
 import { assignAdditionalRoleToUser, ensureSystemRoleAssignment, replaceUserAdditionalRolesForAdmin, replaceUserSystemRole } from "./roles-service.js";
 import { updateUserPermissionsForAdmin } from "./permissions-service.js";
+import {
+  resetPasswordLink,
+  sendPasswordResetEmail,
+  sendPasswordSetupEmail,
+  sendRegistrationEmail,
+} from "./email-service.js";
 
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
@@ -230,6 +236,7 @@ export async function registerCustomer(payload: { email: string; name?: string; 
     throw new HTTPException(409, { message: "An account with this email already exists" });
   }
   await ensureSystemRoleAssignment(user.id, user.role);
+  await sendRegistrationEmail({ to: user.email, name: user.name });
 
   return toPublicUser(user);
 }
@@ -445,6 +452,16 @@ export async function createEmployeeForAdmin(payload: {
     },
   });
 
+  const setup = await createPasswordResetToken(user.id);
+  await markPasswordResetLinkSent({ userId: user.id });
+  await sendPasswordSetupEmail({
+    to: user.email,
+    name: user.name,
+    link: setup.link,
+    expiresAt: setup.expiresAt,
+    accountType: "employee",
+  });
+
   return toPublicUser(createdUser);
 }
 
@@ -480,6 +497,15 @@ export async function createCustomerForAdmin(payload: {
     performedBy: payload.performedBy ?? "admin",
     details: "Admin created customer account",
     metadata: { email: user.email, role: user.role },
+  });
+  const setup = await createPasswordResetToken(user.id);
+  await markPasswordResetLinkSent({ userId: user.id });
+  await sendPasswordSetupEmail({
+    to: user.email,
+    name: user.name,
+    link: setup.link,
+    expiresAt: setup.expiresAt,
+    accountType: "customer",
   });
   return toPublicUser(user);
 }
@@ -781,6 +807,14 @@ function sha256Hex(value: string) {
   return crypto.createHash("sha256").update(value).digest("hex");
 }
 
+async function createPasswordResetToken(userId: string) {
+  const token = crypto.randomBytes(32).toString("hex");
+  const tokenHash = sha256Hex(token);
+  const expiresAt = new Date(Date.now() + 1000 * 60 * 60);
+  await createPasswordResetRequest({ userId, tokenHash, expiresAt });
+  return { token, expiresAt, link: resetPasswordLink(token) };
+}
+
 export async function sendPasswordResetLinkForAdmin(payload: { userId: string; performedBy?: string }) {
   const existing = await getUserById(payload.userId);
   if (!existing) {
@@ -790,12 +824,7 @@ export async function sendPasswordResetLinkForAdmin(payload: { userId: string; p
     throw new HTTPException(400, { message: "User email is required to send a reset link" });
   }
 
-  // Generate secure random token; never return it to the client.
-  const token = crypto.randomBytes(32).toString("hex");
-  const tokenHash = sha256Hex(token);
-  const expiresAt = new Date(Date.now() + 1000 * 60 * 60); // 1 hour
-
-  await createPasswordResetRequest({ userId: payload.userId, tokenHash, expiresAt });
+  const reset = await createPasswordResetToken(payload.userId);
   const updated = await markPasswordResetLinkSent({ userId: payload.userId });
 
   await db.insert(auditLogs).values({
@@ -809,8 +838,13 @@ export async function sendPasswordResetLinkForAdmin(payload: { userId: string; p
     metadata: { email: updated.email },
   });
 
-  // Email sending is environment-specific. If no mail provider is configured,
-  // we still record the request and rely on ops to wire up mail delivery.
+  await sendPasswordResetEmail({
+    to: updated.email,
+    name: updated.name,
+    link: reset.link,
+    expiresAt: reset.expiresAt,
+    accountType: updated.role,
+  });
   return toPublicUser(updated);
 }
 
@@ -823,14 +857,16 @@ export async function requestPasswordResetByEmail(payload: { email: string }) {
     return { accepted: true };
   }
 
-  const token = crypto.randomBytes(32).toString("hex");
-  const tokenHash = sha256Hex(token);
-  const expiresAt = new Date(Date.now() + 1000 * 60 * 60); // 1 hour
-
-  await createPasswordResetRequest({ userId: user.id, tokenHash, expiresAt });
+  const reset = await createPasswordResetToken(user.id);
   await markPasswordResetLinkSent({ userId: user.id });
+  await sendPasswordResetEmail({
+    to: user.email,
+    name: user.name,
+    link: reset.link,
+    expiresAt: reset.expiresAt,
+    accountType: user.role,
+  });
 
-  // Email delivery is wired up by ops; we only track the request for now.
   return { accepted: true };
 }
 

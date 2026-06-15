@@ -33,6 +33,7 @@ const checkoutIntentSchema = z.object({
   pickupPersonName: z.string().optional(),
   pickupPersonPhone: z.string().optional(),
   remarks: z.string().max(1000).optional(),
+  couponCode: z.string().trim().max(64).optional(),
 });
 const etbProofSchema = z.object({
   paymentProofUrl: z.string().url(),
@@ -88,6 +89,7 @@ ordersRouter.post("/checkout-intent", requireAuth, zValidator("json", checkoutIn
     pickupPersonName: body.pickupPersonName,
     pickupPersonPhone: body.pickupPersonPhone,
     remarks: body.remarks,
+    couponCode: body.couponCode,
   });
   return c.json({ data }, 201);
 });

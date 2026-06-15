@@ -4,6 +4,7 @@ import { db } from "../lib/db/drizzle.js";
 import { auditLogs, cartItems, events, familyGroups, systemAlerts, uploadedDesigns, familyMembers, eventParticipants } from "../lib/db/schema.js";
 import { numberToMoney } from "./checkout-utils.js";
 import { getUserByEmail } from "../repositories/users-repository.js";
+import { sendCustomDesignApprovedEmail, sendCustomDesignDeclinedEmail } from "./email-service.js";
 
 function makeSubmissionNumber(date = new Date(), randomPart = Math.floor(1000 + Math.random() * 9000)) {
   const yyyy = date.getUTCFullYear();
@@ -216,7 +217,7 @@ export async function reviewUploadedDesign(payload: {
   }
 
   if (payload.decision === "approve") {
-    return db.transaction(async (tx) => {
+    const result = await db.transaction(async (tx) => {
       const quotedPrice = Number.isFinite(payload.quotedPriceUsd) ? Math.max(payload.quotedPriceUsd ?? 0, 0) : 0;
       if (quotedPrice <= 0) {
         throw new HTTPException(400, { message: "Quoted price is required before approving a custom design" });
@@ -321,6 +322,16 @@ export async function reviewUploadedDesign(payload: {
 
       return { submission: updated, cartItem };
     });
+    await sendCustomDesignApprovedEmail({
+      to: result.submission.userEmail,
+      customerName: result.submission.customerName,
+      submissionNumber: result.submission.submissionNumber,
+      designTitle: result.submission.designTitle,
+      quotedPriceUsd: result.submission.quotedPriceUsd,
+      estimatedDeliveryLabel: result.submission.estimatedDeliveryLabel,
+      reason: result.submission.reviewReason,
+    });
+    return result;
   }
 
   const [updated] = await db
@@ -350,6 +361,14 @@ export async function reviewUploadedDesign(payload: {
       reason: payload.reason ?? null,
       email_placeholder_status: "rejection_pending_manual_delivery",
     },
+  });
+
+  await sendCustomDesignDeclinedEmail({
+    to: updated.userEmail,
+    customerName: updated.customerName,
+    submissionNumber: updated.submissionNumber,
+    designTitle: updated.designTitle,
+    reason: updated.reviewReason,
   });
 
   return { submission: updated, cartItem: null };

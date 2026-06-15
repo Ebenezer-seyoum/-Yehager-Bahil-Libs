@@ -21,6 +21,8 @@ import {
   moneyToNumber,
   numberToMoney,
 } from "./checkout-utils.js";
+import { sendOrderStatusEmail } from "./email-service.js";
+import { getLiveProductDiscounts, applyBestProductDiscount, calculateCouponDiscount, markCouponRedeemed } from "./discounts-service.js";
 
 const ORDER_STATUS_VALUES = [
   "pending",
@@ -159,6 +161,21 @@ export async function updateOrderAdminState(payload: {
     },
   });
 
+  const orderChanged =
+    (payload.status && payload.status !== order.status) ||
+    (payload.paymentStatus && payload.paymentStatus !== order.paymentStatus) ||
+    (payload.fulfillmentType && payload.fulfillmentType !== order.fulfillmentType);
+  if (orderChanged) {
+    await sendOrderStatusEmail({
+      to: updated.userEmail,
+      customerName: updated.customerName,
+      orderNumber: updated.orderNumber,
+      status: updated.status,
+      paymentStatus: updated.paymentStatus,
+      fulfillmentType: updated.fulfillmentType,
+    });
+  }
+
   return updated;
 }
 
@@ -175,6 +192,7 @@ export async function createCheckoutIntent(payload: {
   pickupPersonName?: string;
   pickupPersonPhone?: string;
   remarks?: string;
+  couponCode?: string;
 }) {
   const userEmail = payload.userEmail;
   if (!userEmail) {
@@ -197,7 +215,7 @@ export async function createCheckoutIntent(payload: {
     throw new HTTPException(400, { message: "Stripe checkout orders must use USD" });
   }
 
-  return db.transaction(async (tx) => {
+  const result = await db.transaction(async (tx) => {
     const cartRows = await listCartItemsByIdsForUser({
       itemIds: payload.cartItemIds,
       userEmail,
@@ -213,7 +231,15 @@ export async function createCheckoutIntent(payload: {
         })
       : [];
 
-    const productPriceMap = new Map(dbProducts.map((p) => [p.id, p.priceUsd]));
+    const liveDiscounts = await getLiveProductDiscounts();
+    const productDiscountMetaMap = new Map<string, ReturnType<typeof applyBestProductDiscount>>();
+    const productPriceMap = new Map(
+      dbProducts.map((p) => {
+        const discounted = applyBestProductDiscount(p, liveDiscounts);
+        productDiscountMetaMap.set(p.id, discounted);
+        return [p.id, discounted.effectivePriceUsd];
+      }),
+    );
     const eventIds = [...new Set(cartRows.map((row) => row.eventId).filter((id): id is string => Boolean(id)))];
     const primaryEventId = eventIds.length === 1 ? eventIds[0] : undefined;
     const primaryEvent = primaryEventId
@@ -224,6 +250,7 @@ export async function createCheckoutIntent(payload: {
 
     const lineInputs = cartRows.map((row) => {
       const trustedUnitPriceUsd = row.productId ? productPriceMap.get(row.productId) ?? row.priceUsd : row.priceUsd;
+      const discountMeta = row.productId ? productDiscountMetaMap.get(row.productId) : null;
       return {
         cartItemId: row.id,
         productId: row.productId,
@@ -233,7 +260,18 @@ export async function createCheckoutIntent(payload: {
         measurementId: row.measurementId,
         itemType: row.itemType,
         uploadedDesignId: row.uploadedDesignId,
-        itemMetadata: row.itemMetadata,
+        itemMetadata: {
+          ...(row.itemMetadata ?? {}),
+          ...(discountMeta?.discount
+            ? {
+                original_price_usd: discountMeta.originalPriceUsd,
+                effective_price_usd: discountMeta.effectivePriceUsd,
+                discount_label: discountMeta.discount.label,
+                discount_savings_usd: discountMeta.discount.savingsUsd,
+                product_discount_id: discountMeta.discount.id,
+              }
+            : {}),
+        },
       };
     });
 
@@ -246,7 +284,19 @@ export async function createCheckoutIntent(payload: {
     const carrier = fulfillmentType === "pickup" ? "pickup" : payload.carrier ?? "Ethiopian Mail Service";
     const shippingCostUsd =
       fulfillmentType === "mail" && carrier === "Ethiopian Mail Service" ? computeEmsShipping(totalItems) : 0;
-    const totals = computeTotals(lines, shippingCostUsd);
+    const baseTotals = computeTotals(lines, shippingCostUsd);
+    const couponResult = await calculateCouponDiscount({
+      code: payload.couponCode,
+      subtotalUsd: baseTotals.subtotalUsd,
+      shippingCostUsd,
+      orderType,
+    });
+    const discountAmountUsd = couponResult.discountAmountUsd;
+    const totals = {
+      ...baseTotals,
+      discountAmountUsd,
+      totalUsd: Math.max(baseTotals.totalUsd - discountAmountUsd, 0),
+    };
 
     let totalEtb: string | undefined;
     let etbExchangeRate: string | undefined;
@@ -289,6 +339,10 @@ export async function createCheckoutIntent(payload: {
           uploaded_design_id: line.uploadedDesignId,
           item_metadata: line.itemMetadata,
         })),
+        subtotalUsd: numberToMoney(baseTotals.subtotalUsd),
+        discountAmountUsd: numberToMoney(discountAmountUsd),
+        couponCode: couponResult.coupon?.code,
+        couponId: couponResult.coupon?.id,
         totalUsd: numberToMoney(totals.totalUsd),
         shippingCostUsd: numberToMoney(totals.shippingCostUsd),
         orderType,
@@ -324,6 +378,9 @@ export async function createCheckoutIntent(payload: {
         })
         .where(inArray(uploadedDesigns.id, uploadedDesignIds));
     }
+    if (couponResult.coupon?.id) {
+      await markCouponRedeemed(couponResult.coupon.id);
+    }
 
     await tx.insert(auditLogs).values({
       action: "checkout_intent_created",
@@ -339,6 +396,9 @@ export async function createCheckoutIntent(payload: {
         order_mode: orderMode,
         cart_item_ids: payload.cartItemIds,
         total_usd: totals.totalUsd,
+        subtotal_usd: baseTotals.subtotalUsd,
+        discount_amount_usd: discountAmountUsd,
+        coupon_code: couponResult.coupon?.code ?? null,
         total_etb: totalEtb,
         etb_exchange_rate: etbExchangeRate,
         payment_currency: paymentCurrency,
@@ -351,6 +411,15 @@ export async function createCheckoutIntent(payload: {
       lines,
     };
   });
+  await sendOrderStatusEmail({
+    to: result.order.userEmail,
+    customerName: result.order.customerName,
+    orderNumber: result.order.orderNumber,
+    status: result.order.status,
+    paymentStatus: result.order.paymentStatus,
+    fulfillmentType: result.order.fulfillmentType,
+  });
+  return result;
 }
 
 export async function submitEtbPaymentProof(payload: {
@@ -408,6 +477,15 @@ export async function submitEtbPaymentProof(payload: {
     type: "payment_review",
     severity: "info",
     entityId: updated.id,
+  });
+
+  await sendOrderStatusEmail({
+    to: updated.userEmail,
+    customerName: updated.customerName,
+    orderNumber: updated.orderNumber,
+    status: updated.status,
+    paymentStatus: updated.paymentStatus,
+    fulfillmentType: updated.fulfillmentType,
   });
 
   if (updated.eventId) {

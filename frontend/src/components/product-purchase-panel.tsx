@@ -25,6 +25,9 @@ type ProductPurchasePanelProps = {
     uniqueId?: string | null;
     fabricType?: string | null;
     embroideryStyle?: string | null;
+    priceUsd?: number | string | null;
+    originalPriceUsd?: number | string | null;
+    discount?: { label?: string | null } | null;
   };
   roles: Role[];
   price: number;
@@ -205,6 +208,8 @@ export function ProductPurchasePanel({
 
   const selectedRole = roles[selectedRoleIndex] ?? null;
   const displayPrice = Number(selectedRole?.price ?? price);
+  const originalPrice = Number(product.originalPriceUsd ?? product.priceUsd ?? displayPrice);
+  const hasDiscount = !selectedRole && Boolean(product.discount && originalPrice > displayPrice);
   const measurementGender = selectedRole?.gender ?? product.gender ?? "female";
   const etb = etbRate ? Math.round(displayPrice * etbRate).toLocaleString() : null;
   const signinHref = `/signin?callbackUrl=${encodeURIComponent(`/product/${product.id}`)}`;
@@ -261,11 +266,15 @@ export function ProductPurchasePanel({
         {product.region ? <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">{product.region}</span> : null}
         {product.subcategory ? <span className="rounded-full bg-secondary px-3 py-1 text-xs text-secondary-foreground">{product.subcategory}</span> : null}
         {product.uniqueId ? <span className="rounded-full bg-secondary px-3 py-1 font-mono text-xs text-muted-foreground"># {product.uniqueId}</span> : null}
+        {hasDiscount ? <span className="rounded-full bg-rose-600 px-3 py-1 text-xs font-black text-white">{product.discount?.label ?? "SALE"}</span> : null}
       </div>
 
       <div>
         <h1 className="font-heading text-3xl font-bold leading-tight text-foreground md:text-4xl">{product.name}</h1>
-        <p className="mt-3 text-3xl font-light text-primary">${displayPrice.toFixed(2)}</p>
+        <div className="mt-3 flex flex-wrap items-end gap-3">
+          <p className="text-3xl font-light text-primary">${displayPrice.toFixed(2)}</p>
+          {hasDiscount ? <p className="pb-1 text-lg font-semibold text-muted-foreground line-through">${originalPrice.toFixed(2)}</p> : null}
+        </div>
         {etb ? <p className="mt-1 text-sm text-muted-foreground">≈ {etb} ETB</p> : null}
       </div>
 

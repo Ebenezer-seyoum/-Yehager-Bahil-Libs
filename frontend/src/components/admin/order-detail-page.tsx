@@ -15,6 +15,7 @@ import {
   StickyNote,
   Truck,
   UserRound,
+  BadgePercent,
 } from "lucide-react";
 import { AdminDetailLayout, AdminDetailHeader } from "@/components/admin/admin-detail-layout";
 import { cn } from "@/lib/utils";
@@ -37,6 +38,11 @@ type OrderItem = {
   priceUsd?: number | string | null;
   unit_price_usd?: number | string | null;
   line_total_usd?: number | string | null;
+  original_price_usd?: number | string | null;
+  discount_amount_usd?: number | string | null;
+  discount_label?: string | null;
+  item_metadata?: Record<string, unknown> | null;
+  itemMetadata?: Record<string, unknown> | null;
   measurements?: Record<string, string | number | null> | null;
   measurementDetails?: Record<string, string | number | null> | null;
   measurement_details?: Record<string, string | number | null> | null;
@@ -60,6 +66,12 @@ export type OrderDetailData = {
   customerName?: string | null;
   userEmail?: string | null;
   totalUsd?: number | string | null;
+  subtotalUsd?: number | string | null;
+  subtotal_usd?: number | string | null;
+  discountAmountUsd?: number | string | null;
+  discount_amount_usd?: number | string | null;
+  couponCode?: string | null;
+  coupon_code?: string | null;
   totalEtb?: number | string | null;
   totalAmount?: number | string | null;
   shippingCostUsd?: number | string | null;
@@ -184,6 +196,20 @@ function itemPrice(item: OrderItem) {
   return item.line_total_usd ?? item.priceUsd ?? item.unit_price_usd ?? item.price ?? null;
 }
 
+function itemUnitPrice(item: OrderItem) {
+  return item.unit_price_usd ?? item.priceUsd ?? item.price ?? null;
+}
+
+function itemOriginalPrice(item: OrderItem) {
+  const metadata = item.itemMetadata ?? item.item_metadata ?? {};
+  return item.original_price_usd ?? metadata.original_price_usd ?? metadata.originalPriceUsd ?? null;
+}
+
+function itemDiscountLabel(item: OrderItem) {
+  const metadata = item.itemMetadata ?? item.item_metadata ?? {};
+  return item.discount_label ?? metadata.discount_label ?? metadata.discountLabel ?? null;
+}
+
 function itemMeasurements(item: OrderItem) {
   return item.measurements ?? item.measurementDetails ?? item.measurement_details ?? {};
 }
@@ -259,7 +285,7 @@ export function OrderDetailPage({
   const router = useRouter();
   const [order, setOrder] = useState<OrderDetailData>(initialOrder);
   const [busy, setBusy] = useState(false);
-  const [section, setSection] = useState<"summary" | "items" | "customer" | "measurements" | "production" | "shipping" | "timeline" | "attachments" | "notes">("summary");
+  const [section, setSection] = useState<"summary" | "items" | "discounts" | "customer" | "measurements" | "production" | "shipping" | "timeline" | "attachments" | "notes">("summary");
   const [activeMemberIdx, setActiveMemberIdx] = useState(0);
   const [productionStep, setProductionStep] = useState<string | null>(() => deriveProductionStep(initialOrder.status));
 
@@ -272,6 +298,16 @@ export function OrderDetailPage({
     : isPickup
       ? order.status === "ready_for_pickup" ? "ready_for_pickup" : "pending"
       : order.status === "shipped" ? "shipped" : order.status === "fulfilled" ? "shipping_assigned" : "pending";
+  const subtotalBeforeCoupon = order.subtotalUsd ?? order.subtotal_usd ?? (() => {
+    const total = Number(order.totalUsd ?? order.totalAmount ?? 0);
+    const shipping = Number(order.shippingCostUsd ?? 0);
+    const discount = Number(order.discountAmountUsd ?? order.discount_amount_usd ?? 0);
+    const computed = total - shipping + discount;
+    return Number.isFinite(computed) && computed >= 0 ? computed : 0;
+  })();
+  const couponDiscount = Number(order.discountAmountUsd ?? order.discount_amount_usd ?? 0);
+  const couponCode = order.couponCode ?? order.coupon_code ?? null;
+  const finalTotal = Number(order.totalUsd ?? order.totalAmount ?? 0);
 
   const memberMeasurements = (order.members ?? []).map((member: any, idx: number) => ({
     name: member.name ?? member.customerName ?? `Member ${idx + 1}`,
@@ -285,6 +321,7 @@ export function OrderDetailPage({
   const sections = [
     { id: "summary", label: "Order Summary", hint: "Core status and totals", icon: ShoppingBag },
     { id: "items", label: "Order Items", hint: "Products and design previews", icon: ImageIcon },
+    { id: "discounts", label: "Coupons & Discounts", hint: "Sale pricing and coupon impact", icon: BadgePercent },
     { id: "customer", label: "Customer Details", hint: "Contact and address", icon: UserRound },
     { id: "measurements", label: "Measurements", hint: "Individual or group sizing", icon: Ruler },
     { id: "production", label: "Production Tracking", hint: "Inner workflow control", icon: Scissors },
@@ -442,6 +479,63 @@ export function OrderDetailPage({
             ))}
           </div>
           {(order.items ?? []).length === 0 ? <DetailField label="Order Items" value="No order items were found." /> : null}
+        </div>
+      ) : null}
+
+      {section === "discounts" ? (
+        <div className="space-y-6">
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <DetailField label="Subtotal Before Coupon" value={money(subtotalBeforeCoupon)} />
+            <DetailField label="Coupon Code" value={couponCode || "No coupon used"} />
+            <DetailField label="Coupon Discount" value={couponDiscount > 0 ? `-${money(couponDiscount)}` : "$0.00"} />
+            <DetailField label="Final Order Total" value={money(finalTotal)} />
+          </div>
+
+          <div className="overflow-hidden rounded-2xl border border-slate-200">
+            <table className="w-full min-w-[760px] text-left text-sm">
+              <thead className="bg-slate-100 text-[11px] font-black uppercase tracking-widest text-slate-600">
+                <tr>
+                  <th className="px-4 py-3">Item</th>
+                  <th className="px-4 py-3">Original Price</th>
+                  <th className="px-4 py-3">Charged Price</th>
+                  <th className="px-4 py-3">Product Discount</th>
+                  <th className="px-4 py-3">Qty</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200 bg-slate-50">
+                {(order.items ?? []).map((item, index) => {
+                  const original = itemOriginalPrice(item);
+                  const charged = itemUnitPrice(item);
+                  const originalNum = Number(original ?? charged ?? 0);
+                  const chargedNum = Number(charged ?? 0);
+                  const hasItemDiscount = Number.isFinite(originalNum) && Number.isFinite(chargedNum) && originalNum > chargedNum;
+                  return (
+                    <tr key={`${item.id ?? index}-discount`}>
+                      <td className="px-4 py-4 font-black text-slate-950">{itemName(item, index)}</td>
+                      <td className="px-4 py-4 font-semibold text-slate-600">
+                        {hasItemDiscount ? <span className="line-through">{money(originalNum)}</span> : "Included in item price"}
+                      </td>
+                      <td className="px-4 py-4 font-black text-emerald-700">{money(charged)}</td>
+                      <td className="px-4 py-4">
+                        {hasItemDiscount ? (
+                          <span className="rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-black text-rose-700">
+                            {String(itemDiscountLabel(item) ?? `${Math.round(((originalNum - chargedNum) / originalNum) * 100)}% OFF`)}
+                          </span>
+                        ) : (
+                          <span className="text-sm font-semibold text-slate-400">No visible product discount</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-4 font-semibold text-slate-600">{item.quantity ?? 1}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="rounded-2xl border border-blue-100 bg-blue-50 p-5 text-sm font-semibold text-blue-950">
+            Product discounts are item-level sale prices. Coupon discounts are order-level reductions applied after subtotal and before the final payable total.
+          </div>
         </div>
       ) : null}
 

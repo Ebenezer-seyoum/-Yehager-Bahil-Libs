@@ -206,6 +206,64 @@ export const products = pgTable(
   (table) => [index("products_region_idx").on(table.region), index("products_active_idx").on(table.isActive)],
 );
 
+export const productDiscounts = pgTable(
+  "product_discounts",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    name: text("name").notNull(),
+    discountType: varchar("discount_type", { length: 32 }).default("percentage").notNull(),
+    discountValue: numeric("discount_value", { precision: 12, scale: 2 }).notNull(),
+    scope: varchar("scope", { length: 32 }).default("all_products").notNull(),
+    productId: uuid("product_id").references(() => products.id, { onDelete: "cascade" }),
+    region: text("region"),
+    category: text("category"),
+    subcategory: text("subcategory"),
+    status: varchar("status", { length: 32 }).default("draft").notNull(),
+    startsAt: timestamp("starts_at", { withTimezone: true }),
+    endsAt: timestamp("ends_at", { withTimezone: true }),
+    maxRedemptions: integer("max_redemptions"),
+    redemptionCount: integer("redemption_count").default(0).notNull(),
+    internalNote: text("internal_note"),
+    ...timestamps,
+  },
+  (table) => [
+    index("product_discounts_status_idx").on(table.status),
+    index("product_discounts_product_id_idx").on(table.productId),
+    check("product_discounts_type_check", sql`${table.discountType} in ('percentage', 'fixed_amount')`),
+    check("product_discounts_scope_check", sql`${table.scope} in ('all_products', 'product', 'region', 'category', 'subcategory')`),
+    check("product_discounts_status_check", sql`${table.status} in ('draft', 'scheduled', 'active', 'paused', 'expired')`),
+  ],
+);
+
+export const couponCodes = pgTable(
+  "coupon_codes",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    code: varchar("code", { length: 64 }).notNull(),
+    name: text("name").notNull(),
+    discountType: varchar("discount_type", { length: 32 }).default("percentage").notNull(),
+    discountValue: numeric("discount_value", { precision: 12, scale: 2 }).notNull(),
+    appliesTo: varchar("applies_to", { length: 32 }).default("all_orders").notNull(),
+    minimumOrderUsd: numeric("minimum_order_usd", { precision: 12, scale: 2 }),
+    maxDiscountUsd: numeric("max_discount_usd", { precision: 12, scale: 2 }),
+    usageLimit: integer("usage_limit"),
+    perCustomerLimit: integer("per_customer_limit").default(1).notNull(),
+    redemptionCount: integer("redemption_count").default(0).notNull(),
+    status: varchar("status", { length: 32 }).default("draft").notNull(),
+    startsAt: timestamp("starts_at", { withTimezone: true }),
+    endsAt: timestamp("ends_at", { withTimezone: true }),
+    internalNote: text("internal_note"),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("coupon_codes_code_unique").on(table.code),
+    index("coupon_codes_status_idx").on(table.status),
+    check("coupon_codes_type_check", sql`${table.discountType} in ('percentage', 'fixed_amount', 'free_shipping')`),
+    check("coupon_codes_applies_to_check", sql`${table.appliesTo} in ('all_orders', 'catalog_orders', 'custom_orders')`),
+    check("coupon_codes_status_check", sql`${table.status} in ('draft', 'scheduled', 'active', 'paused', 'expired', 'used_up')`),
+  ],
+);
+
 export type HomepageCollection = {
   id: string;
   name: string;
@@ -352,6 +410,10 @@ export const orders = pgTable(
     userEmail: varchar("user_email", { length: 320 }).notNull(),
     customerName: text("customer_name").notNull(),
     items: jsonb("items").$type<Array<Record<string, unknown>>>().notNull(),
+    subtotalUsd: numeric("subtotal_usd", { precision: 12, scale: 2 }),
+    discountAmountUsd: numeric("discount_amount_usd", { precision: 12, scale: 2 }).default("0").notNull(),
+    couponCode: varchar("coupon_code", { length: 64 }),
+    couponId: uuid("coupon_id").references(() => couponCodes.id, { onDelete: "set null" }),
     totalUsd: numeric("total_usd", { precision: 12, scale: 2 }).notNull(),
     shippingCostUsd: numeric("shipping_cost_usd", { precision: 12, scale: 2 }).default("0").notNull(),
     orderType: text("order_type").default("catalog_order").notNull(),

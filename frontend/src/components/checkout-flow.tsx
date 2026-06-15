@@ -59,6 +59,7 @@ function errorMessage(error?: string) {
   if (error === "terms") return "Please agree to tailoring terms before placing your order.";
   if (error === "address") return "Please complete the required shipping address fields.";
   if (error === "pickup") return "Please provide the pickup person's name and phone number.";
+  if (error === "coupon") return "Coupon could not be applied. Please check the code, dates, usage limit, and order type.";
   if (error) return "Checkout failed. Please try again.";
   return "";
 }
@@ -80,6 +81,7 @@ export function CheckoutFlow({ items, event, error, etbRate, startCheckoutAction
   const [paymentMethod, setPaymentMethod] = useState<"stripe_usd" | "etb_bank_transfer">("stripe_usd");
   const [selectedCurrency, setSelectedCurrency] = useState("USD");
   const [tailorNote, setTailorNote] = useState("");
+  const [couponCode, setCouponCode] = useState("");
 
   const totalItems = items.reduce((sum, item) => sum + Number(item.quantity ?? 1), 0);
   const subtotal = items.reduce((sum, item) => sum + Number(item.priceUsd ?? 0) * Number(item.quantity ?? 1), 0);
@@ -111,6 +113,7 @@ export function CheckoutFlow({ items, event, error, etbRate, startCheckoutAction
       <input type="hidden" name="paymentMethod" value={paymentMethod} />
       <input type="hidden" name="selectedCurrency" value={selectedCurrency} />
       <input type="hidden" name="tailorNote" value={tailorNote} />
+      <input type="hidden" name="couponCode" value={couponCode.trim()} />
 
       {message ? <div className="rounded-xl border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">{message}</div> : null}
 
@@ -206,6 +209,21 @@ export function CheckoutFlow({ items, event, error, etbRate, startCheckoutAction
           <SummaryLine label="Clothing Subtotal" value={`$${subtotal.toFixed(2)} USD`} />
           <SummaryLine label="Shipping & Handling" value={fulfillmentType === "pickup" ? "Free - Pickup" : `$${shipping.toFixed(2)} USD`} />
           {fulfillmentType === "mail" ? <p className="text-[10px] text-muted-foreground leading-relaxed">{emsRateText(totalItems)}</p> : null}
+        </div>
+        <div className="mt-4 rounded-xl border border-dashed border-primary/40 bg-primary/5 p-4">
+          <label className="block text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Coupon Code</label>
+          <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+            <input
+              value={couponCode}
+              onChange={(event) => setCouponCode(event.target.value.toUpperCase())}
+              className="h-11 flex-1 rounded-lg border border-input bg-background px-3 text-sm font-semibold outline-none focus:border-primary"
+              placeholder="SAVE30"
+            />
+            <span className="inline-flex h-11 items-center justify-center rounded-lg border border-primary/30 px-4 text-xs font-bold text-primary">
+              Applied at checkout
+            </span>
+          </div>
+          <p className="mt-2 text-[11px] text-muted-foreground">Discount is validated and calculated securely when you place the order.</p>
         </div>
         <div className="flex items-center justify-between pt-2 border-t border-border mt-2">
           <span className="font-bold text-base">Total</span>

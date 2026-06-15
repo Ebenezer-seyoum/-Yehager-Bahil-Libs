@@ -12,6 +12,7 @@ import {
 } from "../repositories/payments-repository.js";
 import { deleteCartItemsByIdsForUser } from "../repositories/cart-repository.js";
 import { canTransitionPaymentStatus, deriveOrderStatusOnPayment } from "./order-state-machine.js";
+import { sendOrderStatusEmail } from "./email-service.js";
 
 const stripe = new Stripe(env.STRIPE_SECRET_KEY);
 
@@ -140,10 +141,18 @@ export async function processStripeWebhook(payload: { body: string; signature?: 
       const nextPayment = "paid" as const;
       if (canTransitionPaymentStatus(order.paymentStatus, nextPayment)) {
         const nextOrderStatus = deriveOrderStatusOnPayment(order.status, nextPayment);
-        await updateOrderPaymentState({
+        const updatedOrder = await updateOrderPaymentState({
           orderId: order.id,
           paymentStatus: nextPayment,
           orderStatus: nextOrderStatus,
+        });
+        await sendOrderStatusEmail({
+          to: updatedOrder?.userEmail ?? order.userEmail,
+          customerName: updatedOrder?.customerName ?? order.customerName,
+          orderNumber: updatedOrder?.orderNumber ?? order.orderNumber,
+          status: updatedOrder?.status ?? nextOrderStatus,
+          paymentStatus: updatedOrder?.paymentStatus ?? nextPayment,
+          fulfillmentType: updatedOrder?.fulfillmentType ?? order.fulfillmentType,
         });
 
         await db.insert(auditLogs).values({

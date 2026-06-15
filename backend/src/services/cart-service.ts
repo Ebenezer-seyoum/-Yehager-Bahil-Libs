@@ -8,6 +8,7 @@ import {
 import { getMeasurementForUser } from "../repositories/measurements-repository.js";
 import { getActiveProductById } from "../repositories/products-repository.js";
 import { getUserByEmail } from "../repositories/users-repository.js";
+import { getEffectiveProductPrice } from "./discounts-service.js";
 
 type CartProductRole = { label: string; icon?: string; price: number; gender: "male" | "female" | "unisex" };
 
@@ -60,6 +61,7 @@ export async function addItemToCart(payload: {
   }
 
   const user = await getUserByEmail(payload.userEmail);
+  const pricedProduct = await getEffectiveProductPrice(product);
   const availableRoles = getProductRoles(product);
   const selectedRole = payload.roleLabel
     ? availableRoles.find((role) => role.label === payload.roleLabel)
@@ -88,7 +90,7 @@ export async function addItemToCart(payload: {
     productId: product.id,
     productName: selectedRole ? `${product.name} — ${selectedRole.label}` : product.name,
     productImage: product.images?.[0],
-    priceUsd: selectedRole ? selectedRole.price.toFixed(2) : product.priceUsd,
+    priceUsd: selectedRole ? selectedRole.price.toFixed(2) : pricedProduct.effectivePriceUsd,
     quantity: payload.quantity,
     measurementId: payload.measurementId,
     measurementSnapshot: measurement

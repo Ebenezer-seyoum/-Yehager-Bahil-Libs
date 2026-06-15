@@ -33,6 +33,12 @@ import { createRoleForAdmin, deleteRoleForAdmin, listRolesForAdmin, updateRoleFo
 import { deletePermissionForAdmin, getEffectivePermissionsForUser, listPermissionsForAdmin, updatePermissionForAdmin, updateUserPermissionsForAdmin } from "../../services/permissions-service.js";
 import { getOrderReport, toOrderReportCsv } from "../../services/reports-service.js";
 import { getReportsCenterPayload } from "../../services/reports-center-service.js";
+import {
+  createCouponCodeForAdmin,
+  createProductDiscountForAdmin,
+  getDiscountWorkspacePayload,
+  updateProductDiscountForAdmin,
+} from "../../services/discounts-service.js";
 import type { AppBindings } from "../../types/hono.js";
 
 const listQuerySchema = z.object({
@@ -91,6 +97,40 @@ const createProductSchema = z.object({
   images: z.array(productImageSchema).default([]),
   isActive: z.boolean().optional(),
   isFeatured: z.boolean().optional(),
+});
+const productDiscountParamSchema = z.object({
+  discountId: z.string().uuid(),
+});
+const productDiscountSchema = z.object({
+  name: z.string().trim().min(1).max(180),
+  discountType: z.enum(["percentage", "fixed_amount"]),
+  discountValue: z.coerce.number().positive(),
+  scope: z.enum(["all_products", "product", "region", "category", "subcategory"]),
+  productId: z.string().uuid().nullable().optional(),
+  region: z.string().trim().nullable().optional(),
+  category: z.string().trim().nullable().optional(),
+  subcategory: z.string().trim().nullable().optional(),
+  status: z.enum(["draft", "scheduled", "active", "paused", "expired"]).optional(),
+  startsAt: z.string().nullable().optional(),
+  endsAt: z.string().nullable().optional(),
+  maxRedemptions: z.coerce.number().int().positive().nullable().optional(),
+  internalNote: z.string().trim().max(1000).nullable().optional(),
+});
+const productDiscountPatchSchema = productDiscountSchema.partial();
+const couponCodeSchema = z.object({
+  code: z.string().trim().min(2).max(64),
+  name: z.string().trim().min(1).max(180),
+  discountType: z.enum(["percentage", "fixed_amount", "free_shipping"]),
+  discountValue: z.coerce.number().nonnegative(),
+  appliesTo: z.enum(["all_orders", "catalog_orders", "custom_orders"]),
+  minimumOrderUsd: z.coerce.number().nonnegative().nullable().optional(),
+  maxDiscountUsd: z.coerce.number().nonnegative().nullable().optional(),
+  usageLimit: z.coerce.number().int().positive().nullable().optional(),
+  perCustomerLimit: z.coerce.number().int().positive().nullable().optional(),
+  status: z.enum(["draft", "scheduled", "active", "paused", "expired", "used_up"]).optional(),
+  startsAt: z.string().nullable().optional(),
+  endsAt: z.string().nullable().optional(),
+  internalNote: z.string().trim().max(1000).nullable().optional(),
 });
 const orderParamSchema = z.object({
   orderId: z.string().uuid(),
@@ -750,6 +790,59 @@ adminRouter.get(
       "Content-Type": "text/csv",
       "Content-Disposition": 'attachment; filename="order-report.csv"',
     });
+  },
+);
+
+adminRouter.get(
+  "/discounts",
+  requirePermission(PERMISSIONS.COUPONS_VIEW),
+  async (c) => {
+    const data = await getDiscountWorkspacePayload();
+    return c.json({ data });
+  },
+);
+
+adminRouter.post(
+  "/discounts/product-discounts",
+  requirePermission(PERMISSIONS.COUPONS_EDIT),
+  zValidator("json", productDiscountSchema),
+  async (c) => {
+    const authUser = c.get("authUser");
+    const data = await createProductDiscountForAdmin({
+      ...c.req.valid("json"),
+      performedBy: authUser?.email,
+    });
+    return c.json({ data }, 201);
+  },
+);
+
+adminRouter.patch(
+  "/discounts/product-discounts/:discountId",
+  requirePermission(PERMISSIONS.COUPONS_EDIT),
+  zValidator("param", productDiscountParamSchema),
+  zValidator("json", productDiscountPatchSchema),
+  async (c) => {
+    const authUser = c.get("authUser");
+    const { discountId } = c.req.valid("param");
+    const data = await updateProductDiscountForAdmin(discountId, {
+      ...c.req.valid("json"),
+      performedBy: authUser?.email,
+    });
+    return c.json({ data });
+  },
+);
+
+adminRouter.post(
+  "/discounts/coupons",
+  requirePermission(PERMISSIONS.COUPONS_EDIT),
+  zValidator("json", couponCodeSchema),
+  async (c) => {
+    const authUser = c.get("authUser");
+    const data = await createCouponCodeForAdmin({
+      ...c.req.valid("json"),
+      performedBy: authUser?.email,
+    });
+    return c.json({ data }, 201);
   },
 );
 

@@ -20,6 +20,10 @@ type Product = {
   fabricType?: string | null;
   embroideryStyle?: string | null;
   priceUsd?: number | null;
+  effectivePriceUsd?: number | string | null;
+  finalPriceUsd?: number | string | null;
+  originalPriceUsd?: number | string | null;
+  discount?: { label?: string | null } | null;
   images?: string[] | null;
   familyRoles?: Array<{ label: string; icon?: string; price: number; gender: "male" | "female" | "unisex" }> | null;
   isCouple?: boolean | null;
@@ -260,7 +264,7 @@ export default async function ProductDetailPage({
   }
 
   const images = Array.isArray(product.images) && product.images.length > 0 ? product.images : [];
-  const price = Number(product.priceUsd ?? 0);
+  const price = Number(product.effectivePriceUsd ?? product.finalPriceUsd ?? product.priceUsd ?? 0);
   const roles = buildStorefrontRoles(product, price);
   const latestMeasurement = measurements[0] ?? null;
 

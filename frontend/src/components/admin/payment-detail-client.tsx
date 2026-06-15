@@ -38,7 +38,7 @@ export function PaymentDetailClient({ order: initialOrder }: { order: Order }) {
   const [order, setOrder] = useState<Order>(initialOrder);
   const [busy, setBusy] = useState(false);
   const [showFullProof, setShowFullProof] = useState(false);
-  const [activeSection, setActiveSection] = useState<"summary" | "proof" | "audit">("summary");
+  const [activeSection, setActiveSection] = useState<"summary" | "breakdown" | "proof" | "audit">("summary");
 
   const paymentStatus = order.paymentStatus ?? order.payment_status ?? "pending";
   const paymentCurrency = order.paymentCurrency ?? order.payment_currency ?? "USD";
@@ -46,6 +46,10 @@ export function PaymentDetailClient({ order: initialOrder }: { order: Order }) {
   const orderNumber = order.orderNumber ?? order.order_number ?? order.id.slice(0, 8).toUpperCase();
   const customerName = order.customerName ?? order.customer_name ?? order.userName ?? order.user_email ?? order.userEmail ?? "Customer";
   const totalUsd = order.totalUsd ?? order.total_usd;
+  const subtotalUsd = order.subtotalUsd ?? order.subtotal_usd;
+  const shippingCostUsd = order.shippingCostUsd ?? order.shipping_cost_usd;
+  const discountAmountUsd = order.discountAmountUsd ?? order.discount_amount_usd;
+  const couponCode = order.couponCode ?? order.coupon_code;
   const totalEtb = order.totalEtb ?? order.total_etb;
   const isEtb = paymentMethod === "etb_bank_transfer" || paymentCurrency === "ETB";
   const proofUrl = order.paymentProofUrl || order.payment_proof_url;
@@ -156,6 +160,7 @@ export function PaymentDetailClient({ order: initialOrder }: { order: Order }) {
       }
       sections={[
         { id: "summary", label: "Transaction Summary", icon: History },
+        { id: "breakdown", label: "Financial Breakdown", icon: Banknote },
         { id: "proof", label: "Proof of Transfer", icon: FileText },
         { id: "audit", label: "Audit & Context", icon: ShieldCheck },
       ]}
@@ -179,6 +184,43 @@ export function PaymentDetailClient({ order: initialOrder }: { order: Order }) {
                  <span className="text-xs font-black uppercase text-slate-900">{isEtb ? "Bank Transfer" : "Stripe"}</span>
               </div>
            </div>
+        </section>
+      )}
+
+      {activeSection === "breakdown" && (
+        <section className="rounded-[2.5rem] border border-slate-200 bg-white p-8 shadow-sm">
+           <h2 className="mb-8 flex items-center gap-2 text-sm font-black uppercase tracking-widest text-slate-400"><Banknote className="h-4 w-4" /> Financial Breakdown</h2>
+           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              <div className="rounded-2xl bg-slate-50 p-6">
+                 <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Subtotal Before Coupon</span>
+                 <p className="mt-2 text-2xl font-black text-slate-900">{formatUsd(subtotalUsd ?? Number(totalUsd ?? 0) - Number(shippingCostUsd ?? 0) + Number(discountAmountUsd ?? 0))}</p>
+              </div>
+              <div className="rounded-2xl bg-slate-50 p-6">
+                 <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Coupon Code</span>
+                 <p className="mt-2 text-2xl font-black text-slate-900">{couponCode || "None"}</p>
+              </div>
+              <div className="rounded-2xl bg-rose-50 p-6">
+                 <span className="text-[10px] font-black uppercase text-rose-400 tracking-widest">Coupon Discount</span>
+                 <p className="mt-2 text-2xl font-black text-rose-700">{Number(discountAmountUsd ?? 0) > 0 ? `-${formatUsd(discountAmountUsd)}` : "$0.00"}</p>
+              </div>
+              <div className="rounded-2xl bg-emerald-50 p-6">
+                 <span className="text-[10px] font-black uppercase text-emerald-500 tracking-widest">Final Payable</span>
+                 <p className="mt-2 text-2xl font-black text-emerald-800">{formatUsd(totalUsd)}</p>
+              </div>
+           </div>
+           <div className="mt-5 grid gap-4 md:grid-cols-2">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Shipping / Handling</p>
+                 <p className="mt-2 text-xl font-black text-slate-900">{formatUsd(shippingCostUsd)}</p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Payment Verification Amount</p>
+                 <p className="mt-2 text-xl font-black text-slate-900">{formatUsd(totalUsd)} {paymentCurrency}</p>
+              </div>
+           </div>
+           <p className="mt-5 rounded-2xl border border-blue-100 bg-blue-50 p-4 text-sm font-semibold text-blue-950">
+             Verify payment against the final payable amount after coupon discount, not the original subtotal.
+           </p>
         </section>
       )}
 

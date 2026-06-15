@@ -5,6 +5,7 @@ import { z } from "zod";
 import { db } from "../../lib/db/drizzle.js";
 import { homepageSections, products } from "../../lib/db/schema.js";
 import { getActiveProductById } from "../../repositories/products-repository.js";
+import { enrichProductsWithDiscounts, getEffectiveProductPrice } from "../../services/discounts-service.js";
 import type { AppBindings } from "../../types/hono.js";
 
 const querySchema = z.object({
@@ -121,7 +122,8 @@ productsRouter.get("/", zValidator("query", querySchema), async (c) => {
     .orderBy(desc(products.createdAt))
     .limit(limit ?? 100);
 
-  return c.json({ data: rows });
+  const data = await enrichProductsWithDiscounts(rows);
+  return c.json({ data });
 });
 
 productsRouter.get("/:productId", zValidator("param", productIdParamSchema), async (c) => {
@@ -130,5 +132,6 @@ productsRouter.get("/:productId", zValidator("param", productIdParamSchema), asy
   if (!row) {
     return c.json({ error: { message: "Product not found" } }, 404);
   }
-  return c.json({ data: row });
+  const data = await getEffectiveProductPrice(row);
+  return c.json({ data });
 });
