@@ -18,6 +18,21 @@ function normalizeCode(value: string) {
   return value.trim().toUpperCase().replace(/\s+/g, "-");
 }
 
+function cleanText(value?: string | null) {
+  const text = String(value ?? "").trim();
+  return text || null;
+}
+
+function validateDiscountValue(type: "percentage" | "fixed_amount" | "free_shipping", value: number) {
+  if (type === "free_shipping") return;
+  if (type === "percentage" && (value <= 0 || value > 100)) {
+    throw new HTTPException(400, { message: "Percentage discount must be between 1 and 100" });
+  }
+  if (type === "fixed_amount" && value <= 0) {
+    throw new HTTPException(400, { message: "Fixed discount must be greater than 0" });
+  }
+}
+
 function isNowWithinWindow(row: { status: string; startsAt?: Date | string | null; endsAt?: Date | string | null }, now = new Date()) {
   if (!["active"].includes(row.status)) return false;
   if (row.startsAt && new Date(row.startsAt) > now) return false;
@@ -203,26 +218,21 @@ export async function createProductDiscountForAdmin(payload: {
   internalNote?: string | null;
   performedBy?: string;
 }) {
-  if (payload.discountType === "percentage" && (payload.discountValue <= 0 || payload.discountValue > 100)) {
-    throw new HTTPException(400, { message: "Percentage discount must be between 1 and 100" });
-  }
-  if (payload.discountType === "fixed_amount" && payload.discountValue <= 0) {
-    throw new HTTPException(400, { message: "Fixed discount must be greater than 0" });
-  }
+  validateDiscountValue(payload.discountType, payload.discountValue);
   if (payload.scope === "product" && !payload.productId) throw new HTTPException(400, { message: "Product is required for product scope" });
-  if (payload.scope === "region" && !payload.region) throw new HTTPException(400, { message: "Region is required for region scope" });
-  if (payload.scope === "category" && !payload.category) throw new HTTPException(400, { message: "Category is required for category scope" });
-  if (payload.scope === "subcategory" && !payload.subcategory) throw new HTTPException(400, { message: "Subcategory is required for subcategory scope" });
+  if (payload.scope === "region" && !cleanText(payload.region)) throw new HTTPException(400, { message: "Region is required for region scope" });
+  if (payload.scope === "category" && !cleanText(payload.category)) throw new HTTPException(400, { message: "Category is required for category scope" });
+  if (payload.scope === "subcategory" && !cleanText(payload.subcategory)) throw new HTTPException(400, { message: "Subcategory is required for subcategory scope" });
 
   const [row] = await db.insert(productDiscounts).values({
     name: payload.name.trim(),
     discountType: payload.discountType,
     discountValue: numberToMoney(payload.discountValue),
     scope: payload.scope,
-    productId: payload.productId ?? null,
-    region: payload.region ?? null,
-    category: payload.category ?? null,
-    subcategory: payload.subcategory ?? null,
+    productId: payload.scope === "product" ? payload.productId ?? null : null,
+    region: payload.scope === "region" ? cleanText(payload.region) : null,
+    category: payload.scope === "category" ? cleanText(payload.category) : null,
+    subcategory: payload.scope === "subcategory" ? cleanText(payload.subcategory) : null,
     status: payload.status ?? "draft",
     startsAt: payload.startsAt ? new Date(payload.startsAt) : null,
     endsAt: payload.endsAt ? new Date(payload.endsAt) : null,
@@ -259,6 +269,9 @@ export async function updateProductDiscountForAdmin(id: string, payload: Partial
   maxRedemptions: number | null;
   internalNote: string | null;
 }> & { performedBy?: string }) {
+  if (payload.discountType && payload.discountValue !== undefined) {
+    validateDiscountValue(payload.discountType, payload.discountValue);
+  }
   const [row] = await db.update(productDiscounts).set({
     name: payload.name,
     discountType: payload.discountType,
@@ -306,6 +319,7 @@ export async function createCouponCodeForAdmin(payload: {
   internalNote?: string | null;
   performedBy?: string;
 }) {
+  validateDiscountValue(payload.discountType, payload.discountValue);
   const [row] = await db.insert(couponCodes).values({
     code: normalizeCode(payload.code),
     name: payload.name.trim(),
@@ -331,6 +345,59 @@ export async function createCouponCodeForAdmin(payload: {
     performedBy: payload.performedBy ?? "admin",
     details: "Admin created coupon code",
     metadata: { code: row.code, applies_to: row.appliesTo },
+  });
+  return row;
+}
+
+export async function updateCouponCodeForAdmin(id: string, payload: Partial<{
+  code: string;
+  name: string;
+  discountType: "percentage" | "fixed_amount" | "free_shipping";
+  discountValue: number;
+  appliesTo: "all_orders" | "catalog_orders" | "custom_orders";
+  minimumOrderUsd: number | null;
+  maxDiscountUsd: number | null;
+  usageLimit: number | null;
+  perCustomerLimit: number | null;
+  status: "draft" | "scheduled" | "active" | "paused" | "expired" | "used_up";
+  startsAt: string | null;
+  endsAt: string | null;
+  internalNote: string | null;
+}> & { performedBy?: string }) {
+  if (payload.discountType && payload.discountValue !== undefined) {
+    validateDiscountValue(payload.discountType, payload.discountValue);
+  }
+
+  const discountType = payload.discountType;
+  const [row] = await db.update(couponCodes).set({
+    code: payload.code === undefined ? undefined : normalizeCode(payload.code),
+    name: payload.name === undefined ? undefined : payload.name.trim(),
+    discountType,
+    discountValue: payload.discountValue === undefined
+      ? undefined
+      : numberToMoney(discountType === "free_shipping" ? 0 : payload.discountValue),
+    appliesTo: payload.appliesTo,
+    minimumOrderUsd: payload.minimumOrderUsd === undefined ? undefined : payload.minimumOrderUsd == null ? null : numberToMoney(payload.minimumOrderUsd),
+    maxDiscountUsd: payload.maxDiscountUsd === undefined ? undefined : payload.maxDiscountUsd == null ? null : numberToMoney(payload.maxDiscountUsd),
+    usageLimit: payload.usageLimit,
+    perCustomerLimit: payload.perCustomerLimit === undefined ? undefined : payload.perCustomerLimit ?? 1,
+    status: payload.status,
+    startsAt: payload.startsAt === undefined ? undefined : payload.startsAt ? new Date(payload.startsAt) : null,
+    endsAt: payload.endsAt === undefined ? undefined : payload.endsAt ? new Date(payload.endsAt) : null,
+    internalNote: payload.internalNote,
+    updatedAt: new Date(),
+  }).where(eq(couponCodes.id, id)).returning();
+
+  if (!row) throw new HTTPException(404, { message: "Coupon code not found" });
+  await db.insert(auditLogs).values({
+    action: "coupon_code_updated",
+    category: "finance",
+    severity: "info",
+    entityType: "coupon_code",
+    entityId: row.id,
+    performedBy: payload.performedBy ?? "admin",
+    details: "Admin updated coupon code",
+    metadata: { code: row.code, status: row.status },
   });
   return row;
 }

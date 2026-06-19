@@ -37,6 +37,7 @@ import {
   createCouponCodeForAdmin,
   createProductDiscountForAdmin,
   getDiscountWorkspacePayload,
+  updateCouponCodeForAdmin,
   updateProductDiscountForAdmin,
 } from "../../services/discounts-service.js";
 import type { AppBindings } from "../../types/hono.js";
@@ -101,6 +102,9 @@ const createProductSchema = z.object({
 const productDiscountParamSchema = z.object({
   discountId: z.string().uuid(),
 });
+const couponParamSchema = z.object({
+  couponId: z.string().uuid(),
+});
 const productDiscountSchema = z.object({
   name: z.string().trim().min(1).max(180),
   discountType: z.enum(["percentage", "fixed_amount"]),
@@ -132,6 +136,7 @@ const couponCodeSchema = z.object({
   endsAt: z.string().nullable().optional(),
   internalNote: z.string().trim().max(1000).nullable().optional(),
 });
+const couponCodePatchSchema = couponCodeSchema.partial();
 const orderParamSchema = z.object({
   orderId: z.string().uuid(),
 });
@@ -843,6 +848,22 @@ adminRouter.post(
       performedBy: authUser?.email,
     });
     return c.json({ data }, 201);
+  },
+);
+
+adminRouter.patch(
+  "/discounts/coupons/:couponId",
+  requirePermission(PERMISSIONS.COUPONS_EDIT),
+  zValidator("param", couponParamSchema),
+  zValidator("json", couponCodePatchSchema),
+  async (c) => {
+    const authUser = c.get("authUser");
+    const { couponId } = c.req.valid("param");
+    const data = await updateCouponCodeForAdmin(couponId, {
+      ...c.req.valid("json"),
+      performedBy: authUser?.email,
+    });
+    return c.json({ data });
   },
 );
 
