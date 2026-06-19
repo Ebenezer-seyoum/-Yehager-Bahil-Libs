@@ -138,6 +138,7 @@ function ProductPicker({
             <tbody className="divide-y divide-slate-100">
               {products.map((product) => {
                 const checked = selectedProduct?.id === product.id;
+                const image = productImage(product);
                 return (
                   <tr key={product.id ?? product.name ?? "product"} onClick={() => onSelect(product.id ?? "")} className="cursor-pointer hover:bg-emerald-50/50">
                     <td className="px-4 py-3">
@@ -148,7 +149,7 @@ function ProductPicker({
                     <td className="px-4 py-3">
                       <div className="flex min-w-[260px] items-center gap-3">
                         <div className="h-10 w-10 overflow-hidden rounded-lg border border-slate-200 bg-slate-100">
-                          {productImage(product) ? <img src={productImage(product)} alt="" className="h-full w-full object-cover" /> : <Package className="m-2.5 h-5 w-5 text-slate-400" />}
+                          {image ? <img src={image} alt="" className="h-full w-full object-cover" /> : <Package className="m-2.5 h-5 w-5 text-slate-400" />}
                         </div>
                         <span className="font-black text-slate-900">{product.name}</span>
                       </div>
