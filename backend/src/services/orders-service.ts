@@ -422,6 +422,85 @@ export async function createCheckoutIntent(payload: {
   return result;
 }
 
+export async function previewCheckoutCoupon(payload: {
+  userEmail?: string;
+  cartItemIds: string[];
+  fulfillmentType?: "mail" | "pickup";
+  carrier?: string;
+  couponCode?: string;
+}) {
+  const userEmail = payload.userEmail;
+  if (!userEmail) {
+    throw new HTTPException(400, { message: "Authenticated token must include email" });
+  }
+  if (!payload.cartItemIds.length) {
+    throw new HTTPException(400, { message: "At least one cart item is required" });
+  }
+
+  const cartRows = await listCartItemsByIdsForUser({
+    itemIds: payload.cartItemIds,
+    userEmail,
+  });
+  if (!cartRows.length) {
+    throw new HTTPException(404, { message: "No matching cart items found" });
+  }
+
+  const productIds = [...new Set(cartRows.map((row) => row.productId).filter((id): id is string => Boolean(id)))];
+  const dbProducts = productIds.length
+    ? await db.query.products.findMany({
+        where: and(inArray(products.id, productIds), eq(products.isActive, true)),
+      })
+    : [];
+
+  const liveDiscounts = await getLiveProductDiscounts();
+  const productPriceMap = new Map(
+    dbProducts.map((product) => {
+      const discounted = applyBestProductDiscount(product, liveDiscounts);
+      return [product.id, discounted.effectivePriceUsd];
+    }),
+  );
+
+  const lines = buildCheckoutLines(
+    cartRows.map((row) => ({
+      cartItemId: row.id,
+      productId: row.productId,
+      productName: row.productName,
+      quantity: row.quantity,
+      trustedUnitPriceUsd: row.productId ? productPriceMap.get(row.productId) ?? row.priceUsd : row.priceUsd,
+      measurementId: row.measurementId,
+      itemType: row.itemType,
+      uploadedDesignId: row.uploadedDesignId,
+      itemMetadata: row.itemMetadata,
+    })),
+  );
+
+  const orderType = lines.some((line) => line.itemType === "custom_design" || line.uploadedDesignId)
+    ? "custom_order"
+    : "catalog_order";
+  const totalItems = lines.reduce((sum, line) => sum + line.quantity, 0);
+  const fulfillmentType = payload.fulfillmentType ?? "mail";
+  const carrier = fulfillmentType === "pickup" ? "pickup" : payload.carrier ?? "Ethiopian Mail Service";
+  const shippingCostUsd =
+    fulfillmentType === "mail" && carrier === "Ethiopian Mail Service" ? computeEmsShipping(totalItems) : 0;
+  const baseTotals = computeTotals(lines, shippingCostUsd);
+  const couponResult = await calculateCouponDiscount({
+    code: payload.couponCode,
+    subtotalUsd: baseTotals.subtotalUsd,
+    shippingCostUsd,
+    orderType,
+  });
+  const discountAmountUsd = couponResult.discountAmountUsd;
+
+  return {
+    code: couponResult.coupon?.code ?? null,
+    discountAmountUsd: numberToMoney(discountAmountUsd),
+    subtotalUsd: numberToMoney(baseTotals.subtotalUsd),
+    shippingCostUsd: numberToMoney(baseTotals.shippingCostUsd),
+    totalUsd: numberToMoney(Math.max(baseTotals.totalUsd - discountAmountUsd, 0)),
+    freeShipping: couponResult.freeShipping,
+  };
+}
+
 export async function submitEtbPaymentProof(payload: {
   orderId: string;
   userEmail?: string;

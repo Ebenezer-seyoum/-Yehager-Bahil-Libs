@@ -10,6 +10,7 @@ import {
   getOrderDetailsForCurrentUser,
   getOrdersForAdmin,
   getOrdersForCurrentUser,
+  previewCheckoutCoupon,
   submitEtbPaymentProof,
   updateOrderAdminState,
 } from "../../services/orders-service.js";
@@ -34,6 +35,12 @@ const checkoutIntentSchema = z.object({
   pickupPersonPhone: z.string().optional(),
   remarks: z.string().max(1000).optional(),
   couponCode: z.string().trim().max(64).optional(),
+});
+const couponPreviewSchema = z.object({
+  cartItemIds: z.array(z.string().uuid()).min(1),
+  fulfillmentType: z.enum(["mail", "pickup"]).optional(),
+  carrier: z.string().optional(),
+  couponCode: z.string().trim().min(1).max(64),
 });
 const etbProofSchema = z.object({
   paymentProofUrl: z.string().url(),
@@ -92,6 +99,19 @@ ordersRouter.post("/checkout-intent", requireAuth, zValidator("json", checkoutIn
     couponCode: body.couponCode,
   });
   return c.json({ data }, 201);
+});
+
+ordersRouter.post("/coupon-preview", requireAuth, zValidator("json", couponPreviewSchema), async (c) => {
+  const authUser = c.get("authUser");
+  const body = c.req.valid("json");
+  const data = await previewCheckoutCoupon({
+    userEmail: authUser?.email,
+    cartItemIds: body.cartItemIds,
+    fulfillmentType: body.fulfillmentType,
+    carrier: body.carrier,
+    couponCode: body.couponCode,
+  });
+  return c.json({ data });
 });
 
 ordersRouter.post("/me/:orderId/etb-proof", requireAuth, zValidator("json", etbProofSchema), async (c) => {

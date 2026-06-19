@@ -28,6 +28,12 @@ type CheckoutFlowProps = {
   startCheckoutAction: (formData: FormData) => void | Promise<void>;
 };
 
+type AppliedCoupon = {
+  code: string;
+  discountAmountUsd: number;
+  totalUsd: number;
+};
+
 const STRIPE_CURRENCIES = [
   { code: "USD", country: "US", name: "US Dollar", region: "For international customers", symbol: "$", rate: 1, default: true },
   { code: "EUR", country: "EU", name: "Euro", region: "Europe", symbol: "€", rate: 0.92 },
@@ -82,12 +88,16 @@ export function CheckoutFlow({ items, event, error, etbRate, startCheckoutAction
   const [selectedCurrency, setSelectedCurrency] = useState("USD");
   const [tailorNote, setTailorNote] = useState("");
   const [couponCode, setCouponCode] = useState("");
+  const [appliedCoupon, setAppliedCoupon] = useState<AppliedCoupon | null>(null);
+  const [couponError, setCouponError] = useState("");
+  const [isApplyingCoupon, setIsApplyingCoupon] = useState(false);
 
   const totalItems = items.reduce((sum, item) => sum + Number(item.quantity ?? 1), 0);
   const subtotal = items.reduce((sum, item) => sum + Number(item.priceUsd ?? 0) * Number(item.quantity ?? 1), 0);
   const shipping = fulfillmentType === "mail" ? computeEmsShipping(totalItems) : 0;
   const total = subtotal + shipping;
-  const totalEtb = etbRate ? Math.round(total * etbRate) : null;
+  const payableTotal = appliedCoupon ? appliedCoupon.totalUsd : total;
+  const totalEtb = etbRate ? Math.round(payableTotal * etbRate) : null;
   const message = errorMessage(error);
   const hasEventAddress = Boolean(event?.shippingAddress);
 
@@ -99,11 +109,55 @@ export function CheckoutFlow({ items, event, error, etbRate, startCheckoutAction
 
   const payLabel = paymentMethod === "etb_bank_transfer"
     ? `Continue to ETB Payment${totalEtb ? ` (${totalEtb.toLocaleString()} ETB)` : ""}`
-    : `Pay $${total.toFixed(2)} USD with Stripe`;
+    : `Pay $${payableTotal.toFixed(2)} USD with Stripe`;
 
   function chooseStripeCurrency(code: string) {
     setSelectedCurrency(code);
     setPaymentMethod("stripe_usd");
+  }
+
+  function clearAppliedCoupon() {
+    setAppliedCoupon(null);
+    setCouponError("");
+  }
+
+  async function applyCoupon() {
+    const code = couponCode.trim().toUpperCase();
+    if (!code) {
+      setCouponError("Enter a coupon code first.");
+      return;
+    }
+
+    setIsApplyingCoupon(true);
+    setCouponError("");
+    try {
+      const response = await fetch("/api/backend/orders/coupon-preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          cartItemIds: items.map((item) => item.id),
+          fulfillmentType,
+          carrier: fulfillmentType === "pickup" ? "pickup" : "Ethiopian Mail Service",
+          couponCode: code,
+        }),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(payload?.error ?? "Coupon could not be applied.");
+      }
+      const data = payload?.data;
+      setAppliedCoupon({
+        code: String(data?.code ?? code),
+        discountAmountUsd: Number(data?.discountAmountUsd ?? 0),
+        totalUsd: Number(data?.totalUsd ?? total),
+      });
+      setCouponCode(String(data?.code ?? code));
+    } catch (error) {
+      setAppliedCoupon(null);
+      setCouponError(error instanceof Error ? error.message : "Coupon could not be applied.");
+    } finally {
+      setIsApplyingCoupon(false);
+    }
   }
 
   return (
@@ -113,7 +167,7 @@ export function CheckoutFlow({ items, event, error, etbRate, startCheckoutAction
       <input type="hidden" name="paymentMethod" value={paymentMethod} />
       <input type="hidden" name="selectedCurrency" value={selectedCurrency} />
       <input type="hidden" name="tailorNote" value={tailorNote} />
-      <input type="hidden" name="couponCode" value={couponCode.trim()} />
+      <input type="hidden" name="couponCode" value={appliedCoupon?.code ?? ""} />
 
       {message ? <div className="rounded-xl border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">{message}</div> : null}
 
@@ -132,14 +186,14 @@ export function CheckoutFlow({ items, event, error, etbRate, startCheckoutAction
       <section className="rounded-xl border border-border bg-card p-5">
         <h3 className="font-heading font-semibold mb-4">Delivery Method</h3>
         <div className="grid gap-3 sm:grid-cols-2">
-          <button type="button" onClick={() => setFulfillmentType("mail")} className={`flex items-start gap-3 rounded-xl border-2 p-4 text-left transition-colors ${fulfillmentType === "mail" ? "border-primary bg-primary/5" : "border-border hover:border-border/80"}`}>
+          <button type="button" onClick={() => { setFulfillmentType("mail"); clearAppliedCoupon(); }} className={`flex items-start gap-3 rounded-xl border-2 p-4 text-left transition-colors ${fulfillmentType === "mail" ? "border-primary bg-primary/5" : "border-border hover:border-border/80"}`}>
             <SelectDot selected={fulfillmentType === "mail"} />
             <div>
               <p className="font-medium text-sm flex items-center gap-1.5"><Truck className="h-4 w-4 text-primary" /> Mail Delivery</p>
               <p className="text-xs text-muted-foreground">Shipped to your address worldwide</p>
             </div>
           </button>
-          <button type="button" onClick={() => setFulfillmentType("pickup")} className={`flex items-start gap-3 rounded-xl border-2 p-4 text-left transition-colors ${fulfillmentType === "pickup" ? "border-primary bg-primary/5" : "border-border hover:border-border/80"}`}>
+          <button type="button" onClick={() => { setFulfillmentType("pickup"); clearAppliedCoupon(); }} className={`flex items-start gap-3 rounded-xl border-2 p-4 text-left transition-colors ${fulfillmentType === "pickup" ? "border-primary bg-primary/5" : "border-border hover:border-border/80"}`}>
             <SelectDot selected={fulfillmentType === "pickup"} />
             <div>
               <p className="font-medium text-sm flex items-center gap-1.5"><MapPin className="h-4 w-4 text-primary" /> In-Store Pickup</p>
@@ -215,19 +269,35 @@ export function CheckoutFlow({ items, event, error, etbRate, startCheckoutAction
           <div className="mt-2 flex flex-col gap-2 sm:flex-row">
             <input
               value={couponCode}
-              onChange={(event) => setCouponCode(event.target.value.toUpperCase())}
+              onChange={(event) => {
+                setCouponCode(event.target.value.toUpperCase());
+                clearAppliedCoupon();
+              }}
               className="h-11 flex-1 rounded-lg border border-input bg-background px-3 text-sm font-semibold outline-none focus:border-primary"
               placeholder="SAVE30"
             />
-            <span className="inline-flex h-11 items-center justify-center rounded-lg border border-primary/30 px-4 text-xs font-bold text-primary">
-              Applied at checkout
-            </span>
+            {appliedCoupon ? (
+              <button type="button" onClick={clearAppliedCoupon} className="inline-flex h-11 items-center justify-center rounded-lg border border-border px-4 text-xs font-bold text-muted-foreground hover:border-primary hover:text-primary">
+                Remove
+              </button>
+            ) : (
+              <button type="button" onClick={() => void applyCoupon()} disabled={isApplyingCoupon || !couponCode.trim()} className="inline-flex h-11 items-center justify-center rounded-lg bg-primary px-5 text-xs font-bold text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60">
+                {isApplyingCoupon ? "Applying..." : "Apply"}
+              </button>
+            )}
           </div>
-          <p className="mt-2 text-[11px] text-muted-foreground">Discount is validated and calculated securely when you place the order.</p>
+          {appliedCoupon ? <p className="mt-2 text-[11px] font-semibold text-green-500">{appliedCoupon.code} applied successfully.</p> : null}
+          {couponError ? <p className="mt-2 text-[11px] font-semibold text-destructive">{couponError}</p> : null}
+          {!appliedCoupon && !couponError ? <p className="mt-2 text-[11px] text-muted-foreground">Apply a coupon to preview the discount before checkout.</p> : null}
         </div>
+        {appliedCoupon ? (
+          <div className="border-t border-border pt-3 mt-3">
+            <SummaryLine label={`Coupon Discount (${appliedCoupon.code})`} value={`-$${appliedCoupon.discountAmountUsd.toFixed(2)} USD`} />
+          </div>
+        ) : null}
         <div className="flex items-center justify-between pt-2 border-t border-border mt-2">
           <span className="font-bold text-base">Total</span>
-          <span className="font-heading text-4xl font-bold text-primary">${total.toFixed(2)} USD</span>
+          <span className="font-heading text-4xl font-bold text-primary">${payableTotal.toFixed(2)} USD</span>
         </div>
       </section>
 
@@ -320,7 +390,7 @@ export function CheckoutFlow({ items, event, error, etbRate, startCheckoutAction
                   left={currency.country}
                   title={currency.name}
                   subtitle={currency.region}
-                  amount={formatCurrency(total * currency.rate, currency.code, currency.symbol, currency.suffix)}
+                  amount={formatCurrency(payableTotal * currency.rate, currency.code, currency.symbol, currency.suffix)}
                   code={currency.code}
                   badge={currency.default ? "Default" : undefined}
                 />
