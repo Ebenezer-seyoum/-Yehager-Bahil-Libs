@@ -86,6 +86,8 @@ export type AdminWorkspaceData = {
   documents?: Record<string, unknown>[];
   uploadedDesigns?: Record<string, unknown>[];
   exchangeRates?: Record<string, unknown>[];
+  productDiscounts?: Record<string, unknown>[];
+  coupons?: Record<string, unknown>[];
   settings?: Record<string, unknown>;
   sections?: Record<string, unknown>[];
 };

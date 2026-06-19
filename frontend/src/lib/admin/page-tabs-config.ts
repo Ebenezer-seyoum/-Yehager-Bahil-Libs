@@ -149,10 +149,8 @@ export const PAGE_TABS: Record<AdminPageId, AdminTabConfig[]> = {
     { id: "refunded", label: "Refunded", icon: RotateCcw, accent: "red" },
   ),
   "coupons-discounts": tabs(
-    { id: "all", label: "All Discounts", icon: DollarSign, accent: "green" },
-    { id: "active", label: "Active", icon: CheckCircle2, accent: "green" },
-    { id: "used", label: "Used", icon: ShoppingBag, accent: "blue" },
-    { id: "expired", label: "Expired", icon: XCircle, accent: "red" },
+    { id: "discounts", label: "Discounts", icon: DollarSign, accent: "green" },
+    { id: "coupons", label: "Coupons", icon: ShoppingBag, accent: "green" },
   ),
   documents: tabs(
     { id: "all", label: "All Orders", icon: FileText },
@@ -318,8 +316,8 @@ export const PAGE_META: Record<AdminPageId, Omit<AdminPageMeta, "tabs">> = {
     section: "Finance",
     icon: DollarSign,
     title: "Coupons & Discounts",
-    subtitle: "Review coupon usage and discount activity detected from current products and orders.",
-    defaultTab: "all",
+    subtitle: "Create and manage product discounts and checkout coupon codes.",
+    defaultTab: "discounts",
   },
   documents: {
     id: "documents",
