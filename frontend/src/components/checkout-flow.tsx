@@ -30,6 +30,8 @@ type CheckoutFlowProps = {
 
 type AppliedCoupon = {
   code: string;
+  subtotalUsd: number;
+  shippingCostUsd: number;
   discountAmountUsd: number;
   totalUsd: number;
 };
@@ -96,6 +98,8 @@ export function CheckoutFlow({ items, event, error, etbRate, startCheckoutAction
   const subtotal = items.reduce((sum, item) => sum + Number(item.priceUsd ?? 0) * Number(item.quantity ?? 1), 0);
   const shipping = fulfillmentType === "mail" ? computeEmsShipping(totalItems) : 0;
   const total = subtotal + shipping;
+  const displaySubtotal = appliedCoupon ? appliedCoupon.subtotalUsd : subtotal;
+  const displayShipping = appliedCoupon ? appliedCoupon.shippingCostUsd : shipping;
   const payableTotal = appliedCoupon ? appliedCoupon.totalUsd : total;
   const totalEtb = etbRate ? Math.round(payableTotal * etbRate) : null;
   const message = errorMessage(error);
@@ -148,6 +152,8 @@ export function CheckoutFlow({ items, event, error, etbRate, startCheckoutAction
       const data = payload?.data;
       setAppliedCoupon({
         code: String(data?.code ?? code),
+        subtotalUsd: Number(data?.subtotalUsd ?? subtotal),
+        shippingCostUsd: Number(data?.shippingCostUsd ?? shipping),
         discountAmountUsd: Number(data?.discountAmountUsd ?? 0),
         totalUsd: Number(data?.totalUsd ?? total),
       });
@@ -260,8 +266,8 @@ export function CheckoutFlow({ items, event, error, etbRate, startCheckoutAction
           ))}
         </div>
         <div className="border-t border-border pt-4 space-y-2">
-          <SummaryLine label="Clothing Subtotal" value={`$${subtotal.toFixed(2)} USD`} />
-          <SummaryLine label="Shipping & Handling" value={fulfillmentType === "pickup" ? "Free - Pickup" : `$${shipping.toFixed(2)} USD`} />
+          <SummaryLine label="Clothing Subtotal" value={`$${displaySubtotal.toFixed(2)} USD`} />
+          <SummaryLine label="Shipping & Handling" value={fulfillmentType === "pickup" ? "Free - Pickup" : `$${displayShipping.toFixed(2)} USD`} />
           {fulfillmentType === "mail" ? <p className="text-[10px] text-muted-foreground leading-relaxed">{emsRateText(totalItems)}</p> : null}
         </div>
         <div className="mt-4 rounded-xl border border-dashed border-primary/40 bg-primary/5 p-4">

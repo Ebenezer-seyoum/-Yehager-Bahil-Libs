@@ -1,7 +1,7 @@
 import { HTTPException } from "hono/http-exception";
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "../lib/db/drizzle.js";
-import { auditLogs, eventParticipants, events, orders, products, systemAlerts, uploadedDesigns } from "../lib/db/schema.js";
+import { auditLogs, eventParticipants, events, orders, systemAlerts, uploadedDesigns } from "../lib/db/schema.js";
 import { deleteCartItemsByIdsForUser, listCartItemsByIdsForUser } from "../repositories/cart-repository.js";
 import {
   getOrderById,
@@ -22,7 +22,7 @@ import {
   numberToMoney,
 } from "./checkout-utils.js";
 import { sendOrderStatusEmail } from "./email-service.js";
-import { getLiveProductDiscounts, applyBestProductDiscount, calculateCouponDiscount, markCouponRedeemed } from "./discounts-service.js";
+import { calculateCouponDiscount, markCouponRedeemed } from "./discounts-service.js";
 
 const ORDER_STATUS_VALUES = [
   "pending",
@@ -224,22 +224,6 @@ export async function createCheckoutIntent(payload: {
       throw new HTTPException(404, { message: "No matching cart items found" });
     }
 
-    const productIds = [...new Set(cartRows.map((row) => row.productId).filter((id): id is string => Boolean(id)))];
-    const dbProducts = productIds.length
-      ? await tx.query.products.findMany({
-          where: and(inArray(products.id, productIds), eq(products.isActive, true)),
-        })
-      : [];
-
-    const liveDiscounts = await getLiveProductDiscounts();
-    const productDiscountMetaMap = new Map<string, ReturnType<typeof applyBestProductDiscount>>();
-    const productPriceMap = new Map(
-      dbProducts.map((p) => {
-        const discounted = applyBestProductDiscount(p, liveDiscounts);
-        productDiscountMetaMap.set(p.id, discounted);
-        return [p.id, discounted.effectivePriceUsd];
-      }),
-    );
     const eventIds = [...new Set(cartRows.map((row) => row.eventId).filter((id): id is string => Boolean(id)))];
     const primaryEventId = eventIds.length === 1 ? eventIds[0] : undefined;
     const primaryEvent = primaryEventId
@@ -249,29 +233,16 @@ export async function createCheckoutIntent(payload: {
       : undefined;
 
     const lineInputs = cartRows.map((row) => {
-      const trustedUnitPriceUsd = row.productId ? productPriceMap.get(row.productId) ?? row.priceUsd : row.priceUsd;
-      const discountMeta = row.productId ? productDiscountMetaMap.get(row.productId) : null;
       return {
         cartItemId: row.id,
         productId: row.productId,
         productName: row.productName,
         quantity: row.quantity,
-        trustedUnitPriceUsd,
+        trustedUnitPriceUsd: row.priceUsd,
         measurementId: row.measurementId,
         itemType: row.itemType,
         uploadedDesignId: row.uploadedDesignId,
-        itemMetadata: {
-          ...(row.itemMetadata ?? {}),
-          ...(discountMeta?.discount
-            ? {
-                original_price_usd: discountMeta.originalPriceUsd,
-                effective_price_usd: discountMeta.effectivePriceUsd,
-                discount_label: discountMeta.discount.label,
-                discount_savings_usd: discountMeta.discount.savingsUsd,
-                product_discount_id: discountMeta.discount.id,
-              }
-            : {}),
-        },
+        itemMetadata: row.itemMetadata,
       };
     });
 
@@ -445,28 +416,13 @@ export async function previewCheckoutCoupon(payload: {
     throw new HTTPException(404, { message: "No matching cart items found" });
   }
 
-  const productIds = [...new Set(cartRows.map((row) => row.productId).filter((id): id is string => Boolean(id)))];
-  const dbProducts = productIds.length
-    ? await db.query.products.findMany({
-        where: and(inArray(products.id, productIds), eq(products.isActive, true)),
-      })
-    : [];
-
-  const liveDiscounts = await getLiveProductDiscounts();
-  const productPriceMap = new Map(
-    dbProducts.map((product) => {
-      const discounted = applyBestProductDiscount(product, liveDiscounts);
-      return [product.id, discounted.effectivePriceUsd];
-    }),
-  );
-
   const lines = buildCheckoutLines(
     cartRows.map((row) => ({
       cartItemId: row.id,
       productId: row.productId,
       productName: row.productName,
       quantity: row.quantity,
-      trustedUnitPriceUsd: row.productId ? productPriceMap.get(row.productId) ?? row.priceUsd : row.priceUsd,
+      trustedUnitPriceUsd: row.priceUsd,
       measurementId: row.measurementId,
       itemType: row.itemType,
       uploadedDesignId: row.uploadedDesignId,
