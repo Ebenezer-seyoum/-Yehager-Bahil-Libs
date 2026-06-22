@@ -138,6 +138,7 @@ export default async function ProductDetailPage({
       waistToPantsLength: toOptionalNumber(formData.get("waistToPantsLength")),
       hemStyle: String(formData.get("hemStyle") ?? "Straight"),
       pressingStyle: String(formData.get("pressingStyle") ?? "Creased"),
+      tailorNote: String(formData.get("tailorNote") ?? ""),
       inseam: toOptionalNumber(formData.get("inseam")),
     };
     try {
@@ -276,7 +277,7 @@ export default async function ProductDetailPage({
         </Link>
         <ChevronRight className="h-3 w-3" />
         <Link href="/catalog" className="hover:text-foreground">
-          Collection
+          Catalog
         </Link>
         {product.region ? (
           <>

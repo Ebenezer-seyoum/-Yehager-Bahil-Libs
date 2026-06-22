@@ -17,6 +17,8 @@ export const PAGE_HEADER_CONFIG: Record<
   "shipping-delivery": { theme: "orange", section: "Operations" },
   payments: { theme: "green", section: "Operations" },
   transactions: { theme: "green", section: "Finance" },
+  "customer-credits": { theme: "green", section: "Finance" },
+  "profit-costs": { theme: "green", section: "Finance" },
   "coupons-discounts": { theme: "green", section: "Finance" },
   documents: { theme: "orange", section: "Operations" },
   "uploaded-designs": { theme: "teal", section: "Catalog" },

@@ -14,6 +14,8 @@ export type AdminPageId =
   | "shipping-delivery"
   | "payments"
   | "transactions"
+  | "customer-credits"
+  | "profit-costs"
   | "coupons-discounts"
   | "documents"
   | "uploaded-designs"
@@ -88,6 +90,14 @@ export type AdminWorkspaceData = {
   exchangeRates?: Record<string, unknown>[];
   productDiscounts?: Record<string, unknown>[];
   coupons?: Record<string, unknown>[];
+  creditCustomers?: Record<string, unknown>[];
+  creditRules?: Record<string, unknown>[];
+  ledgerEntries?: Record<string, unknown>[];
+  activeCreditRule?: Record<string, unknown> | null;
+  profitDefaults?: Record<string, unknown> | null;
+  catalogProfitRows?: Record<string, unknown>[];
+  customProfitRows?: Record<string, unknown>[];
+  designerPayments?: Record<string, unknown>[];
   settings?: Record<string, unknown>;
   sections?: Record<string, unknown>[];
 };

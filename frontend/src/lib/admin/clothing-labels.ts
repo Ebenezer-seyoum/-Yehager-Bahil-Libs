@@ -8,7 +8,7 @@ export const clothingLabels = {
   outOfStock: "Out of stock clothes",
   bestSelling: "Best selling clothing item",
   category: "Clothing category",
-  section: "Collection section",
+  section: "Tribe section",
   inventory: "Clothing inventory",
   revenue: "Clothing revenue",
   featured: "Featured clothes",

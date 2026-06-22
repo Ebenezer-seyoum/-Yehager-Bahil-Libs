@@ -6,6 +6,15 @@ import { useMemo, useState } from "react";
 import { ShareLinks } from "@/components/share-links";
 import { MeasurementVideoModal } from "@/components/measurement-help";
 import { useToast } from "@/components/ui/use-toast";
+import {
+  HEM_STYLE_OPTIONS,
+  PANTS_MEASUREMENT_FIELDS,
+  PANTS_MEASUREMENT_TITLE,
+  PRESSING_STYLE_OPTIONS,
+  TOP_MEASUREMENT_FIELDS,
+  TOP_MEASUREMENT_TITLE,
+  measurementDisplayGroups,
+} from "@/lib/measurement-fields";
 
 type Role = {
   label: string;
@@ -42,6 +51,7 @@ type ProductPurchasePanelProps = {
     shoulderWidth?: number | null;
     armLength?: number | null;
     torsoLength?: number | null;
+    [key: string]: unknown;
   } | null;
   eventId: string;
   event: { id: string; name: string; ownerName?: string | null } | null;
@@ -58,6 +68,7 @@ type ProductPurchasePanelProps = {
     shoulderWidth?: number | null;
     armLength?: number | null;
     torsoLength?: number | null;
+    [key: string]: unknown;
   } | null | void>;
   createEventAction: (formData: FormData) => void | Promise<void>;
   createGroupAction: (formData: FormData) => void | Promise<void>;
@@ -201,8 +212,8 @@ export function ProductPurchasePanel({
   const [showVideo, setShowVideo] = useState(false);
   const [isMeasurementEditorOpen, setIsMeasurementEditorOpen] = useState(!latestMeasurement?.id);
   const [savedMeasurement, setSavedMeasurement] = useState<SavedMeasurement | null>(latestMeasurement);
-  const [hemStyle, setHemStyle] = useState("Straight");
-  const [pressingStyle, setPressingStyle] = useState("Creased");
+  const [hemStyle, setHemStyle] = useState(String((latestMeasurement as any)?.hemStyle || (latestMeasurement as any)?.hem_style || "Straight"));
+  const [pressingStyle, setPressingStyle] = useState(String((latestMeasurement as any)?.pressingStyle || (latestMeasurement as any)?.pressing_style || "Creased"));
   const [tailorNote, setTailorNote] = useState("");
   const [isPantsOpen, setIsPantsOpen] = useState(false);
 
@@ -215,45 +226,13 @@ export function ProductPurchasePanel({
   const signinHref = `/signin?callbackUrl=${encodeURIComponent(`/product/${product.id}`)}`;
   const hasMeasurement = Boolean(savedMeasurement?.id);
 
-  const measurementSummary = useMemo(() => {
-    const m = savedMeasurement;
-    const chest = m?.chest;
-    const waist = m?.waist;
-    const hips = m?.hips || (m as any)?.pantsHip;
-    const shoulder = m?.shoulderWidth;
-    const arm = m?.armLength;
-    const torso = m?.torsoLength;
-    const neck = (m as any)?.neck;
-    const bicep = (m as any)?.bicepCircumference;
-    const wrist = (m as any)?.wristCircumference;
-    const pantsWaist = (m as any)?.pantsWaist;
-    const thigh = (m as any)?.thighCircumference;
-    const outseam = (m as any)?.waistToPantsLength;
-
-    return [
-      ["Neck", (m as any)?.neck],
-      ["Shoulder", (m as any)?.shoulderWidth || (m as any)?.shoulder_width],
-      ["Chest", (m as any)?.chest],
-      ["Waist", (m as any)?.waist],
-      ["Hips", (m as any)?.hips || (m as any)?.pantsHip || (m as any)?.pants_hip],
-      ["Arm", (m as any)?.armLength || (m as any)?.arm_length],
-      ["Torso", (m as any)?.torsoLength || (m as any)?.torso_length],
-      ["Bicep", (m as any)?.bicepCircumference || (m as any)?.bicep],
-      ["Wrist", (m as any)?.wristCircumference || (m as any)?.wrist],
-      ["Pants Waist", (m as any)?.pantsWaist || (m as any)?.pants_waist],
-      ["Thigh", (m as any)?.thighCircumference || (m as any)?.thigh],
-      ["Outseam", (m as any)?.waistToPantsLength || (m as any)?.outseam],
-      ["Hem Style", (m as any)?.hemStyle || (m as any)?.hem_style],
-      ["Pressing", (m as any)?.pressingStyle || (m as any)?.pressing_style],
-    ].filter(([_, v]) => v !== undefined && v !== null && v !== "");
-  }, [savedMeasurement]);
+  const measurementSummary = useMemo(() => measurementDisplayGroups(savedMeasurement ?? {}).filter((group) => group.title !== "Profile"), [savedMeasurement]);
 
   const detailItems = useMemo(
     () =>
       [
         product.fabricType ? ["Fabric", product.fabricType] : null,
         product.embroideryStyle ? ["Design name", product.embroideryStyle] : null,
-        ["Origin", "Handcrafted in Ethiopia"],
         ["Fit Type", "Traditional Cut"],
         ["Gender", formatGender(product.gender)],
       ].filter(Boolean) as Array<[string, string]>,
@@ -371,11 +350,20 @@ export function ProductPurchasePanel({
                   Edit
                 </button>
               </div>
-              <div className="grid grid-cols-2 gap-x-8 gap-y-5 text-sm sm:grid-cols-3">
-                {measurementSummary.map(([label, value]) => (
-                  <div key={label} className="space-y-1">
-                    <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">{label}</p>
-                    <p className="text-[17px] font-bold text-white">{value ? `${Number(value).toFixed(1)} cm` : "-"}</p>
+              <div className="space-y-6">
+                {measurementSummary.map((group) => (
+                  <div key={group.title}>
+                    <h3 className="mb-3 text-xs font-black uppercase tracking-[0.2em] text-[#f5a623]">{group.title}</h3>
+                    <div className="grid grid-cols-2 gap-x-8 gap-y-5 text-sm sm:grid-cols-3">
+                      {group.fields.map(([label, value]) => (
+                        <div key={label} className="space-y-1">
+                          <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">{label}</p>
+                          <p className="text-[17px] font-bold text-white">
+                            {typeof value === "number" ? `${value.toFixed(1)} cm` : String(value)}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -416,7 +404,7 @@ export function ProductPurchasePanel({
               >
                 <input type="hidden" name="productId" value={product.id} />
                 <input type="hidden" name="measurementId" value={savedMeasurement?.id ?? ""} />
-                <input type="hidden" name="label" value={`${product.name} measurements`} />
+                <input type="hidden" name="label" value={savedMeasurement?.label ?? "My Measurements"} />
 
                 <div className="space-y-4">
                   <label className="text-xs font-black uppercase tracking-[0.2em] text-zinc-500 block text-left">
@@ -441,20 +429,15 @@ export function ProductPurchasePanel({
                   <div className="flex items-center gap-4">
                     <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#f5a623]/10 text-2xl shadow-inner">👔</div>
                     <div className="text-left">
-                      <h3 className="text-lg font-bold text-white tracking-tight">Top Body Measurements</h3>
+                      <h3 className="text-lg font-bold text-white tracking-tight">{TOP_MEASUREMENT_TITLE}</h3>
                       <p className="text-[13px] text-zinc-500">Essential for shirts, coats, and blazers</p>
                     </div>
                   </div>
                   <div className="h-px bg-gradient-to-r from-transparent via-white/5 to-transparent" />
                   <div className="grid grid-cols-1 gap-x-6 gap-y-6 sm:grid-cols-2">
-                    <MeasurementInput name="neck" label="Neck" hint="Around the base of the neck" defaultValue={(savedMeasurement as any)?.neck} />
-                    <MeasurementInput name="shoulderWidth" label="Shoulder" hint="Seam to seam across the top" defaultValue={savedMeasurement?.shoulderWidth} />
-                    <MeasurementInput name="chest" label="Chest / Bust" hint="Around the fullest part" defaultValue={savedMeasurement?.chest} />
-                    <MeasurementInput name="waist" label="Waist" hint="Around the narrowest part" defaultValue={savedMeasurement?.waist} />
-                    <MeasurementInput name="torsoLength" label="Garment Length" hint="From neck to desired hem" defaultValue={savedMeasurement?.torsoLength} />
-                    <MeasurementInput name="armLength" label="Arm Length" hint="From shoulder seam to wrist" defaultValue={savedMeasurement?.armLength} />
-                    <MeasurementInput name="bicepCircumference" label="Bicep" hint="Fullest part of upper arm" required={false} defaultValue={(savedMeasurement as any)?.bicepCircumference} />
-                    <MeasurementInput name="wristCircumference" label="Wrist" hint="Around the wrist bone" required={false} defaultValue={(savedMeasurement as any)?.wristCircumference} />
+                    {TOP_MEASUREMENT_FIELDS.map((field) => (
+                      <MeasurementInput key={field.key} name={field.key} label={field.label} hint={field.hint} required={field.required !== false} defaultValue={(savedMeasurement as any)?.[field.key] as number | null} />
+                    ))}
                   </div>
                 </div>
 
@@ -467,7 +450,7 @@ export function ProductPurchasePanel({
                     <div className="flex items-center gap-4">
                       <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-zinc-800/50 text-2xl">👖</div>
                       <div className="text-left">
-                        <h3 className="text-lg font-bold text-white tracking-tight">Pants Measurements</h3>
+                        <h3 className="text-lg font-bold text-white tracking-tight">{PANTS_MEASUREMENT_TITLE}</h3>
                         <p className="text-[13px] text-zinc-500">Required for trousers or full suit sets</p>
                       </div>
                     </div>
@@ -479,25 +462,26 @@ export function ProductPurchasePanel({
                     <div className="px-6 pb-8 md:px-8 md:pb-10 space-y-8 animate-in slide-in-from-top-4 duration-300">
                       <div className="h-px bg-white/5 mb-2" />
                       <div className="grid grid-cols-1 gap-x-6 gap-y-6 sm:grid-cols-2">
-                         <ExtraMeasurementInput name="pantsWaist" label="Pants Waist" hint="Around natural waistline" defaultValue={(savedMeasurement as any)?.pantsWaist} />
-                         <ExtraMeasurementInput name="pantsHip" label="Pants Hip" hint="Around fullest part of hips" defaultValue={(savedMeasurement as any)?.pantsHip} />
-                         <ExtraMeasurementInput name="thighCircumference" label="Thigh" hint="Around fullest part of upper thigh" defaultValue={(savedMeasurement as any)?.thighCircumference} />
-                         <ExtraMeasurementInput name="waistToPantsLength" label="Outseam" hint="From waist to desired pants hem" defaultValue={(savedMeasurement as any)?.waistToPantsLength} />
+                         {PANTS_MEASUREMENT_FIELDS.map((field) => (
+                           <ExtraMeasurementInput key={field.key} name={field.key} label={field.label} hint={field.hint} required={field.required !== false} defaultValue={(savedMeasurement as any)?.[field.key] as number | null} />
+                         ))}
                       </div>
 
                       <div className="grid grid-cols-1 gap-10 md:grid-cols-2 pt-4">
                          <div className="space-y-4">
                            <label className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 block text-left">Hem Style <span className="text-[#f5a623]">*</span></label>
                            <div className="grid grid-cols-1 gap-3">
-                             <ChoiceCard title="Straight" description="Clean finish without any fold." selected={hemStyle === "Straight"} onClick={() => setHemStyle("Straight")} />
-                             <ChoiceCard title="Folded Hem" description="Bottom edge is folded inward." selected={hemStyle === "Folded Hem"} onClick={() => setHemStyle("Folded Hem")} />
+                             {HEM_STYLE_OPTIONS.map((option) => (
+                               <ChoiceCard key={option.value} title={option.title} description={option.description} selected={hemStyle === option.value} onClick={() => setHemStyle(option.value)} />
+                             ))}
                            </div>
                          </div>
                          <div className="space-y-4">
                            <label className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 block text-left">Iron / Pressing <span className="text-[#f5a623]">*</span></label>
                            <div className="grid grid-cols-1 gap-3">
-                             <ChoiceCard title="Creased" description="Sharp formal crease." selected={pressingStyle === "Creased"} onClick={() => setPressingStyle("Creased")} />
-                             <ChoiceCard title="Plain" description="Smooth finish without crease." selected={pressingStyle === "Plain (No Crease)"} onClick={() => setPressingStyle("Plain (No Crease)")} />
+                             {PRESSING_STYLE_OPTIONS.map((option) => (
+                               <ChoiceCard key={option.value} title={option.title} description={option.description} selected={pressingStyle === option.value} onClick={() => setPressingStyle(option.value)} />
+                             ))}
                            </div>
                          </div>
                       </div>

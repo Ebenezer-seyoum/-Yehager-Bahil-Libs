@@ -11,6 +11,7 @@ type EmployeeProduct = {
   id: string;
   name?: string | null;
   region?: string | null;
+  subcategory?: string | null;
   category?: string | null;
   priceUsd?: string | number | null;
   isActive?: boolean | null;
@@ -40,8 +41,8 @@ export default async function EmployeeProductsPage() {
           <thead className="bg-secondary/60 text-left">
             <tr>
               <th className="px-4 py-3 font-medium">Product</th>
+              <th className="px-4 py-3 font-medium">Tribe</th>
               <th className="px-4 py-3 font-medium">Region</th>
-              <th className="px-4 py-3 font-medium">Category</th>
               <th className="px-4 py-3 font-medium">Price</th>
               <th className="px-4 py-3 font-medium">Status</th>
             </tr>
@@ -58,7 +59,7 @@ export default async function EmployeeProductsPage() {
                 <tr key={product.id} className="border-t border-border">
                   <td className="px-4 py-3 font-medium">{product.name}</td>
                   <td className="px-4 py-3">{product.region}</td>
-                  <td className="px-4 py-3">{product.category ?? "—"}</td>
+                  <td className="px-4 py-3">{product.subcategory ?? product.category ?? "—"}</td>
                   <td className="px-4 py-3 text-primary">{formatCurrency(product.priceUsd)}</td>
                   <td className="px-4 py-3">{product.isActive ? "Active" : "Hidden"}</td>
                 </tr>

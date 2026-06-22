@@ -131,7 +131,7 @@ export function AdminCouponsDiscountsWorkspace({ data, canEdit }: { data: AdminW
         pageId="coupons-discounts"
         initialData={data}
         hideKpis
-        title="Coupons & Discounts"
+        title="Promotions"
         subtitle="Create and manage product discounts and checkout coupon codes."
         icon={TicketPercent}
         defaultTab="discounts"
@@ -143,7 +143,7 @@ export function AdminCouponsDiscountsWorkspace({ data, canEdit }: { data: AdminW
             className="inline-flex h-11 items-center gap-2 rounded-xl bg-emerald-800 px-5 text-sm font-bold text-white shadow-lg transition hover:bg-emerald-900 active:scale-95"
           >
             <Plus className="h-4 w-4" />
-            Create Coupon & Discount
+            Create Promotion
           </button>
         ) : null}
         filterActions={

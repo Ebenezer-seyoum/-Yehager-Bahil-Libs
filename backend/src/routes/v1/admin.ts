@@ -40,6 +40,8 @@ import {
   updateCouponCodeForAdmin,
   updateProductDiscountForAdmin,
 } from "../../services/discounts-service.js";
+import { getCustomerCreditWorkspacePayload, updateCustomerCreditRuleForAdmin } from "../../services/customer-credits-service.js";
+import { getProfitCostsWorkspacePayload, upsertProfitCostSettingForAdmin } from "../../services/profit-costs-service.js";
 import type { AppBindings } from "../../types/hono.js";
 
 const listQuerySchema = z.object({
@@ -137,6 +139,27 @@ const couponCodeSchema = z.object({
   internalNote: z.string().trim().max(1000).nullable().optional(),
 });
 const couponCodePatchSchema = couponCodeSchema.partial();
+const customerCreditRuleSchema = z.object({
+  ruleId: z.string().uuid().nullable().optional(),
+  name: z.string().trim().max(180).nullable().optional(),
+  minimumPaidUsd: z.coerce.number().positive(),
+  rewardUsd: z.coerce.number().positive(),
+  appliesTo: z.enum(["all_orders", "catalog_orders", "custom_orders"]),
+  status: z.enum(["active", "inactive"]),
+  internalNote: z.string().trim().max(1000).nullable().optional(),
+});
+const profitCostSettingSchema = z.object({
+  entityType: z.enum(["default", "product", "custom_order"]),
+  entityId: z.string().nullable().optional(),
+  productCostUsd: z.coerce.number().nonnegative(),
+  taxPercent: z.coerce.number().nonnegative(),
+  designerCostUsd: z.coerce.number().nonnegative(),
+  otherCostUsd: z.coerce.number().nonnegative(),
+  designerPaymentPolicy: z.enum(["none", "fifty_fifty", "paid_100"]).optional(),
+  designerPaymentStatus: z.enum(["unpaid", "advance_paid", "fully_paid"]).optional(),
+  designerPaidUsd: z.coerce.number().nonnegative().optional(),
+  internalNote: z.string().trim().max(1000).nullable().optional(),
+});
 const orderParamSchema = z.object({
   orderId: z.string().uuid(),
 });
@@ -803,6 +826,54 @@ adminRouter.get(
   requirePermission(PERMISSIONS.COUPONS_VIEW),
   async (c) => {
     const data = await getDiscountWorkspacePayload();
+    return c.json({ data });
+  },
+);
+
+adminRouter.get(
+  "/customer-credits",
+  requirePermission(PERMISSIONS.PAYMENTS_VIEW),
+  async (c) => {
+    const data = await getCustomerCreditWorkspacePayload();
+    return c.json({ data });
+  },
+);
+
+adminRouter.patch(
+  "/customer-credits/rule",
+  requirePermission(PERMISSIONS.PAYMENTS_VERIFY),
+  zValidator("json", customerCreditRuleSchema),
+  async (c) => {
+    const authUser = c.get("authUser");
+    const body = c.req.valid("json");
+    const data = await updateCustomerCreditRuleForAdmin({
+      ...body,
+      performedBy: authUser?.email,
+    });
+    return c.json({ data });
+  },
+);
+
+adminRouter.get(
+  "/profit-costs",
+  requirePermission(PERMISSIONS.PAYMENTS_VIEW),
+  async (c) => {
+    const data = await getProfitCostsWorkspacePayload();
+    return c.json({ data });
+  },
+);
+
+adminRouter.patch(
+  "/profit-costs/settings",
+  requirePermission(PERMISSIONS.PAYMENTS_VERIFY),
+  zValidator("json", profitCostSettingSchema),
+  async (c) => {
+    const authUser = c.get("authUser");
+    const body = c.req.valid("json");
+    const data = await upsertProfitCostSettingForAdmin({
+      ...body,
+      performedBy: authUser?.email,
+    });
     return c.json({ data });
   },
 );

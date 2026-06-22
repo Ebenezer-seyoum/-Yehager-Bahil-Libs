@@ -252,7 +252,7 @@ function ProductDiscountForm({ products }: { products: Row[] }) {
       <form action={(fd) => void submit(fd)} className="space-y-5">
         <div className="grid gap-3 sm:grid-cols-2">
           <Input name="name" label="Discount Name" placeholder="Summer 30% Sale" required />
-          <Select label="Applies To" value={scope} onChange={setScope} options={[["all_products", "All Products"], ["product", "Specific Product"], ["category", "Specific Category"], ["region", "Region"], ["subcategory", "Subcategory"]]} />
+          <Select label="Applies To" value={scope} onChange={setScope} options={[["all_products", "All Products"], ["product", "Specific Product"], ["category", "Specific Category"], ["region", "Tribe"], ["subcategory", "Region"]]} />
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
           <Select label="Discount Type" value={discountType} onChange={setDiscountType} options={[["percentage", "Percentage"], ["fixed_amount", "Fixed Amount"]]} />
@@ -283,8 +283,8 @@ function ProductDiscountForm({ products }: { products: Row[] }) {
           </label>
         ) : null}
 
-        {scope === "region" ? <Input name="region" label="Region" required /> : null}
-        {scope === "subcategory" ? <Input name="subcategory" label="Subcategory" required /> : null}
+        {scope === "region" ? <Input name="region" label="Tribe" required /> : null}
+        {scope === "subcategory" ? <Input name="subcategory" label="Region" required /> : null}
 
         <div className="grid gap-3 sm:grid-cols-3">
           <label className="block">
@@ -303,7 +303,7 @@ function ProductDiscountForm({ products }: { products: Row[] }) {
         <DiscountPreview
           name="Product discount"
           value={discountType === "percentage" ? "Percentage discount" : "Fixed amount discount"}
-          appliesTo={scope === "product" ? selectedProduct?.name ?? "No product selected" : scope === "category" ? selectedCategory || "No category selected" : String(scope).replaceAll("_", " ")}
+          appliesTo={scope === "product" ? selectedProduct?.name ?? "No product selected" : scope === "category" ? selectedCategory || "No category selected" : scope === "region" ? "Tribe" : scope === "subcategory" ? "Region" : String(scope).replaceAll("_", " ")}
         />
 
         <Textarea name="internalNote" label="Internal Note" />
@@ -447,7 +447,7 @@ export function CouponsDiscountsCreateClient({ products }: { products: Row[] }) 
         icon={TicketPercent}
         iconTheme="border-emerald-100 bg-emerald-50 text-emerald-800"
         category="Finance"
-        title="Create Coupon & Discount"
+        title="Create Promotion"
         subtitle="Create checkout coupons or product discounts from one setup page."
         onRefresh={() => router.refresh()}
         onBack={() => router.push("/admin/finance/coupons-discounts")}
@@ -467,7 +467,7 @@ export function CouponsDiscountsCreateClient({ products }: { products: Row[] }) 
             active={mode === "discount"}
             icon={BadgePercent}
             title="Create Discount"
-            description="Create automatic product sale pricing for all products, one product, category, region, or subcategory."
+            description="Create automatic product sale pricing for all products, one product, category, tribe, or region."
             onClick={() => setMode("discount")}
           />
         </section>

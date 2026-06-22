@@ -3,7 +3,10 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
+  CalendarDays,
   Check,
+  ChevronDown,
+  ChevronRight,
   Eye,
   EyeOff,
   FileText,
@@ -25,23 +28,27 @@ import { dashboardAlert, dashboardConfirm, dashboardError, dashboardLoading, das
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AdminDetailLayout, AdminDetailHeader } from "@/components/admin/admin-detail-layout";
 import { cn } from "@/lib/utils";
+import { hasMeasurementValue, measurementDisplayGroups, normalizeMeasurementRecord } from "@/lib/measurement-fields";
 
+// Admin payloads are assembled from multiple backend resources with uneven shapes.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Customer = Record<string, any>;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type OrderRow = Record<string, any>;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type MeasurementRow = Record<string, any>;
-type CustomerSectionId = "personal" | "contact" | "measurements" | "orders" | "account" | "notes";
-
-const MEASUREMENT_FIELDS = [
-  ["gender", "Gender"],
-  ["chest", "Chest"],
-  ["waist", "Waist"],
-  ["hips", "Hips"],
-  ["shoulderWidth", "Shoulder Width"],
-  ["armLength", "Arm Length"],
-  ["torsoLength", "Torso Length"],
-  ["inseam", "Inseam"],
-  ["neck", "Neck"],
-] as const;
+type MeasurementDisplayRow = { label: string; values: Record<string, unknown>; orderId?: string; updatedAt?: string; meta?: string };
+type FamilyDisplayRow = MeasurementDisplayRow & { id: string; relation: string; gender?: string; orderLabel?: string; eventName?: string };
+type EventDisplayRow = {
+  id: string;
+  name: string;
+  joinedCount: number;
+  orderCount: number;
+  totalValue: number;
+  latestOrderDate?: string | null;
+  statuses: string[];
+};
+type CustomerSectionId = "personal" | "contact" | "measurements" | "family" | "events" | "orders" | "account" | "notes";
 
 function formatDate(value?: string | null) {
   if (!value) return "Not provided";
@@ -171,58 +178,127 @@ function orderCustomerEmail(order: OrderRow) {
   return String(order.userEmail ?? order.email ?? order.customerEmail ?? "").toLowerCase();
 }
 
-function savedMeasurementValues(row: MeasurementRow) {
-  return MEASUREMENT_FIELDS.reduce<Record<string, unknown>>((acc, [key, label]) => {
-    const value = row[key];
-    if (value !== null && value !== undefined && String(value).trim() !== "") {
-      acc[label] = value;
-    }
-    return acc;
-  }, {});
-}
-
-function normalizeMeasurementValues(values: Record<string, unknown>) {
-  return Object.entries(values).reduce<Record<string, unknown>>((acc, [key, value]) => {
-    if (value !== null && value !== undefined && String(value).trim() !== "") {
-      const label = key.replace(/([A-Z])/g, " $1").replace(/^./, (char) => char.toUpperCase());
-      acc[label] = value;
-    }
-    return acc;
-  }, {});
+function normalizeMeasurementValues(values: Record<string, unknown> = {}) {
+  return normalizeMeasurementRecord(values);
 }
 
 function collectMeasurements(savedMeasurements: MeasurementRow[], orders: OrderRow[]) {
-  const rows: Array<{ label: string; values: Record<string, unknown>; orderId?: string; updatedAt?: string }> = [];
+  const rows: MeasurementDisplayRow[] = [];
   for (const measurement of savedMeasurements) {
-    const values = savedMeasurementValues(measurement);
+    const values = normalizeMeasurementValues(measurement);
     if (Object.keys(values).length) {
       rows.push({
         label: String(measurement.label ?? "Saved measurement"),
         values,
         updatedAt: measurement.updatedAt ? String(measurement.updatedAt) : undefined,
+        meta: "Saved profile",
       });
     }
   }
   for (const order of orders) {
     if (order.measurementSnapshot && typeof order.measurementSnapshot === "object") {
-      rows.push({ label: "Order measurement snapshot", values: normalizeMeasurementValues(order.measurementSnapshot), orderId: order.id });
+      rows.push({ label: "Order measurement snapshot", values: normalizeMeasurementValues(order.measurementSnapshot), orderId: order.id, meta: order.orderNumber ? `Order #${order.orderNumber}` : "Order snapshot" });
     }
     if (order.measurements && typeof order.measurements === "object") {
-      rows.push({ label: "Order measurement", values: normalizeMeasurementValues(order.measurements), orderId: order.id });
+      rows.push({ label: "Order measurement", values: normalizeMeasurementValues(order.measurements), orderId: order.id, meta: order.orderNumber ? `Order #${order.orderNumber}` : "Order measurement" });
     }
     if (Array.isArray(order.members)) {
-      order.members.forEach((member: Record<string, any>, index: number) => {
+      order.members.forEach((member: Record<string, unknown>, index: number) => {
         if (member?.measurements && typeof member.measurements === "object") {
           rows.push({
-            label: String(member.name ?? member.role ?? `Member ${index + 1}`),
-            values: normalizeMeasurementValues(member.measurements),
+            label: String(member.name ?? member.relation ?? member.role ?? `Member ${index + 1}`),
+            values: normalizeMeasurementValues(member.measurements as Record<string, unknown>),
             orderId: order.id,
+            meta: [member.relation ?? member.role ?? member.type, order.orderNumber ? `Order #${order.orderNumber}` : null].filter(Boolean).join(" - "),
           });
         }
       });
     }
   }
   return rows;
+}
+
+function collectFamilyMembers(orders: OrderRow[]) {
+  const rows: FamilyDisplayRow[] = [];
+  for (const order of orders) {
+    if (!Array.isArray(order.members)) continue;
+    order.members.forEach((member: Record<string, unknown>, index: number) => {
+      const values = member?.measurements && typeof member.measurements === "object" ? normalizeMeasurementValues(member.measurements as Record<string, unknown>) : {};
+      rows.push({
+        id: String(member.id ?? `${order.id ?? order.orderNumber ?? "order"}-${index}`),
+        label: String(member.name ?? `Family Member ${index + 1}`),
+        relation: String(member.relation ?? member.role ?? member.type ?? "Member"),
+        gender: hasMeasurementValue(member.gender) ? String(member.gender) : undefined,
+        values,
+        orderId: order.id,
+        orderLabel: order.orderNumber ? `Order #${order.orderNumber}` : undefined,
+        eventName: hasMeasurementValue(order.eventName) ? String(order.eventName) : undefined,
+        meta: [member.gender, order.orderNumber ? `Order #${order.orderNumber}` : null].filter(Boolean).join(" - "),
+      });
+    });
+  }
+  return rows;
+}
+
+function collectEventRows(orders: OrderRow[]) {
+  const grouped = new Map<string, EventDisplayRow>();
+  for (const order of orders) {
+    const eventId = String(order.eventId ?? "");
+    const eventName = String(order.eventName ?? "");
+    if (!eventId && !eventName) continue;
+    const key = eventId || eventName;
+    const current = grouped.get(key) ?? {
+      id: key,
+      name: eventName || `Event ${eventId.slice(0, 8)}`,
+      joinedCount: 0,
+      orderCount: 0,
+      totalValue: 0,
+      latestOrderDate: null,
+      statuses: [],
+    };
+    const memberCount = Array.isArray(order.members) ? order.members.length : Number(order.memberCount ?? order.joinedCount ?? 1);
+    current.joinedCount += Number.isFinite(memberCount) && memberCount > 0 ? memberCount : 1;
+    current.orderCount += 1;
+    current.totalValue += orderTotal(order);
+    if (hasMeasurementValue(order.status) && !current.statuses.includes(String(order.status))) current.statuses.push(String(order.status));
+    const orderDate = hasMeasurementValue(order.createdAt) ? String(order.createdAt) : null;
+    if (orderDate && (!current.latestOrderDate || new Date(orderDate).getTime() > new Date(current.latestOrderDate).getTime())) {
+      current.latestOrderDate = orderDate;
+    }
+    grouped.set(key, current);
+  }
+  return Array.from(grouped.values()).sort((a, b) => new Date(b.latestOrderDate ?? 0).getTime() - new Date(a.latestOrderDate ?? 0).getTime());
+}
+
+function MeasurementDisplayCard({ row, compact = false }: { row: MeasurementDisplayRow; compact?: boolean }) {
+  const groups = measurementDisplayGroups(row.values);
+  return (
+    <div className={cn("rounded-2xl border border-slate-200 bg-slate-50", compact ? "p-4" : "p-5")}>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h3 className="text-sm font-extrabold text-slate-950">{row.label}</h3>
+          {row.meta ? <p className="mt-1 text-xs font-semibold text-slate-500">{row.meta}</p> : null}
+        </div>
+        {row.updatedAt ? <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-600">Updated {formatDate(row.updatedAt)}</span> : null}
+      </div>
+      {groups.length ? (
+        <div className="mt-4 space-y-4">
+          {groups.map((group) => (
+            <div key={group.title}>
+              <div className="mb-2 text-xs font-black uppercase tracking-wide text-slate-500">{group.title}</div>
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                {group.fields.map(([key, value]) => (
+                  <MeasurementInput key={`${group.title}-${key}`} label={key} value={value} />
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="mt-3 text-sm font-semibold text-slate-500">No measurement values recorded.</p>
+      )}
+    </div>
+  );
 }
 
 export function CustomerDetailClient({
@@ -268,6 +344,7 @@ export function CustomerDetailClient({
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [expandedFamilyMemberId, setExpandedFamilyMemberId] = useState<string | null>(null);
 
   const passwordRules = {
     minLength: newPassword.length >= 8,
@@ -309,6 +386,8 @@ export function CustomerDetailClient({
   }, [customerOrders]);
 
   const measurementRows = useMemo(() => collectMeasurements(measurements as MeasurementRow[], customerOrders), [measurements, customerOrders]);
+  const familyRows = useMemo(() => collectFamilyMembers(customerOrders), [customerOrders]);
+  const eventRows = useMemo(() => collectEventRows(customerOrders), [customerOrders]);
   const photoUrl = customer.profilePhotoUrl || customer.avatarUrl || null;
   const isBlocked = ["inactive", "blocked", "suspended"].includes(String(accountStatus).toLowerCase());
 
@@ -541,8 +620,10 @@ export function CustomerDetailClient({
           { id: "personal", label: "Identity Profile", icon: User2 },
           { id: "contact", label: "Contact & Address", icon: MapPin },
           { id: "measurements", label: "Measurements & Fit", icon: Ruler },
+          { id: "family", label: "Family Members", icon: Users },
+          { id: "events", label: "Event Participation", icon: CalendarDays },
           { id: "orders", label: "Order History", icon: ShoppingBag },
-          { id: "account", label: "Account & Value", icon: FileText },
+          { id: "account", label: "Account Overview", icon: FileText },
           { id: "notes", label: "Internal Notes", icon: NotebookPen },
         ]}
         activeSection={activeSection}
@@ -677,14 +758,8 @@ export function CustomerDetailClient({
             <h2 className="text-base font-bold text-slate-900">Measurements & Fit</h2>
             {measurementRows.length ? (
               <div className="mt-4 space-y-5">
-                {measurementRows.slice(0, 6).map((row, index) => (
-                  <div key={`${row.orderId ?? "measurement"}-${index}`} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                      {Object.entries(row.values).map(([key, value]) => (
-                        <MeasurementInput key={key} label={key} value={value} />
-                      ))}
-                    </div>
-                  </div>
+                {measurementRows.map((row, index) => (
+                  <MeasurementDisplayCard key={`${row.orderId ?? "measurement"}-${index}`} row={row} />
                 ))}
               </div>
             ) : (
@@ -692,6 +767,102 @@ export function CustomerDetailClient({
                 <Ruler className="mx-auto h-10 w-10 text-slate-400" />
                 <h3 className="mt-3 text-base font-bold text-slate-950">No measurements saved</h3>
                 <p className="mt-1 text-sm text-slate-600">Saved customer tailoring measurements will appear here.</p>
+              </div>
+            )}
+          </section>
+        ) : null}
+
+        {activeSection === "family" ? (
+          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="text-base font-bold text-slate-900">Family Members</h2>
+                <p className="mt-1 text-sm text-slate-600">Family members connected to this customer&apos;s group orders and their recorded measurements.</p>
+              </div>
+              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700">{familyRows.length} member{familyRows.length === 1 ? "" : "s"}</span>
+            </div>
+            {familyRows.length ? (
+              <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200">
+                {familyRows.map((member) => {
+                  const expanded = expandedFamilyMemberId === member.id;
+                  const measurementCount = Object.values(member.values).filter(hasMeasurementValue).length;
+                  return (
+                    <div key={member.id} className="border-b border-slate-200 last:border-b-0">
+                      <button
+                        type="button"
+                        onClick={() => setExpandedFamilyMemberId(expanded ? null : member.id)}
+                        className="flex w-full items-center justify-between gap-4 bg-white px-4 py-4 text-left hover:bg-slate-50"
+                      >
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="font-bold text-slate-950">{member.label}</p>
+                            <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-bold text-slate-600">{member.relation}</span>
+                          </div>
+                          <p className="mt-1 text-sm font-semibold text-slate-500">
+                            {[member.gender, member.orderLabel, member.eventName, `${measurementCount} measurements`].filter(Boolean).join(" - ")}
+                          </p>
+                        </div>
+                        <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700">
+                          {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                        </span>
+                      </button>
+                      {expanded ? (
+                        <div className="border-t border-slate-200 bg-slate-50 p-4">
+                          <MeasurementDisplayCard row={member} compact />
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="mt-4 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
+                <Users className="mx-auto h-10 w-10 text-slate-400" />
+                <h3 className="mt-3 text-base font-bold text-slate-950">No family members found</h3>
+                <p className="mt-1 text-sm text-slate-600">Family member details will appear after this customer places a family or group order.</p>
+              </div>
+            )}
+          </section>
+        ) : null}
+
+        {activeSection === "events" ? (
+          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="text-base font-bold text-slate-900">Event Participation</h2>
+                <p className="mt-1 text-sm text-slate-600">Events this customer joined, with participant and order activity summarized.</p>
+              </div>
+              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700">{eventRows.length} event{eventRows.length === 1 ? "" : "s"}</span>
+            </div>
+            {eventRows.length ? (
+              <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                {eventRows.map((event) => (
+                  <div key={event.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <h3 className="font-extrabold text-slate-950">{event.name}</h3>
+                        <p className="mt-1 text-xs font-semibold text-slate-500">Latest activity: {formatDate(event.latestOrderDate)}</p>
+                      </div>
+                      <CalendarDays className="h-5 w-5 text-slate-500" />
+                    </div>
+                    <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                      <Field label="Joined" value={String(event.joinedCount)} />
+                      <Field label="Orders" value={String(event.orderCount)} />
+                      <Field label="Order Value" value={formatMoney(event.totalValue)} />
+                    </div>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      {(event.statuses.length ? event.statuses : ["No status recorded"]).map((status) => (
+                        <span key={status} className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-bold text-slate-600">{status}</span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="mt-4 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
+                <CalendarDays className="mx-auto h-10 w-10 text-slate-400" />
+                <h3 className="mt-3 text-base font-bold text-slate-950">No event participation found</h3>
+                <p className="mt-1 text-sm text-slate-600">Event details will appear after this customer joins or orders through an event.</p>
               </div>
             )}
           </section>
@@ -736,19 +907,20 @@ export function CustomerDetailClient({
 
         {activeSection === "account" ? (
           <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h2 className="text-base font-bold text-slate-900">Account & Value</h2>
+            <h2 className="text-base font-bold text-slate-900">Account Overview</h2>
             {editMode ? (
               <div className="mt-4 grid gap-4 md:grid-cols-2">
                 <SelectInput label="Account Status" value={accountStatus} onChange={setAccountStatus} options={[{ value: "active", label: "Active" }, { value: "inactive", label: "Inactive" }, { value: "pending", label: "Pending" }]} />
-                <SelectInput label="Customer Type" value={customerType} onChange={setCustomerType} options={[{ value: "standard", label: "Standard" }, { value: "returning", label: "Returning" }, { value: "vip", label: "VIP" }, { value: "wholesale", label: "Wholesale" }]} />
+                <Field label="Password" value="Managed by reset workflow" />
               </div>
             ) : (
               <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                 <Field label="Account Status" value={accountStatus} />
-                <Field label="Customer Segment" value={customerType} />
                 <Field label="Latest Order" value={formatDate(stats.latestOrderDate)} />
                 <Field label="Lifetime Spend" value={formatMoney(stats.totalSpent)} />
                 <Field label="Average Order" value={formatMoney(stats.averageOrder)} />
+                <Field label="Family Members" value={String(familyRows.length)} />
+                <Field label="Events Joined" value={String(eventRows.length)} />
                 <Field label="Password" value="Managed by reset workflow" />
               </div>
             )}
@@ -769,7 +941,6 @@ export function CustomerDetailClient({
         ) : null}
       </AdminDetailLayout>
 
-      {/* @ts-ignore */}
       <Dialog
         open={resetOpen}
         onOpenChange={(next) => {
@@ -783,11 +954,11 @@ export function CustomerDetailClient({
           setResetOpen(next);
         }}
       >
-        {/* @ts-ignore */}
+        {/* @ts-expect-error dialog primitive typing does not expose children in this mixed admin file */}
         <DialogContent className="max-w-md">
-          {/* @ts-ignore */}
+          {/* @ts-expect-error dialog primitive typing requires className in this mixed admin file */}
           <DialogHeader>
-            {/* @ts-ignore */}
+            {/* @ts-expect-error dialog primitive typing does not expose children in this mixed admin file */}
             <DialogTitle className="font-extrabold tracking-wide">RESET PASSWORD OPTIONS</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 pt-2">
@@ -829,7 +1000,7 @@ export function CustomerDetailClient({
                       </span>
                     </div>
                     <div className="mt-0.5 text-xs text-slate-600">
-                      A secure password reset link will be sent to the customer's email address. The customer will create their own new password.
+                      A secure password reset link will be sent to the customer&apos;s email address. The customer will create their own new password.
                     </div>
                   </div>
                 </label>

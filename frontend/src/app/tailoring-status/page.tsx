@@ -94,7 +94,7 @@ export default async function TailoringStatusPage() {
           <h2 className="font-heading text-xl font-semibold">No orders yet</h2>
           <p className="mt-1 text-sm text-muted-foreground">Place an order to begin tracking.</p>
           <Link href="/catalog" className="mt-4 inline-flex rounded-md bg-primary px-4 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90">
-            Browse Collection
+            Browse Catalog
           </Link>
         </div>
       ) : (

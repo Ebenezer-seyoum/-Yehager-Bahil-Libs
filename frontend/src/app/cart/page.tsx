@@ -73,9 +73,9 @@ export default async function CartPage({
       <div className="mx-auto max-w-2xl px-4 py-20 text-center">
         <ShoppingBag className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
         <h2 className="font-heading mb-2 text-2xl font-bold">Your cart is empty</h2>
-        <p className="mb-6 text-muted-foreground">Start browsing the latest collections to add your first piece.</p>
+        <p className="mb-6 text-muted-foreground">Start browsing the latest catalog items to add your first piece.</p>
         <Link href="/catalog" className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90">
-          Browse Collection
+          Browse Catalog
         </Link>
       </div>
     );

@@ -264,6 +264,78 @@ export const couponCodes = pgTable(
   ],
 );
 
+export const customerCreditRules = pgTable(
+  "customer_credit_rules",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    name: text("name").notNull(),
+    minimumPaidUsd: numeric("minimum_paid_usd", { precision: 12, scale: 2 }).notNull(),
+    rewardUsd: numeric("reward_usd", { precision: 12, scale: 2 }).notNull(),
+    appliesTo: varchar("applies_to", { length: 32 }).default("all_orders").notNull(),
+    status: varchar("status", { length: 32 }).default("active").notNull(),
+    internalNote: text("internal_note"),
+    ...timestamps,
+  },
+  (table) => [
+    index("customer_credit_rules_status_idx").on(table.status),
+    check("customer_credit_rules_applies_to_check", sql`${table.appliesTo} in ('all_orders', 'catalog_orders', 'custom_orders')`),
+    check("customer_credit_rules_status_check", sql`${table.status} in ('active', 'inactive')`),
+  ],
+);
+
+export const customerCreditLedger = pgTable(
+  "customer_credit_ledger",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
+    userEmail: varchar("user_email", { length: 320 }).notNull(),
+    customerName: text("customer_name"),
+    orderId: uuid("order_id").references(() => orders.id, { onDelete: "set null" }),
+    orderNumber: text("order_number"),
+    ruleId: uuid("rule_id").references(() => customerCreditRules.id, { onDelete: "set null" }),
+    amountUsd: numeric("amount_usd", { precision: 12, scale: 2 }).notNull(),
+    balanceAfterUsd: numeric("balance_after_usd", { precision: 12, scale: 2 }),
+    type: varchar("type", { length: 40 }).notNull(),
+    reason: text("reason").notNull(),
+    createdBy: varchar("created_by", { length: 320 }).default("system").notNull(),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>(),
+    ...timestamps,
+  },
+  (table) => [
+    index("customer_credit_ledger_user_email_idx").on(table.userEmail),
+    index("customer_credit_ledger_user_id_idx").on(table.userId),
+    index("customer_credit_ledger_order_id_idx").on(table.orderId),
+    uniqueIndex("customer_credit_ledger_order_rule_type_unique").on(table.orderId, table.ruleId, table.type),
+    check("customer_credit_ledger_type_check", sql`${table.type} in ('bonus_credit', 'credit_used')`),
+  ],
+);
+
+export const profitCostSettings = pgTable(
+  "profit_cost_settings",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    entityType: varchar("entity_type", { length: 40 }).notNull(),
+    entityId: text("entity_id").default("default").notNull(),
+    productCostUsd: numeric("product_cost_usd", { precision: 12, scale: 2 }).default("0").notNull(),
+    taxPercent: numeric("tax_percent", { precision: 6, scale: 2 }).default("0").notNull(),
+    designerCostUsd: numeric("designer_cost_usd", { precision: 12, scale: 2 }).default("0").notNull(),
+    otherCostUsd: numeric("other_cost_usd", { precision: 12, scale: 2 }).default("0").notNull(),
+    designerPaymentPolicy: varchar("designer_payment_policy", { length: 32 }).default("none").notNull(),
+    designerPaymentStatus: varchar("designer_payment_status", { length: 32 }).default("unpaid").notNull(),
+    designerPaidUsd: numeric("designer_paid_usd", { precision: 12, scale: 2 }).default("0").notNull(),
+    internalNote: text("internal_note"),
+    updatedBy: varchar("updated_by", { length: 320 }),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("profit_cost_settings_entity_unique").on(table.entityType, table.entityId),
+    index("profit_cost_settings_entity_idx").on(table.entityType, table.entityId),
+    check("profit_cost_settings_entity_type_check", sql`${table.entityType} in ('default', 'product', 'custom_order')`),
+    check("profit_cost_settings_designer_policy_check", sql`${table.designerPaymentPolicy} in ('none', 'fifty_fifty', 'paid_100')`),
+    check("profit_cost_settings_designer_status_check", sql`${table.designerPaymentStatus} in ('unpaid', 'advance_paid', 'fully_paid')`),
+  ],
+);
+
 export type HomepageCollection = {
   id: string;
   name: string;

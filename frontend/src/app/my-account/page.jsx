@@ -31,6 +31,7 @@ function buildMeasurementBody(formData) {
     waistToPantsLength: toOptionalNumber(formData.get("waistToPantsLength")),
     hemStyle: String(formData.get("hemStyle") ?? "Straight"),
     pressingStyle: String(formData.get("pressingStyle") ?? "Creased"),
+    tailorNote: String(formData.get("tailorNote") ?? ""),
     inseam: toOptionalNumber(formData.get("inseam")),
   };
 }

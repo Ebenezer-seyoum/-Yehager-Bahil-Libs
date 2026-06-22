@@ -321,7 +321,7 @@ export function OrderDetailPage({
   const sections = [
     { id: "summary", label: "Order Summary", hint: "Core status and totals", icon: ShoppingBag },
     { id: "items", label: "Order Items", hint: "Products and design previews", icon: ImageIcon },
-    { id: "discounts", label: "Coupons & Discounts", hint: "Sale pricing and coupon impact", icon: BadgePercent },
+    { id: "discounts", label: "Promotions", hint: "Sale pricing and coupon impact", icon: BadgePercent },
     { id: "customer", label: "Customer Details", hint: "Contact and address", icon: UserRound },
     { id: "measurements", label: "Measurements", hint: "Individual or group sizing", icon: Ruler },
     { id: "production", label: "Production Tracking", hint: "Inner workflow control", icon: Scissors },

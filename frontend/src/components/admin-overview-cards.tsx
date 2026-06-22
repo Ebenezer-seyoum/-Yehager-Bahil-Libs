@@ -31,6 +31,7 @@ type Product = {
   name?: string | null;
   category?: string | null;
   region?: string | null;
+  subcategory?: string | null;
   priceUsd?: number | string | null;
   isActive?: boolean | null;
 };
@@ -159,11 +160,11 @@ export function AdminOverviewCards({
       helper: "Visible catalog items",
       tone: "from-indigo-800 to-indigo-600",
       icon: Boxes,
-      columns: ["Product", "Category", "Region", "Price"],
+      columns: ["Product", "Region", "Tribe", "Price"],
       rows: activeProducts.map((product) => ({
         Product: product.name ?? "Unnamed product",
-        Category: product.category ?? "—",
-        Region: product.region ?? "—",
+        Region: product.subcategory ?? product.category ?? "—",
+        Tribe: product.region ?? "—",
         Price: formatCurrency(product.priceUsd),
       })),
     },

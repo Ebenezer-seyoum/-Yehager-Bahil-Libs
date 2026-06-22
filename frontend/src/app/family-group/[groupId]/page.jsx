@@ -37,7 +37,10 @@ export default async function FamilyGroupPage({ params, searchParams }) {
         "pantsHip",
         "thighCircumference",
         "waistToPantsLength",
+        "hemStyle",
+        "pressingStyle",
       ].map((field) => {
+        if (field === "hemStyle" || field === "pressingStyle") return [field, String(formData.get(field) ?? "")];
         let val = formData.get(field);
         if (field === "hips" && !val) val = formData.get("pantsHip");
         if (field === "pantsHip" && !val) val = formData.get("hips");

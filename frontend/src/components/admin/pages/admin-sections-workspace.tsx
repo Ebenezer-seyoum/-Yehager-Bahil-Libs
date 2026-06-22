@@ -54,17 +54,17 @@ export function AdminSectionsWorkspace({
       initialData={data}
       hideFilters
       hideKpis
-      title="Regions & Collections"
-      subtitle="Organize customer-facing regions, collections, and homepage category visibility."
+      title="Tribes & Regions"
+      subtitle="Organize customer-facing tribes, regions, and homepage category visibility."
       actions={canEdit ? (
         <button
           type="button"
           onClick={() => window.dispatchEvent(new Event(ADMIN_SECTION_SAVE_EVENT))}
           className="inline-flex h-11 items-center gap-2 rounded-xl bg-emerald-800 px-5 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-900 active:scale-95"
-          aria-label="Add Region"
+          aria-label="Add Tribe"
         >
           <Plus className="h-4 w-4" />
-          Add Region
+          Add Tribe
         </button>
       ) : null}
     >

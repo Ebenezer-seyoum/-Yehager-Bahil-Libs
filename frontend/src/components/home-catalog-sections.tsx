@@ -72,7 +72,7 @@ export function HomeCatalogSections({
         <div className="rounded-2xl border border-border bg-card p-8 text-center">
           <Package className="mx-auto h-10 w-10 text-muted-foreground" />
           <h2 className="mt-3 text-2xl font-semibold">Products are being prepared</h2>
-          <p className="mt-2 text-sm text-muted-foreground">Please check back soon for new collections.</p>
+          <p className="mt-2 text-sm text-muted-foreground">Please check back soon for new catalog items.</p>
         </div>
       </section>
     );

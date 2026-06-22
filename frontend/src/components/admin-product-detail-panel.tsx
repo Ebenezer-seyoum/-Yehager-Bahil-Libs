@@ -380,8 +380,8 @@ export function AdminProductDetailPanel({
               <p className="text-sm leading-7 text-slate-700 whitespace-pre-wrap">{product.description || "No product description has been added yet."}</p>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
-              <ReadOnlyField label="Section / Region" value={product.region} />
-              <ReadOnlyField label="Collection / Category" value={product.subcategory || "—"} />
+              <ReadOnlyField label="Tribe" value={product.region} />
+              <ReadOnlyField label="Region" value={product.subcategory || "—"} />
             </div>
           </div>
         )}
@@ -446,15 +446,15 @@ export function AdminProductDetailPanel({
             </div>
             <EditableField label="Fabric Texture" value={draft.fabricType} onChange={(v) => setDraft((c) => ({ ...c, fabricType: v }))} placeholder="e.g. Pure Cotton" />
             <EditableField label="Embroidery Style" value={draft.embroideryStyle} onChange={(v) => setDraft((c) => ({ ...c, embroideryStyle: v }))} placeholder="e.g. Traditional Tilet" />
-            <EditableField label="Tailoring Days" value={draft.tailoringDays} onChange={(v) => setDraft((c) => ({ ...c, tailoringDays: v }))} type="number" placeholder="30" />
+            <EditableField label="Estimated Delivery Days" value={draft.tailoringDays} onChange={(v) => setDraft((c) => ({ ...c, tailoringDays: v }))} type="number" placeholder="30" />
           </div>
         ) : (
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            <ReadOnlyField label="Product ID" value={displayUniqueId} />
             <ReadOnlyField label="Gender" value={product.gender} />
             <ReadOnlyField label="Fabric Texture" value={product.fabricType || "—"} />
             <ReadOnlyField label="Embroidery Style" value={product.embroideryStyle || "—"} />
-            <ReadOnlyField label="Tailoring Days" value={`${product.tailoringDays ?? 30} days`} />
-            <ReadOnlyField label="Origin" value="Handcrafted in Ethiopia" />
+            <ReadOnlyField label="Estimated Delivery Days" value={`${product.tailoringDays ?? 30} days`} />
           </div>
         )}
       </div>
@@ -668,7 +668,7 @@ export function AdminProductDetailPanel({
             <div>
               <h2 className="text-xl font-black text-slate-900 uppercase tracking-tight truncate" title={cleanProductName}>{cleanProductName}</h2>
               <p className="mt-1 font-mono text-xs font-bold text-slate-500">
-                ID: {displayUniqueId}
+                Product ID: {displayUniqueId}
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -694,7 +694,7 @@ export function AdminProductDetailPanel({
             <div className="flex items-center gap-4 text-xs font-bold text-slate-500 mt-1">
               <span className="capitalize">Gender: {product.gender}</span>
               <span className="text-slate-300">|</span>
-              <span>Tailoring: {product.tailoringDays ?? 30} days</span>
+              <span>Delivery Window: {product.tailoringDays ?? 30} days</span>
             </div>
           </div>
 

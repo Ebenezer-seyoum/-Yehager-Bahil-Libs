@@ -136,6 +136,20 @@ export function AdminWorkspace({
         return (tabFilteredData.orders ?? []).length;
       case "payments":
         return ((tabFilteredData.orders ?? []) as any[]).filter((o) => o.paymentStatus || o.paymentMethod).length;
+      case "customer-credits":
+        return activeTab === "ledger"
+          ? (tabFilteredData.ledgerEntries ?? []).length
+          : activeTab === "rules"
+            ? (tabFilteredData.creditRules ?? []).length
+            : (tabFilteredData.creditCustomers ?? []).length;
+      case "profit-costs":
+        return activeTab === "custom"
+          ? (tabFilteredData.customProfitRows ?? []).length
+          : activeTab === "designer"
+            ? (tabFilteredData.designerPayments ?? []).length
+            : activeTab === "defaults"
+              ? 1
+              : (tabFilteredData.catalogProfitRows ?? []).length;
       case "uploaded-designs":
         return (tabFilteredData.uploadedDesigns ?? []).length;
       case "activity-logs":

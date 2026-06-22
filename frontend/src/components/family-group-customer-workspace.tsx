@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { ChevronRight, Pencil, Plus, ShoppingCart, Trash2, UserRound, Users, X } from "lucide-react";
 import { useState } from "react";
+import { HEM_STYLE_OPTIONS, PANTS_MEASUREMENT_FIELDS, PRESSING_STYLE_OPTIONS, TOP_MEASUREMENT_FIELDS, TOP_MEASUREMENT_TITLE, PANTS_MEASUREMENT_TITLE } from "@/lib/measurement-fields";
 
 type Member = {
   id: string;
@@ -27,21 +28,6 @@ type SelectedDesign = {
 };
 
 type Measurement = { id: string; label?: string | null };
-
-const measurementFields = [
-  ["neck", "Neck", "Around collar line"],
-  ["shoulderWidth", "Shoulder Width", "Shoulder seam to seam"],
-  ["chest", "Chest / Bust", "Around the fullest part"],
-  ["waist", "Waist", "Natural waistline"],
-  ["hips", "Hips / Seat", "Fullest part of hips"],
-  ["armLength", "Sleeve Length", "Shoulder to wrist"],
-  ["torsoLength", "Back Length", "Nape of neck to waist"],
-  ["bicepCircumference", "Bicep", "Fullest part of upper arm"],
-  ["wristCircumference", "Wrist", "Around the wrist bone"],
-  ["pantsWaist", "Pants Waist", "Around natural waistline"],
-  ["thighCircumference", "Thigh", "Around fullest part of upper thigh"],
-  ["waistToPantsLength", "Outseam", "Waist to desired pants hem"],
-] as const;
 
 export function FamilyGroupCustomerWorkspace({
   groupId,
@@ -75,12 +61,17 @@ export function FamilyGroupCustomerWorkspace({
   const [gender, setGender] = useState("male");
   const [relation, setRelation] = useState("Myself");
   const [selectedMeasurementId, setSelectedMeasurementId] = useState<string>("");
+  const [hemStyle, setHemStyle] = useState("Straight");
+  const [pressingStyle, setPressingStyle] = useState("Creased");
   const hasSource = Boolean(group.productName);
   const customReady = group.selectionType !== "custom_design" || selectedDesign?.status === "awaiting_payment";
 
   function closeMember() {
     setMemberOpen(false);
     setStep(1);
+    setSelectedMeasurementId("");
+    setHemStyle("Straight");
+    setPressingStyle("Creased");
   }
 
   return (
@@ -268,13 +259,55 @@ export function FamilyGroupCustomerWorkspace({
                   Using your exact predefined profile sizing.
                 </div>
               ) : (
-                <div className="grid gap-x-5 gap-y-4 sm:grid-cols-2">
-                  {measurementFields.map(([name, label, hint]) => (
-                    <label key={name} className="text-sm font-semibold">{label}{!["inseam", "neck"].includes(name) ? <span className="text-primary">*</span> : null}
-                      <input name={name} type="number" step="0.1" min="0" placeholder="0.0" className="mt-2 h-12 w-full rounded-xl border border-input bg-black px-4 text-lg text-blue-200 outline-none focus:border-primary" />
-                      <span className="mt-1 block text-xs font-normal text-muted-foreground">{hint}</span>
-                    </label>
-                  ))}
+                <div className="space-y-6">
+                  <div className="rounded-2xl border border-border bg-secondary/30 p-5">
+                    <h3 className="font-heading text-lg font-bold text-primary">{TOP_MEASUREMENT_TITLE}</h3>
+                    <div className="mt-4 grid gap-x-5 gap-y-4 sm:grid-cols-2">
+                      {TOP_MEASUREMENT_FIELDS.map((field) => (
+                        <label key={field.key} className="text-sm font-semibold">{field.label}{field.required !== false ? <span className="text-primary">*</span> : null}
+                          <input name={field.key} type="number" step="0.1" min="0" placeholder="0.0" className="mt-2 h-12 w-full rounded-xl border border-input bg-black px-4 text-lg text-blue-200 outline-none focus:border-primary" />
+                          <span className="mt-1 block text-xs font-normal text-muted-foreground">{field.hint}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-border bg-secondary/30 p-5">
+                    <h3 className="font-heading text-lg font-bold text-primary">{PANTS_MEASUREMENT_TITLE}</h3>
+                    <div className="mt-4 grid gap-x-5 gap-y-4 sm:grid-cols-2">
+                      {PANTS_MEASUREMENT_FIELDS.map((field) => (
+                        <label key={field.key} className="text-sm font-semibold">{field.label}{field.required !== false ? <span className="text-primary">*</span> : null}
+                          <input name={field.key} type="number" step="0.1" min="0" placeholder="0.0" className="mt-2 h-12 w-full rounded-xl border border-input bg-black px-4 text-lg text-blue-200 outline-none focus:border-primary" />
+                          <span className="mt-1 block text-xs font-normal text-muted-foreground">{field.hint}</span>
+                        </label>
+                      ))}
+                    </div>
+                    <input type="hidden" name="hemStyle" value={hemStyle} />
+                    <input type="hidden" name="pressingStyle" value={pressingStyle} />
+                    <div className="mt-6 grid gap-4 sm:grid-cols-2">
+                      <div>
+                        <p className="text-sm font-semibold">Hem Style <span className="text-primary">*</span></p>
+                        <div className="mt-3 grid gap-3">
+                          {HEM_STYLE_OPTIONS.map((option) => (
+                            <button key={option.value} type="button" onClick={() => setHemStyle(option.value)} className={`rounded-xl border-2 p-4 text-left ${hemStyle === option.value ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground"}`}>
+                              <span className="block font-bold">{option.title}</span>
+                              <span className="mt-1 block text-xs">{option.description}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold">Pressing (Iron) Style <span className="text-primary">*</span></p>
+                        <div className="mt-3 grid gap-3">
+                          {PRESSING_STYLE_OPTIONS.map((option) => (
+                            <button key={option.value} type="button" onClick={() => setPressingStyle(option.value)} className={`rounded-xl border-2 p-4 text-left ${pressingStyle === option.value ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground"}`}>
+                              <span className="block font-bold">{option.title}</span>
+                              <span className="mt-1 block text-xs">{option.description}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               )}
               <div className="grid grid-cols-2 gap-4">

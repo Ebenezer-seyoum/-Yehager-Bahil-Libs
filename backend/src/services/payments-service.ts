@@ -13,6 +13,7 @@ import {
 import { deleteCartItemsByIdsForUser } from "../repositories/cart-repository.js";
 import { canTransitionPaymentStatus, deriveOrderStatusOnPayment } from "./order-state-machine.js";
 import { sendOrderStatusEmail } from "./email-service.js";
+import { awardCustomerCreditForPaidOrder } from "./customer-credits-service.js";
 
 const stripe = new Stripe(env.STRIPE_SECRET_KEY);
 
@@ -146,6 +147,9 @@ export async function processStripeWebhook(payload: { body: string; signature?: 
           paymentStatus: nextPayment,
           orderStatus: nextOrderStatus,
         });
+        if (updatedOrder) {
+          await awardCustomerCreditForPaidOrder(updatedOrder, "stripe");
+        }
         await sendOrderStatusEmail({
           to: updatedOrder?.userEmail ?? order.userEmail,
           customerName: updatedOrder?.customerName ?? order.customerName,

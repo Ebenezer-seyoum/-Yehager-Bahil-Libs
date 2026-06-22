@@ -69,7 +69,7 @@ function apiErrorMessage(payload: unknown, fallback: string) {
       ? String((payload as { error?: unknown }).error ?? "")
       : "";
   if (raw.includes("API error 500")) {
-    return "Collections API failed on the server. Please make sure the homepage collections migration has been applied, then try again.";
+    return "Tribes and regions API failed on the server. Please make sure the homepage classification migration has been applied, then try again.";
   }
   const match = raw.match(/"message"\s*:\s*"([^"]+)"/);
   if (match?.[1] && match[1] !== "Internal Server Error") return match[1];
@@ -211,7 +211,7 @@ export function AdminSectionManager({
   }
 
   const writeSection = useCallback(async (section: SectionItem, patch: Partial<SectionItem>) => {
-    if (!canEdit) throw new Error("You do not have permission to edit homepage collections.");
+    if (!canEdit) throw new Error("You do not have permission to edit homepage tribes and regions.");
     const body = {
       name: patch.name ?? section.name,
       isActive: patch.isActive ?? section.isActive,
@@ -227,7 +227,7 @@ export function AdminSectionManager({
       },
     );
     const payload = await response.json().catch(() => null);
-    if (!response.ok) throw new Error(apiErrorMessage(payload, "Could not save homepage collection."));
+    if (!response.ok) throw new Error(apiErrorMessage(payload, "Could not save homepage tribe."));
     return normalizeSection(payload.data as SectionItem);
   }, [canEdit]);
 
@@ -263,7 +263,7 @@ export function AdminSectionManager({
     if (!canEdit) return;
     const name = sectionFormName.trim();
     if (!name) {
-      await dashboardAlert("Validation Error", "Region name is required.", { icon: "error", tone: "danger" });
+      await dashboardAlert("Validation Error", "Tribe name is required.", { icon: "error", tone: "danger" });
       return;
     }
 
@@ -276,21 +276,21 @@ export function AdminSectionManager({
           setIsCreatingSection(false);
           setSectionFormName(existing.name);
           setSectionFormActive(existing.isActive);
-          await dashboardAlert("Region Exists", `"${existing.name}" already exists. It is now selected in the left list.`, { icon: "info", tone: "warning" });
+          await dashboardAlert("Tribe Exists", `"${existing.name}" already exists. It is now selected in the left list.`, { icon: "info", tone: "warning" });
           return;
         }
         await createSectionByName(name, sectionFormActive);
-        await dashboardAlert("Region Added", "New region has been created.", { icon: "success", tone: "success" });
+        await dashboardAlert("Tribe Added", "New tribe has been created.", { icon: "success", tone: "success" });
       } else if (selectedSection) {
         const saved = await writeSection(selectedSection, { name, isActive: sectionFormActive });
         setSections((items) => upsertSectionByName(items.filter((item) => item.id !== selectedSection.id), saved));
         setSelectedId(saved.id);
         setSectionFormName(saved.name);
         setSectionFormActive(saved.isActive);
-        await dashboardAlert("Region Updated", "Region details have been saved.", { icon: "success", tone: "success" });
+        await dashboardAlert("Tribe Updated", "Tribe details have been saved.", { icon: "success", tone: "success" });
       }
     } catch (error) {
-      await dashboardAlert("Save Failed", error instanceof Error ? error.message : "Could not save homepage region.", { icon: "error", tone: "danger" });
+      await dashboardAlert("Save Failed", error instanceof Error ? error.message : "Could not save homepage tribe.", { icon: "error", tone: "danger" });
     } finally {
       setBusy(false);
     }
@@ -300,8 +300,8 @@ export function AdminSectionManager({
     if (!canEdit) return;
     const nextActive = !sectionFormActive;
     const confirmed = await dashboardConfirm({
-      title: nextActive ? "Activate this region?" : "Deactivate this region?",
-      text: nextActive ? "This region will be available for customer-facing placement." : "This region will be hidden from customer-facing placement.",
+      title: nextActive ? "Activate this tribe?" : "Deactivate this tribe?",
+      text: nextActive ? "This tribe will be available for customer-facing placement." : "This tribe will be hidden from customer-facing placement.",
       confirmButtonText: nextActive ? "Yes, activate" : "Yes, deactivate",
       cancelButtonText: "Cancel",
       tone: nextActive ? "success" : "warning",
@@ -319,8 +319,8 @@ export function AdminSectionManager({
   async function deleteSection(section: SectionItem) {
     if (!canDelete) return;
     const confirmed = await dashboardConfirm({
-      title: "Delete this region?",
-      text: `The region "${section.name}" and its collections will be removed from homepage Categories.`,
+      title: "Delete this tribe?",
+      text: `The tribe "${section.name}" and its regions will be removed from homepage categories.`,
       confirmButtonText: "Yes, Delete",
       cancelButtonText: "Cancel",
       tone: "danger",
@@ -333,7 +333,7 @@ export function AdminSectionManager({
       if (isPersisted(section)) {
         const response = await fetch(`/api/backend/admin/homepage-sections/${section.id}`, { method: "DELETE" });
         const payload = await response.json().catch(() => null);
-        if (!response.ok) throw new Error(apiErrorMessage(payload, "Could not delete homepage collection."));
+        if (!response.ok) throw new Error(apiErrorMessage(payload, "Could not delete homepage tribe."));
       }
       setSections((items) => {
         const next = items.filter((item) => item.id !== section.id);
@@ -346,9 +346,9 @@ export function AdminSectionManager({
         }
         return next;
       });
-      await dashboardAlert("Region Deleted", "Homepage region has been deleted.", { icon: "success", tone: "success" });
+      await dashboardAlert("Tribe Deleted", "Homepage tribe has been deleted.", { icon: "success", tone: "success" });
     } catch (error) {
-      await dashboardAlert("Delete Failed", error instanceof Error ? error.message : "Could not delete homepage region.", { icon: "error", tone: "danger" });
+      await dashboardAlert("Delete Failed", error instanceof Error ? error.message : "Could not delete homepage tribe.", { icon: "error", tone: "danger" });
     } finally {
       setBusy(false);
     }
@@ -363,7 +363,7 @@ export function AdminSectionManager({
       setSelectedId(saved.id);
       await dashboardAlert("Updated", successMessage, { icon: "success", tone: "success" });
     } catch (error) {
-      await dashboardAlert("Update Failed", error instanceof Error ? error.message : "Could not update homepage collection.", { icon: "error", tone: "danger" });
+      await dashboardAlert("Update Failed", error instanceof Error ? error.message : "Could not update homepage classification.", { icon: "error", tone: "danger" });
     } finally {
       setBusy(false);
     }
@@ -374,7 +374,7 @@ export function AdminSectionManager({
     if (!selectedSection) return;
     const name = subsectionName.trim();
     if (!name) {
-      await dashboardAlert("Validation Error", "Collection name is required.", { icon: "error", tone: "danger" });
+      await dashboardAlert("Validation Error", "Region name is required.", { icon: "error", tone: "danger" });
       return;
     }
 
@@ -384,7 +384,7 @@ export function AdminSectionManager({
         )
       : [...selectedSection.subsections, makeSubsection(name, selectedSection.subsections.length)];
 
-    await patchSection(selectedSection, { subsections: nextSubsections }, editingSubsection ? "Collection updated." : "Collection added.");
+    await patchSection(selectedSection, { subsections: nextSubsections }, editingSubsection ? "Region updated." : "Region added.");
     setSubsectionName("");
     setEditingSubsection(null);
     if (!editingSubsection) setExpandedSubsectionId(nextSubsections.at(-1)?.id ?? null);
@@ -393,7 +393,7 @@ export function AdminSectionManager({
   async function deleteSubsection(section: SectionItem, subsection: SubsectionItem) {
     if (!canDelete) return;
     const confirmed = await dashboardConfirm({
-      title: "Delete this collection?",
+      title: "Delete this region?",
       text: `"${subsection.name}" will be removed from ${section.name}.`,
       confirmButtonText: "Yes, Delete",
       cancelButtonText: "Cancel",
@@ -404,7 +404,7 @@ export function AdminSectionManager({
     await patchSection(
       section,
       { subsections: section.subsections.filter((item) => item.id !== subsection.id) },
-      "Collection deleted.",
+      "Region deleted.",
     );
   }
 
@@ -425,8 +425,8 @@ export function AdminSectionManager({
     if (!canEdit) return;
     const nextActive = !subsection.isActive;
     const confirmed = await dashboardConfirm({
-      title: nextActive ? "Activate this collection?" : "Deactivate this collection?",
-      text: nextActive ? `"${subsection.name}" will become available in this region.` : `"${subsection.name}" will be hidden in this region.`,
+      title: nextActive ? "Activate this region?" : "Deactivate this region?",
+      text: nextActive ? `"${subsection.name}" will become available in this tribe.` : `"${subsection.name}" will be hidden in this tribe.`,
       confirmButtonText: nextActive ? "Yes, activate" : "Yes, deactivate",
       cancelButtonText: "Cancel",
       tone: nextActive ? "success" : "warning",
@@ -440,7 +440,7 @@ export function AdminSectionManager({
           item.id === subsection.id ? { ...item, isActive: nextActive } : item,
         ),
       },
-      nextActive ? "Collection activated." : "Collection deactivated.",
+      nextActive ? "Region activated." : "Region deactivated.",
     );
   }
 
@@ -451,7 +451,7 @@ export function AdminSectionManager({
           <div className="flex min-h-[70px] items-center justify-between border-b border-slate-200 px-5">
             <div className="flex items-center gap-3">
               <FolderTree className="h-5 w-5 text-emerald-700" />
-              <h3 className="text-lg font-black text-slate-950">Regions</h3>
+              <h3 className="text-lg font-black text-slate-950">Tribes</h3>
             </div>
             <span className="rounded-md bg-slate-100 px-3 py-1 text-xs font-black text-slate-600">{filteredSections.length}</span>
           </div>
@@ -461,7 +461,7 @@ export function AdminSectionManager({
               <input
                 value={sectionQuery}
                 onChange={(event) => setSectionQuery(event.target.value)}
-                placeholder="Search regions..."
+                placeholder="Search tribes..."
                 className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-3 text-sm font-medium outline-none focus:border-emerald-700 focus:bg-white focus:ring-2 focus:ring-emerald-100"
               />
             </label>
@@ -474,10 +474,10 @@ export function AdminSectionManager({
                 className="mb-2 block w-full border-l-4 border-violet-600 bg-violet-50/70 px-4 py-4 text-left"
               >
                 <div className="flex items-center justify-between gap-3">
-                  <span className="truncate font-bold text-slate-950">New Region</span>
+                  <span className="truncate font-bold text-slate-950">New Tribe</span>
                   <span className="rounded-md bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-700">Draft</span>
                 </div>
-                <p className="mt-1 truncate text-xs text-slate-500">Configure region details</p>
+                <p className="mt-1 truncate text-xs text-slate-500">Configure tribe details</p>
               </button>
             ) : null}
             {filteredSections.map((section) => (
@@ -502,7 +502,7 @@ export function AdminSectionManager({
                     <div className="min-w-0">
                       <h4 className="truncate font-black text-slate-950">{section.name}</h4>
                       <p className="mt-1 text-sm font-semibold text-slate-500">
-                        {section.subsections.length} collections
+                        {section.subsections.length} regions
                       </p>
                       <div className="mt-2 flex flex-wrap gap-1">
                         <span
@@ -531,7 +531,7 @@ export function AdminSectionManager({
             ))}
             {filteredSections.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-slate-300 p-8 text-center text-sm font-semibold text-slate-500">
-                No regions match your search.
+                No tribes match your search.
               </div>
             ) : null}
           </div>
@@ -542,20 +542,20 @@ export function AdminSectionManager({
             <>
               <div className="border-b border-slate-200 bg-slate-50 px-6 py-5">
                 <div>
-                  <p className="text-xs font-black uppercase tracking-wide text-emerald-700">Region Details</p>
-                  <h3 className="mt-1 text-xl font-black text-slate-950">{isCreatingSection ? "New Region" : selectedSection?.name}</h3>
+                  <p className="text-xs font-black uppercase tracking-wide text-emerald-700">Tribe Details</p>
+                  <h3 className="mt-1 text-xl font-black text-slate-950">{isCreatingSection ? "New Tribe" : selectedSection?.name}</h3>
                 </div>
               </div>
 
               <div className="space-y-5 p-6">
                 <div className="grid gap-4 xl:grid-cols-[1fr_auto_auto_auto] xl:items-end">
                   <label className="space-y-2">
-                    <span className="text-xs font-black uppercase tracking-wide text-slate-400">Region Name</span>
+                    <span className="text-xs font-black uppercase tracking-wide text-slate-400">Tribe Name</span>
                     <input
                       ref={sectionNameInputRef}
                       value={sectionFormName}
                       onChange={(event) => setSectionFormName(event.target.value)}
-                      placeholder="Enter region name"
+                      placeholder="Enter tribe name"
                       readOnly={!canEdit}
                       className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-900 outline-none focus:border-emerald-700 focus:ring-2 focus:ring-emerald-100"
                     />
@@ -625,7 +625,7 @@ export function AdminSectionManager({
                         <input
                           value={subsectionQuery}
                           onChange={(event) => setSubsectionQuery(event.target.value)}
-                          placeholder="Search collections..."
+                          placeholder="Search regions..."
                           className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-3 text-sm font-semibold text-slate-900 outline-none focus:border-emerald-700 focus:bg-white focus:ring-2 focus:ring-emerald-100"
                         />
                       </label>
@@ -634,7 +634,7 @@ export function AdminSectionManager({
                           <input
                             value={subsectionName}
                             onChange={(event) => setSubsectionName(event.target.value)}
-                            placeholder={editingSubsection ? "Update collection name" : "New collection name"}
+                            placeholder={editingSubsection ? "Update region name" : "New region name"}
                             className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-900 outline-none focus:border-emerald-700 focus:ring-2 focus:ring-emerald-100"
                           />
                           {editingSubsection ? (
@@ -657,7 +657,7 @@ export function AdminSectionManager({
                             className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-700 px-5 py-3 text-sm font-black text-white hover:bg-emerald-800 disabled:opacity-60"
                           >
                             {editingSubsection ? <Save className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-                            {editingSubsection ? "Update" : "Add Collection"}
+                            {editingSubsection ? "Update" : "Add Region"}
                           </button>
                         </>
                       ) : null}
@@ -777,8 +777,8 @@ export function AdminSectionManager({
                       ) : (
                         <div className="p-8 text-center">
                           <FolderTree className="mx-auto h-10 w-10 text-slate-400" />
-                          <h4 className="mt-3 text-lg font-black text-slate-950">No collections yet</h4>
-                          <p className="mt-1 text-sm font-medium text-slate-500">Add a collection to organize catalog links under this region.</p>
+                          <h4 className="mt-3 text-lg font-black text-slate-950">No regions yet</h4>
+                          <p className="mt-1 text-sm font-medium text-slate-500">Add a region to organize catalog links under this tribe.</p>
                         </div>
                       )}
                     </div>
@@ -786,8 +786,8 @@ export function AdminSectionManager({
                 ) : (
                   <div className="rounded-2xl border border-dashed border-slate-300 p-8 text-center">
                     <FolderTree className="mx-auto h-10 w-10 text-slate-400" />
-                    <h4 className="mt-3 text-lg font-black text-slate-950">Save region details first</h4>
-                    <p className="mt-1 text-sm font-medium text-slate-500">After saving, you can add collections and expand products inline.</p>
+                    <h4 className="mt-3 text-lg font-black text-slate-950">Save tribe details first</h4>
+                    <p className="mt-1 text-sm font-medium text-slate-500">After saving, you can add regions and expand products inline.</p>
                   </div>
                 )}
               </div>
@@ -796,8 +796,8 @@ export function AdminSectionManager({
             <div className="grid min-h-[360px] place-items-center rounded-2xl border border-dashed border-slate-200 p-8 text-center">
               <div>
                 <FolderTree className="mx-auto h-10 w-10 text-slate-400" />
-                <h3 className="mt-3 text-lg font-black text-slate-950">Expand a region</h3>
-                <p className="mt-1 text-sm font-semibold text-slate-500">Use the left panel to expand a region and manage its collections.</p>
+                <h3 className="mt-3 text-lg font-black text-slate-950">Expand a tribe</h3>
+                <p className="mt-1 text-sm font-semibold text-slate-500">Use the left panel to expand a tribe and manage its regions.</p>
               </div>
             </div>
           )}

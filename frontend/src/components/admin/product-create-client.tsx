@@ -94,7 +94,7 @@ function fallbackHomepageSections(): HomepageSection[] {
   }));
 }
 
-// Region & Subcategory Abbreviation Helpers
+// Tribe & region abbreviation helpers for generated product IDs.
 function getRegionCode(r: string): string {
   const map: Record<string, string> = {
     "Amhara": "AMH",
@@ -305,7 +305,7 @@ export function ProductCreateClient() {
   async function handleSingleCreate() {
     // 1. Validations
     if (!region || !subcategory) {
-      setFormNotice({ tone: "error", title: "Missing Region", message: "Please select a region and collection before inserting a product." });
+      setFormNotice({ tone: "error", title: "Missing Classification", message: "Please select a tribe and region before inserting a product." });
       return;
     }
     if (!middleText.trim()) {
@@ -470,7 +470,7 @@ export function ProductCreateClient() {
     }
     const missingCollection = activeProducts.find(p => !p.region || !p.subcategory);
     if (missingCollection) {
-      void dashboardError("Missing Region", `Product "${missingCollection.folderName}" needs a region and collection before import.`);
+      void dashboardError("Missing Classification", `Product "${missingCollection.folderName}" needs a tribe and region before import.`);
       return;
     }
 
@@ -682,7 +682,7 @@ export function ProductCreateClient() {
               <div className="p-8 space-y-6">
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase text-slate-400">Region / Traditional Source</label>
+                    <label className="text-[10px] font-black uppercase text-slate-400">Tribe</label>
                     <select
                       value={region}
                       onChange={e => {
@@ -695,7 +695,7 @@ export function ProductCreateClient() {
                     </select>
                   </div>
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase text-slate-400">Collection</label>
+                    <label className="text-[10px] font-black uppercase text-slate-400">Region</label>
                     <select
                       value={subcategory}
                       onChange={e => setSubcategory(e.target.value)}
@@ -806,7 +806,7 @@ export function ProductCreateClient() {
                   </select>
                 </div>
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase text-slate-400">Tailoring Days <span className="text-rose-500">*</span></label>
+                  <label className="text-[10px] font-black uppercase text-slate-400">Estimated Delivery Days <span className="text-rose-500">*</span></label>
                   <input
                     type="number"
                     value={tailoringDays}
@@ -908,7 +908,7 @@ export function ProductCreateClient() {
             </h3>
             <div className="grid gap-4 md:grid-cols-4">
               <div className="space-y-1">
-                <label className="text-[10px] font-black uppercase text-slate-400">Region</label>
+                <label className="text-[10px] font-black uppercase text-slate-400">Tribe</label>
                 <select
                   value={defaultRegion}
                   onChange={e => {
@@ -921,7 +921,7 @@ export function ProductCreateClient() {
                 </select>
               </div>
               <div className="space-y-1">
-                <label className="text-[10px] font-black uppercase text-slate-400">Collection</label>
+                <label className="text-[10px] font-black uppercase text-slate-400">Region</label>
                 <select
                   value={defaultSubcategory}
                   onChange={e => setDefaultSubcategory(e.target.value)}
@@ -972,7 +972,7 @@ export function ProductCreateClient() {
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-[10px] font-black uppercase text-slate-400">Tailoring Days</label>
+                <label className="text-[10px] font-black uppercase text-slate-400">Estimated Delivery Days</label>
                 <input
                   type="number"
                   value={defaultTailoringDays}
@@ -1049,7 +1049,7 @@ export function ProductCreateClient() {
                       <th className="px-6 py-4 font-bold text-slate-400 uppercase tracking-widest w-12">Import</th>
                       <th className="px-6 py-4 font-bold text-slate-400 uppercase tracking-widest w-40">Subfolder Name</th>
                       <th className="px-6 py-4 font-bold text-slate-400 uppercase tracking-widest min-w-[200px]">Images Previews</th>
-                      <th className="px-6 py-4 font-bold text-slate-400 uppercase tracking-widest">Region / Collection</th>
+                      <th className="px-6 py-4 font-bold text-slate-400 uppercase tracking-widest">Tribe / Region</th>
                       <th className="px-6 py-4 font-bold text-slate-400 uppercase tracking-widest">Custom Middle Name</th>
                       <th className="px-6 py-4 font-bold text-slate-400 uppercase tracking-widest w-24">Price (USD)</th>
                       <th className="px-6 py-4 font-bold text-slate-400 uppercase tracking-widest w-28">Status</th>

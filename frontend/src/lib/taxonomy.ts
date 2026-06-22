@@ -5,10 +5,11 @@ export const TAXONOMY: Record<string, string[]> = {
   Debub: ["Gurage", "Welaita", "Gamo", "Sidama", "Kids", "Apparels"],
   Islamic: [],
   Men: [],
+  Others: [],
   "Bride & Groom": ["Modern", "Amhara", "Oromo", "Tigre", "Debub"],
   "Mila's Choice": [],
 };
 
-export const REGIONS = ["Amhara", "Oromo", "Tigre", "Debub", "Islamic", "Men", "Bride & Groom", "Mila's Choice"];
+export const REGIONS = ["Amhara", "Oromo", "Tigre", "Debub", "Islamic", "Men", "Others", "Bride & Groom", "Mila's Choice"];
 
 export const LEARN_LANGUAGES_URL = "https://learnethiopianlanguages.online/";

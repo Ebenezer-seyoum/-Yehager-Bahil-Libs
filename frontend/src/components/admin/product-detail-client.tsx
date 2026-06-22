@@ -143,7 +143,7 @@ export function ProductDetailClient({ initialProduct }: { initialProduct: Produc
                <div className="flex items-center gap-10">
                   <div className="flex flex-col"><span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Base Price</span><span className="text-xl font-black text-slate-900">{formatCurrency(product.priceUsd)}</span></div>
                   <div className="h-8 w-px bg-slate-200" />
-                  <div className="flex flex-col"><span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Tailoring</span><span className="text-xl font-black text-slate-900">{product.tailoringDays || 30} Days</span></div>
+                  <div className="flex flex-col"><span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Delivery Window</span><span className="text-xl font-black text-slate-900">{product.tailoringDays || 30} Days</span></div>
                </div>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -158,7 +158,7 @@ export function ProductDetailClient({ initialProduct }: { initialProduct: Produc
       sections={[
         { id: "general", label: "Catalog Identity", icon: Info },
         { id: "pricing", label: "Financial Data", icon: DollarSign },
-        { id: "garment", label: "Craft & Tailoring", icon: Shirt },
+        { id: "garment", label: "Garment Specs", icon: Shirt },
         { id: "inventory", label: "Stock & Settings", icon: Package },
       ]}
       activeSection={activeSection}
@@ -170,9 +170,9 @@ export function ProductDetailClient({ initialProduct }: { initialProduct: Produc
                 <h2 className="mb-8 flex items-center gap-2 text-sm font-black uppercase tracking-widest text-slate-400"><Info className="h-4 w-4" /> Identity Profile</h2>
                 <div className="grid gap-4 md:grid-cols-2">
                    <Field label="Catalog Name" value={product.name} icon={Shirt} />
-                   <Field label="Unique Identifier" value={product.uniqueId} icon={Hash} />
-                   <Field label="Geographic Region" value={product.region} icon={MapPin} />
-                   <Field label="Culture / Style" value={product.subcategory} icon={Star} />
+                   <Field label="Product ID" value={product.uniqueId} icon={Hash} />
+                   <Field label="Tribe" value={product.region} icon={MapPin} />
+                   <Field label="Region" value={product.subcategory} icon={Star} />
                 </div>
                 <div className="mt-4 grid gap-4 lg:grid-cols-2">
                    <div className="rounded-2xl border border-slate-100 bg-slate-50/50 p-6">
@@ -229,11 +229,12 @@ export function ProductDetailClient({ initialProduct }: { initialProduct: Produc
 
           {activeSection === "garment" && (
             <section className="rounded-[2.5rem] border border-slate-200 bg-white p-8 shadow-sm">
-               <h2 className="mb-8 flex items-center gap-2 text-sm font-black uppercase tracking-widest text-slate-400"><Shirt className="h-4 w-4" /> Physical Attributes</h2>
+               <h2 className="mb-8 flex items-center gap-2 text-sm font-black uppercase tracking-widest text-slate-400"><Shirt className="h-4 w-4" /> Garment Specifications</h2>
                <div className="grid gap-4 md:grid-cols-2">
+                  <Field label="Product ID" value={product.uniqueId} icon={Hash} />
                   <Field label="Fabric Texture" value={product.fabricType} />
                   <Field label="Artisan Style" value={product.embroideryStyle} />
-                  <Field label="Craftsmanship Period" value={`${product.tailoringDays || 30} Days`} icon={Clock} />
+                  <Field label="Estimated Delivery Days" value={`${product.tailoringDays || 30} Days`} icon={Clock} />
                   <Field label="Target Gender" value={product.gender} />
                </div>
             </section>

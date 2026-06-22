@@ -4,6 +4,16 @@ import { useMemo, useState } from "react";
 import { BookOpen, Check, CheckCircle2, ChevronDown, Loader2, Mail, Palette, Phone, Play, Ruler } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import {
+  HEM_STYLE_OPTIONS,
+  PANTS_MEASUREMENT_FIELDS,
+  PANTS_MEASUREMENT_TITLE,
+  PRESSING_STYLE_OPTIONS,
+  TOP_MEASUREMENT_FIELDS,
+  TOP_MEASUREMENT_TITLE,
+  measurementDisplayGroups,
+  measurementSnapshotFromStringValues,
+} from "@/lib/measurement-fields";
 
 type SignedUpload = {
   cloudName: string;
@@ -20,6 +30,13 @@ type UploadedFileState = {
 };
 
 type UploadKey = "front" | "side" | "back" | "detail";
+type SavedMeasurementSnapshot = Record<string, unknown> & {
+  id?: string;
+  hemStyle?: string;
+  hem_style?: string;
+  pressingStyle?: string;
+  pressing_style?: string;
+};
 
 const steps = ["Design", "Fabric & Style", "Measurements", "Contact & Submit"] as const;
 
@@ -56,24 +73,6 @@ const colorOptions = [
   "Monochromatic Black/White",
   "Custom (Specify in Remarks)",
 ];
-
-const topMeasurementFields = [
-  ["neck", "Neck", "Around the base of the neck"],
-  ["shoulder", "Shoulder", "Seam to seam across the top"],
-  ["chest", "Chest / Bust", "Around the fullest part"],
-  ["waist", "Waist", "Narrowest part of natural waist"],
-  ["torsoLength", "Shirt / Coat Length", "Back of neck down to desired hem"],
-  ["armLength", "Arm Length", "Shoulder seam to wrist"],
-  ["bicepCircumference", "Bicep", "Fullest part of upper arm"],
-  ["wristCircumference", "Wrist", "Around the wrist bone"],
-] as const;
-
-const bottomMeasurementFields = [
-  ["pantsWaist", "Pants Waist", "Around natural waistline"],
-  ["pantsHip", "Pants Hip", "Around fullest part of hips"],
-  ["thighCircumference", "Thigh", "Around fullest part of upper thigh"],
-  ["waistToPantsLength", "Outseam", "Waist to desired pants hem"],
-] as const;
 
 async function uploadToCloudinary(file: File, folder: string) {
   const signRes = await fetch("/api/backend/uploads/sign", {
@@ -230,7 +229,7 @@ function PageHeader({ step, setStep }: { step: number; setStep: (step: number) =
   );
 }
 
-export function UploadDesignWizard({ familyGroupId, eventId, savedMeasurement }: { familyGroupId?: string; eventId?: string; savedMeasurement?: any }) {
+export function UploadDesignWizard({ familyGroupId, eventId, savedMeasurement }: { familyGroupId?: string; eventId?: string; savedMeasurement?: SavedMeasurementSnapshot | null }) {
   const router = useRouter();
   const hasMeasurement = Boolean(savedMeasurement?.id);
   const [isMeasurementEditorOpen, setIsMeasurementEditorOpen] = useState(!hasMeasurement);
@@ -249,6 +248,8 @@ export function UploadDesignWizard({ familyGroupId, eventId, savedMeasurement }:
   const [isPantsOpen, setIsPantsOpen] = useState(false);
   const [measurementNoteOpen, setMeasurementNoteOpen] = useState(false);
   const [measurementNote, setMeasurementNote] = useState("");
+  const [hemStyle, setHemStyle] = useState(String(savedMeasurement?.hemStyle || savedMeasurement?.hem_style || "Straight"));
+  const [pressingStyle, setPressingStyle] = useState(String(savedMeasurement?.pressingStyle || savedMeasurement?.pressing_style || "Creased"));
   const [contactPhone, setContactPhone] = useState("");
   const [inspirationNote, setInspirationNote] = useState("");
 
@@ -311,7 +312,9 @@ export function UploadDesignWizard({ familyGroupId, eventId, savedMeasurement }:
           measurementSnapshot: {
             gender,
             outfitType,
-            ...(hasMeasurement && !isMeasurementEditorOpen ? savedMeasurement : Object.fromEntries(Object.entries(measurements).map(([key, value]) => [key, Number(value)]))),
+            ...(hasMeasurement && !isMeasurementEditorOpen
+              ? savedMeasurement
+              : measurementSnapshotFromStringValues(measurements, { hemStyle, pressingStyle })),
             tailorNote: measurementNote,
           },
           contactPhone,
@@ -374,7 +377,7 @@ export function UploadDesignWizard({ familyGroupId, eventId, savedMeasurement }:
               </Link>
             ) : null}
             <Link href="/catalog" className="rounded-lg border border-border px-5 py-2 text-sm font-bold hover:bg-secondary">
-              Browse Collection
+              Browse Catalog
             </Link>
             <Link href="/my-orders" className="rounded-lg bg-primary px-5 py-2 text-sm font-bold text-black hover:bg-primary/90">
               My Orders
@@ -484,18 +487,18 @@ export function UploadDesignWizard({ familyGroupId, eventId, savedMeasurement }:
                   Edit
                 </button>
               </div>
-              <div className="mt-4 grid grid-cols-2 gap-x-8 gap-y-4 text-sm sm:grid-cols-3">
-                {[
-                  ["Chest", savedMeasurement?.chest],
-                  ["Waist", savedMeasurement?.waist],
-                  ["Hips", savedMeasurement?.hips],
-                  ["Shoulder", savedMeasurement?.shoulderWidth],
-                  ["Arm", savedMeasurement?.armLength],
-                  ["Torso", savedMeasurement?.torsoLength],
-                ].map(([label, value]) => (
-                  <div key={label.toString()}>
-                    <p className="text-[13px] text-zinc-400">{label}</p>
-                    <p className="mt-1 text-[14px] font-semibold text-white">{value ? `${Number(value).toFixed(1)} cm` : "-"}</p>
+              <div className="mt-4 space-y-5">
+                {measurementDisplayGroups(savedMeasurement ?? {}).filter((group) => group.title !== "Profile").map((group) => (
+                  <div key={group.title}>
+                    <h3 className="mb-2 text-[11px] font-black uppercase tracking-[0.2em] text-primary">{group.title}</h3>
+                    <div className="grid grid-cols-2 gap-x-8 gap-y-4 text-sm sm:grid-cols-3">
+                      {group.fields.map(([label, value]) => (
+                        <div key={label}>
+                          <p className="text-[13px] text-zinc-400">{label}</p>
+                          <p className="mt-1 text-[14px] font-semibold text-white">{typeof value === "number" ? `${value.toFixed(1)} cm` : String(value)}</p>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -522,28 +525,28 @@ export function UploadDesignWizard({ familyGroupId, eventId, savedMeasurement }:
           ) : (
             <>
               <div className="mt-5 rounded-xl border border-border p-4">
-                <h3 className="font-black text-primary">👔 Shirt / Coat / Blazer Measurements</h3>
+                <h3 className="font-black text-primary">👔 {TOP_MEASUREMENT_TITLE}</h3>
                 <p className="mt-1 border-b border-primary/30 pb-3 text-xs text-muted-foreground">Measurements for the top garment — shirt, suit coat, or blazer</p>
                 <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                  {topMeasurementFields.map(([key, label, hint]) => (
-                    <label key={key} className="text-xs text-muted-foreground">
-                      {label} <span className="text-primary">*</span>
+                  {TOP_MEASUREMENT_FIELDS.map((field) => (
+                    <label key={field.key} className="text-xs text-muted-foreground">
+                      {field.label} {field.required !== false ? <span className="text-primary">*</span> : null}
                       <div className="mt-1 flex h-10 items-center rounded-lg border border-border bg-background px-3 focus-within:border-primary">
                         <input
                           type="number"
                           min="0"
                           step="0.1"
-                          value={measurements[key] ?? ""}
+                          value={measurements[field.key] ?? ""}
                           onChange={(event) => {
                             setMeasurementsSaved(false);
-                            setMeasurements((current) => ({ ...current, [key]: event.target.value }));
+                            setMeasurements((current) => ({ ...current, [field.key]: event.target.value }));
                           }}
                           className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none"
                           placeholder="0.0"
                         />
                         <span className="text-[10px] font-black text-primary">cm</span>
                       </div>
-                      <span className="mt-1 block text-[10px]">{hint}</span>
+                      <span className="mt-1 block text-[10px]">{field.hint}</span>
                     </label>
                   ))}
                 </div>
@@ -555,32 +558,50 @@ export function UploadDesignWizard({ familyGroupId, eventId, savedMeasurement }:
                   onClick={() => setIsPantsOpen(!isPantsOpen)}
                   className="flex h-12 w-full items-center justify-between px-4 text-left text-sm font-black transition-colors hover:bg-secondary"
                 >
-                  <span>👖 Add Pants Measurements</span>
+                  <span>👖 {PANTS_MEASUREMENT_TITLE}</span>
                   <ChevronDown className={`h-4 w-4 transition-transform ${isPantsOpen ? "rotate-180" : ""}`} />
                 </button>
                 {isPantsOpen && (
                   <div className="mt-2 grid gap-3 px-4 sm:grid-cols-2">
-                    {bottomMeasurementFields.map(([key, label, hint]) => (
-                      <label key={key} className="text-xs text-muted-foreground">
-                        {label}
+                    {PANTS_MEASUREMENT_FIELDS.map((field) => (
+                      <label key={field.key} className="text-xs text-muted-foreground">
+                        {field.label} {field.required !== false ? <span className="text-primary">*</span> : null}
                         <div className="mt-1 flex h-10 items-center rounded-lg border border-border bg-background px-3 focus-within:border-primary">
                           <input
                             type="number"
                             min="0"
                             step="0.1"
-                            value={measurements[key] ?? ""}
+                            value={measurements[field.key] ?? ""}
                             onChange={(event) => {
                               setMeasurementsSaved(false);
-                              setMeasurements((current) => ({ ...current, [key]: event.target.value }));
+                              setMeasurements((current) => ({ ...current, [field.key]: event.target.value }));
                             }}
                             className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none"
                             placeholder="0.0"
                           />
                           <span className="text-[10px] font-black text-primary">cm</span>
                         </div>
-                        <span className="mt-1 block text-[10px]">{hint}</span>
+                        <span className="mt-1 block text-[10px]">{field.hint}</span>
                       </label>
                     ))}
+                    <div className="grid gap-4 sm:col-span-2 sm:grid-cols-2">
+                      <div>
+                        <p className="text-xs font-black text-muted-foreground">Hem Style <span className="text-primary">*</span></p>
+                        <div className="mt-2 grid gap-2">
+                          {HEM_STYLE_OPTIONS.map((option) => (
+                            <ChoiceButton key={option.value} label={option.title} selected={hemStyle === option.value} onClick={() => { setMeasurementsSaved(false); setHemStyle(option.value); }} />
+                          ))}
+                        </div>
+                      </div>
+                      <div>
+                        <p className="text-xs font-black text-muted-foreground">Pressing (Iron) Style <span className="text-primary">*</span></p>
+                        <div className="mt-2 grid gap-2">
+                          {PRESSING_STYLE_OPTIONS.map((option) => (
+                            <ChoiceButton key={option.value} label={option.title} selected={pressingStyle === option.value} onClick={() => { setMeasurementsSaved(false); setPressingStyle(option.value); }} />
+                          ))}
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
@@ -617,7 +638,7 @@ export function UploadDesignWizard({ familyGroupId, eventId, savedMeasurement }:
               <button
                 type="button"
                 onClick={() => {
-                  const requiredFields = topMeasurementFields.map(([key]) => key);
+                  const requiredFields = TOP_MEASUREMENT_FIELDS.filter((field) => field.required !== false).map((field) => field.key);
                   const complete = requiredFields.every((key) => Number(measurements[key] ?? 0) > 0);
                   if (!complete) {
                     setError("Please enter all required top-body measurements before saving.");

@@ -23,6 +23,7 @@ import {
 } from "./checkout-utils.js";
 import { sendOrderStatusEmail } from "./email-service.js";
 import { calculateCouponDiscount, markCouponRedeemed } from "./discounts-service.js";
+import { awardCustomerCreditForPaidOrder } from "./customer-credits-service.js";
 
 const ORDER_STATUS_VALUES = [
   "pending",
@@ -120,6 +121,8 @@ export async function updateOrderAdminState(payload: {
     .returning();
 
   if (nextPayment === "paid" && order.paymentStatus !== "paid" && Array.isArray(order.items)) {
+    await awardCustomerCreditForPaidOrder(updated, payload.performedBy ?? "admin");
+
     const uploadedDesignIds = order.items
       .map((item) =>
         typeof item === "object" && item

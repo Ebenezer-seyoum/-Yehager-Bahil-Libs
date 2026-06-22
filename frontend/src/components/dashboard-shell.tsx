@@ -706,6 +706,17 @@ export function DashboardShell({
                   >
                     Profile settings
                   </Link>
+                  <Link
+                    href="/?staffPreview=1"
+                    onClick={() => setProfileOpen(false)}
+                    className={
+                      adminTopBar
+                        ? "mb-1 block rounded-xl bg-zinc-800 px-3 py-2 text-sm font-bold text-white transition hover:bg-zinc-700"
+                        : "mb-1 block rounded-xl bg-zinc-800 px-3 py-2 text-sm font-bold text-white transition hover:bg-zinc-700"
+                    }
+                  >
+                    View as Customer
+                  </Link>
                   <button
                     type="button"
                     onClick={() => signOut({ callbackUrl: "/" })}

@@ -133,9 +133,9 @@ export default async function MyOrdersPage({
           <div className="rounded-2xl border-2 border-dashed border-border py-16 text-center">
             <Package className="mx-auto mb-3 h-10 w-10 text-muted-foreground" />
             <h3 className="font-heading mb-1 text-lg font-semibold">No orders yet</h3>
-            <p className="mb-4 text-sm text-muted-foreground">Browse collections and place your first order.</p>
+            <p className="mb-4 text-sm text-muted-foreground">Browse the catalog and place your first order.</p>
             <Link href="/catalog" className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90">
-              Browse Collection
+              Browse Catalog
             </Link>
           </div>
         ) : (

@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/auth-options";
 import { apiRequest } from "@/lib/api-client";
 import { backendPublicRequest } from "@/lib/backend-public";
 import { ensureBackendUserSynced } from "@/lib/backend-user-sync";
@@ -29,10 +31,19 @@ export default async function CheckoutPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const query = await searchParams;
+  const session = await getServerSession(authOptions);
+  const role = String(session?.user?.role ?? "").toLowerCase();
+  const isStaffAccount = role === "admin" || role === "employee";
+  const dashboardHref = role === "employee" ? "/employee" : "/admin";
 
   async function startCheckout(formData: FormData) {
     "use server";
     await ensureBackendUserSynced();
+    const checkoutSession = await getServerSession(authOptions);
+    const checkoutRole = String(checkoutSession?.user?.role ?? "").toLowerCase();
+    if (checkoutRole === "admin" || checkoutRole === "employee") {
+      redirect("/checkout?error=staff_preview");
+    }
 
     const paymentMethod = String(formData.get("paymentMethod") ?? "stripe_usd");
     const paymentCurrency = paymentMethod === "etb_bank_transfer" ? "ETB" : "USD";
@@ -119,7 +130,7 @@ export default async function CheckoutPage({
 
         revalidatePath("/cart");
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error("Checkout error:", e);
       const message = e instanceof Error ? e.message : "Internal Error";
       const errorKey = message.toLowerCase().includes("coupon") ? "coupon" : "checkout";
@@ -174,6 +185,31 @@ export default async function CheckoutPage({
         <Link href="/catalog" className="mt-4 inline-block text-sm font-medium text-primary hover:underline">
           Browse collection
         </Link>
+      </div>
+    );
+  }
+
+  if (isStaffAccount) {
+    return (
+      <div className="mx-auto max-w-3xl px-4 py-16 sm:px-6">
+        <div className="rounded-3xl border border-red-950 bg-[#4a0505] p-8 text-white shadow-2xl">
+          <p className="text-xs font-black uppercase tracking-[0.24em] text-red-100">Staff Preview Mode</p>
+          <h1 className="mt-3 font-heading text-4xl font-bold">Checkout is disabled for staff accounts</h1>
+          <p className="mt-4 text-base leading-7 text-red-50">
+            You can review the customer storefront, browse products, inspect the cart, and verify the checkout entry point. To protect live customer operations, admin and employee accounts cannot submit payment or create customer orders.
+          </p>
+          <div className="mt-7 flex flex-col gap-3 sm:flex-row">
+            <Link href="/cart" className="inline-flex h-12 items-center justify-center rounded-xl border border-white/20 px-5 text-sm font-bold text-white hover:bg-white/10">
+              Return to Cart
+            </Link>
+            <Link href="/" className="inline-flex h-12 items-center justify-center rounded-xl border border-white/20 px-5 text-sm font-bold text-white hover:bg-white/10">
+              Continue Storefront Review
+            </Link>
+            <Link href={dashboardHref} className="inline-flex h-12 items-center justify-center rounded-xl bg-white px-5 text-sm font-black text-[#4a0505] hover:bg-red-50">
+              Back to Dashboard
+            </Link>
+          </div>
+        </div>
       </div>
     );
   }

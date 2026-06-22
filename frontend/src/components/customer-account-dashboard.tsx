@@ -27,6 +27,15 @@ import {
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import {
+  HEM_STYLE_OPTIONS,
+  PANTS_MEASUREMENT_FIELDS,
+  PANTS_MEASUREMENT_TITLE,
+  PRESSING_STYLE_OPTIONS,
+  TOP_MEASUREMENT_FIELDS,
+  TOP_MEASUREMENT_TITLE,
+  measurementDisplayGroups,
+} from "@/lib/measurement-fields";
 
 type Profile = {
   id?: string | null;
@@ -285,7 +294,7 @@ export function CustomerAccountDashboard({
             <h2 className="font-heading mb-4 font-semibold">Quick Actions</h2>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {[
-                { href: "/catalog", icon: ShoppingBag, title: "Browse & Order", desc: "Explore new collections" },
+                { href: "/catalog", icon: ShoppingBag, title: "Browse & Order", desc: "Explore new catalog items" },
                 { href: "/tailoring-status", icon: Scissors, title: "Track Tailoring", desc: "Live production updates" },
                 { href: "/events", icon: CalendarDays, title: "Events & Groups", desc: "Manage shared ordering" },
               ].map(({ href, icon: Icon, title, desc }) => (
@@ -329,7 +338,7 @@ function OrdersPanel({ orders }: { orders: Order[] }) {
         <Package className="mx-auto mb-3 h-10 w-10 text-muted-foreground" />
         <h3 className="font-heading mb-1 text-lg font-semibold">No orders yet</h3>
         <p className="mb-4 text-sm text-muted-foreground">Browse the collection and place your first order.</p>
-        <Link href="/catalog" className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground">Browse Collection</Link>
+        <Link href="/catalog" className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground">Browse Catalog</Link>
       </div>
     );
   }
@@ -406,7 +415,7 @@ function StatusPanel({ orders }: { orders: Order[] }) {
         <Scissors className="mx-auto mb-3 h-10 w-10 text-muted-foreground" />
         <h3 className="font-heading mb-1 text-lg font-semibold">No active orders</h3>
         <p className="mb-4 text-sm text-muted-foreground">Place an order to track tailoring progress here.</p>
-        <Link href="/catalog" className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground">Browse Collection</Link>
+        <Link href="/catalog" className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground">Browse Catalog</Link>
       </div>
     );
   }
@@ -638,20 +647,15 @@ function MeasurementEditForm({
         <div className="flex items-center gap-3 mb-5">
           <span className="text-2xl">👔</span>
           <div>
-            <h3 className="text-base font-bold text-[#f5a623]">Shirt / Coat / Blazer Measurements</h3>
+            <h3 className="text-base font-bold text-[#f5a623]">{TOP_MEASUREMENT_TITLE}</h3>
             <p className="text-xs text-zinc-500">Measurements for the top garment</p>
           </div>
         </div>
         <div className="h-px bg-white/5 mb-5" />
         <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2">
-          <DashboardMeasurementInput name="neck" label="Neck" hint="Around the base of the neck" defaultValue={m?.neck} />
-          <DashboardMeasurementInput name="shoulderWidth" label="Shoulder" hint="Seam to seam across the top" defaultValue={m?.shoulderWidth} />
-          <DashboardMeasurementInput name="chest" label="Chest / Bust" hint="Fullest part of bust" defaultValue={m?.chest} />
-          <DashboardMeasurementInput name="waist" label="Waist" hint="Narrowest part of natural waist" defaultValue={m?.waist} />
-          <DashboardMeasurementInput name="torsoLength" label="Shirt / Coat Length" hint="Back of neck to desired hem" defaultValue={m?.torsoLength} />
-          <DashboardMeasurementInput name="armLength" label="Arm Length" hint="Shoulder seam to wrist" defaultValue={m?.armLength} />
-          <DashboardMeasurementInput name="bicepCircumference" label="Bicep Circumference" hint="Around fullest part of upper arm" required={false} defaultValue={m?.bicepCircumference} />
-          <DashboardMeasurementInput name="wristCircumference" label="Wrist Circumference" hint="Around wrist bone" required={false} defaultValue={m?.wristCircumference} />
+          {TOP_MEASUREMENT_FIELDS.map((field) => (
+            <DashboardMeasurementInput key={field.key} name={field.key} label={field.label} hint={field.hint} required={field.required !== false} defaultValue={(m as any)?.[field.key]} />
+          ))}
         </div>
       </div>
 
@@ -663,7 +667,7 @@ function MeasurementEditForm({
         >
           <div className="flex items-center gap-3">
             <span className="text-2xl">👖</span>
-            <span className="text-base font-bold text-white">Pants Measurements</span>
+            <span className="text-base font-bold text-white">{PANTS_MEASUREMENT_TITLE}</span>
           </div>
           <div className="rounded-full bg-white/5 p-2 transition-transform duration-200">
             <ChevronDown className={`h-5 w-5 text-zinc-400 ${isPantsOpen ? "rotate-180" : ""}`} />
@@ -673,25 +677,26 @@ function MeasurementEditForm({
           <div className="px-6 pb-6 animate-in slide-in-from-top-4 duration-300">
             <div className="h-px bg-white/5 mb-5" />
             <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2">
-              <DashboardMeasurementInput name="pantsWaist" label="Pants Waist" hint="Around natural waistline" defaultValue={m?.pantsWaist} />
-              <DashboardMeasurementInput name="pantsHip" label="Pants Hip" hint="Around fullest part of hips" defaultValue={m?.pantsHip} />
-              <DashboardMeasurementInput name="thighCircumference" label="Thigh" hint="Around fullest part of upper thigh" defaultValue={m?.thighCircumference} />
-              <DashboardMeasurementInput name="waistToPantsLength" label="Outseam" hint="From waist to desired pants hem" defaultValue={m?.waistToPantsLength} />
+              {PANTS_MEASUREMENT_FIELDS.map((field) => (
+                <DashboardMeasurementInput key={field.key} name={field.key} label={field.label} hint={field.hint} required={field.required !== false} defaultValue={(m as any)?.[field.key]} />
+              ))}
             </div>
 
             <div className="mt-6 space-y-5">
               <div>
                 <p className="text-sm font-semibold text-zinc-400 mb-3">Hem Style <span className="text-[#f5a623]">*</span></p>
                 <div className="grid grid-cols-2 gap-3">
-                  <ChoiceCard title="Straight" description="Clean, simple finish" selected={hemStyle === "Straight"} onClick={() => setHemStyle("Straight")} />
-                  <ChoiceCard title="Folded Hem" description="Bottom edge is folded inward" selected={hemStyle === "Folded Hem"} onClick={() => setHemStyle("Folded Hem")} />
+                  {HEM_STYLE_OPTIONS.map((option) => (
+                    <ChoiceCard key={option.value} title={option.title} description={option.description} selected={hemStyle === option.value} onClick={() => setHemStyle(option.value)} />
+                  ))}
                 </div>
               </div>
               <div>
                 <p className="text-sm font-semibold text-zinc-400 mb-3">Pressing (Iron) Style <span className="text-[#f5a623]">*</span></p>
                 <div className="grid grid-cols-2 gap-3">
-                  <ChoiceCard title="Creased" description="Sharp crease runs down the front" selected={pressingStyle === "Creased"} onClick={() => setPressingStyle("Creased")} />
-                  <ChoiceCard title="Plain (No Crease)" description="Ironed smooth without crease" selected={pressingStyle === "Plain (No Crease)"} onClick={() => setPressingStyle("Plain (No Crease)")} />
+                  {PRESSING_STYLE_OPTIONS.map((option) => (
+                    <ChoiceCard key={option.value} title={option.title} description={option.description} selected={pressingStyle === option.value} onClick={() => setPressingStyle(option.value)} />
+                  ))}
                 </div>
               </div>
             </div>
@@ -733,6 +738,18 @@ function MeasurementsPanel({
   const [pressingStyle, setPressingStyle] = useState("Creased");
 
   const hasMeasurement = measurements.length > 0;
+
+  function beginEdit(m: Measurement) {
+    setHemStyle(String(m.hemStyle || (m as any).hem_style || "Straight"));
+    setPressingStyle(String(m.pressingStyle || (m as any).pressing_style || "Creased"));
+    setEditingId(m.id);
+  }
+
+  function beginAdd() {
+    setHemStyle("Straight");
+    setPressingStyle("Creased");
+    setShowAddForm(true);
+  }
 
   // When fresh data arrives (after router.refresh), automatically switch to the saved view
   useEffect(() => {
@@ -812,7 +829,7 @@ function MeasurementsPanel({
             <div className="flex justify-end">
               <button
                 type="button"
-                onClick={() => setShowAddForm(true)}
+                onClick={beginAdd}
                 className="inline-flex items-center gap-2 rounded-xl border border-[#f5a623]/30 bg-[#f5a623]/10 px-4 py-2 text-sm font-bold text-[#f5a623] hover:bg-[#f5a623]/20"
               >
                 + Add Another Profile
@@ -828,7 +845,7 @@ function MeasurementsPanel({
                 </div>
                 <button
                   type="button"
-                  onClick={() => setEditingId(m.id)}
+                  onClick={() => beginEdit(m)}
                   className="inline-flex items-center gap-2 rounded-xl border border-[#f5a623]/20 bg-[#f5a623]/5 px-5 py-2.5 text-sm font-bold text-[#f5a623] transition-all hover:bg-[#f5a623]/10 hover:border-[#f5a623]/40 active:scale-95"
                 >
                   <Pencil className="h-4 w-4" />
@@ -836,35 +853,27 @@ function MeasurementsPanel({
                 </button>
               </div>
 
-              <div className="grid grid-cols-2 gap-x-8 gap-y-10 sm:grid-cols-3">
-                {[
-                  ["Neck", (m as any).neck],
-                  ["Shoulder", m.shoulderWidth || (m as any).shoulder_width],
-                  ["Chest", m.chest],
-                  ["Waist", m.waist],
-                  ["Hips", m.hips || m.pantsHip || (m as any).pants_hip],
-                  ["Arm", m.armLength || (m as any).arm_length],
-                  ["Torso", m.torsoLength || (m as any).torso_length],
-                  ["Bicep", m.bicepCircumference || (m as any).bicep],
-                  ["Wrist", m.wristCircumference || (m as any).wrist],
-                  ["Pants Waist", m.pantsWaist || (m as any).pants_waist],
-                  ["Thigh", m.thighCircumference || (m as any).thigh],
-                  ["Outseam", m.waistToPantsLength || (m as any).outseam],
-                  ["Hem Style", m.hemStyle || (m as any).hem_style],
-                  ["Pressing Style", m.pressingStyle || (m as any).pressing_style],
-                ].map(([label, value]) => (
-                  <div key={label as string} className="space-y-2">
-                    <p className="text-[11px] font-bold uppercase tracking-widest text-zinc-500">{label as string}</p>
-                    <p className="text-2xl font-bold text-white">
-                      {value !== undefined && value !== null && value !== "" ? (
-                        <>
-                          {typeof value === "number" ? value.toFixed(1) : value} 
-                          {typeof value === "number" && <span className="ml-1 text-lg font-medium text-zinc-400">cm</span>}
-                        </>
-                      ) : (
-                        <span className="text-zinc-600">-</span>
-                      )}
-                    </p>
+              <div className="space-y-8">
+                {measurementDisplayGroups(m as any).filter((group) => group.title !== "Profile").map((group) => (
+                  <div key={group.title}>
+                    <h4 className="mb-4 text-xs font-black uppercase tracking-[0.2em] text-[#f5a623]">{group.title}</h4>
+                    <div className="grid grid-cols-2 gap-x-8 gap-y-8 sm:grid-cols-3">
+                      {group.fields.map(([label, value]) => (
+                        <div key={label} className="space-y-2">
+                          <p className="text-[11px] font-bold uppercase tracking-widest text-zinc-500">{label}</p>
+                          <p className="text-2xl font-bold text-white">
+                            {value !== undefined && value !== null && value !== "" ? (
+                              <>
+                                {typeof value === "number" ? value.toFixed(1) : value}
+                                {typeof value === "number" && <span className="ml-1 text-lg font-medium text-zinc-400">cm</span>}
+                              </>
+                            ) : (
+                              <span className="text-zinc-600">-</span>
+                            )}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 ))}
               </div>

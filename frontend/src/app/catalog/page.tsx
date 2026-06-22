@@ -75,13 +75,13 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
         <aside className="hidden w-52 flex-shrink-0 lg:block">
           <div className="sticky top-24 space-y-6">
             <div>
-              <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Region</p>
+              <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Tribe</p>
               <div className="space-y-1">
                 <Link
                   href={makeHref(null, null, activeGender, activeEventId, groupId, selectionMode)}
                   className={`block rounded-lg px-3 py-1.5 text-sm transition-colors ${!activeRegion ? "bg-primary font-medium text-primary-foreground" : "text-muted-foreground hover:bg-secondary hover:text-foreground"}`}
                 >
-                  All Regions
+                  All Tribes
                 </Link>
                 {regions.map((region) => (
                   <Link
@@ -97,7 +97,7 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
 
             {subs.length > 0 ? (
               <div>
-                <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Collections</p>
+                <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Region</p>
                 <div className="space-y-1">
                   {subs.map((sub) => (
                     <Link

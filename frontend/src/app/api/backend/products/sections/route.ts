@@ -5,6 +5,6 @@ export async function GET() {
   try {
     return NextResponse.json(await backendPublicRequest("/api/v1/products/sections"));
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Collections failed" }, { status: 500 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Catalog classifications failed" }, { status: 500 });
   }
 }

@@ -54,7 +54,7 @@ export const adminNavigation: readonly NavigationGroup[] = [
     label: "Product Management",
     items: [
       { href: "/admin/inventory", label: "Catalog", icon: "products", permission: "products.view" },
-      { href: "/admin/sections", label: "Collections", icon: "sections", permission: "products.view" },
+      { href: "/admin/sections", label: "Tribes & Regions", icon: "sections", permission: "products.view" },
     ],
   },
   {
@@ -71,7 +71,9 @@ export const adminNavigation: readonly NavigationGroup[] = [
     label: "Finance",
     items: [
       { href: "/admin/payments", label: "Payments", icon: "payments", permission: "payments.view" },
-      { href: "/admin/finance/coupons-discounts", label: "Coupons & Discounts", icon: "payments", permission: "coupons.view" },
+      { href: "/admin/finance/customer-credits", label: "Customer Credits", icon: "payments", permission: "payments.view" },
+      { href: "/admin/finance/coupons-discounts", label: "Promotions", icon: "payments", permission: "coupons.view" },
+      { href: "/admin/finance/profit-costs", label: "Profit & Costs", icon: "payments", permission: "payments.view" },
       { href: "/admin/exchange-rate", label: "Exchange Rates", icon: "exchange", permission: "exchange.view" },
     ],
   },

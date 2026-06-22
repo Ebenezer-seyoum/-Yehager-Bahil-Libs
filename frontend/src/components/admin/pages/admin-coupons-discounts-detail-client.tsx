@@ -46,6 +46,12 @@ function text(value: unknown, fallback = "Not provided") {
   return label || fallback;
 }
 
+function scopeText(value: unknown, fallback = "Not provided") {
+  if (value === "region") return "Tribe";
+  if (value === "subcategory") return "Region";
+  return text(value, fallback);
+}
+
 function money(value: unknown, fallback = "Not set") {
   if (value === null || value === undefined || value === "") return fallback;
   const amount = Number(value);
@@ -352,7 +358,7 @@ export function AdminCouponsDiscountsDetailClient({ row, kind }: { row: CouponDi
             ) : (
               <>
                 {editing ? <TextInput label="Discount Name" value={form.name} onChange={(value) => updateForm("name", value)} required /> : <DetailField label="Discount Name" value={record.name} />}
-                {editing ? <SelectInput label="Applies To" value={form.scope} onChange={(value) => updateForm("scope", value)} options={[["all_products", "All Products"], ["product", "Specific Product"], ["category", "Specific Category"], ["region", "Region"], ["subcategory", "Subcategory"]]} /> : <DetailField label="Applies To" value={text(record.scope)} />}
+                {editing ? <SelectInput label="Applies To" value={form.scope} onChange={(value) => updateForm("scope", value)} options={[["all_products", "All Products"], ["product", "Specific Product"], ["category", "Specific Category"], ["region", "Tribe"], ["subcategory", "Region"]]} /> : <DetailField label="Applies To" value={scopeText(record.scope)} />}
                 {editing ? <TextInput label="Product ID" value={form.productId} onChange={(value) => updateForm("productId", value)} /> : <DetailField label="Product ID" value={record.productId ?? "Not set"} mono />}
               </>
             )}
@@ -388,11 +394,11 @@ export function AdminCouponsDiscountsDetailClient({ row, kind }: { row: CouponDi
       {activeSection === "targeting" && !isCoupon ? (
         <SectionCard title="Targeting">
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {editing ? <SelectInput label="Scope" value={form.scope} onChange={(value) => updateForm("scope", value)} options={[["all_products", "All Products"], ["product", "Specific Product"], ["category", "Specific Category"], ["region", "Region"], ["subcategory", "Subcategory"]]} /> : <DetailField label="Scope" value={text(record.scope)} />}
+            {editing ? <SelectInput label="Scope" value={form.scope} onChange={(value) => updateForm("scope", value)} options={[["all_products", "All Products"], ["product", "Specific Product"], ["category", "Specific Category"], ["region", "Tribe"], ["subcategory", "Region"]]} /> : <DetailField label="Scope" value={scopeText(record.scope)} />}
             {editing ? <TextInput label="Product ID" value={form.productId} onChange={(value) => updateForm("productId", value)} /> : <DetailField label="Product ID" value={record.productId ?? "Not set"} mono />}
             {editing ? <TextInput label="Category" value={form.category} onChange={(value) => updateForm("category", value)} /> : <DetailField label="Category" value={text(record.category)} />}
-            {editing ? <TextInput label="Subcategory" value={form.subcategory} onChange={(value) => updateForm("subcategory", value)} /> : <DetailField label="Subcategory" value={text(record.subcategory)} />}
-            {editing ? <TextInput label="Region" value={form.region} onChange={(value) => updateForm("region", value)} /> : <DetailField label="Region" value={text(record.region)} />}
+            {editing ? <TextInput label="Region" value={form.subcategory} onChange={(value) => updateForm("subcategory", value)} /> : <DetailField label="Region" value={text(record.subcategory)} />}
+            {editing ? <TextInput label="Tribe" value={form.region} onChange={(value) => updateForm("region", value)} /> : <DetailField label="Tribe" value={text(record.region)} />}
           </div>
         </SectionCard>
       ) : null}
