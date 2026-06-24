@@ -70,9 +70,11 @@ const FIELD_ALIASES: Record<string, string> = {
   hip: "hips",
   thigh: "thighCircumference",
   outseam: "waistToPantsLength",
+  waist_to_pants_length: "waistToPantsLength",
   hem_style: "hemStyle",
   pressing_style: "pressingStyle",
   tailor_note: "tailorNote",
+  measurement_details: "measurementDetails",
 };
 
 const FIELD_LABELS: Record<string, string> = {
@@ -93,9 +95,13 @@ const META_KEYS = new Set([
   "updatedAt",
   "deletedAt",
   "measurementId",
+  "measurementDetails",
   "familyGroupId",
   "eventId",
   "productId",
+  "userEmail",
+  "user_email",
+  "email",
 ]);
 
 export function hasMeasurementValue(value: unknown) {
@@ -114,6 +120,10 @@ export function measurementFieldLabel(key: string) {
 export function normalizeMeasurementRecord(values: Record<string, unknown> = {}) {
   return Object.entries(values).reduce<Record<string, unknown>>((acc, [key, value]) => {
     const canonical = canonicalMeasurementKey(key);
+    if ((canonical === "measurementDetails" || canonical === "measurement_details") && value && typeof value === "object" && !Array.isArray(value)) {
+      Object.assign(acc, normalizeMeasurementRecord(value as Record<string, unknown>));
+      return acc;
+    }
     if (!META_KEYS.has(canonical) && hasMeasurementValue(value)) {
       acc[canonical] = value;
     }
@@ -141,7 +151,8 @@ export function measurementDisplayGroups(values: Record<string, unknown> = {}): 
   const groups = [
     group("Profile", ["gender", "tailorNote"]),
     group(TOP_MEASUREMENT_TITLE, TOP_MEASUREMENT_FIELDS.map((field) => field.key)),
-    group(PANTS_MEASUREMENT_TITLE, [...PANTS_MEASUREMENT_FIELDS.map((field) => field.key), "hemStyle", "pressingStyle"]),
+    group(PANTS_MEASUREMENT_TITLE, [...PANTS_MEASUREMENT_FIELDS.map((field) => field.key), "inseam"]),
+    group("Style Selections", ["hemStyle", "pressingStyle"]),
   ].filter(Boolean) as MeasurementDisplayGroup[];
   const additional = Object.entries(normalized)
     .filter(([key, value]) => !used.has(key) && hasMeasurementValue(value))

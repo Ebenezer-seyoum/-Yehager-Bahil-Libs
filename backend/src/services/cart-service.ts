@@ -101,6 +101,9 @@ export async function addItemToCart(payload: {
           shoulderWidth: measurement.shoulderWidth,
           armLength: measurement.armLength,
           torsoLength: measurement.torsoLength,
+          inseam: measurement.inseam,
+          neck: measurement.neck,
+          ...(measurement.measurementDetails ?? {}),
         }
       : undefined,
     eventId: payload.eventId,

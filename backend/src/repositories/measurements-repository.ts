@@ -34,6 +34,7 @@ export type MeasurementInsert = {
   torsoLength: string;
   inseam?: string;
   neck?: string;
+  measurementDetails?: Record<string, unknown>;
   label?: string;
 };
 
@@ -52,6 +53,7 @@ export async function insertMeasurement(payload: MeasurementInsert) {
       torsoLength: payload.torsoLength,
       inseam: payload.inseam,
       neck: payload.neck,
+      measurementDetails: payload.measurementDetails ?? {},
       label: payload.label ?? "My Measurements",
     })
     .returning();
@@ -69,6 +71,7 @@ export type MeasurementPatch = Partial<{
   torsoLength: string;
   inseam: string | null;
   neck: string | null;
+  measurementDetails: Record<string, unknown>;
   label: string;
 }>;
 

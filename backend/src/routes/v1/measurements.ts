@@ -21,12 +21,30 @@ const measurementFields = z.object({
   torsoLength: z.coerce.number().finite().positive(),
   inseam: z.coerce.number().finite().positive().optional(),
   neck: z.coerce.number().finite().positive().optional(),
+  bicepCircumference: z.coerce.number().finite().positive().optional(),
+  wristCircumference: z.coerce.number().finite().positive().optional(),
+  pantsWaist: z.coerce.number().finite().positive().optional(),
+  pantsHip: z.coerce.number().finite().positive().optional(),
+  thighCircumference: z.coerce.number().finite().positive().optional(),
+  waistToPantsLength: z.coerce.number().finite().positive().optional(),
+  hemStyle: z.string().trim().max(80).optional(),
+  pressingStyle: z.string().trim().max(80).optional(),
+  tailorNote: z.string().trim().max(1000).optional(),
   label: z.string().min(1).max(200).optional(),
 });
 
 const measurementPatch = measurementFields.partial().extend({
   inseam: z.union([z.coerce.number().finite().positive(), z.null()]).optional(),
   neck: z.union([z.coerce.number().finite().positive(), z.null()]).optional(),
+  bicepCircumference: z.union([z.coerce.number().finite().positive(), z.null()]).optional(),
+  wristCircumference: z.union([z.coerce.number().finite().positive(), z.null()]).optional(),
+  pantsWaist: z.union([z.coerce.number().finite().positive(), z.null()]).optional(),
+  pantsHip: z.union([z.coerce.number().finite().positive(), z.null()]).optional(),
+  thighCircumference: z.union([z.coerce.number().finite().positive(), z.null()]).optional(),
+  waistToPantsLength: z.union([z.coerce.number().finite().positive(), z.null()]).optional(),
+  hemStyle: z.union([z.string().trim().max(80), z.null()]).optional(),
+  pressingStyle: z.union([z.string().trim().max(80), z.null()]).optional(),
+  tailorNote: z.union([z.string().trim().max(1000), z.null()]).optional(),
 });
 
 const idParam = z.object({

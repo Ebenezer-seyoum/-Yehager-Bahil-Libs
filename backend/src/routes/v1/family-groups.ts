@@ -210,6 +210,7 @@ familyGroupsRouter.post("/:groupId/members", requireAuth, zValidator("param", gr
     measurementSnapshot = {
       chest: saved.chest, waist: saved.waist, hips: saved.hips, shoulderWidth: saved.shoulderWidth,
       armLength: saved.armLength, torsoLength: saved.torsoLength, inseam: saved.inseam, neck: saved.neck,
+      ...(saved.measurementDetails ?? {}),
     };
   }
 
@@ -297,6 +298,7 @@ familyGroupsRouter.patch(
       measurementSnapshot = {
         chest: saved.chest, waist: saved.waist, hips: saved.hips, shoulderWidth: saved.shoulderWidth,
         armLength: saved.armLength, torsoLength: saved.torsoLength, inseam: saved.inseam, neck: saved.neck,
+        ...(saved.measurementDetails ?? {}),
       };
     }
     const [row] = await db

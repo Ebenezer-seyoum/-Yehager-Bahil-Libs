@@ -39,14 +39,45 @@ type OrderRow = Record<string, any>;
 type MeasurementRow = Record<string, any>;
 type MeasurementDisplayRow = { label: string; values: Record<string, unknown>; orderId?: string; updatedAt?: string; meta?: string };
 type FamilyDisplayRow = MeasurementDisplayRow & { id: string; relation: string; gender?: string; orderLabel?: string; eventName?: string };
+type FamilyGroupDisplayRow = {
+  id: string;
+  name: string;
+  productName?: string;
+  productImage?: string;
+  eventName?: string;
+  memberCount: number;
+  readyMemberCount: number;
+  currentStep: number;
+  paid: boolean;
+  ordered: boolean;
+  inCart: boolean;
+  selectionType?: string;
+  updatedAt?: string | null;
+  members: FamilyDisplayRow[];
+};
 type EventDisplayRow = {
   id: string;
   name: string;
+  eventCode?: string;
+  productName?: string;
   joinedCount: number;
   orderCount: number;
+  paidCount: number;
+  familyGroupCount: number;
+  currentStep: number;
   totalValue: number;
   latestOrderDate?: string | null;
   statuses: string[];
+  participants: Record<string, unknown>[];
+  familyGroups: FamilyGroupDisplayRow[];
+  orders: OrderRow[];
+};
+type ActivityData = {
+  orders?: OrderRow[];
+  events?: Array<Record<string, unknown>>;
+  eventParticipants?: Array<Record<string, unknown>>;
+  familyGroups?: Array<Record<string, unknown>>;
+  familyMembers?: Array<Record<string, unknown>>;
 };
 type CustomerSectionId = "personal" | "contact" | "measurements" | "family" | "events" | "orders" | "account" | "notes";
 
@@ -218,8 +249,24 @@ function collectMeasurements(savedMeasurements: MeasurementRow[], orders: OrderR
   return rows;
 }
 
-function collectFamilyMembers(orders: OrderRow[]) {
+function collectFamilyMembers(orders: OrderRow[], activity?: ActivityData | null) {
   const rows: FamilyDisplayRow[] = [];
+  const groups = new Map((activity?.familyGroups ?? []).map((group) => [String(group.id), group]));
+  for (const member of activity?.familyMembers ?? []) {
+    const group = groups.get(String(member.familyGroupId ?? member.family_group_id ?? ""));
+    const values = member?.measurements && typeof member.measurements === "object" ? normalizeMeasurementValues(member.measurements as Record<string, unknown>) : {};
+    rows.push({
+      id: String(member.id),
+      label: String(member.name ?? "Family Member"),
+      relation: String(member.relation ?? "Member"),
+      gender: hasMeasurementValue(member.gender) ? String(member.gender) : undefined,
+      values,
+      orderLabel: group?.groupName ? String(group.groupName) : undefined,
+      eventName: hasMeasurementValue(group?.eventName) ? String(group?.eventName) : undefined,
+      updatedAt: hasMeasurementValue(member.updatedAt) ? String(member.updatedAt) : undefined,
+      meta: [member.gender, group?.groupName].filter(Boolean).join(" - "),
+    });
+  }
   for (const order of orders) {
     if (!Array.isArray(order.members)) continue;
     order.members.forEach((member: Record<string, unknown>, index: number) => {
@@ -237,10 +284,98 @@ function collectFamilyMembers(orders: OrderRow[]) {
       });
     });
   }
-  return rows;
+  const seen = new Set<string>();
+  return rows.filter((row) => {
+    if (seen.has(row.id)) return false;
+    seen.add(row.id);
+    return true;
+  });
 }
 
-function collectEventRows(orders: OrderRow[]) {
+function collectFamilyGroups(activity: ActivityData | null | undefined, fallbackMembers: FamilyDisplayRow[]): FamilyGroupDisplayRow[] {
+  const members = activity?.familyMembers ?? [];
+  const groups = activity?.familyGroups ?? [];
+  if (!groups.length) {
+    return fallbackMembers.length
+      ? [{
+          id: "order-family-members",
+          name: "Family Members From Orders",
+          memberCount: fallbackMembers.length,
+          readyMemberCount: fallbackMembers.filter((member) => Object.keys(member.values).length > 0).length,
+          currentStep: 4,
+          paid: false,
+          ordered: true,
+          inCart: false,
+          productName: undefined,
+          productImage: undefined,
+          eventName: undefined,
+          selectionType: undefined,
+          updatedAt: null,
+          members: fallbackMembers,
+        }]
+      : [];
+  }
+  return groups.map((group) => {
+    const groupMembers = members
+      .filter((member) => String(member.familyGroupId ?? member.family_group_id ?? "") === String(group.id))
+      .map((member) => {
+        const values = member?.measurements && typeof member.measurements === "object" ? normalizeMeasurementValues(member.measurements as Record<string, unknown>) : {};
+        return {
+          id: String(member.id),
+          label: String(member.name ?? "Family Member"),
+          relation: String(member.relation ?? "Member"),
+          gender: hasMeasurementValue(member.gender) ? String(member.gender) : undefined,
+          values,
+          updatedAt: hasMeasurementValue(member.updatedAt) ? String(member.updatedAt) : undefined,
+          eventName: hasMeasurementValue(group.eventName) ? String(group.eventName) : undefined,
+          meta: [member.gender, group.groupName].filter(Boolean).join(" - "),
+        };
+      });
+    return {
+      id: String(group.id),
+      name: String(group.groupName ?? "Family Group"),
+      productName: hasMeasurementValue(group.productName) ? String(group.productName) : undefined,
+      productImage: hasMeasurementValue(group.productImage) ? String(group.productImage) : undefined,
+      eventName: hasMeasurementValue(group.eventName) ? String(group.eventName) : undefined,
+      memberCount: Number(group.memberCount ?? groupMembers.length ?? 0),
+      readyMemberCount: Number(group.readyMemberCount ?? groupMembers.filter((member) => Object.keys(member.values).length > 0).length),
+      currentStep: Number(group.currentStep ?? 1),
+      paid: Boolean(group.paid),
+      ordered: Boolean(group.ordered),
+      inCart: Boolean(group.inCart),
+      selectionType: hasMeasurementValue(group.selectionType) ? String(group.selectionType) : undefined,
+      updatedAt: hasMeasurementValue(group.updatedAt) ? String(group.updatedAt) : null,
+      members: groupMembers,
+    } satisfies FamilyGroupDisplayRow;
+  });
+}
+
+function collectEventRows(orders: OrderRow[], activity?: ActivityData | null, familyGroups: FamilyGroupDisplayRow[] = []) {
+  if (activity?.events?.length) {
+    return activity.events.map((event) => {
+      const eventId = String(event.id);
+      const eventOrders = orders.filter((order) => String(order.eventId ?? "") === eventId);
+      const participants = (activity.eventParticipants ?? []).filter((participant) => String(participant.eventId ?? "") === eventId);
+      const groups = familyGroups.filter((group) => String((activity.familyGroups ?? []).find((row) => String(row.id) === group.id)?.eventId ?? "") === eventId);
+      return {
+        id: eventId,
+        name: String(event.name ?? "Event"),
+        eventCode: hasMeasurementValue(event.eventCode) ? String(event.eventCode) : undefined,
+        productName: hasMeasurementValue(event.productName) ? String(event.productName) : undefined,
+        joinedCount: Number(event.participantCount ?? participants.length ?? 0),
+        orderCount: Number(event.orderCount ?? eventOrders.length ?? 0),
+        paidCount: Number(event.paidCount ?? eventOrders.filter((order) => String(order.paymentStatus ?? "").toLowerCase() === "paid").length),
+        familyGroupCount: Number(event.familyGroupCount ?? groups.length ?? 0),
+        currentStep: Number(event.currentStep ?? 1),
+        totalValue: eventOrders.reduce((sum, order) => sum + orderTotal(order), 0),
+        latestOrderDate: eventOrders[0]?.createdAt ? String(eventOrders[0].createdAt) : hasMeasurementValue(event.updatedAt) ? String(event.updatedAt) : null,
+        statuses: Array.from(new Set(eventOrders.map((order) => String(order.status ?? "")).filter(Boolean))),
+        participants,
+        familyGroups: groups,
+        orders: eventOrders,
+      } satisfies EventDisplayRow;
+    });
+  }
   const grouped = new Map<string, EventDisplayRow>();
   for (const order of orders) {
     const eventId = String(order.eventId ?? "");
@@ -255,11 +390,19 @@ function collectEventRows(orders: OrderRow[]) {
       totalValue: 0,
       latestOrderDate: null,
       statuses: [],
+      paidCount: 0,
+      familyGroupCount: 0,
+      currentStep: 4,
+      participants: [],
+      familyGroups: [],
+      orders: [],
     };
     const memberCount = Array.isArray(order.members) ? order.members.length : Number(order.memberCount ?? order.joinedCount ?? 1);
     current.joinedCount += Number.isFinite(memberCount) && memberCount > 0 ? memberCount : 1;
     current.orderCount += 1;
+    current.orders.push(order);
     current.totalValue += orderTotal(order);
+    if (String(order.paymentStatus ?? "").toLowerCase() === "paid") current.paidCount += 1;
     if (hasMeasurementValue(order.status) && !current.statuses.includes(String(order.status))) current.statuses.push(String(order.status));
     const orderDate = hasMeasurementValue(order.createdAt) ? String(order.createdAt) : null;
     if (orderDate && (!current.latestOrderDate || new Date(orderDate).getTime() > new Date(current.latestOrderDate).getTime())) {
@@ -305,6 +448,7 @@ export function CustomerDetailClient({
   initialCustomer,
   orders = [],
   measurements = [],
+  activity = null,
   canEdit = false,
   canDelete = false,
   embedded = false,
@@ -312,6 +456,7 @@ export function CustomerDetailClient({
   initialCustomer: Customer;
   orders?: Array<Record<string, unknown>>;
   measurements?: Array<Record<string, unknown>>;
+  activity?: ActivityData | null;
   backTab?: string;
   canEdit?: boolean;
   canDelete?: boolean;
@@ -344,7 +489,9 @@ export function CustomerDetailClient({
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [expandedFamilyGroupId, setExpandedFamilyGroupId] = useState<string | null>(null);
   const [expandedFamilyMemberId, setExpandedFamilyMemberId] = useState<string | null>(null);
+  const [expandedEventId, setExpandedEventId] = useState<string | null>(null);
 
   const passwordRules = {
     minLength: newPassword.length >= 8,
@@ -365,11 +512,12 @@ export function CustomerDetailClient({
 
   const customerOrders = useMemo(() => {
     const emailKey = String(customer.email ?? email ?? "").toLowerCase();
-    return (orders as OrderRow[]).filter((order) => {
+    const sourceOrders = activity?.orders?.length ? activity.orders : (orders as OrderRow[]);
+    return sourceOrders.filter((order) => {
       const orderEmail = orderCustomerEmail(order);
       return !emailKey || orderEmail === emailKey || String(order.userId ?? "") === String(customer.id ?? "");
     });
-  }, [customer.email, customer.id, email, orders]);
+  }, [activity?.orders, customer.email, customer.id, email, orders]);
 
   const stats = useMemo(() => {
     const totalOrders = customerOrders.length;
@@ -386,8 +534,9 @@ export function CustomerDetailClient({
   }, [customerOrders]);
 
   const measurementRows = useMemo(() => collectMeasurements(measurements as MeasurementRow[], customerOrders), [measurements, customerOrders]);
-  const familyRows = useMemo(() => collectFamilyMembers(customerOrders), [customerOrders]);
-  const eventRows = useMemo(() => collectEventRows(customerOrders), [customerOrders]);
+  const familyRows = useMemo(() => collectFamilyMembers(customerOrders, activity), [activity, customerOrders]);
+  const familyGroupRows = useMemo(() => collectFamilyGroups(activity, familyRows), [activity, familyRows]);
+  const eventRows = useMemo(() => collectEventRows(customerOrders, activity, familyGroupRows), [activity, customerOrders, familyGroupRows]);
   const photoUrl = customer.profilePhotoUrl || customer.avatarUrl || null;
   const isBlocked = ["inactive", "blocked", "suspended"].includes(String(accountStatus).toLowerCase());
 
@@ -776,39 +925,81 @@ export function CustomerDetailClient({
           <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h2 className="text-base font-bold text-slate-900">Family Members</h2>
-                <p className="mt-1 text-sm text-slate-600">Family members connected to this customer&apos;s group orders and their recorded measurements.</p>
+                <h2 className="text-base font-bold text-slate-900">Family & Group Orders</h2>
+                <p className="mt-1 text-sm text-slate-600">Created family groups, selected outfits, progress, members, and saved member details.</p>
               </div>
-              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700">{familyRows.length} member{familyRows.length === 1 ? "" : "s"}</span>
+              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700">{familyGroupRows.length} group{familyGroupRows.length === 1 ? "" : "s"}</span>
             </div>
-            {familyRows.length ? (
-              <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200">
-                {familyRows.map((member) => {
-                  const expanded = expandedFamilyMemberId === member.id;
-                  const measurementCount = Object.values(member.values).filter(hasMeasurementValue).length;
+            {familyGroupRows.length ? (
+              <div className="mt-4 space-y-4">
+                {familyGroupRows.map((group) => {
+                  const expanded = expandedFamilyGroupId === group.id;
                   return (
-                    <div key={member.id} className="border-b border-slate-200 last:border-b-0">
+                    <div key={group.id} className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
                       <button
                         type="button"
-                        onClick={() => setExpandedFamilyMemberId(expanded ? null : member.id)}
+                        onClick={() => setExpandedFamilyGroupId(expanded ? null : group.id)}
                         className="flex w-full items-center justify-between gap-4 bg-white px-4 py-4 text-left hover:bg-slate-50"
                       >
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <p className="font-bold text-slate-950">{member.label}</p>
-                            <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-bold text-slate-600">{member.relation}</span>
+                        <div className="flex min-w-0 items-center gap-4">
+                          {group.productImage ? (
+                            <img src={group.productImage} alt="" className="h-16 w-14 rounded-xl object-cover" />
+                          ) : (
+                            <span className="grid h-14 w-14 shrink-0 place-items-center rounded-xl bg-amber-100 text-amber-700">
+                              <Users className="h-6 w-6" />
+                            </span>
+                          )}
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="font-bold text-slate-950">{group.name}</p>
+                              {group.paid ? <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-800">Paid</span> : null}
+                              {group.inCart && !group.paid ? <span className="rounded-full bg-blue-100 px-2.5 py-1 text-xs font-bold text-blue-800">In cart</span> : null}
+                            </div>
+                            <p className="mt-1 text-sm font-semibold text-slate-500">
+                              {[group.productName || "No outfit selected", group.eventName, `${group.memberCount} members`, `${group.readyMemberCount} ready`].filter(Boolean).join(" - ")}
+                            </p>
                           </div>
-                          <p className="mt-1 text-sm font-semibold text-slate-500">
-                            {[member.gender, member.orderLabel, member.eventName, `${measurementCount} measurements`].filter(Boolean).join(" - ")}
-                          </p>
                         </div>
                         <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700">
                           {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                         </span>
                       </button>
                       {expanded ? (
-                        <div className="border-t border-slate-200 bg-slate-50 p-4">
-                          <MeasurementDisplayCard row={member} compact />
+                        <div className="border-t border-slate-200 p-4">
+                          <div className="grid gap-3 md:grid-cols-4">
+                            <Field label="Current Step" value={`${group.currentStep} / 4`} />
+                            <Field label="Selection" value={group.selectionType || "Not selected"} />
+                            <Field label="Updated" value={formatDate(group.updatedAt)} />
+                            <Field label="Order State" value={group.paid ? "Paid" : group.ordered ? "Ordered" : group.inCart ? "In cart" : "Draft"} />
+                          </div>
+                          <div className="mt-4 space-y-3">
+                            {group.members.length ? group.members.map((member) => {
+                              const memberExpanded = expandedFamilyMemberId === member.id;
+                              const measurementCount = Object.values(member.values).filter(hasMeasurementValue).length;
+                              return (
+                                <div key={member.id} className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                                  <button
+                                    type="button"
+                                    onClick={() => setExpandedFamilyMemberId(memberExpanded ? null : member.id)}
+                                    className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-slate-50"
+                                  >
+                                    <div>
+                                      <p className="font-bold text-slate-950">{member.label}</p>
+                                      <p className="mt-1 text-xs font-semibold text-slate-500">
+                                        {[member.relation, member.gender, `${measurementCount} measurements`].filter(Boolean).join(" - ")}
+                                      </p>
+                                    </div>
+                                    {memberExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                                  </button>
+                                  {memberExpanded ? <div className="border-t border-slate-200 p-4"><MeasurementDisplayCard row={member} compact /></div> : null}
+                                </div>
+                              );
+                            }) : (
+                              <div className="rounded-xl border border-dashed border-slate-300 bg-white p-5 text-sm font-semibold text-slate-500">
+                                No members have been added to this group yet.
+                              </div>
+                            )}
+                          </div>
                         </div>
                       ) : null}
                     </div>
@@ -818,8 +1009,8 @@ export function CustomerDetailClient({
             ) : (
               <div className="mt-4 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
                 <Users className="mx-auto h-10 w-10 text-slate-400" />
-                <h3 className="mt-3 text-base font-bold text-slate-950">No family members found</h3>
-                <p className="mt-1 text-sm text-slate-600">Family member details will appear after this customer places a family or group order.</p>
+                <h3 className="mt-3 text-base font-bold text-slate-950">No family or group orders found</h3>
+                <p className="mt-1 text-sm text-slate-600">Created family groups will appear here immediately, even before checkout.</p>
               </div>
             )}
           </section>
@@ -835,28 +1026,90 @@ export function CustomerDetailClient({
               <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700">{eventRows.length} event{eventRows.length === 1 ? "" : "s"}</span>
             </div>
             {eventRows.length ? (
-              <div className="mt-4 grid gap-4 lg:grid-cols-2">
-                {eventRows.map((event) => (
-                  <div key={event.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
-                    <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <h3 className="font-extrabold text-slate-950">{event.name}</h3>
-                        <p className="mt-1 text-xs font-semibold text-slate-500">Latest activity: {formatDate(event.latestOrderDate)}</p>
-                      </div>
-                      <CalendarDays className="h-5 w-5 text-slate-500" />
+              <div className="mt-4 space-y-4">
+                {eventRows.map((event) => {
+                  const expanded = expandedEventId === event.id;
+                  return (
+                    <div key={event.id} className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
+                      <button
+                        type="button"
+                        onClick={() => setExpandedEventId(expanded ? null : event.id)}
+                        className="flex w-full items-center justify-between gap-4 bg-white px-4 py-4 text-left hover:bg-slate-50"
+                      >
+                        <div className="flex min-w-0 items-center gap-4">
+                          <span className="grid h-14 w-14 shrink-0 place-items-center rounded-xl bg-amber-100 text-amber-700">
+                            <CalendarDays className="h-6 w-6" />
+                          </span>
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <h3 className="font-extrabold text-slate-950">{event.name}</h3>
+                              {event.eventCode ? <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-bold text-slate-600">{event.eventCode}</span> : null}
+                            </div>
+                            <p className="mt-1 text-sm font-semibold text-slate-500">
+                              {[event.productName || "No outfit selected", `${event.joinedCount} participants`, `${event.orderCount} orders`, `${event.paidCount} paid`].filter(Boolean).join(" - ")}
+                            </p>
+                          </div>
+                        </div>
+                        <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700">
+                          {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                        </span>
+                      </button>
+                      {expanded ? (
+                        <div className="border-t border-slate-200 p-4">
+                          <div className="grid gap-3 md:grid-cols-4">
+                            <Field label="Current Step" value={`${event.currentStep} / 4`} />
+                            <Field label="Participants" value={String(event.joinedCount)} />
+                            <Field label="Family Groups" value={String(event.familyGroupCount)} />
+                            <Field label="Order Value" value={formatMoney(event.totalValue)} />
+                          </div>
+                          <div className="mt-5 grid gap-4 xl:grid-cols-2">
+                            <div className="rounded-xl border border-slate-200 bg-white p-4">
+                              <h4 className="text-sm font-black text-slate-950">Participants</h4>
+                              <div className="mt-3 divide-y divide-slate-100">
+                                {event.participants.length ? event.participants.map((participant) => (
+                                  <div key={String(participant.id ?? participant.participantEmail)} className="py-3 text-sm">
+                                    <p className="font-bold text-slate-950">{String(participant.participantName ?? "Participant")}</p>
+                                    <p className="mt-1 text-xs font-semibold text-slate-500">
+                                      {[participant.participantEmail, participant.orderStatus, participant.paymentStatus].filter(Boolean).join(" - ")}
+                                    </p>
+                                  </div>
+                                )) : <p className="text-sm font-semibold text-slate-500">No participants joined yet.</p>}
+                              </div>
+                            </div>
+                            <div className="rounded-xl border border-slate-200 bg-white p-4">
+                              <h4 className="text-sm font-black text-slate-950">Orders & Payment</h4>
+                              <div className="mt-3 divide-y divide-slate-100">
+                                {event.orders.length ? event.orders.map((order) => (
+                                  <div key={String(order.id ?? order.orderNumber)} className="py-3 text-sm">
+                                    <p className="font-bold text-slate-950">#{String(order.orderNumber ?? order.id ?? "").slice(0, 12).toUpperCase()}</p>
+                                    <p className="mt-1 text-xs font-semibold text-slate-500">
+                                      {[order.status, order.paymentStatus, formatMoney(orderTotal(order)), formatDate(order.createdAt)].filter(Boolean).join(" - ")}
+                                    </p>
+                                  </div>
+                                )) : <p className="text-sm font-semibold text-slate-500">No orders have been placed for this event yet.</p>}
+                              </div>
+                            </div>
+                          </div>
+                          {event.familyGroups.length ? (
+                            <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
+                              <h4 className="text-sm font-black text-slate-950">Connected Family Groups</h4>
+                              <div className="mt-3 grid gap-3 md:grid-cols-2">
+                                {event.familyGroups.map((group) => (
+                                  <div key={group.id} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                                    <p className="font-bold text-slate-950">{group.name}</p>
+                                    <p className="mt-1 text-xs font-semibold text-slate-500">
+                                      {[group.productName || "No outfit selected", `${group.memberCount} members`, `${group.readyMemberCount} ready`].filter(Boolean).join(" - ")}
+                                    </p>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : null}
                     </div>
-                    <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                      <Field label="Joined" value={String(event.joinedCount)} />
-                      <Field label="Orders" value={String(event.orderCount)} />
-                      <Field label="Order Value" value={formatMoney(event.totalValue)} />
-                    </div>
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      {(event.statuses.length ? event.statuses : ["No status recorded"]).map((status) => (
-                        <span key={status} className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-bold text-slate-600">{status}</span>
-                      ))}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <div className="mt-4 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center">

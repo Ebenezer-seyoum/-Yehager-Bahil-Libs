@@ -8,6 +8,8 @@ type BeforeInstallPromptEvent = Event & {
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 };
 
+const PWA_INSTALL_PROMPT_SHOWN_KEY = "pwa-install-prompt-shown";
+
 export function PwaInstallBanner() {
   const [show, setShow] = useState(false);
   const [isIos, setIsIos] = useState(false);
@@ -17,24 +19,39 @@ export function PwaInstallBanner() {
   useEffect(() => {
     const navigatorWithStandalone = navigator as Navigator & { standalone?: boolean };
     if (window.matchMedia("(display-mode: standalone)").matches || navigatorWithStandalone.standalone) return;
+    if (window.localStorage.getItem(PWA_INSTALL_PROMPT_SHOWN_KEY)) return;
 
     const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
     setIsIos(ios);
 
     function handlePrompt(event: Event) {
       event.preventDefault();
+      if (window.localStorage.getItem(PWA_INSTALL_PROMPT_SHOWN_KEY)) return;
       setDeferredPrompt(event as BeforeInstallPromptEvent);
+      window.localStorage.setItem(PWA_INSTALL_PROMPT_SHOWN_KEY, "1");
       setShow(true);
+    }
+
+    function handleInstalled() {
+      window.localStorage.setItem(PWA_INSTALL_PROMPT_SHOWN_KEY, "1");
+      setShow(false);
+      setDeferredPrompt(null);
     }
 
     window.addEventListener("beforeinstallprompt", handlePrompt);
-    if (ios && !window.sessionStorage.getItem("pwa-banner-dismissed")) {
+    window.addEventListener("appinstalled", handleInstalled);
+    if (ios) {
+      window.localStorage.setItem(PWA_INSTALL_PROMPT_SHOWN_KEY, "1");
       setShow(true);
     }
-    return () => window.removeEventListener("beforeinstallprompt", handlePrompt);
+    return () => {
+      window.removeEventListener("beforeinstallprompt", handlePrompt);
+      window.removeEventListener("appinstalled", handleInstalled);
+    };
   }, []);
 
   async function install() {
+    window.localStorage.setItem(PWA_INSTALL_PROMPT_SHOWN_KEY, "1");
     if (isIos) {
       setShowIosSteps(true);
       return;
@@ -47,7 +64,7 @@ export function PwaInstallBanner() {
   }
 
   function dismiss() {
-    window.sessionStorage.setItem("pwa-banner-dismissed", "1");
+    window.localStorage.setItem(PWA_INSTALL_PROMPT_SHOWN_KEY, "1");
     setShow(false);
     setShowIosSteps(false);
   }

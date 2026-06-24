@@ -1,7 +1,19 @@
 import { HTTPException } from "hono/http-exception";
 import { and, desc, eq, inArray, or } from "drizzle-orm";
 import { db } from "../lib/db/drizzle.js";
-import { auditLogs, employeeProfiles, measurements, orders, roles } from "../lib/db/schema.js";
+import {
+  auditLogs,
+  cartItems,
+  employeeProfiles,
+  eventParticipants,
+  events,
+  familyGroups,
+  familyMembers,
+  measurements,
+  orders,
+  roles,
+  uploadedDesigns,
+} from "../lib/db/schema.js";
 import { hashPassword, verifyPassword } from "../lib/auth/password.js";
 import { isUserRole, type UserRole } from "../lib/auth/roles.js";
 import crypto from "node:crypto";
@@ -311,6 +323,160 @@ export async function listCustomerMeasurementsForAdmin(userId: string) {
     where: filters,
     orderBy: [desc(measurements.updatedAt)],
   });
+}
+
+const requiredFamilyMeasurementFields = ["chest", "waist", "hips", "shoulderWidth", "armLength", "torsoLength"];
+
+function hasSavedValue(value: unknown) {
+  return value !== null && value !== undefined && String(value).trim() !== "";
+}
+
+function groupIdFromOrderItem(item: Record<string, unknown>) {
+  const metadata = (item.itemMetadata ?? item.item_metadata) as Record<string, unknown> | undefined;
+  return String(metadata?.group_id ?? metadata?.groupId ?? "");
+}
+
+export async function getCustomerActivityForAdmin(userId: string) {
+  const user = await requireCustomerForAdmin(userId);
+  const email = String(user.email ?? "").trim().toLowerCase();
+  const userOrders = await db.query.orders.findMany({
+    where: or(eq(orders.userId, user.id), eq(orders.userEmail, email)),
+    orderBy: [desc(orders.createdAt)],
+    limit: 200,
+  });
+  const ownedEvents = await db.query.events.findMany({
+    where: eq(events.ownerEmail, email),
+    orderBy: [desc(events.updatedAt)],
+    limit: 200,
+  });
+  const joinedParticipants = await db.query.eventParticipants.findMany({
+    where: eq(eventParticipants.participantEmail, email),
+    orderBy: [desc(eventParticipants.updatedAt)],
+    limit: 200,
+  });
+
+  const eventIds = Array.from(new Set([
+    ...ownedEvents.map((event) => event.id),
+    ...joinedParticipants.map((participant) => participant.eventId),
+    ...userOrders.map((order) => order.eventId).filter(Boolean),
+  ] as string[]));
+
+  const [eventRows, participantRows, familyRows, memberRows, cartRows, designRows] = await Promise.all([
+    eventIds.length
+      ? db.query.events.findMany({
+          where: inArray(events.id, eventIds),
+          orderBy: [desc(events.updatedAt)],
+        })
+      : [],
+    eventIds.length
+      ? db.query.eventParticipants.findMany({
+          where: inArray(eventParticipants.eventId, eventIds),
+          orderBy: [desc(eventParticipants.createdAt)],
+        })
+      : [],
+    eventIds.length
+      ? db.query.familyGroups.findMany({
+          where: or(eq(familyGroups.leadEmail, email), inArray(familyGroups.eventId, eventIds)),
+          orderBy: [desc(familyGroups.updatedAt)],
+        })
+      : db.query.familyGroups.findMany({
+          where: eq(familyGroups.leadEmail, email),
+          orderBy: [desc(familyGroups.updatedAt)],
+        }),
+    eventIds.length
+      ? db.query.familyMembers.findMany({
+          where: inArray(familyMembers.eventId, eventIds),
+          orderBy: [desc(familyMembers.createdAt)],
+        })
+      : [],
+    db.query.cartItems.findMany({
+      where: eq(cartItems.userEmail, email),
+      orderBy: [desc(cartItems.updatedAt)],
+      limit: 200,
+    }),
+    db.query.uploadedDesigns.findMany({
+      where: eq(uploadedDesigns.userEmail, email),
+      orderBy: [desc(uploadedDesigns.updatedAt)],
+      limit: 200,
+    }),
+  ]);
+
+  const familyGroupIds = Array.from(new Set(familyRows.map((group) => group.id)));
+  const directMembers = familyGroupIds.length
+    ? await db.query.familyMembers.findMany({
+        where: inArray(familyMembers.familyGroupId, familyGroupIds),
+        orderBy: [desc(familyMembers.createdAt)],
+      })
+    : [];
+  const allMembersById = new Map([...memberRows, ...directMembers].map((member) => [member.id, member]));
+  const members = Array.from(allMembersById.values());
+  const orderGroupIds = new Set(
+    userOrders.flatMap((order) => (order.items ?? []).map((item) => groupIdFromOrderItem(item))).filter(Boolean),
+  );
+  const cartGroupIds = new Set(
+    cartRows.map((item) => String(item.itemMetadata?.group_id ?? item.itemMetadata?.groupId ?? "")).filter(Boolean),
+  );
+  const paidGroupIds = new Set(
+    userOrders
+      .filter((order) => String(order.paymentStatus ?? "").toLowerCase() === "paid")
+      .flatMap((order) => (order.items ?? []).map((item) => groupIdFromOrderItem(item)))
+      .filter(Boolean),
+  );
+
+  const familySummaries = familyRows.map((group) => {
+    const groupMembers = members.filter((member) => member.familyGroupId === group.id);
+    const readyMemberCount = groupMembers.filter((member) =>
+      requiredFamilyMeasurementFields.every((field) => hasSavedValue(member.measurements?.[field])),
+    ).length;
+    const hasOutfit = Boolean(group.productId || group.uploadedDesignId);
+    const ordered = orderGroupIds.has(group.id);
+    const paid = paidGroupIds.has(group.id);
+    const inCart = cartGroupIds.has(group.id);
+    const allReady = groupMembers.length > 0 && readyMemberCount === groupMembers.length;
+    const currentStep = paid || ordered ? 4 : allReady || inCart ? 3 : hasOutfit ? 2 : 1;
+    return {
+      ...group,
+      memberCount: groupMembers.length,
+      readyMemberCount,
+      inCart,
+      ordered,
+      paid,
+      currentStep,
+    };
+  });
+
+  const orderEventIds = new Set(userOrders.map((order) => order.eventId).filter(Boolean));
+  const paidEventIds = new Set(userOrders.filter((order) => String(order.paymentStatus ?? "").toLowerCase() === "paid").map((order) => order.eventId).filter(Boolean));
+  const eventSummaries = eventRows.map((event) => {
+    const eventParticipantRows = participantRows.filter((participant) => participant.eventId === event.id);
+    const eventOrders = userOrders.filter((order) => order.eventId === event.id);
+    const familyForEvent = familySummaries.filter((group) => group.eventId === event.id);
+    const participantCount = eventParticipantRows.length;
+    const orderCount = eventOrders.length;
+    const paidCount = eventOrders.filter((order) => String(order.paymentStatus ?? "").toLowerCase() === "paid").length;
+    const hasOutfit = Boolean(event.productId || event.uploadedDesignId);
+    const currentStep = orderEventIds.has(event.id) || paidEventIds.has(event.id) ? 4 : participantCount > 0 || familyForEvent.length > 0 ? 3 : hasOutfit ? 2 : 1;
+    return {
+      ...event,
+      participantCount,
+      orderCount,
+      paidCount,
+      familyGroupCount: familyForEvent.length,
+      currentStep,
+      isOwner: event.ownerEmail === email,
+      joinedByCustomer: eventParticipantRows.some((participant) => participant.participantEmail === email),
+    };
+  });
+
+  return {
+    orders: userOrders,
+    events: eventSummaries,
+    eventParticipants: participantRows,
+    familyGroups: familySummaries,
+    familyMembers: members,
+    cartItems: cartRows,
+    uploadedDesigns: designRows,
+  };
 }
 
 export async function getEmployeeDetailForAdmin(userId: string) {

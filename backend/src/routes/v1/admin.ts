@@ -15,6 +15,7 @@ import {
   createCustomerForAdmin,
   deleteCustomerForAdmin,
   deleteUserForAdmin,
+  getCustomerActivityForAdmin,
   getCustomerDetailForAdmin,
   getEmployeeDetailForAdmin,
   listCustomerMeasurementsForAdmin,
@@ -518,6 +519,12 @@ adminRouter.get("/customers", requirePermission(PERMISSIONS.CUSTOMERS_VIEW), zVa
 adminRouter.get("/customers/:userId", requirePermission(PERMISSIONS.CUSTOMERS_VIEW), zValidator("param", userParamSchema), async (c) => {
   const { userId } = c.req.valid("param");
   const data = await getCustomerDetailForAdmin(userId);
+  return c.json({ data });
+});
+
+adminRouter.get("/customers/:userId/activity", requirePermission(PERMISSIONS.CUSTOMERS_VIEW), zValidator("param", userParamSchema), async (c) => {
+  const { userId } = c.req.valid("param");
+  const data = await getCustomerActivityForAdmin(userId);
   return c.json({ data });
 });
 

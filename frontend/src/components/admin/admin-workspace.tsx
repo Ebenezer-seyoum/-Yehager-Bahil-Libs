@@ -41,6 +41,7 @@ export function AdminWorkspace({
   tabs,
   actions,
   pageClassName,
+  autoRefreshMs,
 }: {
   pageId: AdminPageId;
   initialData: AdminWorkspaceData;
@@ -77,6 +78,7 @@ export function AdminWorkspace({
   tabs?: AdminTabConfig[];
   actions?: ReactNode;
   pageClassName?: string;
+  autoRefreshMs?: number | false;
 }) {
   const meta = getPageMeta(pageId);
   const router = useRouter();
@@ -118,6 +120,7 @@ export function AdminWorkspace({
   const kpis = useMemo(() => computePageKpis(pageId, kpiData), [pageId, kpiData]);
   const showKpis = !hideKpis && !hideKpisOnTabs?.includes(activeTab);
   const showFilters = !hideFilters && !hideFiltersOnTabs?.includes(activeTab);
+  const refreshIntervalMs = autoRefreshMs === undefined ? 30000 : autoRefreshMs;
 
   const refresh = useCallback(() => {
     startTransition(() => {
@@ -125,6 +128,19 @@ export function AdminWorkspace({
       setData(initialData);
     });
   }, [initialData, router]);
+
+  useEffect(() => {
+    if (!refreshIntervalMs || refreshIntervalMs < 10000) return;
+
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      startTransition(() => {
+        router.refresh();
+      });
+    }, refreshIntervalMs);
+
+    return () => window.clearInterval(intervalId);
+  }, [refreshIntervalMs, router]);
 
   const recordsCount = useMemo(() => {
     switch (pageId) {

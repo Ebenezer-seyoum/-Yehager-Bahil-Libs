@@ -376,6 +376,7 @@ export const measurements = pgTable(
     torsoLength: numeric("torso_length", { precision: 10, scale: 2 }).notNull(),
     inseam: numeric("inseam", { precision: 10, scale: 2 }),
     neck: numeric("neck", { precision: 10, scale: 2 }),
+    measurementDetails: jsonb("measurement_details").$type<Record<string, unknown>>().default({}).notNull(),
     label: text("label").default("My Measurements").notNull(),
     ...timestamps,
   },

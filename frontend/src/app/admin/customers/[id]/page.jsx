@@ -21,6 +21,7 @@ export default async function AdminCustomerDetailPage({ params, searchParams }) 
   let customer = null;
   let orders = [];
   let measurements = [];
+  let activity = null;
   try {
     const customerResponse = await apiRequest(`/api/v1/admin/customers/${id}`);
     customer = customerResponse?.data?.user ?? customerResponse?.data ?? null;
@@ -35,6 +36,13 @@ export default async function AdminCustomerDetailPage({ params, searchParams }) 
     } catch (err) {
       console.error("Failed fetching customer measurements in customer page:", err);
       measurements = [];
+    }
+    try {
+      const activityResponse = await apiRequest(`/api/v1/admin/customers/${id}/activity`);
+      activity = activityResponse?.data ?? null;
+    } catch (err) {
+      console.error("Failed fetching customer activity in customer page:", err);
+      activity = null;
     }
   }
   if (customer && can(session.user.permissions, "orders.view")) {
@@ -55,6 +63,7 @@ export default async function AdminCustomerDetailPage({ params, searchParams }) 
       initialCustomer={customer}
       orders={orders}
       measurements={measurements}
+      activity={activity}
       backTab={backTab}
       canEdit={can(session.user.permissions, "customers.edit")}
       canDelete={can(session.user.permissions, "customers.delete")}
