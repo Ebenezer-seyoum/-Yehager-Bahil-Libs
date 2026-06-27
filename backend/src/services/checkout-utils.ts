@@ -5,6 +5,7 @@ export type CheckoutLineInput = {
   quantity: number;
   trustedUnitPriceUsd: string;
   measurementId?: string | null;
+  measurementSnapshot?: Record<string, unknown> | null;
   itemType?: string | null;
   uploadedDesignId?: string | null;
   itemMetadata?: Record<string, unknown> | null;
@@ -18,6 +19,7 @@ export type CheckoutLine = {
   unitPriceUsd: number;
   lineTotalUsd: number;
   measurementId?: string | null;
+  measurementSnapshot?: Record<string, unknown> | null;
   itemType?: string | null;
   uploadedDesignId?: string | null;
   itemMetadata?: Record<string, unknown> | null;
@@ -47,6 +49,7 @@ export function buildCheckoutLines(inputs: CheckoutLineInput[]) {
       unitPriceUsd,
       lineTotalUsd: unitPriceUsd * quantity,
       measurementId: item.measurementId,
+      measurementSnapshot: item.measurementSnapshot,
       itemType: item.itemType,
       uploadedDesignId: item.uploadedDesignId,
       itemMetadata: item.itemMetadata,

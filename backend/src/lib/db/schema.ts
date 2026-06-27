@@ -432,6 +432,7 @@ export const familyMembers = pgTable(
       .references(() => events.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
     relation: text("relation"),
+    age: integer("age"),
     gender: text("gender").notNull(),
     measurements: jsonb("measurements").$type<Record<string, unknown>>(),
     measurementId: uuid("measurement_id").references(() => measurements.id, { onDelete: "set null" }),
@@ -502,6 +503,13 @@ export const orders = pgTable(
     paymentProofUploadedAt: timestamp("payment_proof_uploaded_at", { withTimezone: true }),
     fulfillmentType: text("fulfillment_type").default("mail").notNull(),
     carrier: text("carrier"),
+    deliveryStatus: text("delivery_status").default("not_started").notNull(),
+    trackingNumber: text("tracking_number"),
+    deliveryStatusChangedBy: text("delivery_status_changed_by"),
+    deliveryStatusChangedAt: timestamp("delivery_status_changed_at", { withTimezone: true }),
+    deliveryTimeline: jsonb("delivery_timeline").$type<
+      Array<{ status: string; mainStatus?: string; note?: string; changedBy?: string; changedAt: string; trackingNumber?: string }>
+    >().default([]),
     pickupLocation: text("pickup_location"),
     pickupPersonName: text("pickup_person_name"),
     pickupPersonPhone: text("pickup_person_phone"),
@@ -529,6 +537,28 @@ export const orders = pgTable(
     uniqueIndex("orders_order_number_unique").on(table.orderNumber),
     index("orders_user_email_idx").on(table.userEmail),
     index("orders_order_type_idx").on(table.orderType),
+  ],
+);
+
+export const orderNotes = pgTable(
+  "order_notes",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    orderId: uuid("order_id").notNull().references(() => orders.id, { onDelete: "cascade" }),
+    noteType: varchar("note_type", { length: 32 }).notNull(),
+    note: text("note").notNull(),
+    createdByUserId: uuid("created_by_user_id").references(() => users.id, { onDelete: "set null" }),
+    createdByName: text("created_by_name"),
+    createdByEmail: varchar("created_by_email", { length: 320 }),
+    createdByRole: text("created_by_role"),
+    editedAt: timestamp("edited_at", { withTimezone: true }),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+    ...timestamps,
+  },
+  (table) => [
+    index("order_notes_order_idx").on(table.orderId),
+    index("order_notes_type_idx").on(table.noteType),
+    index("order_notes_deleted_idx").on(table.deletedAt),
   ],
 );
 
@@ -709,6 +739,7 @@ export const uploadedDesigns = pgTable(
     fabricType: text("fabric_type"),
     embroideryStyle: text("embroidery_style"),
     colorPreference: text("color_preference"),
+    childAge: integer("child_age"),
     measurementSnapshot: jsonb("measurement_snapshot").$type<Record<string, unknown>>().default({}).notNull(),
     contactPhone: text("contact_phone"),
     contactTelegram: text("contact_telegram"),

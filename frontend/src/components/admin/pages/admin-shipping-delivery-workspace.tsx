@@ -1,13 +1,43 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { CheckCircle2, MapPin, Package, Truck, XCircle } from "lucide-react";
+import { Truck } from "lucide-react";
 import { AdminWorkspace } from "@/components/admin/admin-workspace";
+import { DashboardActionButton, DashboardTableActions } from "@/components/admin/dashboard-action-button";
 import type { AdminWorkspaceData } from "@/lib/admin/types";
 import { cn } from "@/lib/utils";
 
-type OrderRow = Record<string, any>;
+type OrderRow = Record<string, unknown> & {
+  id?: string;
+  orderNumber?: string | null;
+  customerName?: string | null;
+  userEmail?: string | null;
+  status?: string | null;
+  fulfillmentType?: string | null;
+  fulfillment_type?: string | null;
+  carrier?: string | null;
+  shippingProvider?: string | null;
+  shipping_provider?: string | null;
+  shippingAddress?: Record<string, unknown> | string | null;
+  shipping_address?: Record<string, unknown> | string | null;
+  deliveryStatus?: string | null;
+  delivery_status?: string | null;
+  shippingStatus?: string | null;
+  shipping_status?: string | null;
+  pickupStatus?: string | null;
+  pickup_status?: string | null;
+  pickupLocation?: string | null;
+  pickup_location?: string | null;
+  trackingNumber?: string | null;
+  tracking_number?: string | null;
+  deliveryStatusChangedAt?: string | number | Date | null;
+  delivery_status_changed_at?: string | number | Date | null;
+  updatedAt?: string | number | Date | null;
+  createdAt?: string | number | Date | null;
+  _method?: string;
+  _provider?: string;
+  _fulfillmentStatus?: string;
+};
 
 function norm(value: unknown) {
   return String(value ?? "").toLowerCase().trim();
@@ -16,13 +46,6 @@ function norm(value: unknown) {
 function text(value: unknown, fallback = "-") {
   const next = String(value ?? "").trim();
   return next || fallback;
-}
-
-function dateLabel(value: unknown) {
-  if (!value) return "-";
-  const date = new Date(String(value));
-  if (Number.isNaN(date.getTime())) return "-";
-  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(date);
 }
 
 function titleCase(value: string) {
@@ -54,34 +77,27 @@ function addressOrPickup(order: OrderRow) {
 }
 
 function fulfillmentStatus(order: OrderRow) {
-  const explicit = norm(order.shippingStatus ?? order.shipping_status ?? order.pickupStatus ?? order.pickup_status);
+  const explicit = norm(order.deliveryStatus ?? order.delivery_status ?? order.shippingStatus ?? order.shipping_status ?? order.pickupStatus ?? order.pickup_status);
   if (explicit) return explicit;
   const status = norm(order.status);
   if (["delivered", "picked_up"].includes(status)) return "delivered";
   if (status === "ready_for_pickup") return "ready_for_pickup";
   if (status === "shipped") return "shipped";
-  if (status === "fulfilled") return "shipping_assigned";
-  if (status === "quality_check") return "quality_check";
-  return "pending";
+  if (status === "fulfilled") return isPickup(order) ? "packed" : "assigned_to_ems";
+  return "not_started";
 }
 
 function readyForFulfillment(order: OrderRow) {
   const status = norm(order.status);
   const fulfillment = fulfillmentStatus(order);
-  return [
-    "fulfilled",
-    "ready_for_pickup",
-    "shipped",
-    "picked_up",
-    "delivered",
-  ].includes(status) || !["pending", "processing", "tailoring", "quality_check"].includes(fulfillment);
+  return ["fulfilled", "ready_for_pickup", "shipped", "picked_up", "delivered"].includes(status) || fulfillment !== "not_started";
 }
 
 function tone(status: string) {
   if (["delivered", "picked_up"].includes(status)) return "green";
-  if (["shipped", "in_transit", "out_for_delivery", "shipping_assigned", "ready_for_pickup"].includes(status)) return "blue";
-  if (["pending", "packed", "quality_check"].includes(status)) return "yellow";
-  if (["failed", "cancelled", "canceled"].includes(status)) return "red";
+  if (["assigned_to_ems", "handed_to_ems", "shipped", "in_transit", "at_hub", "out_for_delivery", "ready_for_pickup", "customer_notified"].includes(status)) return "blue";
+  if (["not_started", "packing", "packed", "moved_to_pickup_desk", "waiting_customer"].includes(status)) return "yellow";
+  if (["failed", "failed_attempt", "returned", "cancelled", "canceled", "cancelled_pickup"].includes(status)) return "red";
   return "slate";
 }
 
@@ -105,8 +121,36 @@ function Badge({ status }: { status: string }) {
 
 export function AdminShippingDeliveryWorkspace({ data }: { data: AdminWorkspaceData }) {
   const [methodFilter, setMethodFilter] = useState("all");
-  const [providerFilter, setProviderFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [viewedDeliveryIds, setViewedDeliveryIds] = useState<string[]>([]);
+  const statusOptions = methodFilter === "pickup"
+    ? [
+        ["all", "All Pickup Statuses"],
+        ["not_started", "Not Started"],
+        ["packing", "Packing"],
+        ["packed", "Packed"],
+        ["moved_to_pickup_desk", "Moved To Pickup Desk"],
+        ["ready_for_pickup", "Ready For Pickup"],
+        ["customer_notified", "Customer Notified"],
+        ["waiting_customer", "Waiting Customer"],
+        ["picked_up", "Picked Up"],
+        ["delivered", "Delivered"],
+        ["cancelled_pickup", "Cancelled Pickup"],
+      ]
+    : [
+        ["all", "All Delivery Statuses"],
+        ["not_started", "Not Started"],
+        ["packing", "Packing"],
+        ["packed", "Packed"],
+        ["assigned_to_ems", "Assigned To EMS"],
+        ["handed_to_ems", "Handed To EMS"],
+        ["in_transit", "In Transit"],
+        ["at_hub", "At Hub"],
+        ["out_for_delivery", "Out For Delivery"],
+        ["delivered", "Delivered"],
+        ["failed_attempt", "Failed Attempt"],
+        ["returned", "Returned"],
+      ];
 
   const fulfillmentOrders = useMemo(() => {
     return ((data.orders ?? []) as OrderRow[])
@@ -119,6 +163,30 @@ export function AdminShippingDeliveryWorkspace({ data }: { data: AdminWorkspaceD
       }));
   }, [data.orders]);
 
+  useEffect(() => {
+    const key = "admin-viewed-shipping-delivery-notifications";
+    const read = () => {
+      try {
+        const raw = window.localStorage.getItem(key);
+        setViewedDeliveryIds(raw ? JSON.parse(raw) : []);
+      } catch {
+        setViewedDeliveryIds([]);
+      }
+    };
+    const onViewed = (event: Event) => {
+      const orderId = (event as CustomEvent<string>).detail;
+      if (!orderId) return;
+      setViewedDeliveryIds((current) => {
+        const next = Array.from(new Set([...current, orderId]));
+        try { window.localStorage.setItem(key, JSON.stringify(next)); } catch {}
+        return next;
+      });
+    };
+    read();
+    window.addEventListener("admin-shipping-delivery-viewed", onViewed);
+    return () => window.removeEventListener("admin-shipping-delivery-viewed", onViewed);
+  }, []);
+
   return (
     <AdminWorkspace
       pageId="shipping-delivery"
@@ -129,27 +197,21 @@ export function AdminShippingDeliveryWorkspace({ data }: { data: AdminWorkspaceD
       icon={Truck}
       defaultTab="all"
       filterActions={
-        <div className="grid w-full gap-2 lg:grid-cols-3">
-          <select value={methodFilter} onChange={(event) => setMethodFilter(event.target.value)} className="h-9 rounded-lg border border-input bg-background px-3 text-sm font-medium">
+        <div className="grid w-full gap-2 md:grid-cols-2">
+          <select
+            value={methodFilter}
+            onChange={(event) => {
+              setMethodFilter(event.target.value);
+              setStatusFilter("all");
+            }}
+            className="h-9 rounded-lg border border-input bg-background px-3 text-sm font-medium"
+          >
             <option value="all">All Methods</option>
             <option value="mail">Mail Delivery</option>
             <option value="pickup">Store Pickup</option>
           </select>
-          <select value={providerFilter} onChange={(event) => setProviderFilter(event.target.value)} className="h-9 rounded-lg border border-input bg-background px-3 text-sm font-medium">
-            <option value="all">All Providers</option>
-            <option value="ems">EMS</option>
-            <option value="dhl">DHL</option>
-            <option value="pickup">Pickup Desk</option>
-          </select>
           <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="h-9 rounded-lg border border-input bg-background px-3 text-sm font-medium">
-            <option value="all">All Statuses</option>
-            <option value="pending">Pending</option>
-            <option value="packed">Packed</option>
-            <option value="shipping_assigned">Shipping Assigned</option>
-            <option value="ready_for_pickup">Ready For Pickup</option>
-            <option value="shipped">Shipped</option>
-            <option value="out_for_delivery">Out For Delivery</option>
-            <option value="delivered">Delivered</option>
+            {statusOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </select>
         </div>
       }
@@ -159,8 +221,8 @@ export function AdminShippingDeliveryWorkspace({ data }: { data: AdminWorkspaceD
           orders={(filteredData.orders ?? []) as OrderRow[]}
           search={search}
           methodFilter={methodFilter}
-          providerFilter={providerFilter}
           statusFilter={statusFilter}
+          viewedDeliveryIds={viewedDeliveryIds}
           onCount={setDisplayedRecordsCount}
         />
       )}
@@ -172,15 +234,15 @@ function ShippingDeliveryTable({
   orders,
   search,
   methodFilter,
-  providerFilter,
   statusFilter,
+  viewedDeliveryIds,
   onCount,
 }: {
   orders: OrderRow[];
   search: string;
   methodFilter: string;
-  providerFilter: string;
   statusFilter: string;
+  viewedDeliveryIds: string[];
   onCount: (count: number | null) => void;
 }) {
   const rows = useMemo(() => {
@@ -190,66 +252,61 @@ function ShippingDeliveryTable({
       const method = order._method ?? (isPickup(order) ? "pickup" : "mail");
       const providerValue = String(order._provider ?? provider(order)).toLowerCase();
       const matchesMethod = methodFilter === "all" || method === methodFilter;
-      const matchesProvider = providerFilter === "all" || providerValue.includes(providerFilter);
       const matchesStatus = statusFilter === "all" || status === statusFilter;
       const matchesSearch = query
         ? [order.orderNumber, order.customerName, order.userEmail, status, providerValue, addressOrPickup(order)].some((value) => String(value ?? "").toLowerCase().includes(query))
         : true;
-      return matchesMethod && matchesProvider && matchesStatus && matchesSearch;
+      return matchesMethod && matchesStatus && matchesSearch;
     });
-  }, [methodFilter, orders, providerFilter, search, statusFilter]);
+  }, [methodFilter, orders, search, statusFilter]);
 
   useEffect(() => {
     onCount(rows.length);
   }, [onCount, rows.length]);
 
-  const packed = rows.filter((order) => ["packed", "shipping_assigned", "ready_for_pickup", "shipped"].includes(order._fulfillmentStatus)).length;
-  const delivered = rows.filter((order) => order._fulfillmentStatus === "delivered").length;
-  const pickup = rows.filter((order) => order._method === "pickup").length;
-
   return (
-    <div className="space-y-4">
-      <div className="grid gap-3 md:grid-cols-4">
-        <Metric label="Fulfillment Orders" value={rows.length} icon={Package} />
-        <Metric label="Packed / Assigned" value={packed} icon={Truck} />
-        <Metric label="Store Pickup" value={pickup} icon={MapPin} />
-        <Metric label="Delivered" value={delivered} icon={CheckCircle2} />
-      </div>
-
+    <div>
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1100px] text-left text-sm">
+          <table className="w-full min-w-[980px] text-left text-sm">
             <thead className="bg-slate-50 text-xs font-black uppercase tracking-wide text-slate-500">
               <tr>
+                <th className="px-5 py-4">No</th>
                 <th className="px-5 py-4">Order</th>
                 <th className="px-5 py-4">Customer</th>
                 <th className="px-5 py-4">Method</th>
-                <th className="px-5 py-4">Provider</th>
-                <th className="px-5 py-4">Fulfillment Status</th>
+                <th className="px-5 py-4">Main Status</th>
+                <th className="px-5 py-4">Delivery Status</th>
                 <th className="px-5 py-4">Tracking / Pickup</th>
-                <th className="px-5 py-4">Last Update</th>
                 <th className="px-5 py-4">Action</th>
               </tr>
             </thead>
             <tbody>
-              {rows.map((order) => {
+              {rows.map((order, index) => {
                 const status = order._fulfillmentStatus ?? fulfillmentStatus(order);
+                const orderId = String(order.id ?? "");
+                const isNew = Boolean(orderId && !viewedDeliveryIds.includes(orderId));
                 return (
-                  <tr key={String(order.id)} className="border-t border-slate-200 hover:bg-slate-50">
-                    <td className="px-5 py-4 font-black text-slate-950">#{text(order.orderNumber ?? order.id)}</td>
+                  <tr key={orderId} className={cn("border-t border-slate-200 transition hover:bg-blue-50/70", isNew && "border-l-4 border-l-blue-500 bg-blue-50/70")}>
+                    <td className="px-5 py-4 font-semibold text-slate-500">{index + 1}</td>
+                    <td className="px-5 py-4 font-black text-slate-950">
+                      <div className="flex items-center gap-2">
+                        {isNew ? <span className="rounded-full border border-blue-200 bg-blue-600 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-white">New</span> : null}
+                        <span>#{text(order.orderNumber ?? order.id)}</span>
+                      </div>
+                    </td>
                     <td className="px-5 py-4">
                       <p className="font-black text-slate-900">{text(order.customerName, "Customer")}</p>
                       <p className="text-xs font-semibold text-slate-400">{text(order.userEmail, "-")}</p>
                     </td>
                     <td className="px-5 py-4 font-bold text-slate-700">{deliveryMethod(order)}</td>
-                    <td className="px-5 py-4 font-bold text-slate-700">{provider(order)}</td>
+                    <td className="px-5 py-4"><Badge status={norm(order.status) || "pending"} /></td>
                     <td className="px-5 py-4"><Badge status={status} /></td>
-                    <td className="px-5 py-4 text-slate-600">{text(order.trackingNumber ?? order.tracking_number ?? order.pickupLocation, isPickup(order) ? "Pickup code pending" : "Tracking pending")}</td>
-                    <td className="px-5 py-4 text-slate-500">{dateLabel(order.updatedAt ?? order.createdAt)}</td>
+                    <td className="px-5 py-4 text-slate-600">{text(order.trackingNumber ?? order.tracking_number ?? order.pickupLocation, isPickup(order) ? "Office pickup" : "Tracking pending")}</td>
                     <td className="px-5 py-4">
-                      <Link href={`/admin/orders/shipping-delivery/${order.id}`} className="inline-flex rounded-xl border border-slate-200 px-3 py-2 text-xs font-black text-slate-800 hover:bg-slate-100">
-                        View
-                      </Link>
+                      <DashboardTableActions>
+                        <DashboardActionButton action="view" href={`/admin/orders/shipping-delivery/${orderId}`} onClick={() => markDeliveryViewed(orderId)} aria-label="Open delivery details" />
+                      </DashboardTableActions>
                     </td>
                   </tr>
                 );
@@ -269,14 +326,9 @@ function ShippingDeliveryTable({
   );
 }
 
-function Metric({ label, value, icon: Icon }: { label: string; value: number; icon: any }) {
-  return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-xs font-black uppercase tracking-wide text-slate-500">{label}</p>
-        <Icon className="h-4 w-4 text-slate-400" />
-      </div>
-      <p className="mt-3 text-3xl font-black text-slate-950">{value}</p>
-    </div>
-  );
+function markDeliveryViewed(orderId: string) {
+  window.dispatchEvent(new CustomEvent("admin-shipping-delivery-viewed", { detail: orderId }));
+  fetch(`/api/backend/orders/admin/${orderId}`).catch((error) => {
+    console.error("Could not resolve shipping delivery notification:", error);
+  });
 }

@@ -43,6 +43,8 @@ type NotificationCounts = {
   customOrderIds?: Array<string | null | undefined>;
   refundIssues?: number;
   refundIssueIds?: Array<string | null | undefined>;
+  shippingDelivery?: number;
+  shippingDeliveryIds?: Array<string | null | undefined>;
   total?: number;
 };
 
@@ -185,11 +187,13 @@ export function DashboardShell({
   const [viewedOrderIds, setViewedOrderIds] = useState<string[]>([]);
   const [viewedPaymentIds, setViewedPaymentIds] = useState<string[]>([]);
   const [viewedCustomDesignIds, setViewedCustomDesignIds] = useState<string[]>([]);
+  const [viewedShippingDeliveryIds, setViewedShippingDeliveryIds] = useState<string[]>([]);
   const activeOrderIds = (counts.orderIds ?? []).filter(Boolean).map(String);
   const activePaymentIds = (counts.paymentIds ?? []).filter(Boolean).map(String);
   const activeCustomDesignIds = (counts.customDesignIds ?? []).filter(Boolean).map(String);
   const activeCustomOrderIds = (counts.customOrderIds ?? []).filter(Boolean).map(String);
   const activeRefundIssueIds = (counts.refundIssueIds ?? []).filter(Boolean).map(String);
+  const activeShippingDeliveryIds = (counts.shippingDeliveryIds ?? []).filter(Boolean).map(String);
   const visibleOrderCount = activeOrderIds.length > 0
     ? activeOrderIds.filter((id) => !viewedOrderIds.includes(id)).length
     : Math.max((counts.orders ?? 0) - viewedOrderIds.length, 0);
@@ -205,13 +209,17 @@ export function DashboardShell({
   const visibleRefundIssueCount = activeRefundIssueIds.length > 0
     ? activeRefundIssueIds.filter((id) => !viewedOrderIds.includes(id)).length
     : counts.refundIssues ?? 0;
-  const totalNotifications = visibleOrderCount + visiblePaymentCount + visibleCustomDesignCount + visibleCustomOrderCount + visibleRefundIssueCount;
+  const visibleShippingDeliveryCount = activeShippingDeliveryIds.length > 0
+    ? activeShippingDeliveryIds.filter((id) => !viewedShippingDeliveryIds.includes(id)).length
+    : Math.max((counts.shippingDelivery ?? 0) - viewedShippingDeliveryIds.length, 0);
+  const totalNotifications = visibleOrderCount + visiblePaymentCount + visibleCustomDesignCount + visibleCustomOrderCount + visibleRefundIssueCount + visibleShippingDeliveryCount;
   const badgeForHref = (href: string) => {
     if (variant !== "admin") return 0;
     if (href === "/admin/orders" || href === "/admin/catalog-orders") return visibleOrderCount;
     if (href === "/admin/group-orders") return counts.groupOrders ?? 0;
     if (href === "/admin/payments") return visiblePaymentCount;
     if (href === "/admin/uploaded-designs" || href === "/admin/custom-orders") return visibleCustomDesignCount + visibleCustomOrderCount;
+    if (href === "/admin/orders/shipping-delivery") return visibleShippingDeliveryCount;
     if (href === "/admin/orders/returns-refunds") return visibleRefundIssueCount;
     if (href === "/admin/alerts") return totalNotifications;
     if (href === "/admin/support-inbox") return counts.support ?? 0;
@@ -291,18 +299,23 @@ export function DashboardShell({
 
   useEffect(() => {
     if (variant !== "admin") return;
-    try {
-      const viewedOrdersRaw = window.localStorage.getItem("admin-viewed-order-notifications");
-      const viewedPaymentsRaw = window.localStorage.getItem("admin-viewed-payment-notifications");
-      const viewedDesignsRaw = window.localStorage.getItem("admin-viewed-custom-design-notifications");
-      setViewedOrderIds(viewedOrdersRaw ? JSON.parse(viewedOrdersRaw) : []);
-      setViewedPaymentIds(viewedPaymentsRaw ? JSON.parse(viewedPaymentsRaw) : []);
-      setViewedCustomDesignIds(viewedDesignsRaw ? JSON.parse(viewedDesignsRaw) : []);
-    } catch {
-      setViewedOrderIds([]);
-      setViewedPaymentIds([]);
-      setViewedCustomDesignIds([]);
-    }
+    const readTimeout = window.setTimeout(() => {
+      try {
+        const viewedOrdersRaw = window.localStorage.getItem("admin-viewed-order-notifications");
+        const viewedPaymentsRaw = window.localStorage.getItem("admin-viewed-payment-notifications");
+        const viewedDesignsRaw = window.localStorage.getItem("admin-viewed-custom-design-notifications");
+        const viewedShippingRaw = window.localStorage.getItem("admin-viewed-shipping-delivery-notifications");
+        setViewedOrderIds(viewedOrdersRaw ? JSON.parse(viewedOrdersRaw) : []);
+        setViewedPaymentIds(viewedPaymentsRaw ? JSON.parse(viewedPaymentsRaw) : []);
+        setViewedCustomDesignIds(viewedDesignsRaw ? JSON.parse(viewedDesignsRaw) : []);
+        setViewedShippingDeliveryIds(viewedShippingRaw ? JSON.parse(viewedShippingRaw) : []);
+      } catch {
+        setViewedOrderIds([]);
+        setViewedPaymentIds([]);
+        setViewedCustomDesignIds([]);
+        setViewedShippingDeliveryIds([]);
+      }
+    }, 0);
     const onViewed = (event: Event) => {
       const orderId = (event as CustomEvent<string>).detail;
       if (!orderId) return;
@@ -330,13 +343,25 @@ export function DashboardShell({
         return next;
       });
     };
+    const onShippingViewed = (event: Event) => {
+      const orderId = (event as CustomEvent<string>).detail;
+      if (!orderId) return;
+      setViewedShippingDeliveryIds((current) => {
+        const next = Array.from(new Set([...current, orderId]));
+        try { window.localStorage.setItem("admin-viewed-shipping-delivery-notifications", JSON.stringify(next)); } catch {}
+        return next;
+      });
+    };
     window.addEventListener("admin-order-viewed", onViewed);
     window.addEventListener("admin-payment-viewed", onPaymentViewed);
     window.addEventListener("admin-custom-design-viewed", onCustomViewed);
+    window.addEventListener("admin-shipping-delivery-viewed", onShippingViewed);
     return () => {
+      window.clearTimeout(readTimeout);
       window.removeEventListener("admin-order-viewed", onViewed);
       window.removeEventListener("admin-payment-viewed", onPaymentViewed);
       window.removeEventListener("admin-custom-design-viewed", onCustomViewed);
+      window.removeEventListener("admin-shipping-delivery-viewed", onShippingViewed);
     };
   }, [variant]);
 
@@ -610,6 +635,15 @@ export function DashboardShell({
                       accent: "bg-blue-400",
                       active: "border-blue-400/30 bg-blue-400/10 text-blue-50",
                       badge: "bg-blue-400 text-slate-950",
+                    },
+                    {
+                      href: "/admin/orders/shipping-delivery",
+                      label: "Orders ready for delivery",
+                      value: visibleShippingDeliveryCount,
+                      Icon: ClipboardList,
+                      accent: "bg-cyan-400",
+                      active: "border-cyan-400/30 bg-cyan-400/10 text-cyan-50",
+                      badge: "bg-cyan-400 text-slate-950",
                     },
                     {
                       href: "/admin/orders/returns-refunds?filter=awaiting-review",

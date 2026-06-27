@@ -16,6 +16,11 @@ const createGroupSchema = z.object({
   uploadedDesignId: z.string().uuid().optional(),
 });
 
+function isChildRelation(relation?: string | null) {
+  const normalized = String(relation ?? "").toLowerCase();
+  return ["son", "daughter", "child", "children", "kid", "kids"].some((token) => normalized.includes(token));
+}
+
 const groupIdParam = z.object({
   groupId: z.string().uuid(),
 });
@@ -28,9 +33,14 @@ const updateGroupSchema = z.object({
 const createMemberSchema = z.object({
   name: z.string().min(1).max(160),
   relation: z.string().optional(),
+  age: z.coerce.number().int().min(0).max(17).nullable().optional(),
   gender: z.enum(["male", "female", "unisex"]),
   measurements: z.record(z.string(), z.unknown()).optional(),
   measurementId: z.string().uuid().optional(),
+}).superRefine((body, ctx) => {
+  if (isChildRelation(body.relation) && body.age == null) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["age"], message: "Age is required for child family members." });
+  }
 });
 
 const memberParam = z.object({
@@ -41,10 +51,15 @@ const memberParam = z.object({
 const updateMemberSchema = z.object({
   name: z.string().min(1).max(160).optional(),
   relation: z.string().optional(),
+  age: z.coerce.number().int().min(0).max(17).nullable().optional(),
   gender: z.enum(["male", "female", "unisex"]).optional(),
   measurements: z.record(z.string(), z.unknown()).optional(),
   measurementId: z.string().uuid().nullable().optional(),
   productId: z.string().uuid().nullable().optional(),
+}).superRefine((body, ctx) => {
+  if (isChildRelation(body.relation) && body.age == null) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["age"], message: "Age is required for child family members." });
+  }
 });
 
 export const familyGroupsRouter = new Hono<AppBindings>();
@@ -221,6 +236,7 @@ familyGroupsRouter.post("/:groupId/members", requireAuth, zValidator("param", gr
       eventId: group.eventId,
       name: body.name,
       relation: body.relation,
+      age: body.age,
       gender: body.gender,
       measurements: measurementSnapshot,
       measurementId: body.measurementId,
@@ -306,6 +322,7 @@ familyGroupsRouter.patch(
       .set({
         name: body.name,
         relation: body.relation,
+        age: body.age === undefined ? undefined : body.age,
         gender: body.gender,
         measurements: measurementSnapshot,
         measurementId: body.measurementId === undefined ? undefined : body.measurementId,
@@ -379,6 +396,7 @@ familyGroupsRouter.post("/:groupId/add-to-cart", requireAuth, zValidator("param"
         member_id: member.id,
         member_name: member.name,
         member_gender: member.gender,
+        member_age: member.age,
         selection_type: design ? "custom_design" : "catalog_product",
         uploaded_design_id: design?.id,
       },

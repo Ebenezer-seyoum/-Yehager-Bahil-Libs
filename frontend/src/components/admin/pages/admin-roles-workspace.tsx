@@ -139,7 +139,7 @@ function titleCase(value: string) {
 function normalizeAction(action: string): MatrixAction | null {
   const value = action.toLowerCase();
   const match = (Object.keys(ACTION_ALIASES) as MatrixAction[]).find((key) =>
-    ACTION_ALIASES[key].includes(value),
+    ACTION_ALIASES[key].some((alias) => value === alias || value.endsWith(`.${alias}`)),
   );
   return match ?? null;
 }

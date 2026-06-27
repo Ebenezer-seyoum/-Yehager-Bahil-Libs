@@ -385,6 +385,7 @@ adminRouter.get("/summary-counts", requirePermission(PERMISSIONS.ALERTS_VIEW), a
   const customRequestTypes = new Set(["custom_design_submitted", "design_review"]);
   const catalogTypes = new Set(["new_order", "new_catalog_order"]);
   const refundTypes = new Set(["refund_issue", "refund_requested", "return_refund", "refund_pending"]);
+  const shippingTypes = new Set(["shipping_delivery_ready"]);
 
   const counts = {
     payment: 0,
@@ -392,12 +393,14 @@ adminRouter.get("/summary-counts", requirePermission(PERMISSIONS.ALERTS_VIEW), a
     custom_order: 0,
     catalog_order: 0,
     refund_issue: 0,
+    shipping_delivery: 0,
     total: 0,
     paymentIds: [] as string[],
     customRequestIds: [] as string[],
     customOrderIds: [] as string[],
     catalogOrderIds: [] as string[],
     refundIssueIds: [] as string[],
+    shippingDeliveryIds: [] as string[],
   };
 
   function orderHasUploadedDesign(order: typeof orderRows[number] | null | undefined) {
@@ -425,12 +428,19 @@ adminRouter.get("/summary-counts", requirePermission(PERMISSIONS.ALERTS_VIEW), a
     return Boolean(order.paymentStatus || order.paymentMethod || order.paymentCurrency);
   }
 
+  function isDeliveryReady(order: typeof orderRows[number]) {
+    const status = String(order.status ?? "").toLowerCase();
+    const deliveryStatus = String(order.deliveryStatus ?? "not_started").toLowerCase();
+    return ["fulfilled", "shipped", "ready_for_pickup", "delivered"].includes(status) || deliveryStatus !== "not_started";
+  }
+
   const customRequestRows = designRows.filter((design) =>
     ["submitted", "in_review", "under_review", "needs_changes"].includes(String(design.status ?? "").toLowerCase()),
   );
   const customOrderRows = orderRows.filter((order) => isCustomOrder(order) && orderNeedsReview(order));
   const catalogOrderRows = orderRows.filter((order) => !isCustomOrder(order) && orderNeedsReview(order));
   const paymentRows = orderRows.filter((order) => hasPaymentRecord(order));
+  const shippingDeliveryRows = orderRows.filter(isDeliveryReady);
 
   counts.custom_request = customRequestRows.length;
   counts.customRequestIds = customRequestRows.map((design) => String(design.id));
@@ -440,6 +450,8 @@ adminRouter.get("/summary-counts", requirePermission(PERMISSIONS.ALERTS_VIEW), a
   counts.catalogOrderIds = catalogOrderRows.map((order) => String(order.id));
   counts.payment = paymentRows.length;
   counts.paymentIds = paymentRows.map((order) => String(order.id));
+  counts.shipping_delivery = shippingDeliveryRows.length;
+  counts.shippingDeliveryIds = shippingDeliveryRows.map((order) => String(order.id));
 
   unresolvedAlerts.forEach((alert) => {
     const entityId = alert.entityId ? String(alert.entityId) : null;
@@ -458,6 +470,13 @@ adminRouter.get("/summary-counts", requirePermission(PERMISSIONS.ALERTS_VIEW), a
       if (entityId) counts.refundIssueIds.push(entityId);
       return;
     }
+    if (shippingTypes.has(type)) {
+      if (entityId && !counts.shippingDeliveryIds.includes(entityId)) {
+        counts.shipping_delivery++;
+        counts.shippingDeliveryIds.push(entityId);
+      }
+      return;
+    }
     if (catalogTypes.has(type)) {
       if (isCustomOrder(order)) {
         if (entityId && !counts.customOrderIds.includes(entityId)) {
@@ -473,7 +492,7 @@ adminRouter.get("/summary-counts", requirePermission(PERMISSIONS.ALERTS_VIEW), a
     }
   });
 
-  counts.total = counts.payment + counts.custom_request + counts.custom_order + counts.catalog_order + counts.refund_issue;
+  counts.total = counts.payment + counts.custom_request + counts.custom_order + counts.catalog_order + counts.refund_issue + counts.shipping_delivery;
 
   return c.json({ data: counts });
 });
@@ -1378,7 +1397,7 @@ adminRouter.delete(
 
 adminRouter.post(
   "/orders/:orderId/documents",
-  requirePermission(PERMISSIONS.ORDERS_EDIT),
+  requirePermission(PERMISSIONS.DOCUMENTS_UPLOAD),
   zValidator("param", orderParamSchema),
   zValidator("json", documentSchema),
   async (c) => {
@@ -1429,7 +1448,7 @@ adminRouter.post(
 
 adminRouter.delete(
   "/orders/:orderId/documents",
-  requirePermission(PERMISSIONS.ORDERS_EDIT),
+  requirePermission(PERMISSIONS.DOCUMENTS_DELETE),
   zValidator("param", orderParamSchema),
   zValidator("json", deleteDocumentSchema),
   async (c) => {

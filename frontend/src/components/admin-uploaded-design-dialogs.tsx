@@ -22,6 +22,7 @@ export type UploadedDesign = {
   sideImageUrl?: string | null;
   backImageUrl?: string | null;
   detailImageUrl?: string | null;
+  childAge?: number | string | null;
   fabricType?: string | null;
   embroideryStyle?: string | null;
   colorPreference?: string | null;
@@ -243,6 +244,7 @@ function ViewDialog({ design, onClose }: { design: UploadedDesign; onClose: () =
                                <Field label="Submission Number" value={design.submissionNumber} />
                                <Field label="Design Category" value={isGroup ? "Group Custom" : "Individual Custom"} />
                                <Field label="Submission Date" value={(design.submittedAt || design.createdAt) ? new Date(String(design.submittedAt ?? design.createdAt)).toLocaleString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : "N/A"} />
+                               <Field label="Child Age" value={design.childAge ?? "Not Provided"} />
                                <Field label="Fabric Preference" value={design.fabricType} />
                                <Field label="Embroidery Preference" value={design.embroideryStyle} />
                                <Field label="Color Preference" value={design.colorPreference} />

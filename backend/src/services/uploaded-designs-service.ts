@@ -22,6 +22,7 @@ export async function createUploadedDesignSubmission(payload: {
   sideImageUrl?: string;
   backImageUrl?: string;
   detailImageUrl?: string;
+  childAge?: number;
   fabricType?: string;
   embroideryStyle?: string;
   colorPreference?: string;
@@ -64,6 +65,7 @@ export async function createUploadedDesignSubmission(payload: {
       sideImageUrl: payload.sideImageUrl,
       backImageUrl: payload.backImageUrl,
       detailImageUrl: payload.detailImageUrl,
+      childAge: payload.childAge,
       fabricType: payload.fabricType,
       embroideryStyle: payload.embroideryStyle,
       colorPreference: payload.colorPreference,
@@ -263,6 +265,7 @@ export async function reviewUploadedDesign(payload: {
             fabric_type: submission.fabricType,
             embroidery_style: submission.embroideryStyle,
             color_preference: submission.colorPreference,
+            child_age: submission.childAge,
             contact_address: submission.contactAddress,
             admin_note: payload.reason,
             estimated_delivery_label: payload.estimatedDeliveryLabel,

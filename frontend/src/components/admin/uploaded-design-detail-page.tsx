@@ -35,6 +35,7 @@ export type UploadedDesignDetailData = {
   sideImageUrl?: string | null;
   backImageUrl?: string | null;
   detailImageUrl?: string | null;
+  childAge?: number | string | null;
   fabricType?: string | null;
   embroideryStyle?: string | null;
   colorPreference?: string | null;
@@ -440,6 +441,7 @@ export function UploadedDesignDetailPage({
 
             <div className="space-y-4">
               <DetailTile label="Submission Number" value={design.submissionNumber} icon={ClipboardList} />
+              <DetailTile label="Child Age" value={design.childAge} icon={UserRound} />
               <DetailTile label="Fabric Preference" value={design.fabricType} icon={Sparkles} />
               <DetailTile label="Embroidery Style" value={design.embroideryStyle} icon={Palette} />
               <DetailTile label="Color Preference" value={design.colorPreference} icon={Palette} />

@@ -20,12 +20,14 @@ async function getAdminNotificationCounts() {
         custom_order: number;
         catalog_order: number;
         refund_issue: number;
+        shipping_delivery: number;
         total: number;
         paymentIds?: string[];
         customRequestIds?: string[];
         customOrderIds?: string[];
         catalogOrderIds?: string[];
         refundIssueIds?: string[];
+        shippingDeliveryIds?: string[];
       };
     }>("/api/v1/admin/summary-counts");
     const counts = response?.data;
@@ -41,13 +43,15 @@ async function getAdminNotificationCounts() {
       customOrderIds: counts?.customOrderIds ?? [],
       refundIssues: counts?.refund_issue ?? 0,
       refundIssueIds: counts?.refundIssueIds ?? [],
+      shippingDelivery: counts?.shipping_delivery ?? 0,
+      shippingDeliveryIds: counts?.shippingDeliveryIds ?? [],
       total: counts?.total ?? 0,
       // Keep other placeholders for now if needed by DashboardShell
       alerts: 0,
       support: 0,
     };
   } catch {
-    return { orders: 0, orderIds: [], payments: 0, paymentIds: [], customDesigns: 0, customDesignIds: [], customOrders: 0, customOrderIds: [], refundIssues: 0, refundIssueIds: [], total: 0, alerts: 0, support: 0 };
+    return { orders: 0, orderIds: [], payments: 0, paymentIds: [], customDesigns: 0, customDesignIds: [], customOrders: 0, customOrderIds: [], refundIssues: 0, refundIssueIds: [], shippingDelivery: 0, shippingDeliveryIds: [], total: 0, alerts: 0, support: 0 };
   }
 }
 

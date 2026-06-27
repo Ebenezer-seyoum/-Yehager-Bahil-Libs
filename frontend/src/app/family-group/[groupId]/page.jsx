@@ -52,6 +52,7 @@ export default async function FamilyGroupPage({ params, searchParams }) {
       body: {
         name: String(formData.get("name") ?? "").trim(),
         relation: String(formData.get("relation") ?? "Other"),
+        age: formData.get("age") ? Number(formData.get("age")) : undefined,
         gender: String(formData.get("gender") ?? "male"),
         measurements,
         measurementId: measurementId || undefined,

@@ -5,13 +5,17 @@ import { requireAuth } from "../../middleware/auth.js";
 import { requirePermission } from "../../middleware/permissions.js";
 import { PERMISSIONS } from "../../lib/auth/permissions.js";
 import {
+  createOrderNote,
+  deleteOrderNote,
   createCheckoutIntent,
   getOrderDetailsForAdmin,
   getOrderDetailsForCurrentUser,
   getOrdersForAdmin,
   getOrdersForCurrentUser,
+  listOrderNotes,
   previewCheckoutCoupon,
   submitEtbPaymentProof,
+  updateOrderNote,
   updateOrderAdminState,
 } from "../../services/orders-service.js";
 import { systemAlerts } from "../../lib/db/schema.js";
@@ -62,6 +66,17 @@ const adminUpdateSchema = z.object({
     .optional(),
   paymentStatus: z.enum(["pending", "paid", "failed", "refunded", "unpaid"]).optional(),
   fulfillmentType: z.enum(["mail", "pickup"]).optional(),
+  carrier: z.string().trim().max(120).optional(),
+  deliveryStatus: z.string().trim().max(80).optional(),
+  trackingNumber: z.string().trim().max(120).optional().nullable(),
+  deliveryNote: z.string().trim().max(1000).optional(),
+});
+const noteSchema = z.object({
+  noteType: z.enum(["admin", "tailor", "delivery", "customer"]),
+  note: z.string().trim().min(3).max(1000),
+});
+const notePatchSchema = z.object({
+  note: z.string().trim().min(3).max(1000),
 });
 
 export const ordersRouter = new Hono<AppBindings>();
@@ -145,11 +160,56 @@ ordersRouter.get("/admin/:orderId", requireAuth, requirePermission(PERMISSIONS.O
     })
     .where(
       and(
-        sql`${systemAlerts.type} IN ('new_order', 'new_catalog_order', 'payment_review', 'payment_proof_uploaded', 'refund_issue', 'refund_requested', 'return_refund', 'refund_pending')`,
+        sql`${systemAlerts.type} IN ('new_order', 'new_catalog_order', 'payment_review', 'payment_proof_uploaded', 'refund_issue', 'refund_requested', 'return_refund', 'refund_pending', 'shipping_delivery_ready')`,
         eq(systemAlerts.entityId, orderId)
       )
     );
 
+  return c.json({ data });
+});
+
+ordersRouter.get("/:orderId/notes", requireAuth, requirePermission(PERMISSIONS.ORDER_NOTES_VIEW), async (c) => {
+  const orderId = c.req.param("orderId");
+  const data = await listOrderNotes(orderId);
+  return c.json({ data });
+});
+
+ordersRouter.post("/:orderId/notes", requireAuth, requirePermission(PERMISSIONS.ORDERS_VIEW), zValidator("json", noteSchema), async (c) => {
+  const authUser = c.get("authUser");
+  const orderId = c.req.param("orderId");
+  const body = c.req.valid("json");
+  const data = await createOrderNote({
+    orderId,
+    noteType: body.noteType,
+    note: body.note,
+    userEmail: authUser?.email,
+  });
+  return c.json({ data }, 201);
+});
+
+ordersRouter.patch("/:orderId/notes/:noteId", requireAuth, requirePermission(PERMISSIONS.ORDERS_VIEW), zValidator("json", notePatchSchema), async (c) => {
+  const authUser = c.get("authUser");
+  const orderId = c.req.param("orderId");
+  const noteId = c.req.param("noteId");
+  const body = c.req.valid("json");
+  const data = await updateOrderNote({
+    orderId,
+    noteId,
+    note: body.note,
+    userEmail: authUser?.email,
+  });
+  return c.json({ data });
+});
+
+ordersRouter.delete("/:orderId/notes/:noteId", requireAuth, requirePermission(PERMISSIONS.ORDERS_VIEW), async (c) => {
+  const authUser = c.get("authUser");
+  const orderId = c.req.param("orderId");
+  const noteId = c.req.param("noteId");
+  const data = await deleteOrderNote({
+    orderId,
+    noteId,
+    userEmail: authUser?.email,
+  });
   return c.json({ data });
 });
 
@@ -169,6 +229,10 @@ ordersRouter.patch("/:orderId/admin-state", requireAuth, requirePermission(PERMI
     status: body.status,
     paymentStatus: body.paymentStatus,
     fulfillmentType: body.fulfillmentType,
+    carrier: body.carrier,
+    deliveryStatus: body.deliveryStatus,
+    trackingNumber: body.trackingNumber ?? undefined,
+    deliveryNote: body.deliveryNote,
   });
   return c.json({ data });
 });

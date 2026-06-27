@@ -36,12 +36,18 @@ const createSchema = z.object({
   fabricType: z.string().max(120).optional(),
   embroideryStyle: z.string().max(120).optional(),
   colorPreference: z.string().max(120).optional(),
+  childAge: z.coerce.number().int().min(0).max(17).optional(),
   measurementSnapshot: z.record(z.string(), z.unknown()).optional(),
   contactPhone: z.string().max(40).optional(),
   contactTelegram: z.string().max(80).optional(),
   contactAddress: z.record(z.string(), z.unknown()).optional(),
   familyGroupId: z.string().uuid().optional(),
   eventId: z.string().uuid().optional(),
+}).superRefine((body, ctx) => {
+  const isKidsOutfit = body.designTitle.toLowerCase().includes("kid") || body.designTitle.toLowerCase().includes("child");
+  if (isKidsOutfit && body.childAge === undefined) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["childAge"], message: "Child age is required for kids outfits." });
+  }
 });
 
 const reviewSchema = z.object({
@@ -67,6 +73,7 @@ uploadedDesignsRouter.post("/", requireAuth, zValidator("json", createSchema), a
     sideImageUrl: body.sideImageUrl,
     backImageUrl: body.backImageUrl,
     detailImageUrl: body.detailImageUrl,
+    childAge: body.childAge,
     fabricType: body.fabricType,
     embroideryStyle: body.embroideryStyle,
     colorPreference: body.colorPreference,

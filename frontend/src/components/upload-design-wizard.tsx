@@ -41,7 +41,7 @@ type SavedMeasurementSnapshot = Record<string, unknown> & {
 const steps = ["Design", "Fabric & Style", "Measurements", "Contact & Submit"] as const;
 
 const outfitTypes = [
-  "Men's Habesha Kemis",
+  "Men's Habesha Kuta",
   "Women's Habesha Kemis",
   "Kids Outfit",
   "Traditional Bridal Set",
@@ -239,6 +239,7 @@ export function UploadDesignWizard({ familyGroupId, eventId, savedMeasurement }:
   const [submittedNumber, setSubmittedNumber] = useState<string | null>(null);
 
   const [outfitType, setOutfitType] = useState("");
+  const [childAge, setChildAge] = useState("");
   const [fabricType, setFabricType] = useState("");
   const [embroideryStyle, setEmbroideryStyle] = useState("");
   const [colorPreference, setColorPreference] = useState("");
@@ -262,6 +263,9 @@ export function UploadDesignWizard({ familyGroupId, eventId, savedMeasurement }:
     () => [frontImage, sideImage, backImage, detailImage].filter(Boolean).length,
     [frontImage, sideImage, backImage, detailImage],
   );
+  const isKidsOutfit = outfitType.toLowerCase().includes("kid") || outfitType.toLowerCase().includes("child");
+  const childAgeNumber = Number(childAge);
+  const isValidChildAge = childAge.trim() !== "" && Number.isInteger(childAgeNumber) && childAgeNumber >= 0 && childAgeNumber <= 17;
 
   async function handleUpload(which: UploadKey, file: File) {
     setError(null);
@@ -281,7 +285,7 @@ export function UploadDesignWizard({ familyGroupId, eventId, savedMeasurement }:
   }
 
   function canProceed() {
-    if (step === 0) return Boolean(frontImage && backImage && outfitType);
+    if (step === 0) return Boolean(frontImage && backImage && outfitType && (!isKidsOutfit || isValidChildAge));
     if (step === 1) return Boolean(fabricType && embroideryStyle && colorPreference);
     if (step === 2) return measurementsSaved;
     return Boolean(contactPhone.trim());
@@ -289,7 +293,7 @@ export function UploadDesignWizard({ familyGroupId, eventId, savedMeasurement }:
 
   async function submitAll() {
     if (!canProceed() || !frontImage || !backImage) {
-      setError("Please complete all required fields before submitting.");
+      setError(isKidsOutfit && !isValidChildAge ? "Please enter a valid child age from 0 to 17." : "Please complete all required fields before submitting.");
       return;
     }
 
@@ -306,12 +310,14 @@ export function UploadDesignWizard({ familyGroupId, eventId, savedMeasurement }:
           sideImageUrl: sideImage?.url,
           backImageUrl: backImage.url,
           detailImageUrl: detailImage?.url,
+          childAge: isKidsOutfit ? childAgeNumber : undefined,
           fabricType,
           embroideryStyle,
           colorPreference,
           measurementSnapshot: {
             gender,
             outfitType,
+            ...(isKidsOutfit ? { childAge: childAgeNumber } : {}),
             ...(hasMeasurement && !isMeasurementEditorOpen
               ? savedMeasurement
               : measurementSnapshotFromStringValues(measurements, { hemStyle, pressingStyle })),
@@ -414,9 +420,33 @@ export function UploadDesignWizard({ familyGroupId, eventId, savedMeasurement }:
             <h3 className="mb-4 text-sm font-black text-foreground">What type of outfit is this? <span className="text-primary">*</span></h3>
             <div className="grid gap-2 sm:grid-cols-2">
               {outfitTypes.map((option) => (
-                <ChoiceButton key={option} label={option} selected={outfitType === option} onClick={() => setOutfitType(option)} />
+                <ChoiceButton
+                  key={option}
+                  label={option}
+                  selected={outfitType === option}
+                  onClick={() => {
+                    setOutfitType(option);
+                    if (!option.toLowerCase().includes("kid") && !option.toLowerCase().includes("child")) setChildAge("");
+                  }}
+                />
               ))}
             </div>
+            {isKidsOutfit ? (
+              <label className="mt-4 block text-sm font-semibold text-foreground">
+                Child Age <span className="text-primary">*</span>
+                <input
+                  type="number"
+                  min="0"
+                  max="17"
+                  step="1"
+                  value={childAge}
+                  onChange={(event) => setChildAge(event.target.value)}
+                  placeholder="Enter child age"
+                  className="mt-2 h-12 w-full rounded-xl border border-input bg-black px-4 text-base outline-none focus:border-primary"
+                  required
+                />
+              </label>
+            ) : null}
           </section>
         </>
       ) : null}
@@ -702,6 +732,7 @@ export function UploadDesignWizard({ familyGroupId, eventId, savedMeasurement }:
             <h3 className="font-black text-primary">Order Summary</h3>
             <div className="mt-3 grid grid-cols-[130px_1fr] gap-y-1 text-xs">
               <span className="font-bold text-foreground">Outfit:</span><span className="text-muted-foreground">{outfitType}</span>
+              {isKidsOutfit ? <><span className="font-bold text-foreground">Child Age:</span><span className="text-muted-foreground">{childAge || "Not provided"}</span></> : null}
               <span className="font-bold text-foreground">Fabric:</span><span className="text-muted-foreground">{fabricType}</span>
               <span className="font-bold text-foreground">Embroidery:</span><span className="text-muted-foreground">{embroideryStyle}</span>
               <span className="font-bold text-foreground">Color Theme:</span><span className="text-muted-foreground">{colorPreference}</span>

@@ -1,12 +1,15 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { type ReactNode, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { jsPDF } from "jspdf";
+import autoTable from "jspdf-autotable";
 import {
   CalendarDays,
   Check,
   ChevronDown,
   ChevronRight,
+  Download,
   Eye,
   EyeOff,
   FileText,
@@ -38,7 +41,7 @@ type OrderRow = Record<string, any>;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type MeasurementRow = Record<string, any>;
 type MeasurementDisplayRow = { label: string; values: Record<string, unknown>; orderId?: string; updatedAt?: string; meta?: string };
-type FamilyDisplayRow = MeasurementDisplayRow & { id: string; relation: string; gender?: string; orderLabel?: string; eventName?: string };
+type FamilyDisplayRow = MeasurementDisplayRow & { id: string; relation: string; gender?: string; age?: string; orderLabel?: string; eventName?: string };
 type FamilyGroupDisplayRow = {
   id: string;
   name: string;
@@ -79,7 +82,14 @@ type ActivityData = {
   familyGroups?: Array<Record<string, unknown>>;
   familyMembers?: Array<Record<string, unknown>>;
 };
-type CustomerSectionId = "personal" | "contact" | "measurements" | "family" | "events" | "orders" | "account" | "notes";
+type CustomerSectionId = "personal" | "contact" | "measurements" | "family" | "events" | "orders" | "documents" | "account" | "notes";
+
+type CustomerReportStats = {
+  totalOrders: number;
+  totalSpent: number;
+  averageOrder: number;
+  latestOrderDate?: string | null;
+};
 
 function formatDate(value?: string | null) {
   if (!value) return "Not provided";
@@ -132,6 +142,46 @@ function Field({ label, value, href }: { label: string; value?: string | null; h
       ) : (
         <div className="mt-1 text-sm font-semibold text-slate-950">{display}</div>
       )}
+    </div>
+  );
+}
+
+function DocumentListRow({
+  title,
+  tags,
+  status,
+  children,
+}: {
+  title: string;
+  tags: string[];
+  status?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div className="flex min-w-0 items-center gap-4">
+          <span className="grid h-16 w-16 shrink-0 place-items-center rounded-2xl border border-slate-200 bg-white text-slate-600 shadow-sm">
+            <FileText className="h-7 w-7" />
+          </span>
+          <div className="min-w-0">
+            <h3 className="truncate text-base font-extrabold text-slate-950">{title}</h3>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {tags.map((tag) => (
+                <span key={tag} className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-extrabold uppercase text-slate-600">
+                  {tag}
+                </span>
+              ))}
+              {status ? (
+                <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-extrabold uppercase text-emerald-800">
+                  {status}
+                </span>
+              ) : null}
+            </div>
+          </div>
+        </div>
+        <div className="flex shrink-0 flex-wrap items-center gap-2">{children}</div>
+      </div>
     </div>
   );
 }
@@ -189,6 +239,45 @@ function SelectInput({
   );
 }
 
+function validateEmail(value: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+}
+
+function validatePhone(value: string) {
+  return /^[+\d][\d\s-]{6,24}$/.test(value.trim());
+}
+
+function cleanOptionalText(value: string) {
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+}
+
+function friendlyApiError(message: unknown) {
+  const raw = String(message ?? "").trim();
+  if (!raw) return "Please check the form and try again.";
+
+  try {
+    const parsed = JSON.parse(raw);
+    const issues = parsed?.error?.issues ?? parsed?.issues;
+    if (Array.isArray(issues) && issues.length) {
+      const issue = issues[0];
+      const field = Array.isArray(issue.path) ? String(issue.path.at(-1) ?? "field") : "field";
+      if (field === "phone") return "Phone number cannot be empty. Add a valid phone number or leave it blank.";
+      if (field === "email") return "Please enter a valid email address.";
+      if (field === "name") return "Customer name is required.";
+      return `Please check ${field.replaceAll("_", " ")} and try again.`;
+    }
+  } catch {
+    // Backend errors are sometimes already plain text.
+  }
+
+  if (raw.includes('"phone"') || raw.toLowerCase().includes("phone")) {
+    return "Phone number cannot be empty. Add a valid phone number or leave it blank.";
+  }
+  if (raw.includes("too_small") || raw.includes("expected string")) return "Please check the highlighted fields and try again.";
+  return raw.length > 180 ? "Please check the form and try again." : raw;
+}
+
 function MeasurementInput({ label, value }: { label: string; value: unknown }) {
   const display = value !== null && value !== undefined && String(value).trim() ? String(value) : "";
   return (
@@ -207,6 +296,55 @@ function orderTotal(order: OrderRow) {
 
 function orderCustomerEmail(order: OrderRow) {
   return String(order.userEmail ?? order.email ?? order.customerEmail ?? "").toLowerCase();
+}
+
+function orderShippingMethod(order: OrderRow) {
+  const raw = order.shippingMethod ?? order.shipping_method ?? order.deliveryMethod ?? order.delivery_method ?? order.fulfillmentMethod ?? order.shippingType ?? order.deliveryType;
+  const value = hasMeasurementValue(raw) ? String(raw) : "Not provided";
+  const normalized = value.toLowerCase();
+  if (normalized.includes("ems") || normalized.includes("mail")) return "EMS";
+  if (normalized.includes("office") || normalized.includes("pickup")) return "Office pickup";
+  return value;
+}
+
+function orderStatus(order: OrderRow) {
+  return String(order.status ?? order.orderStatus ?? order.productionStatus ?? "Not provided");
+}
+
+function hasUploadedDesign(order: OrderRow) {
+  const items = Array.isArray(order.items) ? order.items : Array.isArray(order.orderItems) ? order.orderItems : [];
+  return items.some((item: Record<string, unknown>) => (
+    item.uploaded_design_id ||
+    item.uploadedDesignId ||
+    item.item_type === "custom_design" ||
+    item.itemType === "custom_design"
+  )) || Boolean(order.uploadedDesignId ?? order.uploaded_design_id ?? order.customDesignId ?? order.custom_design_id);
+}
+
+function normalizedOrderKind(order: OrderRow) {
+  const type = String(order.orderType ?? order.type ?? "catalog_order").toLowerCase();
+  if (type === "custom_order" || type === "custom_design_order" || type === "custom" || type.includes("custom")) return "custom_order";
+  if (type === "group_order") return hasUploadedDesign(order) ? "custom_order" : "catalog_order";
+  return "catalog_order";
+}
+
+function normalizedOrderMode(order: OrderRow) {
+  const mode = String(order.orderMode ?? order.mode ?? "").toLowerCase();
+  if (
+    mode === "group" ||
+    String(order.orderType ?? "").toLowerCase() === "group_order" ||
+    Boolean(order.groupId ?? order.groupOrderId ?? order.familyGroupId ?? order.family_group_id ?? order.eventId) ||
+    Boolean(Array.isArray(order.members) && order.members.length)
+  ) {
+    return "group";
+  }
+  return "individual";
+}
+
+function orderType(order: OrderRow) {
+  const mode = normalizedOrderMode(order) === "group" ? "Group" : "Individual";
+  const kind = normalizedOrderKind(order) === "custom_order" ? "Custom" : "Catalog";
+  return `${mode} ${kind}`;
 }
 
 function normalizeMeasurementValues(values: Record<string, unknown> = {}) {
@@ -260,11 +398,12 @@ function collectFamilyMembers(orders: OrderRow[], activity?: ActivityData | null
       label: String(member.name ?? "Family Member"),
       relation: String(member.relation ?? "Member"),
       gender: hasMeasurementValue(member.gender) ? String(member.gender) : undefined,
+      age: hasMeasurementValue(member.age) ? String(member.age) : undefined,
       values,
       orderLabel: group?.groupName ? String(group.groupName) : undefined,
       eventName: hasMeasurementValue(group?.eventName) ? String(group?.eventName) : undefined,
       updatedAt: hasMeasurementValue(member.updatedAt) ? String(member.updatedAt) : undefined,
-      meta: [member.gender, group?.groupName].filter(Boolean).join(" - "),
+      meta: [member.gender, hasMeasurementValue(member.age) ? `Age ${member.age}` : null, group?.groupName].filter(Boolean).join(" - "),
     });
   }
   for (const order of orders) {
@@ -276,11 +415,12 @@ function collectFamilyMembers(orders: OrderRow[], activity?: ActivityData | null
         label: String(member.name ?? `Family Member ${index + 1}`),
         relation: String(member.relation ?? member.role ?? member.type ?? "Member"),
         gender: hasMeasurementValue(member.gender) ? String(member.gender) : undefined,
+        age: hasMeasurementValue(member.age ?? member.member_age) ? String(member.age ?? member.member_age) : undefined,
         values,
         orderId: order.id,
         orderLabel: order.orderNumber ? `Order #${order.orderNumber}` : undefined,
         eventName: hasMeasurementValue(order.eventName) ? String(order.eventName) : undefined,
-        meta: [member.gender, order.orderNumber ? `Order #${order.orderNumber}` : null].filter(Boolean).join(" - "),
+        meta: [member.gender, hasMeasurementValue(member.age ?? member.member_age) ? `Age ${member.age ?? member.member_age}` : null, order.orderNumber ? `Order #${order.orderNumber}` : null].filter(Boolean).join(" - "),
       });
     });
   }
@@ -325,10 +465,11 @@ function collectFamilyGroups(activity: ActivityData | null | undefined, fallback
           label: String(member.name ?? "Family Member"),
           relation: String(member.relation ?? "Member"),
           gender: hasMeasurementValue(member.gender) ? String(member.gender) : undefined,
+          age: hasMeasurementValue(member.age) ? String(member.age) : undefined,
           values,
           updatedAt: hasMeasurementValue(member.updatedAt) ? String(member.updatedAt) : undefined,
           eventName: hasMeasurementValue(group.eventName) ? String(group.eventName) : undefined,
-          meta: [member.gender, group.groupName].filter(Boolean).join(" - "),
+          meta: [member.gender, hasMeasurementValue(member.age) ? `Age ${member.age}` : null, group.groupName].filter(Boolean).join(" - "),
         };
       });
     return {
@@ -444,6 +585,241 @@ function MeasurementDisplayCard({ row, compact = false }: { row: MeasurementDisp
   );
 }
 
+function safeFilename(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "customer";
+}
+
+function downloadDateLabel() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function datedPdfFilename(name: string, label: string) {
+  return `${safeFilename(`${name} ${label}`)} (${downloadDateLabel()}).pdf`;
+}
+
+type MeasurementPdfPerson = MeasurementDisplayRow & { groupName?: string };
+
+function downloadUnifiedMeasurementPdf({
+  filename,
+  title,
+  subtitle,
+  customerName,
+  people,
+}: {
+  filename: string;
+  title: string;
+  subtitle?: string;
+  customerName?: string;
+  people: MeasurementPdfPerson[];
+}) {
+  const pdf = new jsPDF({ orientation: "portrait" });
+  const pageWidth = pdf.internal.pageSize.getWidth();
+  const margin = 14;
+
+  function ensureSpace(y: number, needed = 22) {
+    if (y + needed <= 284) return y;
+    pdf.addPage();
+    return 18;
+  }
+
+  pdf.setFontSize(16);
+  pdf.text(title, margin, 16);
+  pdf.setFontSize(9);
+  pdf.setTextColor(100, 116, 139);
+  pdf.text([subtitle, `Generated ${new Date().toLocaleString()}`].filter(Boolean).join(" - "), margin, 22);
+  pdf.setTextColor(15, 23, 42);
+
+  let y = 34;
+  let currentGroupName = "";
+  people.forEach((row, index) => {
+    if (row.groupName && row.groupName !== currentGroupName) {
+      y = ensureSpace(y, 24);
+      currentGroupName = row.groupName;
+      pdf.setFillColor(239, 246, 255);
+      pdf.setDrawColor(191, 219, 254);
+      pdf.roundedRect(margin, y - 8, pageWidth - margin * 2, 20, 2, 2, "FD");
+      pdf.setFontSize(9);
+      pdf.setTextColor(37, 99, 235);
+      pdf.text(`Customer Name: ${customerName ?? "Not provided"}`, margin + 4, y);
+      pdf.text(`Group Name: ${currentGroupName}`, margin + 4, y + 7);
+      pdf.setTextColor(15, 23, 42);
+      y += 22;
+    }
+
+    y = ensureSpace(index === 0 ? y : y + 8, 34);
+    pdf.setFillColor(248, 250, 252);
+    pdf.roundedRect(margin, y - 8, pageWidth - margin * 2, 20, 3, 3, "F");
+    pdf.setFontSize(11);
+    pdf.setTextColor(15, 23, 42);
+    pdf.text(`Member Name: ${row.label}`, margin + 4, y);
+    pdf.setFontSize(8);
+    pdf.setTextColor(100, 116, 139);
+    pdf.text(row.meta ?? "Measurement sheet", margin + 4, y + 6);
+    y += 18;
+
+    measurementDisplayGroups(row.values).filter((group) => group.title !== "Profile").forEach((group) => {
+      y = ensureSpace(y, 26);
+      pdf.setFontSize(9);
+      pdf.setTextColor(37, 99, 235);
+      pdf.text(group.title.toUpperCase(), margin, y);
+      y += 5;
+      group.fields.forEach(([field, value], fieldIndex) => {
+        const col = fieldIndex % 2;
+        const x = margin + col * 92;
+        if (col === 0 && fieldIndex > 0) y = ensureSpace(y + 16, 18);
+        pdf.setFillColor(255, 255, 255);
+        pdf.setDrawColor(226, 232, 240);
+        pdf.roundedRect(x, y, 84, 12, 2, 2, "FD");
+        pdf.setFontSize(7);
+        pdf.setTextColor(100, 116, 139);
+        pdf.text(field, x + 3, y + 4);
+        pdf.setFontSize(8);
+        pdf.setTextColor(15, 23, 42);
+        pdf.text(String(value ?? "Not provided"), x + 3, y + 9);
+      });
+      y += group.fields.length ? 18 : 4;
+    });
+
+    if (index < people.length - 1) {
+      y = ensureSpace(y + 4, 10);
+      pdf.setDrawColor(15, 23, 42);
+      pdf.setLineWidth(0.8);
+      pdf.line(margin, y, pageWidth - margin, y);
+      y += 6;
+    }
+  });
+
+  pdf.save(filename);
+}
+
+function downloadMeasurementPdf(filename: string, title: string, rows: MeasurementDisplayRow[], subtitle?: string) {
+  downloadUnifiedMeasurementPdf({ filename, title, subtitle, people: rows });
+}
+
+function downloadGroupMeasurementPdf({
+  filename,
+  customerName,
+  title,
+  groups,
+}: {
+  filename: string;
+  customerName: string;
+  title: string;
+  groups: FamilyGroupDisplayRow[];
+}) {
+  const people = groups.flatMap((group) =>
+    group.members
+      .filter((member) => Object.values(member.values).some(hasMeasurementValue))
+      .map((member) => ({
+        ...member,
+        groupName: group.name,
+      })),
+  );
+  downloadUnifiedMeasurementPdf({
+    filename,
+    title,
+    subtitle: `Customer Name: ${customerName}${groups.length === 1 ? ` | Group Name: ${groups[0]?.name ?? ""}` : " | Group Name: All groups"}`,
+    customerName,
+    people,
+  });
+}
+
+function downloadCustomerReportPdf({
+  customer,
+  fullName,
+  stats,
+  orders,
+  familyGroups,
+  events,
+}: {
+  customer: Customer;
+  fullName: string;
+  stats: CustomerReportStats;
+  orders: OrderRow[];
+  familyGroups: FamilyGroupDisplayRow[];
+  events: EventDisplayRow[];
+}) {
+  const pdf = new jsPDF({ orientation: "landscape" });
+  const shippingCounts = orders.reduce<Record<string, number>>((counts, order) => {
+    const method = orderShippingMethod(order);
+    counts[method] = (counts[method] ?? 0) + 1;
+    return counts;
+  }, {});
+
+  pdf.setFillColor(15, 23, 42);
+  pdf.rect(0, 0, 297, 24, "F");
+  pdf.setTextColor(255, 255, 255);
+  pdf.setFontSize(16);
+  pdf.text("Customer Report", 14, 13);
+  pdf.setFontSize(9);
+  pdf.text(`${fullName} - Generated ${new Date().toLocaleString()}`, 14, 20);
+  pdf.text("Yehager Bahil Libs", 250, 15);
+  pdf.setTextColor(15, 23, 42);
+
+  autoTable(pdf, {
+    startY: 32,
+    head: [["Customer", "Email", "Phone", "Location", "Status"]],
+    body: [[fullName, String(customer.email ?? "Not provided"), String(customer.phone ?? "Not provided"), [customer.city, customer.country].filter(Boolean).join(", ") || "Not provided", String(customer.accountStatus ?? customer.status ?? "Not provided")]],
+    styles: { fontSize: 8 },
+    headStyles: { fillColor: [37, 99, 235] },
+  });
+
+  autoTable(pdf, {
+    startY: 58,
+    head: [["Total Orders", "Total Revenue", "Average Order", "Group Orders", "Events", "Latest Order"]],
+    body: [[String(stats.totalOrders), formatMoney(stats.totalSpent), formatMoney(stats.averageOrder), String(familyGroups.length), String(events.length), formatDate(stats.latestOrderDate)]],
+    styles: { fontSize: 8 },
+    headStyles: { fillColor: [15, 23, 42] },
+  });
+
+  autoTable(pdf, {
+    startY: 84,
+    head: [["Shipping Method", "Orders"]],
+    body: Object.entries(shippingCounts).length ? Object.entries(shippingCounts).map(([method, count]) => [method, String(count)]) : [["Not provided", "0"]],
+    styles: { fontSize: 8 },
+    headStyles: { fillColor: [37, 99, 235] },
+  });
+
+  autoTable(pdf, {
+    startY: 112,
+    head: [["Order", "Order Type", "Status", "Payment", "Shipping", "Total", "Date"]],
+    body: orders.length
+      ? orders.map((order) => [
+          String(order.orderNumber ?? order.id ?? "Not provided"),
+          orderType(order),
+          orderStatus(order),
+          String(order.paymentStatus ?? "Not provided"),
+          orderShippingMethod(order),
+          formatMoney(orderTotal(order)),
+          formatDate(order.createdAt ?? order.orderDate),
+        ])
+      : [["No orders found", "", "", "", "", "", ""]],
+    styles: { fontSize: 7, cellWidth: "wrap" },
+    headStyles: { fillColor: [15, 23, 42] },
+  });
+
+  pdf.addPage("landscape");
+  autoTable(pdf, {
+    startY: 16,
+    head: [["Group Order", "Product", "Event", "Members", "Ready", "State", "Updated"]],
+    body: familyGroups.length
+      ? familyGroups.map((group) => [
+          group.name,
+          group.productName ?? "Not selected",
+          group.eventName ?? "Not provided",
+          String(group.memberCount),
+          String(group.readyMemberCount),
+          group.paid ? "Paid" : group.ordered ? "Ordered" : group.inCart ? "In cart" : "Draft",
+          formatDate(group.updatedAt),
+        ])
+      : [["No group orders found", "", "", "", "", "", ""]],
+    styles: { fontSize: 8 },
+    headStyles: { fillColor: [15, 23, 42] },
+  });
+
+  pdf.save(datedPdfFilename(fullName, "Customer Report"));
+}
+
 export function CustomerDetailClient({
   initialCustomer,
   orders = [],
@@ -492,6 +868,7 @@ export function CustomerDetailClient({
   const [expandedFamilyGroupId, setExpandedFamilyGroupId] = useState<string | null>(null);
   const [expandedFamilyMemberId, setExpandedFamilyMemberId] = useState<string | null>(null);
   const [expandedEventId, setExpandedEventId] = useState<string | null>(null);
+  const [expandedDocumentGroupId, setExpandedDocumentGroupId] = useState<string | null>(null);
 
   const passwordRules = {
     minLength: newPassword.length >= 8,
@@ -517,7 +894,7 @@ export function CustomerDetailClient({
       const orderEmail = orderCustomerEmail(order);
       return !emailKey || orderEmail === emailKey || String(order.userId ?? "") === String(customer.id ?? "");
     });
-  }, [activity?.orders, customer.email, customer.id, email, orders]);
+  }, [activity, customer.email, customer.id, email, orders]);
 
   const stats = useMemo(() => {
     const totalOrders = customerOrders.length;
@@ -537,6 +914,7 @@ export function CustomerDetailClient({
   const familyRows = useMemo(() => collectFamilyMembers(customerOrders, activity), [activity, customerOrders]);
   const familyGroupRows = useMemo(() => collectFamilyGroups(activity, familyRows), [activity, familyRows]);
   const eventRows = useMemo(() => collectEventRows(customerOrders, activity, familyGroupRows), [activity, customerOrders, familyGroupRows]);
+  const accountOwnerMeasurement = useMemo(() => measurementRows.find((row) => row.meta === "Saved profile") ?? null, [measurementRows]);
   const photoUrl = customer.profilePhotoUrl || customer.avatarUrl || null;
   const isBlocked = ["inactive", "blocked", "suspended"].includes(String(accountStatus).toLowerCase());
 
@@ -558,36 +936,54 @@ export function CustomerDetailClient({
 
   async function save() {
     if (!canEdit) return;
+    const cleanFirstName = firstName.trim();
+    const cleanFatherName = fatherName.trim();
+    const cleanGrandfatherName = grandfatherName.trim();
+    const cleanEmail = email.trim();
+    const cleanPhone = phone.trim();
+    if (!cleanFirstName) return await dashboardError("Validation Error", "First name is required.");
+    if (!cleanFatherName) return await dashboardError("Validation Error", "Father name is required.");
+    if (!cleanEmail) return await dashboardError("Validation Error", "Email address is required.");
+    if (!validateEmail(cleanEmail)) return await dashboardError("Validation Error", "Please enter a valid email address.");
+    if (cleanPhone && !validatePhone(cleanPhone)) return await dashboardError("Validation Error", "Please enter a valid phone number, or leave the field blank.");
+
     setBusy(true);
     try {
+      const profilePayload: Record<string, unknown> = {
+        firstName: cleanFirstName,
+        fatherName: cleanFatherName,
+        grandfatherName: cleanGrandfatherName || null,
+        gender: gender.trim() || undefined,
+        dateOfBirth: dateOfBirth || null,
+        country: cleanOptionalText(country),
+        city: cleanOptionalText(city),
+        address: cleanOptionalText(address),
+        notes: cleanOptionalText(notes),
+      };
+      const body: Record<string, unknown> = {
+        name: [cleanFirstName, cleanFatherName, cleanGrandfatherName].filter(Boolean).join(" ") || fullName,
+        email: cleanEmail,
+        phone: cleanPhone || null,
+        profile: profilePayload,
+      };
+      if (["active", "invited", "pending"].includes(accountStatus)) {
+        body.accountStatus = accountStatus;
+      }
       const res = await fetch(`/api/backend/admin/customers/${customer.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: [firstName, fatherName, grandfatherName].map((part) => part.trim()).filter(Boolean).join(" ") || fullName,
-          email,
-          phone,
-          accountStatus,
-          profile: {
-            firstName,
-            fatherName,
-            grandfatherName,
-            gender,
-            dateOfBirth: dateOfBirth || null,
-            country,
-            city,
-            address,
-            notes,
-          },
-        }),
+        body: JSON.stringify(body),
       });
-      if (!res.ok) throw new Error("Update failed");
+      const json = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(friendlyApiError(json?.message ?? json));
+      const nextCustomer = json?.data?.user ?? json?.data;
+      if (nextCustomer) setCustomer(nextCustomer);
       await dashboardSuccess("Customer Updated", "Customer profile saved successfully.");
       setEditMode(false);
       await refreshDetail();
       router.refresh();
     } catch (e) {
-      await dashboardError("Update Failed", e instanceof Error ? e.message : "Unable to update customer.");
+      await dashboardError("Update Failed", friendlyApiError(e instanceof Error ? e.message : "Unable to update customer."));
     } finally {
       setBusy(false);
     }
@@ -772,6 +1168,7 @@ export function CustomerDetailClient({
           { id: "family", label: "Family Members", icon: Users },
           { id: "events", label: "Event Participation", icon: CalendarDays },
           { id: "orders", label: "Order History", icon: ShoppingBag },
+          { id: "documents", label: "Documents", icon: FileText },
           { id: "account", label: "Account Overview", icon: FileText },
           { id: "notes", label: "Internal Notes", icon: NotebookPen },
         ]}
@@ -986,7 +1383,7 @@ export function CustomerDetailClient({
                                     <div>
                                       <p className="font-bold text-slate-950">{member.label}</p>
                                       <p className="mt-1 text-xs font-semibold text-slate-500">
-                                        {[member.relation, member.gender, `${measurementCount} measurements`].filter(Boolean).join(" - ")}
+                                        {[member.relation, member.age ? `Age ${member.age}` : null, member.gender, `${measurementCount} measurements`].filter(Boolean).join(" - ")}
                                       </p>
                                     </div>
                                     {memberExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
@@ -1158,12 +1555,139 @@ export function CustomerDetailClient({
           </section>
         ) : null}
 
+        {activeSection === "documents" ? (
+          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div>
+              <h2 className="text-base font-bold text-slate-900">Documents & Attachments</h2>
+              <p className="mt-1 text-sm text-slate-600">Download customer measurements, group measurement sheets, and the professional customer report.</p>
+            </div>
+
+            <div className="mt-5 space-y-4">
+              <DocumentListRow title="Own Measurement Sheet" tags={["Required", "Measurements"]} status={accountOwnerMeasurement ? "Ready" : undefined}>
+                {accountOwnerMeasurement ? (
+                  <button
+                    type="button"
+                    onClick={() => downloadMeasurementPdf(datedPdfFilename(fullName, "Own Measurement Sheet"), "Own Measurement Sheet", [accountOwnerMeasurement], `Customer Name: ${fullName}`)}
+                    className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-slate-950 px-3 text-xs font-bold text-white shadow-sm hover:bg-slate-800"
+                  >
+                    <Download className="h-4 w-4" /> Download
+                  </button>
+                ) : (
+                  <span className="inline-flex h-9 items-center rounded-lg border border-dashed border-slate-300 px-3 text-xs font-bold text-slate-400">
+                    Not available
+                  </span>
+                )}
+              </DocumentListRow>
+
+              <div className="rounded-2xl border border-slate-200 bg-slate-50">
+                <DocumentListRow title="Group Measurement Sheet" tags={["Required", "Group", "Measurements"]} status={familyGroupRows.length ? `${familyGroupRows.length} groups` : undefined}>
+                  <button
+                    type="button"
+                    onClick={() => setExpandedDocumentGroupId(expandedDocumentGroupId === "all-groups" ? null : "all-groups")}
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm hover:bg-slate-50"
+                    aria-label="Show group measurement sheets"
+                  >
+                    {expandedDocumentGroupId === "all-groups" ? <ChevronDown className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
+                  </button>
+                  {familyGroupRows.length ? (
+                    <button
+                      type="button"
+                      onClick={() => downloadGroupMeasurementPdf({
+                        filename: datedPdfFilename(fullName, "All Group Measurement Sheets"),
+                        customerName: fullName,
+                        title: "Group Measurement Sheet",
+                        groups: familyGroupRows,
+                      })}
+                      className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-slate-950 px-3 text-xs font-bold text-white shadow-sm hover:bg-slate-800"
+                    >
+                      <Download className="h-4 w-4" /> Download
+                    </button>
+                  ) : (
+                    <span className="inline-flex h-9 items-center rounded-lg border border-dashed border-slate-300 px-3 text-xs font-bold text-slate-400">
+                      Not available
+                    </span>
+                  )}
+                </DocumentListRow>
+
+                {expandedDocumentGroupId === "all-groups" ? (
+                  <div className="border-t border-slate-200 bg-white p-4">
+                    {familyGroupRows.length ? (
+                      <div className="space-y-3">
+                        {familyGroupRows.map((group) => {
+                          const memberMeasurements = group.members.filter((member) => Object.values(member.values).some(hasMeasurementValue));
+                          return (
+                            <div key={group.id} className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+                              <div className="flex flex-col gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3 md:flex-row md:items-center md:justify-between">
+                                <div className="min-w-0">
+                                  <p className="truncate text-sm font-extrabold text-slate-950">{group.name}</p>
+                                  <p className="mt-1 text-xs font-semibold text-slate-500">
+                                    {[group.productName || "No outfit selected", group.eventName, `${memberMeasurements.length} measurement sheets`, `${group.memberCount} members`].filter(Boolean).join(" - ")}
+                                  </p>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => downloadGroupMeasurementPdf({
+                                    filename: datedPdfFilename(`${fullName} ${group.name}`, "Group Measurement Sheet"),
+                                    customerName: fullName,
+                                    title: "Group Measurement Sheet",
+                                    groups: [group],
+                                  })}
+                                  disabled={!memberMeasurements.length}
+                                  className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-slate-950 px-3 text-xs font-bold text-white shadow-sm hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                  <Download className="h-4 w-4" /> Download
+                                </button>
+                              </div>
+                              <div className="grid gap-0 divide-y divide-slate-100">
+                                {group.members.length ? group.members.map((member) => {
+                                  const hasValues = Object.values(member.values).some(hasMeasurementValue);
+                                  const measurementCount = Object.values(member.values).filter(hasMeasurementValue).length;
+                                  return (
+                                    <div key={member.id} className="grid gap-2 px-4 py-3 text-sm md:grid-cols-[1.3fr_1fr_auto] md:items-center">
+                                      <div>
+                                        <p className="font-bold text-slate-950">{member.label}</p>
+                                        <p className="mt-0.5 text-xs font-semibold text-slate-500">{[member.relation, member.age ? `Age ${member.age}` : null, member.gender].filter(Boolean).join(" - ") || "Group member"}</p>
+                                      </div>
+                                      <div className="text-xs font-semibold text-slate-500">{measurementCount} recorded measurements</div>
+                                      <span className={cn("w-fit rounded-full px-2.5 py-1 text-xs font-black", hasValues ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-500")}>
+                                        {hasValues ? "Ready" : "Missing"}
+                                      </span>
+                                    </div>
+                                  );
+                                }) : (
+                                  <div className="px-4 py-5 text-sm font-semibold text-slate-500">No members have been added to this group yet.</div>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p className="text-center text-sm font-semibold text-slate-500">No group order measurements are available yet.</p>
+                    )}
+                  </div>
+                ) : null}
+              </div>
+
+              <DocumentListRow title="Customer Report" tags={["Report", "Orders", "Finance"]} status="Ready">
+                <button
+                  type="button"
+                  onClick={() => downloadCustomerReportPdf({ customer, fullName, stats, orders: customerOrders, familyGroups: familyGroupRows, events: eventRows })}
+                  className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-slate-950 px-3 text-xs font-bold text-white shadow-sm hover:bg-slate-800"
+                >
+                  <Download className="h-4 w-4" /> Download
+                </button>
+              </DocumentListRow>
+            </div>
+          </section>
+        ) : null}
+
         {activeSection === "account" ? (
           <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <h2 className="text-base font-bold text-slate-900">Account Overview</h2>
             {editMode ? (
               <div className="mt-4 grid gap-4 md:grid-cols-2">
-                <SelectInput label="Account Status" value={accountStatus} onChange={setAccountStatus} options={[{ value: "active", label: "Active" }, { value: "inactive", label: "Inactive" }, { value: "pending", label: "Pending" }]} />
+                <SelectInput label="Account Status" value={["active", "invited", "pending"].includes(accountStatus) ? accountStatus : "active"} onChange={setAccountStatus} options={[{ value: "active", label: "Active" }, { value: "invited", label: "Invited" }, { value: "pending", label: "Pending" }]} />
                 <Field label="Password" value="Managed by reset workflow" />
               </div>
             ) : (

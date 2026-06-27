@@ -77,6 +77,8 @@ type Order = {
   paymentProofUploadedAt?: string | null;
   fulfillmentType?: string | null;
   carrier?: string | null;
+  deliveryStatus?: string | null;
+  delivery_status?: string | null;
   pickupLocation?: string | null;
   pickupPersonName?: string | null;
   pickupPersonPhone?: string | null;
@@ -95,7 +97,7 @@ type Order = {
   updatedAt: string | number | Date;
 };
 
-const ORDER_STATUSES = ["pending", "tailoring", "quality_check", "shipped", "delivered", "ready_for_pickup", "picked_up"];
+const ORDER_STATUSES = ["pending", "processing", "tailoring", "quality_check", "fulfilled", "shipped", "ready_for_pickup", "delivered", "cancelled"];
 const PAYMENT_STATUSES = ["pending", "awaiting_verification", "paid", "failed", "refunded", "unpaid"];
 const ORDER_MODES = ["individual", "group"] as const;
 
@@ -208,6 +210,12 @@ function measurementRows(item: OrderItem) {
 
 function needsAttention(order: Order) {
   return order.status === "pending" || order.paymentStatus === "awaiting_verification";
+}
+
+function isDeliveryStageOrder(order: Order) {
+  const mainStatus = String(order.status ?? "").toLowerCase();
+  const deliveryStatus = String(order.deliveryStatus ?? order.delivery_status ?? "not_started").toLowerCase();
+  return ["fulfilled", "shipped", "ready_for_pickup", "delivered"].includes(mainStatus) || deliveryStatus !== "not_started";
 }
 
 export function AdminOrdersTable({
@@ -396,6 +404,7 @@ export function AdminOrdersTable({
                   const isViewed = viewedOrderIdsLocal.includes(order.id);
                   const highlightRow = needsAttention(order) && !isViewed;
                   const isSelected = selectedOrderId === order.id;
+                  const deliveryStage = isDeliveryStageOrder(order);
                   return (
                     <tr
                       key={order.id}
@@ -425,24 +434,36 @@ export function AdminOrdersTable({
                         <p className="text-sm text-muted-foreground">{order.customerName ? order.userEmail : "Unregistered/Direct"}</p>
                       </td>
                       <td className="px-4 py-5 align-middle">
-                        <select
-                          value={order.status ?? "pending"}
-                          disabled={busyKey !== null}
-                          onChange={(event) => void updateOrder(order.id, { status: event.target.value })}
-                          className={`h-9 min-w-[190px] rounded-full border px-4 text-sm font-bold capitalize outline-none ${STATUS_STYLES[order.status ?? "pending"] ?? STATUS_STYLES.pending}`}
-                        >
-                          {ORDER_STATUSES.map((status) => <option key={status} value={status}>{prettyLabel(status)}</option>)}
-                        </select>
+                        {deliveryStage ? (
+                          <span className={`inline-flex rounded-full border px-4 py-2 text-sm font-bold capitalize ${STATUS_STYLES[order.status ?? "pending"] ?? STATUS_STYLES.pending}`}>
+                            {prettyLabel(order.status)}
+                          </span>
+                        ) : (
+                          <select
+                            value={order.status ?? "pending"}
+                            disabled={busyKey !== null}
+                            onChange={(event) => void updateOrder(order.id, { status: event.target.value })}
+                            className={`h-9 min-w-[190px] rounded-full border px-4 text-sm font-bold capitalize outline-none ${STATUS_STYLES[order.status ?? "pending"] ?? STATUS_STYLES.pending}`}
+                          >
+                            {ORDER_STATUSES.map((status) => <option key={status} value={status}>{prettyLabel(status)}</option>)}
+                          </select>
+                        )}
                       </td>
                       <td className="px-4 py-5 align-middle">
-                        <select
-                          value={order.paymentStatus ?? "pending"}
-                          disabled={busyKey !== null}
-                          onChange={(event) => void updateOrder(order.id, { paymentStatus: event.target.value })}
-                          className={`h-9 min-w-[170px] rounded-full border px-4 text-sm font-bold capitalize outline-none ${PAYMENT_STYLES[order.paymentStatus ?? "pending"] ?? PAYMENT_STYLES.pending}`}
-                        >
-                          {PAYMENT_STATUSES.map((status) => <option key={status} value={status}>{prettyLabel(status)}</option>)}
-                        </select>
+                        {deliveryStage ? (
+                          <span className={`inline-flex rounded-full border px-4 py-2 text-sm font-bold capitalize ${PAYMENT_STYLES[order.paymentStatus ?? "pending"] ?? PAYMENT_STYLES.pending}`}>
+                            {prettyLabel(order.paymentStatus)}
+                          </span>
+                        ) : (
+                          <select
+                            value={order.paymentStatus ?? "pending"}
+                            disabled={busyKey !== null}
+                            onChange={(event) => void updateOrder(order.id, { paymentStatus: event.target.value })}
+                            className={`h-9 min-w-[170px] rounded-full border px-4 text-sm font-bold capitalize outline-none ${PAYMENT_STYLES[order.paymentStatus ?? "pending"] ?? PAYMENT_STYLES.pending}`}
+                          >
+                            {PAYMENT_STATUSES.map((status) => <option key={status} value={status}>{prettyLabel(status)}</option>)}
+                          </select>
+                        )}
                       </td>
                       <td className="px-4 py-5 align-middle">
                         <DashboardTableActions>

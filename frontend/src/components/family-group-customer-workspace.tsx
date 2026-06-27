@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { ChevronRight, Pencil, Plus, ShoppingCart, Trash2, UserRound, Users, X } from "lucide-react";
-import { useState } from "react";
+import { type FormEvent, useRef, useState, useTransition } from "react";
 import { HEM_STYLE_OPTIONS, PANTS_MEASUREMENT_FIELDS, PRESSING_STYLE_OPTIONS, TOP_MEASUREMENT_FIELDS, TOP_MEASUREMENT_TITLE, PANTS_MEASUREMENT_TITLE } from "@/lib/measurement-fields";
 
 type Member = {
   id: string;
   name?: string | null;
   relation?: string | null;
+  age?: number | string | null;
   gender?: string | null;
   measurements?: Record<string, unknown> | null;
 };
@@ -60,18 +61,99 @@ export function FamilyGroupCustomerWorkspace({
   const [step, setStep] = useState(1);
   const [gender, setGender] = useState("male");
   const [relation, setRelation] = useState("Myself");
+  const [age, setAge] = useState("");
   const [selectedMeasurementId, setSelectedMeasurementId] = useState<string>("");
   const [hemStyle, setHemStyle] = useState("Straight");
   const [pressingStyle, setPressingStyle] = useState("Creased");
+  const [memberError, setMemberError] = useState("");
+  const [memberSuccess, setMemberSuccess] = useState("");
+  const [isAddingMember, startAddMemberTransition] = useTransition();
+  const memberFormRef = useRef<HTMLFormElement | null>(null);
   const hasSource = Boolean(group.productName);
   const customReady = group.selectionType !== "custom_design" || selectedDesign?.status === "awaiting_payment";
 
-  function closeMember() {
-    setMemberOpen(false);
+  function resetMemberFlow(keepOpen = true) {
+    memberFormRef.current?.reset();
     setStep(1);
+    setGender("male");
+    setRelation("Myself");
+    setAge("");
     setSelectedMeasurementId("");
     setHemStyle("Straight");
     setPressingStyle("Creased");
+    setMemberError("");
+    if (!keepOpen) setMemberOpen(false);
+  }
+
+  function closeMember() {
+    resetMemberFlow(false);
+    setMemberSuccess("");
+  }
+
+  function openMember() {
+    resetMemberFlow(true);
+    setMemberSuccess("");
+    setMemberOpen(true);
+  }
+
+  function measurementNumber(formData: FormData, key: string) {
+    const value = Number(formData.get(key));
+    return Number.isFinite(value) ? value : 0;
+  }
+
+  function isChildMemberRelation(value = relation) {
+    const normalized = value.toLowerCase();
+    return ["son", "daughter", "child", "children", "kid", "kids"].some((token) => normalized.includes(token));
+  }
+
+  function isValidChildAge() {
+    const value = Number(age);
+    return age.trim() !== "" && Number.isInteger(value) && value >= 0 && value <= 17;
+  }
+
+  function validateMemberForm(formData: FormData) {
+    const name = String(formData.get("name") ?? "").trim();
+    if (!name) return "Please enter the family member's full name.";
+    if (!relation) return "Please select the family member relation.";
+    if (!gender) return "Please select the family member gender.";
+    if (isChildMemberRelation() && !isValidChildAge()) return "Please enter a valid child age from 0 to 17.";
+    if (selectedMeasurementId) return "";
+
+    const missingTop = TOP_MEASUREMENT_FIELDS
+      .filter((field) => field.required !== false && measurementNumber(formData, field.key) <= 0)
+      .map((field) => field.label);
+    const missingPants = PANTS_MEASUREMENT_FIELDS
+      .filter((field) => field.required !== false && measurementNumber(formData, field.key) <= 0)
+      .map((field) => field.label);
+    if (missingTop.length || missingPants.length) {
+      return `Please complete required measurements greater than 0: ${[...missingTop, ...missingPants].join(", ")}.`;
+    }
+    if (!hemStyle) return "Please select a hem style.";
+    if (!pressingStyle) return "Please select a pressing/iron style.";
+    return "";
+  }
+
+  function submitMember(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const formData = new FormData(form);
+    const error = validateMemberForm(formData);
+    if (error) {
+      setMemberError(error);
+      setMemberSuccess("");
+      return;
+    }
+    setMemberError("");
+    startAddMemberTransition(async () => {
+      try {
+        await addMember(formData);
+        resetMemberFlow(true);
+        setMemberSuccess("Family member added successfully. Add another member or continue to cart.");
+      } catch {
+        setMemberError("We could not add this family member. Please review the details and try again.");
+        setMemberSuccess("");
+      }
+    });
   }
 
   return (
@@ -145,7 +227,7 @@ export function FamilyGroupCustomerWorkspace({
               Add each family member with their name and measurements. Everyone gets their own outfit, and you checkout all at once in a single order.
             </p>
           </div>
-          <button disabled={!hasSource} onClick={() => setMemberOpen(true)} className="inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-xl bg-primary px-6 font-semibold text-black hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-40">
+          <button disabled={!hasSource} onClick={openMember} className="inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-xl bg-primary px-6 font-semibold text-black hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-40">
             <Plus className="h-5 w-5" /> Add Member
           </button>
         </div>
@@ -157,7 +239,7 @@ export function FamilyGroupCustomerWorkspace({
             <Users className="mx-auto h-16 w-16 text-primary/50" />
             <h2 className="mt-5 font-heading text-3xl font-bold">Start with yourself, then add your family</h2>
             <p className="mx-auto mt-3 max-w-lg text-base leading-7 text-muted-foreground">Add each person with their measurements so every outfit fits perfectly.</p>
-            <button disabled={!hasSource} onClick={() => setMemberOpen(true)} className="mt-7 inline-flex h-12 items-center gap-2 rounded-xl bg-primary px-7 font-semibold text-black disabled:cursor-not-allowed disabled:opacity-40">
+            <button disabled={!hasSource} onClick={openMember} className="mt-7 inline-flex h-12 items-center gap-2 rounded-xl bg-primary px-7 font-semibold text-black disabled:cursor-not-allowed disabled:opacity-40">
               <Plus className="h-5 w-5" /> Add Your First Member
             </button>
           </div>
@@ -172,7 +254,7 @@ export function FamilyGroupCustomerWorkspace({
                   <div className="grid h-12 w-12 place-items-center rounded-full bg-primary/15 font-bold text-primary">{String(member.name ?? "?").charAt(0).toUpperCase()}</div>
                   <div>
                     <p className="font-semibold">{member.name}</p>
-                    <p className="mt-1 text-sm text-muted-foreground">{member.relation || "Member"} · {member.gender} · {measurementCount} measurements</p>
+                    <p className="mt-1 text-sm text-muted-foreground">{[member.relation || "Member", member.age !== null && member.age !== undefined && member.age !== "" ? `Age ${member.age}` : null, member.gender, `${measurementCount} measurements`].filter(Boolean).join(" · ")}</p>
                   </div>
                 </div>
                 <form action={removeMember}>
@@ -182,7 +264,7 @@ export function FamilyGroupCustomerWorkspace({
               </div>
             );
           })}
-          <button disabled={!hasSource} onClick={() => setMemberOpen(true)} className="flex h-20 w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-primary/60 bg-primary/5 font-semibold text-primary disabled:cursor-not-allowed disabled:opacity-40">
+          <button disabled={!hasSource} onClick={openMember} className="flex h-20 w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-primary/60 bg-primary/5 font-semibold text-primary disabled:cursor-not-allowed disabled:opacity-40">
             <Plus className="h-5 w-5" /> Add Another Family Member
           </button>
         </section>
@@ -200,12 +282,22 @@ export function FamilyGroupCustomerWorkspace({
 
       {memberOpen ? (
         <div className="fixed inset-0 z-[150] grid place-items-center bg-black/85 p-4 backdrop-blur-sm" onClick={(event) => event.target === event.currentTarget && closeMember()}>
-          <form action={addMember} className="max-h-[calc(100dvh-40px)] w-full max-w-[768px] overflow-y-auto rounded-3xl border border-border bg-card shadow-2xl">
+          <form ref={memberFormRef} onSubmit={submitMember} className="max-h-[calc(100dvh-40px)] w-full max-w-[768px] overflow-y-auto rounded-3xl border border-border bg-card shadow-2xl">
             <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-card px-7 py-5">
               <h2 className="flex items-center gap-3 font-heading text-2xl font-bold"><UserRound className="h-5 w-5 text-primary" /> Add Family Member</h2>
               <button type="button" onClick={closeMember} className="rounded-lg p-2 hover:bg-secondary"><X className="h-5 w-5" /></button>
             </div>
             <div className="px-7 pt-6">
+              {memberError ? (
+                <div className="mb-4 rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-sm font-semibold text-rose-300" role="alert">
+                  {memberError}
+                </div>
+              ) : null}
+              {memberSuccess ? (
+                <div className="mb-4 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-emerald-300" role="status">
+                  {memberSuccess}
+                </div>
+              ) : null}
               <div className="grid grid-cols-2 gap-3">
                 <div className={`h-1 rounded-full ${step >= 1 ? "bg-primary" : "bg-secondary"}`} />
                 <div className={`h-1 rounded-full ${step >= 2 ? "bg-primary" : "bg-secondary"}`} />
@@ -227,10 +319,43 @@ export function FamilyGroupCustomerWorkspace({
                 <p className="text-sm font-semibold">Relation <span className="text-primary">*</span></p>
                 <input type="hidden" name="relation" value={relation} />
                 <div className="mt-3 grid grid-cols-3 gap-3">
-                  {["Myself", "Husband", "Wife", "Son", "Daughter", "Other"].map((value) => <button key={value} type="button" onClick={() => setRelation(value)} className={`h-12 rounded-xl border-2 font-semibold ${relation === value ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground"}`}>{value}</button>)}
+                  {["Myself", "Husband", "Wife", "Son", "Daughter", "Child", "Other"].map((value) => <button key={value} type="button" onClick={() => {
+                    setRelation(value);
+                    if (!isChildMemberRelation(value)) setAge("");
+                  }} className={`h-12 rounded-xl border-2 font-semibold ${relation === value ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground"}`}>{value}</button>)}
                 </div>
               </div>
+              {isChildMemberRelation() ? (
+                <label className="block text-sm font-semibold">
+                  Child Age <span className="text-primary">*</span>
+                  <input
+                    name="age"
+                    type="number"
+                    min="0"
+                    max="17"
+                    step="1"
+                    value={age}
+                    onChange={(event) => setAge(event.target.value)}
+                    placeholder="Enter child age"
+                    className="mt-2 h-12 w-full rounded-xl border border-input bg-black px-4 text-base outline-none focus:border-primary"
+                    required
+                  />
+                </label>
+              ) : null}
               <button type="button" onClick={() => {
+                const formData = new FormData(memberFormRef.current ?? undefined);
+                const name = String(formData.get("name") ?? "").trim();
+                if (!name) {
+                  setMemberError("Please enter the family member's full name before continuing.");
+                  setMemberSuccess("");
+                  return;
+                }
+                if (isChildMemberRelation() && !isValidChildAge()) {
+                  setMemberError("Please enter a valid child age from 0 to 17.");
+                  setMemberSuccess("");
+                  return;
+                }
+                setMemberError("");
                 if (relation === "Myself" && savedMeasurements.length > 0) {
                   setSelectedMeasurementId(savedMeasurements[0].id);
                 } else {
@@ -312,7 +437,9 @@ export function FamilyGroupCustomerWorkspace({
               )}
               <div className="grid grid-cols-2 gap-4">
                 <button type="button" onClick={() => setStep(1)} className="h-12 rounded-xl border border-border font-semibold">← Back</button>
-                <button type="submit" className="h-12 rounded-xl bg-primary text-base font-semibold text-black">Add to Family Group ✓</button>
+                <button type="submit" disabled={isAddingMember} className="h-12 rounded-xl bg-primary text-base font-semibold text-black disabled:cursor-not-allowed disabled:opacity-50">
+                  {isAddingMember ? "Adding..." : "Add to Family Group ✓"}
+                </button>
               </div>
             </div>
           </form>

@@ -1,0 +1,5 @@
+ALTER TABLE family_members
+  ADD COLUMN IF NOT EXISTS age INTEGER;
+
+ALTER TABLE uploaded_designs
+  ADD COLUMN IF NOT EXISTS child_age INTEGER;
