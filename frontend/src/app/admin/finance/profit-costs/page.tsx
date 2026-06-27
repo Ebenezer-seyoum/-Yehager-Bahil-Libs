@@ -9,6 +9,7 @@ import { AdminProfitCostsWorkspace } from "@/components/admin/pages/admin-profit
 type ProfitCostsPayload = {
   defaults?: Record<string, unknown> | null;
   catalogProducts?: unknown[];
+  allProfitSummary?: Record<string, unknown> | null;
   customOrders?: unknown[];
   designerPayments?: unknown[];
 };
@@ -28,6 +29,7 @@ export default async function AdminProfitCostsPage() {
   let payload: ProfitCostsPayload = {
     defaults: null,
     catalogProducts: [],
+    allProfitSummary: null,
     customOrders: [],
     designerPayments: [],
   };
@@ -39,6 +41,7 @@ export default async function AdminProfitCostsPage() {
     payload = {
       defaults: null,
       catalogProducts: [],
+      allProfitSummary: null,
       customOrders: [],
       designerPayments: [],
     };
@@ -48,6 +51,7 @@ export default async function AdminProfitCostsPage() {
     <AdminProfitCostsWorkspace
       data={{
         profitDefaults: payload.defaults ?? null,
+        allProfitSummary: payload.allProfitSummary ?? null,
         catalogProfitRows: records(payload.catalogProducts),
         customProfitRows: records(payload.customOrders),
         designerPayments: records(payload.designerPayments),

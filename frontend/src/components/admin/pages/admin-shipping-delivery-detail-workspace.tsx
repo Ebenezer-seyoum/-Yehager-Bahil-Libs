@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CheckCircle2, ClipboardList, FileText, MapPin, Package, Send, Truck, UserRound } from "lucide-react";
 import { AdminDetailHeader, AdminDetailLayout } from "@/components/admin/admin-detail-layout";
+import { dashboardConfirm, dashboardError, dashboardSuccess } from "@/lib/dashboard-swal";
 import { cn } from "@/lib/utils";
 
 type Order = Record<string, unknown> & {
@@ -32,6 +33,7 @@ type Order = Record<string, unknown> & {
   pickupLocation?: string | null;
   pickupPersonName?: string | null;
   pickupPersonPhone?: string | null;
+  pickupIdUrl?: string | null;
   pickupProofUrl?: string | null;
   pickupSignedDocUrl?: string | null;
   pickup_signed_doc_url?: string | null;
@@ -43,6 +45,19 @@ type Order = Record<string, unknown> & {
   shipping_address?: Record<string, unknown> | string | null;
   updatedAt?: string | number | Date | null;
   items?: Array<Record<string, unknown>> | null;
+  shippingDocuments?: Array<{ url: string; label: string; uploadedAt?: string }> | null;
+  shipping_documents?: Array<{ url: string; label: string; uploadedAt?: string }> | null;
+};
+
+type OrderNote = {
+  id?: string;
+  noteType?: string;
+  note_type?: string;
+  note?: string;
+  userEmail?: string | null;
+  user_email?: string | null;
+  createdAt?: string | number | Date | null;
+  created_at?: string | number | Date | null;
 };
 
 const MAIL_STATES = ["not_started", "packing", "packed", "assigned_to_ems", "handed_to_ems", "in_transit", "at_hub", "out_for_delivery", "delivered", "failed_attempt", "returned"] as const;
@@ -134,6 +149,7 @@ export function AdminShippingDeliveryDetailWorkspace({ initialOrder }: { initial
   const [fulfillmentStatus, setFulfillmentStatus] = useState(derivedFulfillmentStatus(order));
   const [trackingNumber, setTrackingNumber] = useState(String(order.trackingNumber ?? order.tracking_number ?? ""));
   const [deliveryNote, setDeliveryNote] = useState("");
+  const [deliveryNotes, setDeliveryNotes] = useState<OrderNote[]>([]);
   const [error, setError] = useState("");
   const pickup = isPickup(order);
   const image = firstImage(order);
@@ -146,6 +162,31 @@ export function AdminShippingDeliveryDetailWorkspace({ initialOrder }: { initial
       console.error("Could not resolve shipping delivery notification:", error);
     });
   }, [order.id]);
+
+  useEffect(() => {
+    const orderId = String(order.id ?? "");
+    if (!orderId) return;
+    fetch(`/api/backend/orders/${orderId}/notes`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((json) => {
+        const rows = Array.isArray(json?.data) ? json.data : [];
+        setDeliveryNotes(rows.filter((note: OrderNote) => norm(note.noteType ?? note.note_type) === "delivery"));
+      })
+      .catch((error) => console.error("Could not load delivery notes:", error));
+  }, [order.id]);
+
+  async function createDeliveryNote(note: string) {
+    const trimmed = note.trim();
+    if (trimmed.length < 3) return;
+    const res = await fetch(`/api/backend/orders/${order.id}/notes`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ noteType: "delivery", note: trimmed }),
+    });
+    if (!res.ok) return;
+    const json = await res.json().catch(() => null);
+    if (json?.data) setDeliveryNotes((current) => [json.data, ...current]);
+  }
 
   async function updateDeliveryStatus(next: string, note?: string) {
     setBusy(true);
@@ -168,23 +209,46 @@ export function AdminShippingDeliveryDetailWorkspace({ initialOrder }: { initial
         throw new Error(payload?.error || payload?.message || "Delivery update failed");
       }
       const json = await res.json();
+      const noteToSave = note ?? deliveryNote.trim();
+      await createDeliveryNote(noteToSave || `${titleCase(next)} updated for ${pickup ? "store pickup" : "EMS delivery"}.`);
       setOrder((current) => ({ ...current, ...(json.data ?? { deliveryStatus: next, status: nextMainStatus ?? current.status }) }));
       setFulfillmentStatus(next);
       setDeliveryNote("");
+      await dashboardSuccess("Delivery Updated", `${titleCase(next)} saved successfully.`);
     } catch (error) {
       console.error(error);
-      setError(error instanceof Error ? error.message : "Delivery update failed");
+      const message = error instanceof Error ? error.message : "Delivery update failed";
+      setError(message);
+      await dashboardError("Delivery Update Failed", message);
     } finally {
       setBusy(false);
     }
   }
 
-  async function changeFulfillmentStatus(next: string) {
+  async function changeFulfillmentStatus(next: string, actionLabel = titleCase(next)) {
+    const confirmed = await dashboardConfirm({
+      title: actionLabel,
+      text: `This will update fulfillment status to ${titleCase(next)} and add a delivery note to this order.`,
+      confirmButtonText: "Yes, update",
+      cancelButtonText: "No, cancel",
+      tone: next === "delivered" || next === "picked_up" ? "success" : "primary",
+      icon: "warning",
+    });
+    if (!confirmed) return;
     await updateDeliveryStatus(next);
   }
 
-  function sendToProvider() {
-    void updateDeliveryStatus("assigned_to_ems", `EMS request created with ${provider}.`);
+  async function sendToProvider() {
+    const confirmed = await dashboardConfirm({
+      title: "Request EMS",
+      text: `This will assign the order to ${provider} and save an EMS delivery note.`,
+      confirmButtonText: "Yes, request EMS",
+      cancelButtonText: "No, cancel",
+      tone: "primary",
+      icon: "warning",
+    });
+    if (!confirmed) return;
+    await updateDeliveryStatus("assigned_to_ems", `EMS request created with ${provider}.`);
   }
 
   const sections = [
@@ -196,12 +260,21 @@ export function AdminShippingDeliveryDetailWorkspace({ initialOrder }: { initial
     { id: "timeline", label: "Fulfillment Timeline", icon: ClipboardList },
   ];
 
-  const documents = [
-    { label: pickup ? "Pickup QR / Order ID" : "Shipping Label", url: order.shippingDocumentUrl ?? order.shipping_document_url },
-    { label: pickup ? "Pickup Proof" : "Courier Receipt", url: pickup ? order.pickupProofUrl : order.shippingDocumentUrl },
-    { label: "Package Photo", url: null },
-    { label: "Delivery Proof", url: order.pickupSignedDocUrl ?? order.pickup_signed_doc_url },
-  ];
+  const shippingDocuments = (order.shippingDocuments ?? order.shipping_documents ?? []) as Array<{ url: string; label: string; uploadedAt?: string }>;
+  const uploadedByLabel = (label: string) => shippingDocuments.find((doc) => doc.label?.toLowerCase() === label.toLowerCase());
+  const documents = pickup
+    ? [
+        { label: "Pickup QR / Order ID", url: order.pickupIdUrl },
+        { label: "Pickup Proof", url: order.pickupProofUrl ?? order.pickupSignedDocUrl ?? order.pickup_signed_doc_url },
+        { label: "Package Photo", url: uploadedByLabel("Package Photo")?.url },
+        { label: "Delivery Proof", url: uploadedByLabel("Delivery Proof")?.url },
+      ]
+    : [
+        { label: "Shipping Label", url: uploadedByLabel("Shipping Label")?.url ?? order.shippingDocumentUrl ?? order.shipping_document_url },
+        { label: "Courier Receipt", url: uploadedByLabel("Courier Receipt")?.url },
+        { label: "Package Photo", url: uploadedByLabel("Package Photo")?.url },
+        { label: "Delivery Proof", url: uploadedByLabel("Delivery Proof")?.url },
+      ];
 
   const timeline = [
     ...((Array.isArray(order.deliveryTimeline ?? order.delivery_timeline) ? order.deliveryTimeline ?? order.delivery_timeline : []) as Array<Record<string, unknown>>).map((row, index) => ({
@@ -253,15 +326,15 @@ export function AdminShippingDeliveryDetailWorkspace({ initialOrder }: { initial
           <div className="flex flex-col gap-3 rounded-3xl border border-slate-200 bg-slate-50 p-4 lg:w-[360px]">
             {pickup ? (
               <>
-                <button disabled={busy} onClick={() => void changeFulfillmentStatus("packed")} className="h-11 rounded-xl bg-slate-950 px-4 text-sm font-black text-white disabled:opacity-60">Mark Packed</button>
-                <button disabled={busy} onClick={() => void changeFulfillmentStatus("ready_for_pickup")} className="h-11 rounded-xl bg-blue-600 px-4 text-sm font-black text-white disabled:opacity-60">Ready For Pickup</button>
-                <button disabled={busy} onClick={() => void changeFulfillmentStatus("picked_up")} className="h-11 rounded-xl bg-emerald-700 px-4 text-sm font-black text-white disabled:opacity-60">Verify Pickup</button>
+                <button disabled={busy} onClick={() => void changeFulfillmentStatus("packed", "Mark Packed")} className="h-11 rounded-xl bg-slate-950 px-4 text-sm font-black text-white disabled:opacity-60">Mark Packed</button>
+                <button disabled={busy} onClick={() => void changeFulfillmentStatus("ready_for_pickup", "Ready For Pickup")} className="h-11 rounded-xl bg-blue-600 px-4 text-sm font-black text-white disabled:opacity-60">Ready For Pickup</button>
+                <button disabled={busy} onClick={() => void changeFulfillmentStatus("picked_up", "Verify Pickup")} className="h-11 rounded-xl bg-emerald-700 px-4 text-sm font-black text-white disabled:opacity-60">Verify Pickup</button>
               </>
             ) : (
               <>
-                <button disabled={busy} onClick={() => void changeFulfillmentStatus("packed")} className="h-11 rounded-xl bg-slate-950 px-4 text-sm font-black text-white disabled:opacity-60">Mark Packed</button>
-                <button disabled={busy} onClick={sendToProvider} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-orange-600 px-4 text-sm font-black text-white disabled:opacity-60"><Send className="h-4 w-4" /> Request EMS</button>
-                <button disabled={busy} onClick={() => void changeFulfillmentStatus("handed_to_ems")} className="h-11 rounded-xl bg-blue-600 px-4 text-sm font-black text-white disabled:opacity-60">Tracking / Handed to EMS</button>
+                <button disabled={busy} onClick={() => void changeFulfillmentStatus("packed", "Mark Packed")} className="h-11 rounded-xl bg-slate-950 px-4 text-sm font-black text-white disabled:opacity-60">Mark Packed</button>
+                <button disabled={busy} onClick={() => void sendToProvider()} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-orange-600 px-4 text-sm font-black text-white disabled:opacity-60"><Send className="h-4 w-4" /> Request EMS</button>
+                <button disabled={busy} onClick={() => void changeFulfillmentStatus("handed_to_ems", "Tracking / Handed to EMS")} className="h-11 rounded-xl bg-blue-600 px-4 text-sm font-black text-white disabled:opacity-60">Tracking / Handed to EMS</button>
               </>
             )}
             {error ? <p className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-bold text-rose-700">{error}</p> : null}
@@ -319,14 +392,14 @@ export function AdminShippingDeliveryDetailWorkspace({ initialOrder }: { initial
                 <input value={trackingNumber} onChange={(event) => setTrackingNumber(event.target.value)} placeholder="EMS tracking number" className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-black" />
               </label>
               <div className="flex items-end">
-                <button disabled={busy} onClick={sendToProvider} className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-orange-600 px-4 text-sm font-black text-white disabled:opacity-60">
+                <button disabled={busy} onClick={() => void sendToProvider()} className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-orange-600 px-4 text-sm font-black text-white disabled:opacity-60">
                   <Send className="h-4 w-4" /> Request EMS
                 </button>
               </div>
             </div>
           )}
           <label className="block space-y-1.5">
-            <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Internal Note</span>
+            <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Delivery Internal Note</span>
             <textarea
               value={deliveryNote}
               onChange={(event) => setDeliveryNote(event.target.value)}
@@ -339,11 +412,29 @@ export function AdminShippingDeliveryDetailWorkspace({ initialOrder }: { initial
           <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4 text-sm font-semibold text-blue-900">
             Mail flow: Request EMS sets main status to fulfilled. Tracking or EMS handoff sets main status to shipped. Delivered closes the order. Pickup flow is staff verified at the office.
           </div>
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <p className="text-sm font-black text-slate-950">Delivery Notes</p>
+            <div className="mt-3 space-y-2">
+              {deliveryNotes.length ? deliveryNotes.map((note) => (
+                <div key={note.id ?? `${note.createdAt ?? note.created_at}-${note.note}`} className="rounded-xl border border-slate-200 bg-white p-3">
+                  <p className="text-sm font-semibold text-slate-800">{note.note}</p>
+                  <p className="mt-1 text-[11px] font-bold text-slate-500">{dateTime(note.createdAt ?? note.created_at)} - {note.userEmail ?? note.user_email ?? "Admin"}</p>
+                </div>
+              )) : <p className="text-sm font-semibold text-slate-500">No delivery notes recorded yet.</p>}
+            </div>
+          </div>
         </div>
       ) : null}
 
       {activeSection === "progress" ? (
-        <HorizontalSteps steps={pickup ? PICKUP_STATES : MAIL_STATES} current={fulfillmentStatus} onSelect={(step) => void changeFulfillmentStatus(step)} />
+        <div className="space-y-4">
+          <HorizontalSteps steps={pickup ? PICKUP_STATES : MAIL_STATES} current={fulfillmentStatus} onSelect={(step) => void changeFulfillmentStatus(step)} />
+          <div className="grid gap-3 sm:grid-cols-3">
+            <DetailField label="Current Progress" value={titleCase(fulfillmentStatus)} />
+            <DetailField label="Last Updated" value={dateTime(order.deliveryStatusChangedAt ?? order.delivery_status_changed_at ?? order.updatedAt)} />
+            <DetailField label="Flow" value={pickup ? "Store pickup progress" : "EMS shipping progress"} />
+          </div>
+        </div>
       ) : null}
 
       {activeSection === "documents" ? (
@@ -354,7 +445,7 @@ export function AdminShippingDeliveryDetailWorkspace({ initialOrder }: { initial
                 <p className="text-sm font-black text-slate-950">{doc.label}</p>
                 <p className="text-xs font-semibold text-slate-500">{doc.url ? "Available" : "Not uploaded"}</p>
               </div>
-              {doc.url ? <a href={doc.url} target="_blank" rel="noreferrer" className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-black">Preview</a> : <span className="text-sm font-black text-slate-400">Pending</span>}
+              {doc.url ? <a href={doc.url} target="_blank" rel="noreferrer" className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-black">Preview</a> : <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-black text-amber-700">Pending</span>}
             </div>
           ))}
         </div>

@@ -1,12 +1,12 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import { zValidator } from "@hono/zod-validator";
-import { asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
 import { requireAuth } from "../../middleware/auth.js";
 import { requirePermission } from "../../middleware/permissions.js";
 import { db } from "../../lib/db/drizzle.js";
-import { auditLogs, homepageSections, orders, products, systemAlerts, uploadedDesigns } from "../../lib/db/schema.js";
+import { auditLogs, homepageSections, orders, products, profitCostSettings, systemAlerts, uploadedDesigns } from "../../lib/db/schema.js";
 import { USER_ROLES } from "../../lib/auth/roles.js";
 import { PERMISSIONS } from "../../lib/auth/permissions.js";
 import {
@@ -83,6 +83,9 @@ const productPatchSchema = z.object({
   images: z.array(productImageSchema).optional(),
   isActive: z.boolean().optional(),
   isFeatured: z.boolean().optional(),
+  designerCostUsd: z.coerce.number().nonnegative().optional(),
+  taxPercent: z.coerce.number().nonnegative().optional(),
+  otherCostUsd: z.coerce.number().nonnegative().optional(),
 });
 const createProductSchema = z.object({
   name: z.string().trim().min(1),
@@ -101,6 +104,9 @@ const createProductSchema = z.object({
   images: z.array(productImageSchema).default([]),
   isActive: z.boolean().optional(),
   isFeatured: z.boolean().optional(),
+  designerCostUsd: z.coerce.number().nonnegative(),
+  taxPercent: z.coerce.number().nonnegative(),
+  otherCostUsd: z.coerce.number().nonnegative(),
 });
 const productDiscountParamSchema = z.object({
   discountId: z.string().uuid(),
@@ -1234,15 +1240,24 @@ adminRouter.get("/products", requirePermission(PERMISSIONS.PRODUCTS_VIEW), zVali
   return c.json({ data });
 });
 
+async function getProductDetailForAdmin(productId: string) {
+  const data = await db.query.products.findFirst({
+    where: eq(products.id, productId),
+  });
+  if (!data) return null;
+  const costSetting = await db.query.profitCostSettings.findFirst({
+    where: and(eq(profitCostSettings.entityType, "product"), eq(profitCostSettings.entityId, productId)),
+  });
+  return { ...data, profitCostSetting: costSetting ?? null };
+}
+
 adminRouter.get(
   "/products/:productId",
   requirePermission(PERMISSIONS.PRODUCTS_VIEW),
   zValidator("param", productParamSchema),
   async (c) => {
     const { productId } = c.req.valid("param");
-    const data = await db.query.products.findFirst({
-      where: eq(products.id, productId),
-    });
+    const data = await getProductDetailForAdmin(productId);
     if (!data) {
       throw new HTTPException(404, { message: "Product not found" });
     }
@@ -1279,6 +1294,16 @@ adminRouter.post(
         isFeatured: body.isFeatured ?? false,
       })
       .returning();
+
+    await upsertProfitCostSettingForAdmin({
+      entityType: "product",
+      entityId: row.id,
+      productCostUsd: 0,
+      taxPercent: body.taxPercent,
+      designerCostUsd: body.designerCostUsd,
+      otherCostUsd: body.otherCostUsd,
+      performedBy: authUser?.email,
+    });
 
     await db.insert(auditLogs).values({
       action: "product_created",
@@ -1345,6 +1370,25 @@ adminRouter.patch(
       throw new HTTPException(404, { message: "Product not found" });
     }
 
+    if (body.designerCostUsd !== undefined || body.taxPercent !== undefined || body.otherCostUsd !== undefined) {
+      const existing = await db.query.profitCostSettings.findFirst({
+        where: and(eq(profitCostSettings.entityType, "product"), eq(profitCostSettings.entityId, productId)),
+      });
+      await upsertProfitCostSettingForAdmin({
+        entityType: "product",
+        entityId: productId,
+        productCostUsd: Number(existing?.productCostUsd ?? 0),
+        taxPercent: body.taxPercent ?? Number(existing?.taxPercent ?? 0),
+        designerCostUsd: body.designerCostUsd ?? Number(existing?.designerCostUsd ?? 0),
+        otherCostUsd: body.otherCostUsd ?? Number(existing?.otherCostUsd ?? 0),
+        designerPaymentPolicy: existing?.designerPaymentPolicy as "none" | "fifty_fifty" | "paid_100" | undefined,
+        designerPaymentStatus: existing?.designerPaymentStatus as "unpaid" | "advance_paid" | "fully_paid" | undefined,
+        designerPaidUsd: Number(existing?.designerPaidUsd ?? 0),
+        internalNote: existing?.internalNote ?? null,
+        performedBy: authUser?.email,
+      });
+    }
+
     await db.insert(auditLogs).values({
       action: "product_admin_updated",
       category: "inventory",
@@ -1356,7 +1400,8 @@ adminRouter.patch(
       metadata: body,
     });
 
-    return c.json({ data: row });
+    const data = await getProductDetailForAdmin(productId);
+    return c.json({ data: data ?? row });
   },
 );
 
@@ -1410,6 +1455,7 @@ adminRouter.post(
     }
 
     const now = new Date();
+    const isPickupOrder = String(order.fulfillmentType ?? order.carrier ?? "").toLowerCase() === "pickup";
     const patch =
       body.type === "pickup_id"
         ? { pickupIdUrl: body.url, pickupIdUploadedAt: now }
@@ -1422,7 +1468,7 @@ adminRouter.post(
                   ...(order.shippingDocuments ?? []),
                   { url: body.url, label: body.label ?? "Document", uploadedAt: now.toISOString() },
                 ],
-                status: order.status === "delivered" ? order.status : "shipped",
+                status: isPickupOrder || order.status === "delivered" ? order.status : "shipped",
               };
 
     const [row] = await db

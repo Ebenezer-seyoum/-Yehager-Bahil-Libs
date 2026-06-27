@@ -9,6 +9,7 @@ import {
   getOrderByStripeSessionId,
   markStripeSessionOnOrder,
   recordWebhookEventIfNew,
+  updateStripeReceiptOnOrder,
 } from "../repositories/payments-repository.js";
 import { deleteCartItemsByIdsForUser } from "../repositories/cart-repository.js";
 import { canTransitionPaymentStatus, deriveOrderStatusOnPayment } from "./order-state-machine.js";
@@ -28,6 +29,56 @@ type OrderItem = {
 function toNumber(value: unknown, fallback = 0) {
   const num = Number(value);
   return Number.isFinite(num) ? num : fallback;
+}
+
+function centsToAmount(value?: number | null) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return undefined;
+  return (value / 100).toFixed(2);
+}
+
+async function resolveStripeReceipt(session: Stripe.Checkout.Session) {
+  const fullSession = await stripe.checkout.sessions.retrieve(session.id, {
+    expand: ["payment_intent", "payment_intent.latest_charge"],
+  });
+  const paymentIntent = typeof fullSession.payment_intent === "object" && fullSession.payment_intent
+    ? fullSession.payment_intent as Stripe.PaymentIntent
+    : undefined;
+  const latestCharge = typeof paymentIntent?.latest_charge === "object" && paymentIntent.latest_charge
+    ? paymentIntent.latest_charge as Stripe.Charge
+    : undefined;
+  const card = latestCharge?.payment_method_details?.card;
+  return {
+    fullSession,
+    paymentIntent,
+    latestCharge,
+    receipt: {
+      stripePaymentIntentId: paymentIntent?.id ?? (typeof fullSession.payment_intent === "string" ? fullSession.payment_intent : undefined),
+      stripeChargeId: latestCharge?.id,
+      stripeReceiptUrl: latestCharge?.receipt_url ?? undefined,
+      stripePaymentStatus: paymentIntent?.status ?? fullSession.payment_status ?? undefined,
+      stripeAmountReceived: centsToAmount(paymentIntent?.amount_received ?? fullSession.amount_total),
+      stripeCurrency: (paymentIntent?.currency ?? fullSession.currency ?? "usd").toUpperCase(),
+      stripeCustomerEmail: fullSession.customer_details?.email ?? fullSession.customer_email ?? latestCharge?.billing_details?.email ?? undefined,
+      stripeCustomerName: fullSession.customer_details?.name ?? latestCharge?.billing_details?.name ?? undefined,
+      stripePaymentMethodBrand: card?.brand ?? undefined,
+      stripePaymentMethodLast4: card?.last4 ?? undefined,
+      stripePaymentMethodFunding: card?.funding ?? undefined,
+      stripePaymentMethodCountry: card?.country ?? undefined,
+      stripePaidAt: latestCharge?.created ? new Date(latestCharge.created * 1000) : undefined,
+      stripeFailureReason: paymentIntent?.last_payment_error?.message ?? latestCharge?.failure_message ?? undefined,
+      stripeRefundStatus: latestCharge?.refunded ? "refunded" : latestCharge?.amount_refunded ? "partially_refunded" : undefined,
+      stripeRefundAmount: centsToAmount(latestCharge?.amount_refunded),
+      stripeReceiptMetadata: {
+        checkout_session_id: fullSession.id,
+        payment_intent_id: paymentIntent?.id,
+        charge_id: latestCharge?.id,
+        receipt_number: latestCharge?.receipt_number,
+        payment_method_type: latestCharge?.payment_method_details?.type,
+        order_id: fullSession.metadata?.order_id,
+        order_number: fullSession.metadata?.order_number,
+      },
+    },
+  };
 }
 
 export async function createStripeCheckoutSession(payload: {
@@ -132,6 +183,7 @@ export async function processStripeWebhook(payload: { body: string; signature?: 
 
   if (event.type === "checkout.session.completed") {
     const session = event.data.object as Stripe.Checkout.Session;
+    const stripeReceipt = await resolveStripeReceipt(session);
     const order =
       (session.id && (await getOrderByStripeSessionId(session.id))) ||
       (session.metadata?.order_id
@@ -146,6 +198,10 @@ export async function processStripeWebhook(payload: { body: string; signature?: 
           orderId: order.id,
           paymentStatus: nextPayment,
           orderStatus: nextOrderStatus,
+        });
+        await updateStripeReceiptOnOrder({
+          orderId: order.id,
+          ...stripeReceipt.receipt,
         });
         if (updatedOrder) {
           await awardCustomerCreditForPaidOrder(updatedOrder, "stripe");
@@ -170,6 +226,9 @@ export async function processStripeWebhook(payload: { body: string; signature?: 
           metadata: {
             stripe_event_id: event.id,
             stripe_session_id: session.id,
+            stripe_payment_intent_id: stripeReceipt.receipt.stripePaymentIntentId,
+            stripe_charge_id: stripeReceipt.receipt.stripeChargeId,
+            stripe_receipt_url: stripeReceipt.receipt.stripeReceiptUrl,
             amount_total: session.amount_total ? session.amount_total / 100 : undefined,
           },
         });

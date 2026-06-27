@@ -13,7 +13,9 @@ type SignedUpload = {
   signature: string;
 };
 
-const QR_CODE_URL = "https://media.base44.com/images/public/69cc55fa50bba233144fe99d/51db1479b_BusheforYehagerbahillibs.png";
+const QR_CODE_URL = "/images/bank-transfer-qr-behailu.jpg";
+const BANK_ACCOUNT_NAME = "BEHAILU ABERA GADISA";
+const BANK_ACCOUNT_NUMBER = "97584516";
 
 export function EtbPaymentProof({
   orderId,
@@ -109,8 +111,14 @@ export function EtbPaymentProof({
       <div className="grid gap-5 md:grid-cols-2">
         <div className="flex flex-col items-center rounded-xl border border-border bg-card p-5 text-center">
           <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-primary">Bank Transfer QR Code</p>
-          <div className="rounded-xl bg-white p-4">
-            <img src={QR_CODE_URL} alt="Bank Transfer QR Code" className="h-56 w-56 object-contain" />
+          <div className="rounded-xl bg-white p-4 shadow-sm">
+            <img src={QR_CODE_URL} alt={`${BANK_ACCOUNT_NAME} bank transfer QR code`} className="h-56 w-56 object-contain" />
+          </div>
+          <div className="mt-4 w-full rounded-xl border border-primary/20 bg-primary/5 p-3">
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Account Name</p>
+            <p className="mt-1 text-sm font-black uppercase tracking-wide text-foreground">{BANK_ACCOUNT_NAME}</p>
+            <p className="mt-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Bank Account</p>
+            <p className="mt-1 font-mono text-lg font-black text-foreground">{BANK_ACCOUNT_NUMBER}</p>
           </div>
           <p className="mt-3 text-xs text-muted-foreground">Scan with your banking app to pay</p>
         </div>
@@ -119,7 +127,7 @@ export function EtbPaymentProof({
           <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-primary">How To Pay</p>
           <ol className="space-y-3 text-sm">
             {[
-              "Open your mobile banking app and choose Scan QR to pay.",
+              `Open your mobile banking app and choose Scan QR, or transfer manually to ${BANK_ACCOUNT_NAME}.`,
               `Transfer exactly ${totalEtb.toLocaleString()} ETB.`,
               "Use your order number below as the payment reference / remark.",
               "Take a screenshot of the successful transfer confirmation.",

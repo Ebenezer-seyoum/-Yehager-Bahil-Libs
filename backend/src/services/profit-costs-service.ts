@@ -38,6 +38,11 @@ function key(entityType: string, entityId = "default") {
   return `${entityType}:${entityId}`;
 }
 
+function numberToPercent(value: number) {
+  const safeValue = Number.isNaN(value) ? 0 : value;
+  return safeValue.toFixed(4);
+}
+
 function calculateProfit(row: {
   entityType: "product" | "custom_order";
   entityId: string;
@@ -64,7 +69,7 @@ function calculateProfit(row: {
     ...row,
     revenueUsd: numberToMoney(revenue),
     productCostUsd: numberToMoney(productCost),
-    taxPercent: numberToMoney(taxPercent),
+    taxPercent: numberToPercent(taxPercent),
     taxAmountUsd: numberToMoney(taxAmount),
     designerCostUsd: numberToMoney(designerCost),
     otherCostUsd: numberToMoney(otherCost),
@@ -81,6 +86,46 @@ function calculateProfit(row: {
   };
 }
 
+function productIdFromItem(item: Record<string, unknown>) {
+  const value = item.product_id ?? item.productId;
+  return typeof value === "string" && value ? value : null;
+}
+
+function quantityFromItem(item: Record<string, unknown>) {
+  const quantity = Number(item.quantity ?? 1);
+  return Number.isFinite(quantity) && quantity > 0 ? quantity : 1;
+}
+
+function moneyLike(value: unknown) {
+  return typeof value === "string" || typeof value === "number" || value === null || value === undefined ? value : undefined;
+}
+
+function sellingPriceFromItem(item: Record<string, unknown>, fallback: string | number | null | undefined) {
+  return moneyToNumber(
+    moneyLike(
+      item.unit_price_usd ??
+        item.unitPriceUsd ??
+        item.price_usd ??
+        item.priceUsd ??
+        item.line_unit_price_usd,
+    ) ??
+      fallback,
+  );
+}
+
+function productionCostForUnit(setting: CostSetting, sellingPrice: number) {
+  const designerCost = moneyToNumber(setting.designerCostUsd);
+  const taxPercent = moneyToNumber(setting.taxPercent);
+  const taxAmount = sellingPrice * (taxPercent / 100);
+  const otherCost = moneyToNumber(setting.otherCostUsd);
+  const totalCost = designerCost + taxAmount + otherCost;
+  return { designerCost, taxPercent, taxAmount, otherCost, totalCost };
+}
+
+function marginPercent(revenue: number, profit: number) {
+  return revenue > 0 ? (profit / revenue) * 100 : 0;
+}
+
 export async function getProfitCostsWorkspacePayload() {
   const [settings, productRows, orderRows] = await Promise.all([
     db.select().from(profitCostSettings),
@@ -91,16 +136,117 @@ export async function getProfitCostsWorkspacePayload() {
   const settingsByKey = new Map(settings.map((setting) => [key(setting.entityType, setting.entityId), setting]));
   const defaults = settingsByKey.get(key("default")) ?? baseSetting();
 
-  const catalogProducts = productRows.map((product) =>
-    calculateProfit({
+  const productSummaries = new Map<string, {
+    entityType: "product";
+    entityId: string;
+    title: string;
+    status: string;
+    sellingPriceUsd: number;
+    designerCostUsd: number;
+    taxPercent: number;
+    otherCostUsd: number;
+    productionCostPerUnitUsd: number;
+    orderCount: number;
+    unitsSold: number;
+    revenueUsd: number;
+    totalProductionCostUsd: number;
+    netProfitUsd: number;
+    marginPercent: number;
+    orderProfits: Array<Record<string, unknown>>;
+    hasCustomCost: boolean;
+  }>();
+
+  for (const product of productRows) {
+    const setting = settingsByKey.get(key("product", product.id)) ?? defaults;
+    const sellingPrice = moneyToNumber(product.priceUsd);
+    const unitCost = productionCostForUnit(setting, sellingPrice);
+    productSummaries.set(product.id, {
       entityType: "product",
       entityId: product.id,
       title: product.name,
-      revenueUsd: product.priceUsd,
-      setting: settingsByKey.get(key("product", product.id)) ?? defaults,
       status: product.isActive ? "active" : "hidden",
-    }),
-  );
+      sellingPriceUsd: sellingPrice,
+      designerCostUsd: unitCost.designerCost,
+      taxPercent: unitCost.taxPercent,
+      otherCostUsd: unitCost.otherCost,
+      productionCostPerUnitUsd: unitCost.totalCost,
+      orderCount: 0,
+      unitsSold: 0,
+      revenueUsd: 0,
+      totalProductionCostUsd: 0,
+      netProfitUsd: 0,
+      marginPercent: 0,
+      orderProfits: [],
+      hasCustomCost: setting.entityType === "product" && setting.entityId === product.id,
+    });
+  }
+
+  for (const order of orderRows) {
+    if (order.paymentStatus !== "paid") continue;
+    const items = Array.isArray(order.items) ? order.items : [];
+    for (const rawItem of items) {
+      if (!rawItem || typeof rawItem !== "object") continue;
+      const item = rawItem as Record<string, unknown>;
+      const productId = productIdFromItem(item);
+      if (!productId) continue;
+      const summary = productSummaries.get(productId);
+      if (!summary) continue;
+      const quantity = quantityFromItem(item);
+      const unitSellingPrice = sellingPriceFromItem(item, summary.sellingPriceUsd);
+      const setting = settingsByKey.get(key("product", productId)) ?? defaults;
+      const unitCost = productionCostForUnit(setting, unitSellingPrice);
+      const revenue = unitSellingPrice * quantity;
+      const productionCost = unitCost.totalCost * quantity;
+      const netProfit = revenue - productionCost;
+
+      summary.orderCount += 1;
+      summary.unitsSold += quantity;
+      summary.revenueUsd += revenue;
+      summary.totalProductionCostUsd += productionCost;
+      summary.netProfitUsd += netProfit;
+      summary.marginPercent = marginPercent(summary.revenueUsd, summary.netProfitUsd);
+      summary.orderProfits.push({
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        customerName: order.customerName,
+        customerEmail: order.userEmail,
+        quantity,
+        sellingPriceUsd: numberToMoney(unitSellingPrice),
+        productionCostUsd: numberToMoney(unitCost.totalCost),
+        revenueUsd: numberToMoney(revenue),
+        netProfitUsd: numberToMoney(netProfit),
+        marginPercent: numberToMoney(marginPercent(revenue, netProfit)),
+        paymentStatus: order.paymentStatus,
+        orderDate: order.createdAt,
+      });
+    }
+  }
+
+  const catalogProducts = Array.from(productSummaries.values()).map((summary) => ({
+    ...summary,
+    sellingPriceUsd: numberToMoney(summary.sellingPriceUsd),
+    designerCostUsd: numberToMoney(summary.designerCostUsd),
+    taxPercent: numberToPercent(summary.taxPercent),
+    otherCostUsd: numberToMoney(summary.otherCostUsd),
+    productionCostPerUnitUsd: numberToMoney(summary.productionCostPerUnitUsd),
+    revenueUsd: numberToMoney(summary.revenueUsd),
+    totalProductionCostUsd: numberToMoney(summary.totalProductionCostUsd),
+    netProfitUsd: numberToMoney(summary.netProfitUsd),
+    marginPercent: numberToMoney(summary.marginPercent),
+  }));
+
+  const totalRevenue = catalogProducts.reduce((sum, row) => sum + moneyToNumber(row.revenueUsd), 0);
+  const totalProductionCost = catalogProducts.reduce((sum, row) => sum + moneyToNumber(row.totalProductionCostUsd), 0);
+  const totalNetProfit = catalogProducts.reduce((sum, row) => sum + moneyToNumber(row.netProfitUsd), 0);
+  const allProfitSummary = {
+    totalProducts: catalogProducts.length,
+    totalOrders: catalogProducts.reduce((sum, row) => sum + Number(row.orderCount ?? 0), 0),
+    totalUnitsSold: catalogProducts.reduce((sum, row) => sum + Number(row.unitsSold ?? 0), 0),
+    totalRevenueUsd: numberToMoney(totalRevenue),
+    totalProductionCostUsd: numberToMoney(totalProductionCost),
+    totalNetProfitUsd: numberToMoney(totalNetProfit),
+    averageProfitMargin: numberToMoney(marginPercent(totalRevenue, totalNetProfit)),
+  };
 
   const customOrders = orderRows
     .filter(isCustomOrder)
@@ -137,6 +283,7 @@ export async function getProfitCostsWorkspacePayload() {
   return {
     defaults,
     catalogProducts,
+    allProfitSummary,
     customOrders,
     designerPayments,
   };
@@ -162,7 +309,7 @@ export async function upsertProfitCostSettingForAdmin(payload: {
     entityType: payload.entityType,
     entityId,
     productCostUsd: numberToMoney(payload.productCostUsd),
-    taxPercent: numberToMoney(payload.taxPercent),
+    taxPercent: numberToPercent(payload.taxPercent),
     designerCostUsd: numberToMoney(payload.designerCostUsd),
     otherCostUsd: numberToMoney(payload.otherCostUsd),
     designerPaymentPolicy: payload.designerPaymentPolicy ?? "none",

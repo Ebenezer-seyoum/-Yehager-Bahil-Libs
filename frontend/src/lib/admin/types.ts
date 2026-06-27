@@ -95,6 +95,7 @@ export type AdminWorkspaceData = {
   ledgerEntries?: Record<string, unknown>[];
   activeCreditRule?: Record<string, unknown> | null;
   profitDefaults?: Record<string, unknown> | null;
+  allProfitSummary?: Record<string, unknown> | null;
   catalogProfitRows?: Record<string, unknown>[];
   customProfitRows?: Record<string, unknown>[];
   designerPayments?: Record<string, unknown>[];

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { Download, Eye, FileText, Trash2, UploadCloud } from "lucide-react";
+import { CheckCircle2, Download, Eye, FileText, ImageIcon, Trash2, UploadCloud } from "lucide-react";
 import { can } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 
@@ -18,6 +18,17 @@ type SignedUpload = {
 
 type ShippingDocument = { url: string; label: string; uploadedAt?: string };
 type UploadType = "pickup_id" | "pickup_proof" | "shipping_doc";
+type UploadRow = {
+  key: string;
+  type: UploadType;
+  label: string;
+  helper: string;
+  url?: string | null;
+  required: boolean;
+  fixedLabel?: string;
+};
+
+const ACCEPTED_DOCUMENT_TYPES = "image/*,application/pdf,.doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
 export function AdminOrderDocuments({
   orderId,
@@ -43,10 +54,13 @@ export function AdminOrderDocuments({
   const canDownload = can(permissions, "documents.download") || can(permissions, "documents.view");
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [shippingLabel, setShippingLabel] = useState("EMS waybill / shipping document");
 
-  async function uploadFile(type: UploadType, file: File) {
-    setBusyKey(type);
+  function uploadedByLabel(label: string) {
+    return (shippingDocuments ?? []).find((doc) => doc.label?.toLowerCase() === label.toLowerCase());
+  }
+
+  async function uploadFile(item: UploadRow, file: File) {
+    setBusyKey(item.key);
     setError(null);
     try {
       const signRes = await fetch("/api/backend/uploads/sign", {
@@ -78,9 +92,9 @@ export function AdminOrderDocuments({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          type,
+          type: item.type,
           url: uploadJson.secure_url,
-          label: type === "shipping_doc" ? shippingLabel : undefined,
+          label: item.fixedLabel ?? item.label,
         }),
       });
       if (!saveRes.ok) throw new Error("Could not save order document");
@@ -112,89 +126,76 @@ export function AdminOrderDocuments({
 
   const uploadRows = pickup
     ? [
-        { type: "pickup_id" as const, label: "Pickup ID", helper: "Customer ID used for office handover.", url: pickupIdUrl, required: true },
-        { type: "pickup_proof" as const, label: "Pickup Proof", helper: "Signed pickup paper or handover photo.", url: pickupProofUrl ?? pickupSignedDocUrl, required: true },
+        { key: "pickup_id", type: "pickup_id" as const, label: "Pickup QR / Order ID", helper: "Customer order ID, QR, or approved pickup identity document.", url: pickupIdUrl, required: true },
+        { key: "pickup_proof", type: "pickup_proof" as const, label: "Pickup Proof", helper: "Signed handover document, pickup confirmation, or proof photo.", url: pickupProofUrl ?? pickupSignedDocUrl, required: true },
+        { key: "pickup_package_photo", type: "shipping_doc" as const, label: "Package Photo", fixedLabel: "Package Photo", helper: "Final packed order image before customer handover.", url: uploadedByLabel("Package Photo")?.url, required: true },
+        { key: "pickup_delivery_proof", type: "shipping_doc" as const, label: "Delivery Proof", fixedLabel: "Delivery Proof", helper: "Final pickup completion proof after handover.", url: uploadedByLabel("Delivery Proof")?.url, required: true },
       ]
-    : [];
+    : [
+        { key: "shipping_label", type: "shipping_doc" as const, label: "Shipping Label", fixedLabel: "Shipping Label", helper: "EMS label, waybill, or printable shipping slip.", url: uploadedByLabel("Shipping Label")?.url, required: true },
+        { key: "courier_receipt", type: "shipping_doc" as const, label: "Courier Receipt", fixedLabel: "Courier Receipt", helper: "EMS counter receipt or courier acceptance document.", url: uploadedByLabel("Courier Receipt")?.url, required: true },
+        { key: "ems_package_photo", type: "shipping_doc" as const, label: "Package Photo", fixedLabel: "Package Photo", helper: "Photo of the packed parcel before EMS handoff.", url: uploadedByLabel("Package Photo")?.url, required: true },
+        { key: "ems_delivery_proof", type: "shipping_doc" as const, label: "Delivery Proof", fixedLabel: "Delivery Proof", helper: "Delivery confirmation, signed proof, or final carrier proof.", url: uploadedByLabel("Delivery Proof")?.url, required: true },
+      ];
 
   return (
     <div className="space-y-5">
-      {uploadRows.length ? (
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="mb-4 flex flex-col gap-2 border-b border-slate-100 pb-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-black text-slate-950">{pickup ? "Pickup Document Uploads" : "EMS Shipping Document Uploads"}</p>
+            <p className="text-xs font-semibold text-slate-500">Accepted formats: PDF, DOC, DOCX, JPG, PNG, and other image files.</p>
+          </div>
+          <span className="inline-flex w-fit items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-[11px] font-black text-blue-700">
+            <UploadCloud className="h-3.5 w-3.5" /> Professional Upload
+          </span>
+        </div>
+
         <div className="grid gap-3 lg:grid-cols-2">
           {uploadRows.map((item) => (
             <UploadCard
-              key={item.type}
+              key={item.key}
               label={item.label}
               helper={item.helper}
               url={item.url}
               required={item.required}
-              busy={busyKey === item.type}
+              busy={busyKey === item.key}
               disabled={busyKey !== null || (!item.url ? !canUpload : !canUpdate)}
               canDownload={canDownload}
-              onFile={(file) => void uploadFile(item.type, file)}
+              onFile={(file) => void uploadFile(item, file)}
             />
           ))}
         </div>
-      ) : null}
 
-      {!pickup ? (
-        <div className="rounded-2xl border border-slate-200 bg-white p-4">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
-            <label className="flex-1 text-sm">
-              <span className="mb-1 block text-xs font-black uppercase tracking-widest text-slate-500">Shipping Document Label</span>
-              <input
-                value={shippingLabel}
-                onChange={(event) => setShippingLabel(event.target.value)}
-                className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-              />
-            </label>
-            <label className={cn("inline-flex h-11 cursor-pointer items-center justify-center gap-2 rounded-xl px-4 text-sm font-black text-white", canUpload && busyKey === null ? "bg-blue-700 hover:bg-blue-800" : "cursor-not-allowed bg-slate-300")}>
-              <UploadCloud className="h-4 w-4" />
-              {busyKey === "shipping_doc" ? "Uploading..." : "Upload Shipping Document"}
-              <input
-                className="hidden"
-                type="file"
-                accept="image/*,application/pdf"
-                disabled={busyKey !== null || !canUpload}
-                onChange={(event) => {
-                  const file = event.target.files?.[0];
-                  if (file) void uploadFile("shipping_doc", file);
-                }}
-              />
-            </label>
-          </div>
-
-          <div className="mt-4 space-y-2">
-            {(shippingDocuments ?? []).length === 0 ? (
-              <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4 text-sm font-bold text-slate-500">No shipping documents uploaded.</div>
-            ) : (
-              (shippingDocuments ?? []).map((doc, index) => (
-                <div key={`${doc.url}-${index}`} className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="min-w-0">
-                    <p className="break-words text-sm font-black text-slate-950">{doc.label || `Shipping Document ${index + 1}`}</p>
-                    {doc.uploadedAt ? <p className="text-xs font-semibold text-slate-500">{new Date(doc.uploadedAt).toLocaleString()}</p> : null}
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <a href={doc.url} target="_blank" rel="noreferrer" className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-xs font-black text-slate-700 hover:bg-slate-100">
-                      <Eye className="h-3.5 w-3.5" /> Preview
-                    </a>
-                    {canDownload ? (
-                      <a href={doc.url} download className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-slate-900 px-3 text-xs font-black text-white hover:bg-slate-800">
-                        <Download className="h-3.5 w-3.5" /> Download
-                      </a>
-                    ) : null}
-                    {canDelete ? (
-                      <button type="button" disabled={busyKey !== null} onClick={() => void removeShippingDocument(index)} className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-rose-600 px-3 text-xs font-black text-white hover:bg-rose-700 disabled:opacity-60">
-                        <Trash2 className="h-3.5 w-3.5" /> {busyKey === `remove-${index}` ? "Removing..." : "Remove"}
-                      </button>
-                    ) : null}
-                  </div>
+        {(shippingDocuments ?? []).length ? (
+          <div className="mt-5 space-y-2">
+            <p className="text-[11px] font-black uppercase tracking-widest text-slate-500">Uploaded File History</p>
+            {(shippingDocuments ?? []).map((doc, index) => (
+              <div key={`${doc.url}-${index}`} className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <p className="break-words text-sm font-black text-slate-950">{doc.label || `Document ${index + 1}`}</p>
+                  {doc.uploadedAt ? <p className="text-xs font-semibold text-slate-500">{new Date(doc.uploadedAt).toLocaleString()}</p> : null}
                 </div>
-              ))
-            )}
+                <div className="flex flex-wrap gap-2">
+                  <a href={doc.url} target="_blank" rel="noreferrer" className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-xs font-black text-slate-700 hover:bg-slate-100">
+                    <Eye className="h-3.5 w-3.5" /> Preview
+                  </a>
+                  {canDownload ? (
+                    <a href={doc.url} download className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-slate-900 px-3 text-xs font-black text-white hover:bg-slate-800">
+                      <Download className="h-3.5 w-3.5" /> Download
+                    </a>
+                  ) : null}
+                  {canDelete ? (
+                    <button type="button" disabled={busyKey !== null} onClick={() => void removeShippingDocument(index)} className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-rose-600 px-3 text-xs font-black text-white hover:bg-rose-700 disabled:opacity-60">
+                      <Trash2 className="h-3.5 w-3.5" /> {busyKey === `remove-${index}` ? "Removing..." : "Remove"}
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            ))}
           </div>
-        </div>
-      ) : null}
+        ) : null}
+      </div>
 
       {error ? <p className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-bold text-rose-700">{error}</p> : null}
     </div>
@@ -223,8 +224,8 @@ function UploadCard({
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-4">
       <div className="flex items-start gap-3">
-        <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-blue-50 text-blue-700">
-          <FileText className="h-5 w-5" />
+        <div className={cn("grid h-11 w-11 shrink-0 place-items-center rounded-xl", url ? "bg-emerald-50 text-emerald-700" : "bg-blue-50 text-blue-700")}>
+          {url ? <CheckCircle2 className="h-5 w-5" /> : label.toLowerCase().includes("photo") ? <ImageIcon className="h-5 w-5" /> : <FileText className="h-5 w-5" />}
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
@@ -251,7 +252,7 @@ function UploadCard({
           <input
             className="hidden"
             type="file"
-            accept="image/*,application/pdf"
+            accept={ACCEPTED_DOCUMENT_TYPES}
             disabled={disabled}
             onChange={(event) => {
               const file = event.target.files?.[0];

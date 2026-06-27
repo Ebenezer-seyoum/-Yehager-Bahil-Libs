@@ -1,11 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState, type ComponentType, type SVGProps } from "react";
 import { useRouter } from "next/navigation";
 import { 
-  ArrowLeft, 
-  RefreshCw, 
-  Loader2,
   Package,
   Pencil,
   Trash2,
@@ -15,17 +12,41 @@ import {
   Clock,
   Shirt,
   Info,
-  ChevronRight,
   ShieldCheck,
   ImageIcon,
   MapPin,
-  Hash
+  Hash,
+  Save,
+  X
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { dashboardConfirm, dashboardError, dashboardSuccess } from "@/lib/dashboard-swal";
+import { dashboardConfirm, dashboardSuccess, dashboardError } from "@/lib/dashboard-swal";
 import { AdminDetailLayout, AdminDetailHeader } from "@/components/admin/admin-detail-layout";
 
-type Product = Record<string, any>;
+type Product = Record<string, unknown> & {
+  id: string;
+  name?: string | null;
+  images?: string[] | null;
+  uniqueId?: string | null;
+  region?: string | null;
+  subcategory?: string | null;
+  priceUsd?: string | number | null;
+  groomPriceUsd?: string | number | null;
+  tailoringDays?: string | number | null;
+  isActive?: boolean | null;
+  isFeatured?: boolean | null;
+  description?: string | null;
+  fabricType?: string | null;
+  embroideryStyle?: string | null;
+  gender?: string | null;
+  familyRoles?: Array<{ icon?: string; label?: string; price?: string | number | null }> | null;
+  profitCostSetting?: {
+    designerCostUsd?: string | number | null;
+    taxPercent?: string | number | null;
+    otherCostUsd?: string | number | null;
+  } | null;
+};
+type IconComponent = ComponentType<SVGProps<SVGSVGElement>>;
 
 function formatCurrency(value: string | number | null | undefined) {
   const amount = Number(value);
@@ -39,7 +60,13 @@ function formatEtb(value: string | number | null | undefined) {
   return `${Math.round(amount).toLocaleString()} ETB`;
 }
 
-function Field({ label, value, icon: Icon }: { label: string; value?: string | number | null; icon?: any }) {
+function formatPercent(value: string | number | null | undefined) {
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) return "0%";
+  return `${amount.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 4 })}%`;
+}
+
+function Field({ label, value, icon: Icon }: { label: string; value?: string | number | null; icon?: IconComponent }) {
   const display = value && String(value).trim() ? value : "Not provided";
   return (
     <div className="rounded-2xl border border-slate-100 bg-slate-50/50 p-5 shadow-[inset_0_1px_2px_rgba(0,0,0,0.02)]">
@@ -55,9 +82,20 @@ function Field({ label, value, icon: Icon }: { label: string; value?: string | n
 export function ProductDetailClient({ initialProduct }: { initialProduct: Product }) {
   const router = useRouter();
   const [product, setProduct] = useState<Product>(initialProduct);
-  const [busy, setBusy] = useState(false);
+  const [, setBusy] = useState(false);
   const [activeImage, setActiveImage] = useState(product.images?.[0] || "");
   const [activeSection, setActiveSection] = useState<"general" | "pricing" | "garment" | "inventory">("general");
+  const [editingCost, setEditingCost] = useState(false);
+  const [costForm, setCostForm] = useState({
+    designerCostUsd: String(product.profitCostSetting?.designerCostUsd ?? ""),
+    taxPercent: String(product.profitCostSetting?.taxPercent ?? ""),
+    otherCostUsd: String(product.profitCostSetting?.otherCostUsd ?? ""),
+  });
+
+  const productionUnitCost =
+    (Number(product.profitCostSetting?.designerCostUsd ?? 0) || 0) +
+    ((Number(product.priceUsd ?? 0) || 0) * ((Number(product.profitCostSetting?.taxPercent ?? 0) || 0) / 100)) +
+    (Number(product.profitCostSetting?.otherCostUsd ?? 0) || 0);
 
   async function refresh() {
     setBusy(true);
@@ -110,6 +148,53 @@ export function ProductDetailClient({ initialProduct }: { initialProduct: Produc
       } catch { /* ignore */ } finally { setBusy(false); }
     }
   }
+
+  function startCostEdit() {
+    setCostForm({
+      designerCostUsd: String(product.profitCostSetting?.designerCostUsd ?? ""),
+      taxPercent: String(product.profitCostSetting?.taxPercent ?? ""),
+      otherCostUsd: String(product.profitCostSetting?.otherCostUsd ?? ""),
+    });
+    setEditingCost(true);
+  }
+
+  async function saveProductionCost() {
+    if (costForm.designerCostUsd === "" || costForm.taxPercent === "" || costForm.otherCostUsd === "") {
+      void dashboardError("Missing Production Cost", "Designer labor cost, tax rate, and other production costs are mandatory.");
+      return;
+    }
+    const ok = await dashboardConfirm({
+      title: "Update Production Cost?",
+      text: "This will update the product cost settings used for profit calculations.",
+      confirmButtonText: "Yes, Update",
+      tone: "success",
+    });
+    if (!ok) return;
+
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/backend/admin/products/${product.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          designerCostUsd: costForm.designerCostUsd,
+          taxPercent: costForm.taxPercent,
+          otherCostUsd: costForm.otherCostUsd,
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error || json.message || "Failed to update production cost");
+      if (json.data) setProduct(json.data);
+      else await refresh();
+      setEditingCost(false);
+      void dashboardSuccess("Updated", "Production cost settings saved.");
+    } catch (error) {
+      void dashboardError("Update Failed", error instanceof Error ? error.message : "Could not update production cost settings.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <AdminDetailLayout
       topHeader={
@@ -127,7 +212,7 @@ export function ProductDetailClient({ initialProduct }: { initialProduct: Produc
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div className="flex items-center gap-6">
             <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary font-black text-2xl shadow-sm overflow-hidden border border-slate-100">
-               {product.images?.[0] ? <img src={product.images[0]} className="h-full w-full object-cover" /> : <Package className="h-10 w-10" />}
+               {product.images?.[0] ? <img src={product.images[0]} className="h-full w-full object-cover" alt={product.name ?? "Product image"} /> : <Package className="h-10 w-10" />}
             </div>
             <div>
               <h2 className="text-2xl font-black text-slate-900 tracking-tight line-clamp-1">{product.name}</h2>
@@ -162,7 +247,7 @@ export function ProductDetailClient({ initialProduct }: { initialProduct: Produc
         { id: "inventory", label: "Stock & Settings", icon: Package },
       ]}
       activeSection={activeSection}
-      onSectionChange={(id) => setActiveSection(id as any)}
+      onSectionChange={(id) => setActiveSection(id as "general" | "pricing" | "garment" | "inventory")}
     >
           {activeSection === "general" && (
             <div className="space-y-6">
@@ -182,12 +267,12 @@ export function ProductDetailClient({ initialProduct }: { initialProduct: Produc
                    <div className="rounded-2xl border border-slate-100 bg-slate-50/50 p-6">
                      <div className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Media Gallery</div>
                      <div className="aspect-square w-full overflow-hidden rounded-xl bg-slate-100 border border-slate-200">
-                        {activeImage ? <img src={activeImage} className="h-full w-full object-cover" /> : <div className="flex h-full w-full items-center justify-center text-slate-300"><ImageIcon className="h-10 w-10" /></div>}
+                        {activeImage ? <img src={activeImage} className="h-full w-full object-cover" alt={product.name ?? "Product gallery image"} /> : <div className="flex h-full w-full items-center justify-center text-slate-300"><ImageIcon className="h-10 w-10" /></div>}
                      </div>
                      <div className="mt-3 flex flex-wrap gap-2">
                         {product.images?.map((img: string, i: number) => (
                           <button key={i} onClick={() => setActiveImage(img)} className={cn("h-12 w-12 overflow-hidden rounded-lg border transition-all", activeImage === img ? "border-primary shadow-sm" : "border-slate-200 opacity-60 hover:opacity-100")}>
-                            <img src={img} className="h-full w-full object-cover" />
+                            <img src={img} className="h-full w-full object-cover" alt={`${product.name ?? "Product"} thumbnail ${i + 1}`} />
                           </button>
                         ))}
                      </div>
@@ -212,10 +297,93 @@ export function ProductDetailClient({ initialProduct }: { initialProduct: Produc
                      <div className="mt-1 text-xs font-bold text-slate-400">Exclusive Male Attire Link</div>
                   </div>
                </div>
+               <div className="mt-6 rounded-2xl border border-emerald-100 bg-emerald-50/60 p-6">
+                  <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                    <h4 className="text-[10px] font-black uppercase tracking-widest text-emerald-700">Production Cost Setup</h4>
+                    {editingCost ? (
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setEditingCost(false)}
+                          className="inline-flex h-9 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-black text-slate-600 hover:bg-slate-50"
+                        >
+                          <X className="h-4 w-4" /> Cancel
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void saveProductionCost()}
+                          className="inline-flex h-9 items-center gap-2 rounded-xl bg-emerald-700 px-3 text-xs font-black text-white shadow-sm hover:bg-emerald-800"
+                        >
+                          <Save className="h-4 w-4" /> Save Cost
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={startCostEdit}
+                        className="inline-flex h-9 items-center gap-2 rounded-xl border border-emerald-200 bg-white px-3 text-xs font-black text-emerald-700 hover:bg-emerald-50"
+                      >
+                        <Pencil className="h-4 w-4" /> Edit Cost
+                      </button>
+                    )}
+                  </div>
+                  {editingCost ? (
+                    <div className="grid gap-4 md:grid-cols-4">
+                      <label className="rounded-2xl border border-emerald-100 bg-white p-5">
+                        <span className="mb-2 block text-[10px] font-black uppercase tracking-widest text-slate-500">Designer Labor Cost</span>
+                        <input
+                          type="number"
+                          value={costForm.designerCostUsd}
+                          onChange={e => setCostForm(prev => ({ ...prev, designerCostUsd: e.target.value }))}
+                          className="h-10 w-full rounded-xl border border-emerald-100 bg-emerald-50/50 px-3 text-sm font-black outline-none focus:border-emerald-400"
+                          placeholder="0"
+                        />
+                      </label>
+                      <label className="rounded-2xl border border-emerald-100 bg-white p-5">
+                        <span className="mb-2 block text-[10px] font-black uppercase tracking-widest text-slate-500">Production Tax Rate</span>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="number"
+                            value={costForm.taxPercent}
+                            onChange={e => setCostForm(prev => ({ ...prev, taxPercent: e.target.value }))}
+                            className="h-10 min-w-0 flex-1 rounded-xl border border-emerald-100 bg-emerald-50/50 px-3 text-sm font-black outline-none focus:border-emerald-400"
+                            placeholder="0"
+                          />
+                          <span className="text-xs font-black text-slate-400">%</span>
+                        </div>
+                      </label>
+                      <label className="rounded-2xl border border-emerald-100 bg-white p-5">
+                        <span className="mb-2 block text-[10px] font-black uppercase tracking-widest text-slate-500">Other Production Costs</span>
+                        <input
+                          type="number"
+                          value={costForm.otherCostUsd}
+                          onChange={e => setCostForm(prev => ({ ...prev, otherCostUsd: e.target.value }))}
+                          className="h-10 w-full rounded-xl border border-emerald-100 bg-emerald-50/50 px-3 text-sm font-black outline-none focus:border-emerald-400"
+                          placeholder="0"
+                        />
+                      </label>
+                      <Field
+                        label="Estimated Unit Cost"
+                        value={formatCurrency(
+                          (Number(costForm.designerCostUsd || 0) || 0) +
+                          ((Number(product.priceUsd ?? 0) || 0) * ((Number(costForm.taxPercent || 0) || 0) / 100)) +
+                          (Number(costForm.otherCostUsd || 0) || 0)
+                        )}
+                      />
+                    </div>
+                  ) : (
+                    <div className="grid gap-4 md:grid-cols-4">
+                      <Field label="Designer Labor Cost" value={formatCurrency(product.profitCostSetting?.designerCostUsd)} />
+                      <Field label="Production Tax Rate" value={formatPercent(product.profitCostSetting?.taxPercent)} />
+                      <Field label="Other Production Costs" value={formatCurrency(product.profitCostSetting?.otherCostUsd)} />
+                      <Field label="Estimated Unit Cost" value={formatCurrency(productionUnitCost)} />
+                    </div>
+                  )}
+               </div>
                <div className="mt-6 rounded-2xl border border-slate-100 p-6">
                   <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-4">Family Bundle Estimation</h4>
                   <div className="grid gap-3 sm:grid-cols-3">
-                     {product.familyRoles?.map((role: any, i: number) => (
+                     {product.familyRoles?.map((role, i) => (
                        <div key={i} className="flex flex-col rounded-xl bg-slate-50 p-4 text-center">
                           <span className="text-lg mb-1">{role.icon}</span>
                           <span className="text-[10px] font-black uppercase text-slate-500 mb-1">{role.label}</span>

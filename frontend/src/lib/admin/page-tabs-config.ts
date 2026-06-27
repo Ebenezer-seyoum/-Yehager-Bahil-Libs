@@ -154,10 +154,8 @@ export const PAGE_TABS: Record<AdminPageId, AdminTabConfig[]> = {
     { id: "rules", label: "Credit Rules", icon: Settings, accent: "teal" },
   ),
   "profit-costs": tabs(
-    { id: "catalog", label: "Catalog Products", icon: Package, accent: "green" },
-    { id: "custom", label: "Custom Orders", icon: Image, accent: "purple" },
-    { id: "designer", label: "Designer Payments", icon: Wallet, accent: "blue" },
-    { id: "defaults", label: "Cost Defaults", icon: Settings, accent: "teal" },
+    { id: "summary", label: "All Profit Summary", icon: Wallet, accent: "green" },
+    { id: "catalog", label: "Product Profit Details", icon: Package, accent: "blue" },
   ),
   "coupons-discounts": tabs(
     { id: "discounts", label: "Discounts", icon: DollarSign, accent: "green" },
@@ -335,8 +333,8 @@ export const PAGE_META: Record<AdminPageId, Omit<AdminPageMeta, "tabs">> = {
     section: "Finance",
     icon: Wallet,
     title: "Profit & Cost Analysis",
-    subtitle: "Manage cost defaults, product costs, designer payments, and net profit calculations.",
-    defaultTab: "catalog",
+    subtitle: "System-calculated product revenue, production cost, net profit, and margin.",
+    defaultTab: "summary",
   },
   "coupons-discounts": {
     id: "coupons-discounts",

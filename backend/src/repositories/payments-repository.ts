@@ -20,6 +20,53 @@ export async function getOrderByStripeSessionId(stripeSessionId: string) {
   });
 }
 
+export async function updateStripeReceiptOnOrder(params: {
+  orderId: string;
+  stripePaymentIntentId?: string | null;
+  stripeChargeId?: string | null;
+  stripeReceiptUrl?: string | null;
+  stripePaymentStatus?: string | null;
+  stripeAmountReceived?: string | null;
+  stripeCurrency?: string | null;
+  stripeCustomerEmail?: string | null;
+  stripeCustomerName?: string | null;
+  stripePaymentMethodBrand?: string | null;
+  stripePaymentMethodLast4?: string | null;
+  stripePaymentMethodFunding?: string | null;
+  stripePaymentMethodCountry?: string | null;
+  stripePaidAt?: Date | null;
+  stripeFailureReason?: string | null;
+  stripeRefundStatus?: string | null;
+  stripeRefundAmount?: string | null;
+  stripeReceiptMetadata?: Record<string, unknown> | null;
+}) {
+  const [row] = await db
+    .update(orders)
+    .set({
+      stripePaymentIntentId: params.stripePaymentIntentId ?? undefined,
+      stripeChargeId: params.stripeChargeId ?? undefined,
+      stripeReceiptUrl: params.stripeReceiptUrl ?? undefined,
+      stripePaymentStatus: params.stripePaymentStatus ?? undefined,
+      stripeAmountReceived: params.stripeAmountReceived ?? undefined,
+      stripeCurrency: params.stripeCurrency ?? undefined,
+      stripeCustomerEmail: params.stripeCustomerEmail ?? undefined,
+      stripeCustomerName: params.stripeCustomerName ?? undefined,
+      stripePaymentMethodBrand: params.stripePaymentMethodBrand ?? undefined,
+      stripePaymentMethodLast4: params.stripePaymentMethodLast4 ?? undefined,
+      stripePaymentMethodFunding: params.stripePaymentMethodFunding ?? undefined,
+      stripePaymentMethodCountry: params.stripePaymentMethodCountry ?? undefined,
+      stripePaidAt: params.stripePaidAt ?? undefined,
+      stripeFailureReason: params.stripeFailureReason ?? undefined,
+      stripeRefundStatus: params.stripeRefundStatus ?? undefined,
+      stripeRefundAmount: params.stripeRefundAmount ?? undefined,
+      stripeReceiptMetadata: params.stripeReceiptMetadata ?? undefined,
+      updatedAt: new Date(),
+    })
+    .where(eq(orders.id, params.orderId))
+    .returning();
+  return row;
+}
+
 export async function recordWebhookEventIfNew(payload: {
   eventId: string;
   eventType: string;

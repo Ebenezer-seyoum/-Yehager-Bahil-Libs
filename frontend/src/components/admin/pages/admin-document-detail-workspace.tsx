@@ -179,8 +179,11 @@ export function AdminDocumentDetailWorkspace({
   const order = orderData as OrderRecord;
   const isPickup = (order.fulfillmentType ?? "").toLowerCase() === "pickup";
   const shippingDocuments = (order.shippingDocuments ?? []).map((doc) => ({ ...doc, uploadedAt: doc.uploadedAt ?? undefined }));
+  const uploadedByLabel = (label: string) => shippingDocuments.find((doc) => doc.label?.toLowerCase() === label.toLowerCase());
   const pickupComplete = !isPickup || (Boolean(order.pickupIdUrl) && Boolean(order.pickupProofUrl || order.pickupSignedDocUrl));
-  const docsComplete = pickupComplete && (isPickup || shippingDocuments.length > 0);
+  const requiredDeliveryLabels = isPickup ? ["Package Photo", "Delivery Proof"] : ["Shipping Label", "Courier Receipt", "Package Photo", "Delivery Proof"];
+  const deliveryDocsComplete = requiredDeliveryLabels.every((label) => Boolean(uploadedByLabel(label)?.url));
+  const docsComplete = pickupComplete && deliveryDocsComplete;
   const needsReview = !pickupComplete || order.paymentStatus === "awaiting_verification";
   const images = orderImages(order);
   const bankTransfer = order.paymentMethod === "etb_bank_transfer" || order.paymentCurrency === "ETB";
@@ -190,18 +193,26 @@ export function AdminDocumentDetailWorkspace({
     { label: "Invoice", icon: ReceiptText, status: true, helper: "Generated from order items, totals, discount, shipping, and payment status.", url: null },
     { label: bankTransfer ? "Payment Proof" : "Stripe Transaction Document", icon: CreditCard, status: bankTransfer ? Boolean(order.paymentProofUrl) : Boolean(order.paymentStatus), helper: bankTransfer ? "Uploaded from the payment page for bank transfer review." : "Generated from Stripe/payment transaction status.", url: order.paymentProofUrl },
   ];
-  const uploadedDocs = isPickup
+  const fulfillmentDocs = isPickup
     ? [
-        { label: "Pickup ID", icon: FileText, status: Boolean(order.pickupIdUrl), helper: "Uploaded ID used for office pickup handover.", url: order.pickupIdUrl },
-        { label: "Pickup Proof", icon: FileCheck, status: Boolean(order.pickupProofUrl || order.pickupSignedDocUrl), helper: "Uploaded signed pickup paper or handover proof.", url: order.pickupProofUrl ?? order.pickupSignedDocUrl },
+        { label: "Pickup QR / Order ID", icon: FileText, status: Boolean(order.pickupIdUrl), helper: "Uploaded order ID, QR, or identity file used for office pickup handover.", url: order.pickupIdUrl },
+        { label: "Pickup Proof", icon: FileCheck, status: Boolean(order.pickupProofUrl || order.pickupSignedDocUrl), helper: "Uploaded signed pickup paper, handover proof, or confirmation photo.", url: order.pickupProofUrl ?? order.pickupSignedDocUrl },
+        { label: "Package Photo", icon: ImageIcon, status: Boolean(uploadedByLabel("Package Photo")?.url), helper: "Final packed order photo before customer handover.", url: uploadedByLabel("Package Photo")?.url },
+        { label: "Delivery Proof", icon: FileCheck, status: Boolean(uploadedByLabel("Delivery Proof")?.url), helper: "Final pickup completion proof after handover.", url: uploadedByLabel("Delivery Proof")?.url },
       ]
-    : shippingDocuments.map((doc, index) => ({
-        label: doc.label || `Shipping Document ${index + 1}`,
-        icon: Truck,
-        status: Boolean(doc.url),
-        helper: doc.uploadedAt ? `Uploaded ${new Date(doc.uploadedAt).toLocaleString()}` : "Uploaded EMS waybill, receipt, or shipping paper.",
-        url: doc.url,
-      }));
+    : [
+        { label: "Shipping Label", icon: Truck, status: Boolean(uploadedByLabel("Shipping Label")?.url), helper: "EMS label, waybill, or printable shipping slip.", url: uploadedByLabel("Shipping Label")?.url },
+        { label: "Courier Receipt", icon: ReceiptText, status: Boolean(uploadedByLabel("Courier Receipt")?.url), helper: "EMS counter receipt or courier acceptance document.", url: uploadedByLabel("Courier Receipt")?.url },
+        { label: "Package Photo", icon: ImageIcon, status: Boolean(uploadedByLabel("Package Photo")?.url), helper: "Photo of the packed parcel before EMS handoff.", url: uploadedByLabel("Package Photo")?.url },
+        { label: "Delivery Proof", icon: FileCheck, status: Boolean(uploadedByLabel("Delivery Proof")?.url), helper: "Delivery confirmation, signed proof, or final carrier proof.", url: uploadedByLabel("Delivery Proof")?.url },
+      ];
+  const systemDocs = [
+    ...generatedDocs,
+    { label: "Shipping Document", icon: Truck, status: isPickup ? Boolean(order.pickupIdUrl || order.pickupProofUrl || order.pickupSignedDocUrl) : Boolean(uploadedByLabel("Shipping Label")?.url || uploadedByLabel("Courier Receipt")?.url || shippingDocuments.length), helper: isPickup ? "Pickup fulfillment documents are attached to this order." : "EMS shipping label, courier receipt, or related shipping document.", url: isPickup ? order.pickupProofUrl ?? order.pickupSignedDocUrl ?? order.pickupIdUrl : uploadedByLabel("Shipping Label")?.url ?? uploadedByLabel("Courier Receipt")?.url ?? shippingDocuments[0]?.url },
+    { label: "Pick Up ID", icon: FileText, status: isPickup ? Boolean(order.pickupIdUrl) : true, helper: isPickup ? "Pickup order ID / QR document." : "Not required for EMS delivery orders.", url: order.pickupIdUrl },
+    { label: "Pick Up Proof", icon: FileCheck, status: isPickup ? Boolean(order.pickupProofUrl || order.pickupSignedDocUrl) : true, helper: isPickup ? "Pickup handover proof." : "Not required for EMS delivery orders.", url: order.pickupProofUrl ?? order.pickupSignedDocUrl },
+    { label: "Package Photo", icon: ImageIcon, status: Boolean(uploadedByLabel("Package Photo")?.url), helper: "Professional package photo attached by fulfillment staff.", url: uploadedByLabel("Package Photo")?.url },
+  ];
 
   const sections = [
     { id: "view-documents", label: "View Documents", icon: FileText },
@@ -248,24 +259,18 @@ export function AdminDocumentDetailWorkspace({
 
           <div className="space-y-3">
             <div>
-              <p className="mb-2 text-[11px] font-black uppercase tracking-widest text-slate-500">Generated Documents</p>
+              <p className="mb-2 text-[11px] font-black uppercase tracking-widest text-slate-500">Final Professional System Documents</p>
               <div className="space-y-2">
-                {generatedDocs.map((doc) => (
-                  <DocumentRow key={doc.label} doc={doc} badge="Generated" />
+                {systemDocs.map((doc) => (
+                  <DocumentRow key={doc.label} doc={doc} badge={["Order Item Image", "Measurement Sheet", "Invoice", bankTransfer ? "Payment Proof" : "Stripe Transaction Document"].includes(doc.label) ? "Generated" : "Uploaded"} />
                 ))}
               </div>
             </div>
 
             <div>
-              <p className="mb-2 text-[11px] font-black uppercase tracking-widest text-slate-500">Uploaded Documents</p>
+              <p className="mb-2 text-[11px] font-black uppercase tracking-widest text-slate-500">{isPickup ? "Pickup Documents" : "EMS Shipping Documents"}</p>
               <div className="space-y-2">
-                {uploadedDocs.length ? (
-                  uploadedDocs.map((doc) => <DocumentRow key={doc.label} doc={doc} badge="Uploaded" />)
-                ) : (
-                  <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4 text-sm font-bold text-slate-500">
-                    No uploaded delivery documents yet.
-                  </div>
-                )}
+                {fulfillmentDocs.map((doc) => <DocumentRow key={doc.label} doc={doc} badge="Uploaded" />)}
               </div>
             </div>
           </div>

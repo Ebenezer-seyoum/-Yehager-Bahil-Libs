@@ -13,7 +13,6 @@ import {
   RefreshCw,
   Package,
   ShieldCheck,
-  Upload,
   Info,
   DollarSign,
   Shirt,
@@ -33,6 +32,11 @@ type Product = {
   uniqueId?: string | null;
   priceUsd: string | number;
   groomPriceUsd?: string | number | null;
+  profitCostSetting?: {
+    designerCostUsd?: string | number | null;
+    taxPercent?: string | number | null;
+    otherCostUsd?: string | number | null;
+  } | null;
   gender: "male" | "female" | "unisex";
   images?: string[];
   fabricType?: string | null;
@@ -40,6 +44,12 @@ type Product = {
   tailoringDays?: number | null;
   isActive?: boolean;
   isFeatured?: boolean;
+};
+
+type ProductPatch = Partial<Product> & {
+  designerCostUsd?: number;
+  taxPercent?: number;
+  otherCostUsd?: number;
 };
 
 type SignedUpload = {
@@ -73,11 +83,41 @@ function formatEtb(value: string | number | null | undefined) {
   return `${Math.round(amount).toLocaleString()} ETB`;
 }
 
+function formatPercent(value: string | number | null | undefined) {
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) return "0%";
+  return `${amount.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 4 })}%`;
+}
+
 function parseImages(value: string) {
   return value
     .split(/\r?\n|,/)
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+function parseRequiredNumber(value: string, label: string) {
+  if (value.trim() === "") throw new Error(`${label} is required.`);
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0) throw new Error(`${label} must be a valid non-negative number.`);
+  return parsed;
+}
+
+function nearlyEqual(left: number, right: number) {
+  return Math.abs(left - right) < 0.00001;
+}
+
+async function responseErrorMessage(response: Response, fallback: string) {
+  const text = await response.text().catch(() => "");
+  if (!text.trim()) return fallback;
+  try {
+    const payload = JSON.parse(text) as { error?: unknown; message?: unknown };
+    const message = payload.error ?? payload.message;
+    if (typeof message === "string" && message.trim()) return message.trim();
+  } catch {
+    // Use the raw response text below.
+  }
+  return text.trim() || fallback;
 }
 
 function draftFromProduct(product: Product) {
@@ -86,12 +126,39 @@ function draftFromProduct(product: Product) {
     description: product.description ?? "",
     priceUsd: String(product.priceUsd ?? ""),
     groomPriceUsd: String(product.groomPriceUsd ?? ""),
+    designerCostUsd: String(product.profitCostSetting?.designerCostUsd ?? ""),
+    taxPercent: String(product.profitCostSetting?.taxPercent ?? ""),
+    otherCostUsd: String(product.profitCostSetting?.otherCostUsd ?? ""),
     gender: product.gender ?? "female",
     fabricType: product.fabricType ?? "",
     embroideryStyle: product.embroideryStyle ?? "",
     tailoringDays: String(product.tailoringDays ?? 30),
     imagesText: (product.images ?? []).join("\n"),
   };
+}
+
+function ReadOnlyField({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
+      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">{label}</p>
+      <p className="text-sm font-extrabold capitalize text-slate-900">{value || "—"}</p>
+    </div>
+  );
+}
+
+function EditableField({ label, value, onChange, placeholder, type = "text" }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string; type?: string }) {
+  return (
+    <div className="rounded-2xl border border-emerald-200 bg-emerald-50/30 p-4">
+      <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600 mb-1">{label}</p>
+      <input
+        type={type}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="w-full rounded-lg border border-emerald-200 bg-white px-3 py-2 text-sm font-bold text-slate-900 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-200 transition-all"
+      />
+    </div>
+  );
 }
 
 export function AdminProductDetailPanel({
@@ -119,6 +186,12 @@ export function AdminProductDetailPanel({
   const nameParts = (product.name || "").split(" — ");
   const cleanProductName = nameParts[0];
   const displayUniqueId = product.uniqueId || (nameParts.length > 1 ? nameParts[1] : product.id.slice(0, 8).toUpperCase());
+  const designerCost = Number(product.profitCostSetting?.designerCostUsd ?? 0) || 0;
+  const taxPercent = Number(product.profitCostSetting?.taxPercent ?? 0) || 0;
+  const otherCost = Number(product.profitCostSetting?.otherCostUsd ?? 0) || 0;
+  const productionTaxCost = (Number(product.priceUsd ?? 0) || 0) * (taxPercent / 100);
+  const productionUnitCost = designerCost + productionTaxCost + otherCost;
+  const unitProfit = (Number(product.priceUsd ?? 0) || 0) - productionUnitCost;
 
   function isDirty() {
     const original = draftFromProduct(product);
@@ -127,6 +200,9 @@ export function AdminProductDetailPanel({
       original.description !== draft.description ||
       original.priceUsd !== draft.priceUsd ||
       original.groomPriceUsd !== draft.groomPriceUsd ||
+      original.designerCostUsd !== draft.designerCostUsd ||
+      original.taxPercent !== draft.taxPercent ||
+      original.otherCostUsd !== draft.otherCostUsd ||
       original.gender !== draft.gender ||
       original.fabricType !== draft.fabricType ||
       original.embroideryStyle !== draft.embroideryStyle ||
@@ -166,7 +242,14 @@ export function AdminProductDetailPanel({
     void (type === "success" ? dashboardSuccess("Success", message) : dashboardError("Something went wrong", message));
   }
 
-  async function patchProduct(patch: Partial<Product>, successMessage: string) {
+  async function loadFreshProduct(fallback?: Product) {
+    const response = await fetch(`/api/backend/admin/products/${product.id}`);
+    if (!response.ok) throw new Error(await responseErrorMessage(response, "Product refresh failed"));
+    const payload = (await response.json()) as { data?: Product };
+    return payload.data ?? fallback ?? product;
+  }
+
+  async function patchProduct(patch: ProductPatch, successMessage: string, expectedTaxPercent?: number) {
     if (!canEdit) {
       showResult("error", "You do not have permission to edit products.");
       return;
@@ -179,15 +262,19 @@ export function AdminProductDetailPanel({
         body: JSON.stringify(patch),
       });
       if (!response.ok) {
-        const payload = (await response.json().catch(() => null)) as { error?: string } | null;
-        throw new Error(payload?.error ?? "Product update failed");
+        throw new Error(await responseErrorMessage(response, "Product update failed"));
       }
       const payload = (await response.json()) as { data?: Product };
-      if (payload.data) {
-        setProduct(payload.data);
-        setDraft(draftFromProduct(payload.data));
-        setSelectedImage(payload.data.images?.[0] ?? "");
+      const freshProduct = await loadFreshProduct(payload.data);
+      if (expectedTaxPercent !== undefined) {
+        const savedTaxPercent = Number(freshProduct.profitCostSetting?.taxPercent ?? Number.NaN);
+        if (!Number.isFinite(savedTaxPercent) || !nearlyEqual(savedTaxPercent, expectedTaxPercent)) {
+          throw new Error("Production tax rate was not saved correctly. Please try again.");
+        }
       }
+      setProduct(freshProduct);
+      setDraft(draftFromProduct(freshProduct));
+      setSelectedImage(freshProduct.images?.[0] ?? "");
       showResult("success", successMessage);
       router.refresh();
     } catch (error) {
@@ -235,8 +322,7 @@ export function AdminProductDetailPanel({
     try {
       const response = await fetch(`/api/backend/admin/products/${product.id}`, { method: "DELETE" });
       if (!response.ok) {
-        const payload = (await response.json().catch(() => null)) as { error?: string } | null;
-        throw new Error(payload?.error ?? "Product delete failed");
+        throw new Error(await responseErrorMessage(response, "Product delete failed"));
       }
       await dashboardSuccess("Deleted", "Product deleted successfully.");
       router.push("/admin/inventory");
@@ -250,6 +336,17 @@ export function AdminProductDetailPanel({
 
   async function saveEdit() {
     if (!canEdit) return;
+    let designerCostUsd: number;
+    let taxPercent: number;
+    let otherCostUsd: number;
+    try {
+      designerCostUsd = parseRequiredNumber(draft.designerCostUsd, "Designer labor cost");
+      taxPercent = parseRequiredNumber(draft.taxPercent, "Production tax rate");
+      otherCostUsd = parseRequiredNumber(draft.otherCostUsd, "Other production costs");
+    } catch (error) {
+      showResult("error", error instanceof Error ? error.message : "Production cost values are invalid.");
+      return;
+    }
     const confirmed = await confirmAction("Save product changes?", "This will update the product information shown in admin and storefront.", "Save", "question");
     if (!confirmed) return;
     await patchProduct(
@@ -258,6 +355,9 @@ export function AdminProductDetailPanel({
         description: draft.description,
         priceUsd: Number(draft.priceUsd),
         groomPriceUsd: draft.groomPriceUsd ? Number(draft.groomPriceUsd) : null,
+        designerCostUsd,
+        taxPercent,
+        otherCostUsd,
         gender: draft.gender as Product["gender"],
         fabricType: draft.fabricType,
         embroideryStyle: draft.embroideryStyle,
@@ -265,6 +365,7 @@ export function AdminProductDetailPanel({
         images: parseImages(draft.imagesText),
       },
       "Product updated successfully.",
+      taxPercent,
     );
     setEditing(false);
   }
@@ -326,31 +427,6 @@ export function AdminProductDetailPanel({
     }
   }
 
-  /* ────────────────────────── Field helper ────────────────────────── */
-  function ReadOnlyField({ label, value }: { label: string; value: string }) {
-    return (
-      <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
-        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">{label}</p>
-        <p className="text-sm font-extrabold capitalize text-slate-900">{value || "—"}</p>
-      </div>
-    );
-  }
-
-  function EditableField({ label, value, onChange, placeholder, type = "text" }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string; type?: string }) {
-    return (
-      <div className="rounded-2xl border border-emerald-200 bg-emerald-50/30 p-4">
-        <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600 mb-1">{label}</p>
-        <input
-          type={type}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={placeholder}
-          className="w-full rounded-lg border border-emerald-200 bg-white px-3 py-2 text-sm font-bold text-slate-900 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-200 transition-all"
-        />
-      </div>
-    );
-  }
-
   /* ─────────────────────── Tab Content Renderers ─────────────────────── */
 
   function renderProductInfo() {
@@ -396,27 +472,75 @@ export function AdminProductDetailPanel({
           <DollarSign className="h-4 w-4" /> Pricing & Cost
         </h3>
         {editing ? (
-          <div className="grid gap-4 sm:grid-cols-2">
-            <EditableField label="USD Price" value={draft.priceUsd} onChange={(v) => setDraft((c) => ({ ...c, priceUsd: v }))} type="number" placeholder="0.00" />
-            <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">ETB Equivalent</p>
-              <p className="text-2xl font-extrabold text-slate-900">{formatEtb(draft.priceUsd || 0)}</p>
+          <div className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <EditableField label="USD Price" value={draft.priceUsd} onChange={(v) => setDraft((c) => ({ ...c, priceUsd: v }))} type="number" placeholder="0.00" />
+              <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">ETB Equivalent</p>
+                <p className="text-2xl font-extrabold text-slate-900">{formatEtb(draft.priceUsd || 0)}</p>
+              </div>
+              <EditableField label="Groom / Men Price (USD)" value={draft.groomPriceUsd} onChange={(v) => setDraft((c) => ({ ...c, groomPriceUsd: v }))} type="number" placeholder="Optional" />
             </div>
-            <EditableField label="Groom / Men Price (USD)" value={draft.groomPriceUsd} onChange={(v) => setDraft((c) => ({ ...c, groomPriceUsd: v }))} type="number" placeholder="Optional" />
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50/40 p-5">
+              <p className="mb-4 text-[10px] font-black uppercase tracking-widest text-emerald-700">Production Cost Detail</p>
+              <div className="grid gap-4 sm:grid-cols-3">
+                <EditableField label="Designer Labor Cost" value={draft.designerCostUsd} onChange={(v) => setDraft((c) => ({ ...c, designerCostUsd: v }))} type="number" placeholder="0.00" />
+                <EditableField label="Production Tax Rate (%)" value={draft.taxPercent} onChange={(v) => setDraft((c) => ({ ...c, taxPercent: v }))} type="number" placeholder="0" />
+                <EditableField label="Other Production Costs" value={draft.otherCostUsd} onChange={(v) => setDraft((c) => ({ ...c, otherCostUsd: v }))} type="number" placeholder="0.00" />
+              </div>
+              <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                <ReadOnlyField
+                  label="Estimated Unit Cost"
+                  value={formatCurrency(
+                    (Number(draft.designerCostUsd || 0) || 0) +
+                    ((Number(draft.priceUsd || 0) || 0) * ((Number(draft.taxPercent || 0) || 0) / 100)) +
+                    (Number(draft.otherCostUsd || 0) || 0)
+                  )}
+                />
+                <ReadOnlyField
+                  label="Estimated Unit Profit"
+                  value={formatCurrency(
+                    (Number(draft.priceUsd || 0) || 0) -
+                    ((Number(draft.designerCostUsd || 0) || 0) +
+                    ((Number(draft.priceUsd || 0) || 0) * ((Number(draft.taxPercent || 0) || 0) / 100)) +
+                    (Number(draft.otherCostUsd || 0) || 0))
+                  )}
+                />
+                <ReadOnlyField label="Tax Cost From Price" value={formatCurrency((Number(draft.priceUsd || 0) || 0) * ((Number(draft.taxPercent || 0) || 0) / 100))} />
+              </div>
+            </div>
           </div>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-3">
-            <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-5">
-              <p className="text-xs font-bold uppercase tracking-widest text-emerald-700">USD Price</p>
-              <p className="mt-2 text-3xl font-extrabold text-emerald-800">{formatCurrency(product.priceUsd)}</p>
+          <div className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-3">
+              <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-5">
+                <p className="text-xs font-bold uppercase tracking-widest text-emerald-700">USD Price</p>
+                <p className="mt-2 text-3xl font-extrabold text-emerald-800">{formatCurrency(product.priceUsd)}</p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+                <p className="text-xs font-bold uppercase tracking-widest text-slate-500">ETB Price</p>
+                <p className="mt-2 text-2xl font-extrabold text-slate-950">{formatEtb(product.priceUsd)}</p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+                <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Men / Groom</p>
+                <p className="mt-2 text-2xl font-extrabold text-slate-950">{product.groomPriceUsd ? formatCurrency(product.groomPriceUsd) : "—"}</p>
+              </div>
             </div>
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
-              <p className="text-xs font-bold uppercase tracking-widest text-slate-500">ETB Price</p>
-              <p className="mt-2 text-2xl font-extrabold text-slate-950">{formatEtb(product.priceUsd)}</p>
-            </div>
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
-              <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Men / Groom</p>
-              <p className="mt-2 text-2xl font-extrabold text-slate-950">{product.groomPriceUsd ? formatCurrency(product.groomPriceUsd) : "—"}</p>
+            <div className="rounded-2xl border border-emerald-100 bg-emerald-50/70 p-5">
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <p className="text-[10px] font-black uppercase tracking-widest text-emerald-700">Production Cost Detail</p>
+                <span className="rounded-full border border-emerald-200 bg-white px-3 py-1 text-[10px] font-black uppercase tracking-widest text-emerald-700">
+                  Profit {formatCurrency(unitProfit)}
+                </span>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <ReadOnlyField label="Designer Labor Cost" value={formatCurrency(designerCost)} />
+                <ReadOnlyField label="Production Tax Rate" value={formatPercent(taxPercent)} />
+                <ReadOnlyField label="Tax Cost From Price" value={formatCurrency(productionTaxCost)} />
+                <ReadOnlyField label="Other Production Costs" value={formatCurrency(otherCost)} />
+                <ReadOnlyField label="Estimated Unit Cost" value={formatCurrency(productionUnitCost)} />
+                <ReadOnlyField label="Estimated Net Profit" value={formatCurrency(unitProfit)} />
+              </div>
             </div>
           </div>
         )}

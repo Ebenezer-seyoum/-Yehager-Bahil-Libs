@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState, useEffect } from "react";
+import { useCallback, useMemo, useRef, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { 
   Loader2,
@@ -37,6 +37,9 @@ type BulkProduct = {
   middleText: string;
   files: File[];
   priceUsd: string;
+  designerCostUsd: string;
+  taxPercent: string;
+  otherCostUsd: string;
   region: string;
   subcategory: string;
   gender: string;
@@ -94,6 +97,54 @@ function fallbackHomepageSections(): HomepageSection[] {
   }));
 }
 
+function normalizeHomepageSections(sections: HomepageSection[] | undefined): HomepageSection[] {
+  const mergedByName = new Map<string, HomepageSection>();
+
+  [...fallbackHomepageSections(), ...(Array.isArray(sections) ? sections : [])].forEach((section, index) => {
+    const name = section.name?.trim();
+    if (!name) return;
+    const key = name.toLowerCase();
+    const incomingCollections = (section.collections ?? section.subsections ?? []).map((collection, collectionIndex) => ({
+      ...collection,
+      name: collection.name.trim(),
+      isActive: collection.isActive ?? true,
+      sortOrder: collection.sortOrder ?? collectionIndex,
+    })).filter(collection => collection.name);
+    const existing = mergedByName.get(key);
+
+    if (!existing) {
+      mergedByName.set(key, {
+        ...section,
+        name,
+        isActive: section.isActive ?? true,
+        sortOrder: section.sortOrder ?? index,
+        collections: incomingCollections,
+      });
+      return;
+    }
+
+    const collectionsByName = new Map(
+      (existing.collections ?? existing.subsections ?? []).map(collection => [collection.name.trim().toLowerCase(), collection]),
+    );
+    incomingCollections.forEach(collection => {
+      if (!collectionsByName.has(collection.name.toLowerCase())) {
+        collectionsByName.set(collection.name.toLowerCase(), collection);
+      }
+    });
+
+    mergedByName.set(key, {
+      ...existing,
+      ...section,
+      name,
+      isActive: existing.isActive || section.isActive,
+      sortOrder: Math.min(existing.sortOrder, section.sortOrder ?? existing.sortOrder),
+      collections: Array.from(collectionsByName.values()).sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name)),
+    });
+  });
+
+  return Array.from(mergedByName.values()).sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name));
+}
+
 // Tribe & region abbreviation helpers for generated product IDs.
 function getRegionCode(r: string): string {
   const map: Record<string, string> = {
@@ -145,6 +196,7 @@ function getSubcategoryCode(sub: string): string {
 
 export function ProductCreateClient() {
   const router = useRouter();
+  const folderInputRef = useRef<HTMLInputElement | null>(null);
   const [uploadMode, setUploadMode] = useState<"single" | "multiple">("single");
   const [busy, setBusy] = useState(false);
   const [formNotice, setFormNotice] = useState<{ tone: "success" | "error"; title: string; message: string } | null>(null);
@@ -152,7 +204,7 @@ export function ProductCreateClient() {
 
   // Existing products list for increment counts
   const [existingProducts, setExistingProducts] = useState<ExistingProduct[]>([]);
-  const [homepageSections, setHomepageSections] = useState<HomepageSection[]>(() => fallbackHomepageSections());
+  const [homepageSections, setHomepageSections] = useState<HomepageSection[]>(() => normalizeHomepageSections(undefined));
 
   useEffect(() => {
     fetch("/api/backend/admin/products?limit=200")
@@ -167,8 +219,8 @@ export function ProductCreateClient() {
     fetch("/api/backend/admin/homepage-sections")
       .then(res => res.json())
       .then(json => {
-        if (Array.isArray(json.data) && json.data.length) {
-          setHomepageSections(json.data);
+        if (Array.isArray(json.data)) {
+          setHomepageSections(normalizeHomepageSections(json.data));
         }
       })
       .catch(err => console.error("Error fetching sections for product insert", err));
@@ -190,6 +242,9 @@ export function ProductCreateClient() {
   const [description, setDescription] = useState("");
   const [priceUsd, setPriceUsd] = useState("");
   const [groomPriceUsd, setGroomPriceUsd] = useState("");
+  const [designerCostUsd, setDesignerCostUsd] = useState("");
+  const [taxPercent, setTaxPercent] = useState("");
+  const [otherCostUsd, setOtherCostUsd] = useState("");
   const [gender, setGender] = useState("female");
   const [fabricType, setFabricType] = useState("");
   const [embroideryStyle, setEmbroideryStyle] = useState("");
@@ -197,13 +252,12 @@ export function ProductCreateClient() {
   const [isActive, setIsActive] = useState(true);
   const [isFeatured, setIsFeatured] = useState(false);
   
-  // Single mode 4 file slots
-  const [singleFiles, setSingleFiles] = useState<(File | null)[]>([null, null, null, null]);
+  // Single mode flexible image list
+  const [singleFiles, setSingleFiles] = useState<File[]>([]);
 
   const sectionOptions = useMemo(
     () =>
       homepageSections
-        .filter(section => section.isActive)
         .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name)),
     [homepageSections],
   );
@@ -212,7 +266,6 @@ export function ProductCreateClient() {
   const getSubsectionsForSection = useCallback((sectionName: string) => {
     const section = sectionOptions.find(item => item.name === sectionName);
     return (section?.collections ?? section?.subsections ?? [])
-      .filter(subsection => subsection.isActive)
       .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name))
       .map(subsection => subsection.name);
   }, [sectionOptions]);
@@ -240,6 +293,9 @@ export function ProductCreateClient() {
   const [defaultRegion, setDefaultRegion] = useState(REGIONS[0]);
   const [defaultSubcategory, setDefaultSubcategory] = useState(TAXONOMY[REGIONS[0]]?.[0] || "");
   const [defaultPrice, setDefaultPrice] = useState("120");
+  const [defaultDesignerCost, setDefaultDesignerCost] = useState("0");
+  const [defaultTaxPercent, setDefaultTaxPercent] = useState("0");
+  const [defaultOtherCost, setDefaultOtherCost] = useState("0");
   const [defaultGender, setDefaultGender] = useState("unisex");
   const [defaultFabric, setDefaultFabric] = useState("Pure Cotton");
   const [defaultEmbroidery, setDefaultEmbroidery] = useState("Traditional Tilet");
@@ -316,9 +372,13 @@ export function ProductCreateClient() {
       setFormNotice({ tone: "error", title: "Missing Data", message: "Please enter a base price." });
       return;
     }
-    const uploadedFiles = singleFiles.filter((f): f is File => f !== null);
-    if (uploadedFiles.length !== 4) {
-      setFormNotice({ tone: "error", title: "Missing Images", message: "Please upload exactly 4 images for different poses." });
+    if (designerCostUsd === "" || taxPercent === "" || otherCostUsd === "") {
+      setFormNotice({ tone: "error", title: "Missing Production Cost", message: "Designer labor cost, tax rate, and other production costs are mandatory." });
+      return;
+    }
+    const uploadedFiles = singleFiles.filter(file => file.type.startsWith("image/"));
+    if (uploadedFiles.length < 1) {
+      setFormNotice({ tone: "error", title: "Missing Images", message: "Please upload at least one product image." });
       return;
     }
 
@@ -346,6 +406,9 @@ export function ProductCreateClient() {
         subcategory: subcategory || undefined,
         priceUsd: Number(priceUsd),
         groomPriceUsd: groomPriceUsd ? Number(groomPriceUsd) : null,
+        designerCostUsd: Number(designerCostUsd),
+        taxPercent: Number(taxPercent),
+        otherCostUsd: Number(otherCostUsd),
         gender,
         fabricType: fabricType || undefined,
         embroideryStyle: embroideryStyle || undefined,
@@ -376,17 +439,22 @@ export function ProductCreateClient() {
     }
   }
 
-  // File slot helpers
-  function handleSingleFileChange(index: number, file: File | null) {
-    const updated = [...singleFiles];
-    updated[index] = file;
-    setSingleFiles(updated);
+  // File helpers
+  function addSingleFiles(files: FileList | null) {
+    const images = Array.from(files || []).filter(file => file.type.startsWith("image/"));
+    if (!images.length) return;
+    setSingleFiles(prev => [...prev, ...images]);
+  }
+
+  function removeSingleFile(index: number) {
+    setSingleFiles(prev => prev.filter((_, fileIndex) => fileIndex !== index));
   }
 
   // --- Handle Bulk Folder Select ---
   function handleFolderSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const fileList = Array.from(e.target.files || []);
     const imgFiles = fileList.filter(file => file.type.startsWith("image/"));
+    e.currentTarget.value = "";
 
     // Group files by parent folder name
     const groups: Record<string, File[]> = {};
@@ -412,8 +480,11 @@ export function ProductCreateClient() {
         id: Math.random().toString(36).substring(2, 9),
         folderName,
         middleText: cleanName || "Traditional Dress",
-        files: groups[folderName].slice(0, 4), // take at most 4 images
+        files: groups[folderName],
         priceUsd: defaultPrice,
+        designerCostUsd: defaultDesignerCost,
+        taxPercent: defaultTaxPercent,
+        otherCostUsd: defaultOtherCost,
         region: defaultRegion,
         subcategory: defaultSubcategory,
         gender: defaultGender,
@@ -439,6 +510,19 @@ export function ProductCreateClient() {
     }
   }
 
+  async function handleRootDirectoryClick() {
+    const confirmed = await dashboardConfirm({
+      title: "Select Root Directory?",
+      text: "Choose one parent folder. Every subfolder with images will be prepared as a product. Your browser may ask for folder upload permission next.",
+      confirmButtonText: "Yes, Select Folder",
+      cancelButtonText: "Cancel",
+      tone: "success",
+      icon: "question",
+    });
+    if (!confirmed) return;
+    folderInputRef.current?.click();
+  }
+
   // Update a single property for an item in bulk list
   function updateBulkProduct(id: string, key: keyof BulkProduct, value: BulkProduct[keyof BulkProduct]) {
     setBulkProducts(prev => prev.map(p => {
@@ -460,11 +544,11 @@ export function ProductCreateClient() {
       return;
     }
 
-    const invalid = activeProducts.find(p => !p.middleText.trim() || !p.priceUsd || p.files.length !== 4);
+    const invalid = activeProducts.find(p => !p.middleText.trim() || !p.priceUsd || p.designerCostUsd === "" || p.taxPercent === "" || p.otherCostUsd === "" || p.files.length < 1);
     if (invalid) {
       void dashboardError(
         "Invalid Data",
-        `Product "${invalid.folderName}" needs a middle name, a price, and exactly 4 images (detected ${invalid.files.length}).`
+        `Product "${invalid.folderName}" needs a middle name, a price, production cost values, and at least one image.`
       );
       return;
     }
@@ -502,7 +586,7 @@ export function ProductCreateClient() {
       setBulkProgress({ current: i + 1, total: activeProducts.length });
 
       try {
-        // 1. Upload the 4 files
+        // 1. Upload every image in the product folder
         const urls: string[] = [];
         for (const file of prod.files) {
           const url = await uploadOneImage(file);
@@ -526,6 +610,9 @@ export function ProductCreateClient() {
           subcategory: prod.subcategory || undefined,
           priceUsd: Number(prod.priceUsd),
           groomPriceUsd: null,
+          designerCostUsd: Number(prod.designerCostUsd),
+          taxPercent: Number(prod.taxPercent),
+          otherCostUsd: Number(prod.otherCostUsd),
           gender: prod.gender,
           fabricType: prod.fabricType || undefined,
           embroideryStyle: prod.embroideryStyle || undefined,
@@ -578,6 +665,9 @@ export function ProductCreateClient() {
         region: defaultRegion,
         subcategory: getSubsectionsForSection(defaultRegion).includes(p.subcategory) ? p.subcategory : (getSubsectionsForSection(defaultRegion)[0] || ""),
         priceUsd: defaultPrice,
+        designerCostUsd: defaultDesignerCost,
+        taxPercent: defaultTaxPercent,
+        otherCostUsd: defaultOtherCost,
         gender: defaultGender,
         fabricType: defaultFabric,
         embroideryStyle: defaultEmbroidery,
@@ -745,42 +835,57 @@ export function ProductCreateClient() {
             <section className="rounded-[2.5rem] border border-slate-200 bg-white shadow-sm overflow-hidden">
               <div className="bg-slate-50 px-8 py-4 border-b border-slate-100">
                 <h3 className="flex items-center gap-2 text-sm font-black uppercase tracking-widest text-slate-400">
-                  <ImageIcon className="h-4 w-4" /> 4 Product Poses (Required)
+                  <ImageIcon className="h-4 w-4" /> Product Images (Required)
                 </h3>
               </div>
               <div className="p-8 space-y-6">
-                <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-                  {["Pose 1 (Front)", "Pose 2 (Side)", "Pose 3 (Back)", "Pose 4 (Detail)"].map((label, idx) => {
-                    const file = singleFiles[idx];
-                    const fileUrl = file ? URL.createObjectURL(file) : null;
-                    return (
-                      <div key={idx} className="relative group aspect-[3/4] rounded-2xl overflow-hidden border border-slate-200 bg-slate-50 flex flex-col items-center justify-center p-3 text-center shadow-sm">
-                        {fileUrl ? (
-                          <>
-                            <img src={fileUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />
-                            <button
-                              onClick={() => handleSingleFileChange(idx, null)}
-                              className="absolute top-2 right-2 h-8 w-8 rounded-xl bg-rose-600 text-white flex items-center justify-center shadow hover:bg-rose-700 transition-colors"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
-                          </>
-                        ) : (
-                          <label className="cursor-pointer flex flex-col items-center justify-center h-full w-full">
-                            <Upload className="h-8 w-8 text-slate-300 mb-2 group-hover:text-emerald-600 transition-colors" />
-                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{label}</span>
-                            <span className="text-[8px] text-slate-300 mt-1 font-bold">CLICK TO UPLOAD</span>
-                            <input
-                              type="file"
-                              accept="image/*"
-                              className="hidden"
-                              onChange={e => handleSingleFileChange(idx, e.target.files?.[0] || null)}
-                            />
-                          </label>
-                        )}
+                <div className="grid gap-4 sm:grid-cols-[260px_1fr]">
+                  <label className="group flex min-h-[260px] cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 p-6 text-center transition-all hover:border-emerald-500 hover:bg-emerald-50/40">
+                    <Upload className="mb-3 h-9 w-9 text-slate-300 transition-colors group-hover:text-emerald-600" />
+                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Add Product Images</span>
+                    <span className="mt-2 max-w-[190px] text-xs font-bold leading-5 text-slate-400">
+                      Upload one or many product photos. Every selected image will be saved with this item.
+                    </span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      className="hidden"
+                      onChange={e => {
+                        addSingleFiles(e.target.files);
+                        e.currentTarget.value = "";
+                      }}
+                    />
+                  </label>
+                  <div className={cn(
+                    "grid min-h-[260px] gap-4 rounded-2xl border border-slate-100 bg-white p-4",
+                    singleFiles.length ? "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4" : "place-items-center"
+                  )}>
+                    {singleFiles.length ? singleFiles.map((file, idx) => {
+                      const fileUrl = URL.createObjectURL(file);
+                      return (
+                        <div key={`${file.name}-${idx}`} className="relative aspect-[3/4] overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 shadow-sm">
+                          <img src={fileUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />
+                          <div className="absolute inset-x-0 bottom-0 bg-black/55 px-2 py-2 text-[9px] font-black uppercase tracking-wider text-white">
+                            Image {idx + 1}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removeSingleFile(idx)}
+                            className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-xl bg-rose-600 text-white shadow transition-colors hover:bg-rose-700"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      );
+                    }) : (
+                      <div className="text-center">
+                        <ImageIcon className="mx-auto mb-2 h-8 w-8 text-slate-200" />
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">No images selected</p>
+                        <p className="mt-1 text-xs font-bold text-slate-300">At least one image is required.</p>
                       </div>
-                    );
-                  })}
+                    )}
+                  </div>
                 </div>
               </div>
             </section>
@@ -852,6 +957,26 @@ export function ProductCreateClient() {
                     placeholder="0.00"
                   />
                 </div>
+                <div className="rounded-2xl border border-emerald-100 bg-emerald-50/60 p-4">
+                  <p className="mb-3 text-[10px] font-black uppercase tracking-widest text-emerald-700">Production Cost Setup *</p>
+                  <div className="grid gap-3">
+                    <label>
+                      <span className="mb-1 block text-[10px] font-black uppercase text-slate-500">Designer Labor Cost</span>
+                      <input type="number" value={designerCostUsd} onChange={e => setDesignerCostUsd(e.target.value)} className="h-10 w-full rounded-xl border border-emerald-100 bg-white px-3 text-sm font-black outline-none" placeholder="0.00" />
+                    </label>
+                    <label>
+                      <span className="mb-1 block text-[10px] font-black uppercase text-slate-500">Production Tax Rate (%)</span>
+                      <input type="number" value={taxPercent} onChange={e => setTaxPercent(e.target.value)} className="h-10 w-full rounded-xl border border-emerald-100 bg-white px-3 text-sm font-black outline-none" placeholder="0" />
+                    </label>
+                    <label>
+                      <span className="mb-1 block text-[10px] font-black uppercase text-slate-500">Other Production Costs</span>
+                      <input type="number" value={otherCostUsd} onChange={e => setOtherCostUsd(e.target.value)} className="h-10 w-full rounded-xl border border-emerald-100 bg-white px-3 text-sm font-black outline-none" placeholder="0.00" />
+                    </label>
+                  </div>
+                  <div className="mt-3 rounded-xl bg-white/80 p-3 text-xs font-bold text-emerald-900">
+                    Estimated unit production cost: ${((Number(designerCostUsd) || 0) + ((Number(priceUsd) || 0) * ((Number(taxPercent) || 0) / 100)) + (Number(otherCostUsd) || 0)).toFixed(2)}
+                  </div>
+                </div>
                 <div className="rounded-2xl border border-slate-100 p-4">
                   <label className="mb-1 block text-[10px] font-black uppercase text-slate-400 tracking-widest">Groom Price (Optional)</label>
                   <input
@@ -904,9 +1029,12 @@ export function ProductCreateClient() {
           {/* Top Config Defaults Panel */}
           <section className="rounded-[2.5rem] border border-slate-200 bg-white p-8 shadow-sm">
             <h3 className="mb-6 flex items-center gap-2 text-sm font-black uppercase tracking-widest text-slate-400">
-              <FolderOpen className="h-4 w-4" /> Step 1: Set Default values for Bulk import
+              <FolderOpen className="h-4 w-4" /> Step 1: Product Defaults for Bulk Import
             </h3>
-            <div className="grid gap-4 md:grid-cols-4">
+            <p className="mb-6 text-xs font-bold leading-5 text-slate-500">
+              These defaults are applied to every detected folder, matching the single-product fields for classification, selling price, production cost, garment details, and storefront status.
+            </p>
+            <div className="grid gap-4 md:grid-cols-4 xl:grid-cols-7">
               <div className="space-y-1">
                 <label className="text-[10px] font-black uppercase text-slate-400">Tribe</label>
                 <select
@@ -937,6 +1065,33 @@ export function ProductCreateClient() {
                   type="number"
                   value={defaultPrice}
                   onChange={e => setDefaultPrice(e.target.value)}
+                  className="w-full rounded-xl border border-slate-100 bg-slate-50 p-3 text-xs font-bold"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-black uppercase text-slate-400">Designer Cost</label>
+                <input
+                  type="number"
+                  value={defaultDesignerCost}
+                  onChange={e => setDefaultDesignerCost(e.target.value)}
+                  className="w-full rounded-xl border border-slate-100 bg-slate-50 p-3 text-xs font-bold"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-black uppercase text-slate-400">Tax Rate (%)</label>
+                <input
+                  type="number"
+                  value={defaultTaxPercent}
+                  onChange={e => setDefaultTaxPercent(e.target.value)}
+                  className="w-full rounded-xl border border-slate-100 bg-slate-50 p-3 text-xs font-bold"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-black uppercase text-slate-400">Other Costs</label>
+                <input
+                  type="number"
+                  value={defaultOtherCost}
+                  onChange={e => setDefaultOtherCost(e.target.value)}
                   className="w-full rounded-xl border border-slate-100 bg-slate-50 p-3 text-xs font-bold"
                 />
               </div>
@@ -1015,20 +1170,25 @@ export function ProductCreateClient() {
             <Upload className="h-12 w-12 text-slate-300 mb-3 group-hover:text-emerald-600 transition-colors" />
             <h4 className="text-sm font-bold text-slate-900 mb-1">Upload Root Folder</h4>
             <p className="text-xs text-slate-500 max-w-sm mb-4">
-              Select a root folder. We will discover subfolders and expect 4 pose images in each subdirectory to build unique catalog items.
+              Select one root folder. Each subfolder becomes a product, and every image inside that subfolder is attached to the catalog item.
             </p>
-            <label className="cursor-pointer inline-flex h-11 items-center gap-2 rounded-xl bg-slate-950 px-5 text-sm font-bold text-white shadow-md hover:bg-slate-800 transition-all">
+            <button
+              type="button"
+              onClick={() => void handleRootDirectoryClick()}
+              className="inline-flex h-11 items-center gap-2 rounded-xl bg-slate-950 px-5 text-sm font-bold text-white shadow-md transition-all hover:bg-slate-800"
+            >
               <FolderOpen className="h-4 w-4" /> Select Root Directory
-              <input
-                type="file"
-                // @ts-expect-error webkitdirectory is supported by Chromium for folder import.
-                webkitdirectory=""
-                directory=""
-                multiple
-                className="hidden"
-                onChange={handleFolderSelect}
-              />
-            </label>
+            </button>
+            <input
+              ref={folderInputRef}
+              type="file"
+              // @ts-expect-error webkitdirectory is supported by Chromium for folder import.
+              webkitdirectory=""
+              directory=""
+              multiple
+              className="hidden"
+              onChange={handleFolderSelect}
+            />
           </section>
 
           {/* Grouped Folders Listing Table */}
@@ -1097,9 +1257,9 @@ export function ProductCreateClient() {
                                   </div>
                                 );
                               })}
-                              {prod.files.length !== 4 && (
+                              {prod.files.length < 1 && (
                                 <div className="text-[10px] text-rose-600 font-bold flex items-center bg-rose-50 px-3 py-2 rounded-xl border border-rose-100 shrink-0 max-w-[150px] leading-tight">
-                                  Error: Need exactly 4 files (got {prod.files.length})
+                                  Error: Add at least 1 image
                                 </div>
                               )}
                             </div>

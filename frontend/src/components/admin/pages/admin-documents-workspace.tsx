@@ -130,6 +130,7 @@ function AdminDocumentsTable({ orders, onFilteredCountChange }: { orders: Order[
         <table className="w-full min-w-[980px] border-collapse text-left text-sm">
           <TableHeader>
             <TableHeadRow>
+              <TableHeadCell>No</TableHeadCell>
               <TableHeadCell>Order ID</TableHeadCell>
               <TableHeadCell>Customer Name</TableHeadCell>
               <TableHeadCell>Delivery</TableHeadCell>
@@ -144,6 +145,7 @@ function AdminDocumentsTable({ orders, onFilteredCountChange }: { orders: Order[
               const status = documentStatus(order);
               return (
                 <tr key={order.id} className={cn("border-b border-slate-200 last:border-b-0 hover:bg-blue-50/70", index % 2 === 0 ? "bg-white" : "bg-slate-50/50")}>
+                  <td className="px-4 py-5 font-black text-slate-500">{index + 1}</td>
                   <td className="px-4 py-5">
                     <Link href={`/admin/orders/documents/${order.id}`} className="font-mono text-xs font-black text-blue-800 underline-offset-4 hover:text-blue-950 hover:underline">
                       {order.orderNumber ?? `#${order.id.slice(0, 8)}`}

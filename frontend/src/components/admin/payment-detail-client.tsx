@@ -3,8 +3,6 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { 
-  ArrowLeft, 
-  RefreshCw, 
   Loader2,
   Banknote,
   CheckCircle2,
@@ -25,7 +23,12 @@ import { cn } from "@/lib/utils";
 import { dashboardConfirm, dashboardError, dashboardSuccess } from "@/lib/dashboard-swal";
 import { AdminDetailLayout, AdminDetailHeader } from "@/components/admin/admin-detail-layout";
 
-type Order = Record<string, any>;
+type OrderValue = string | number | null | undefined;
+type Order = Record<string, OrderValue> & { id: string };
+
+function stringValue(value: OrderValue, fallback = "") {
+  return typeof value === "string" && value.trim() ? value : fallback;
+}
 
 function formatUsd(value?: number | string | null) {
   const n = Number(value);
@@ -40,9 +43,9 @@ export function PaymentDetailClient({ order: initialOrder }: { order: Order }) {
   const [showFullProof, setShowFullProof] = useState(false);
   const [activeSection, setActiveSection] = useState<"summary" | "breakdown" | "proof" | "audit">("summary");
 
-  const paymentStatus = order.paymentStatus ?? order.payment_status ?? "pending";
-  const paymentCurrency = order.paymentCurrency ?? order.payment_currency ?? "USD";
-  const paymentMethod = order.paymentMethod ?? order.payment_method ?? "stripe";
+  const paymentStatus = String(order.paymentStatus ?? order.payment_status ?? "pending");
+  const paymentCurrency = String(order.paymentCurrency ?? order.payment_currency ?? "USD");
+  const paymentMethod = String(order.paymentMethod ?? order.payment_method ?? "stripe");
   const orderNumber = order.orderNumber ?? order.order_number ?? order.id.slice(0, 8).toUpperCase();
   const customerName = order.customerName ?? order.customer_name ?? order.userName ?? order.user_email ?? order.userEmail ?? "Customer";
   const totalUsd = order.totalUsd ?? order.total_usd;
@@ -52,8 +55,24 @@ export function PaymentDetailClient({ order: initialOrder }: { order: Order }) {
   const couponCode = order.couponCode ?? order.coupon_code;
   const totalEtb = order.totalEtb ?? order.total_etb;
   const isEtb = paymentMethod === "etb_bank_transfer" || paymentCurrency === "ETB";
-  const proofUrl = order.paymentProofUrl || order.payment_proof_url;
+  const proofUrl = stringValue(order.paymentProofUrl ?? order.payment_proof_url);
   const canVerify = paymentStatus === "awaiting_verification" || paymentStatus === "pending";
+  const stripeReceiptUrl = stringValue(order.stripeReceiptUrl ?? order.stripe_receipt_url);
+  const stripeSessionId = stringValue(order.stripeSessionId ?? order.stripe_session_id);
+  const stripePaymentIntentId = stringValue(order.stripePaymentIntentId ?? order.stripe_payment_intent_id);
+  const stripeChargeId = stringValue(order.stripeChargeId ?? order.stripe_charge_id);
+  const stripeAmountReceived = order.stripeAmountReceived ?? order.stripe_amount_received;
+  const stripeCurrency = String(order.stripeCurrency ?? order.stripe_currency ?? paymentCurrency);
+  const stripePaidAt = order.stripePaidAt ?? order.stripe_paid_at;
+  const stripeCardBrand = stringValue(order.stripePaymentMethodBrand ?? order.stripe_payment_method_brand);
+  const stripeCardLast4 = stringValue(order.stripePaymentMethodLast4 ?? order.stripe_payment_method_last4);
+  const stripeCardFunding = order.stripePaymentMethodFunding ?? order.stripe_payment_method_funding;
+  const stripeCardCountry = order.stripePaymentMethodCountry ?? order.stripe_payment_method_country;
+  const stripeCustomerEmail = order.stripeCustomerEmail ?? order.stripe_customer_email ?? order.userEmail ?? order.user_email;
+  const stripeCustomerName = order.stripeCustomerName ?? order.stripe_customer_name ?? customerName;
+  const stripeFailureReason = order.stripeFailureReason ?? order.stripe_failure_reason;
+  const stripeRefundStatus = order.stripeRefundStatus ?? order.stripe_refund_status;
+  const stripeRefundAmount = order.stripeRefundAmount ?? order.stripe_refund_amount;
 
   useEffect(() => {
     if (!order.id) return;
@@ -93,8 +112,8 @@ export function PaymentDetailClient({ order: initialOrder }: { order: Order }) {
           const err = await res.json();
           throw new Error(err.message || "Update failed");
         }
-      } catch (error: any) {
-        dashboardError("Error", error.message);
+      } catch (error) {
+        dashboardError("Error", error instanceof Error ? error.message : "Update failed");
       } finally {
         setBusy(false);
       }
@@ -165,7 +184,7 @@ export function PaymentDetailClient({ order: initialOrder }: { order: Order }) {
         { id: "audit", label: "Audit & Context", icon: ShieldCheck },
       ]}
       activeSection={activeSection}
-      onSectionChange={(id) => setActiveSection(id as any)}
+      onSectionChange={(id) => setActiveSection(id as "summary" | "breakdown" | "proof" | "audit")}
     >
       {activeSection === "summary" && (
         <section className="rounded-[2.5rem] border border-slate-200 bg-white p-8 shadow-sm">
@@ -244,12 +263,38 @@ export function PaymentDetailClient({ order: initialOrder }: { order: Order }) {
               </div>
            </section>
         ) : (
-           <section className="rounded-[2.5rem] border border-slate-200 bg-white p-20 shadow-sm text-center">
-              <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-3xl bg-blue-50 text-blue-600 mb-6">
+           <section className="rounded-[2.5rem] border border-slate-200 bg-white p-8 shadow-sm">
+              <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-3xl bg-blue-50 text-blue-600">
                  <CreditCard className="h-12 w-12" />
               </div>
-              <h3 className="text-2xl font-black text-slate-900 uppercase">Stripe Transaction</h3>
-              <p className="mt-2 text-slate-500 font-medium max-w-md mx-auto">This payment was processed automatically via Stripe. Verification is handled by the payment gateway provider.</p>
+              <div className="text-center">
+                <h3 className="text-2xl font-black uppercase text-slate-900">Stripe Transaction Receipt</h3>
+                <p className="mx-auto mt-2 max-w-md font-medium text-slate-500">This payment was processed automatically via Stripe. The receipt data below is captured from Stripe webhooks.</p>
+              </div>
+              <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                <ReceiptField label="Payment Intent" value={stripePaymentIntentId} />
+                <ReceiptField label="Charge ID" value={stripeChargeId} />
+                <ReceiptField label="Checkout Session" value={stripeSessionId} />
+                <ReceiptField label="Amount Received" value={stripeAmountReceived ? `${formatUsd(stripeAmountReceived)} ${stripeCurrency}` : `${formatUsd(totalUsd)} ${paymentCurrency}`} />
+                <ReceiptField label="Payment Status" value={order.stripePaymentStatus ?? order.stripe_payment_status ?? paymentStatus} />
+                <ReceiptField label="Paid At" value={stripePaidAt ? new Date(String(stripePaidAt)).toLocaleString() : null} />
+                <ReceiptField label="Customer Name" value={stripeCustomerName} />
+                <ReceiptField label="Customer Email" value={stripeCustomerEmail} />
+                <ReceiptField label="Card" value={stripeCardBrand || stripeCardLast4 ? `${String(stripeCardBrand ?? "Card").toUpperCase()} ending ${stripeCardLast4 ?? "----"}` : null} />
+                <ReceiptField label="Funding" value={stripeCardFunding} />
+                <ReceiptField label="Card Country" value={stripeCardCountry} />
+                <ReceiptField label="Refund" value={stripeRefundStatus ? `${stripeRefundStatus.replaceAll("_", " ")}${stripeRefundAmount ? ` - ${formatUsd(stripeRefundAmount)}` : ""}` : "No refund recorded"} />
+              </div>
+              {stripeFailureReason ? (
+                <p className="mt-5 rounded-2xl border border-rose-100 bg-rose-50 p-4 text-sm font-semibold text-rose-800">{stripeFailureReason}</p>
+              ) : null}
+              {stripeReceiptUrl ? (
+                <a href={stripeReceiptUrl} target="_blank" rel="noreferrer" className="mt-6 inline-flex h-11 items-center justify-center rounded-xl bg-slate-950 px-5 text-sm font-black text-white transition hover:bg-black">
+                  View Stripe Receipt
+                </a>
+              ) : (
+                <p className="mt-6 rounded-2xl border border-amber-100 bg-amber-50 p-4 text-sm font-semibold text-amber-800">Stripe receipt URL is not stored yet. It will appear after the next completed Stripe webhook with receipt details.</p>
+              )}
            </section>
         )
       )}
@@ -293,7 +338,7 @@ export function PaymentDetailClient({ order: initialOrder }: { order: Order }) {
       {showFullProof && proofUrl && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/95 p-10 animate-in fade-in duration-300" onClick={() => setShowFullProof(false)}>
            <div className="relative h-full w-full">
-              <img src={proofUrl} className="h-full w-full object-contain" />
+              <img src={proofUrl} className="h-full w-full object-contain" alt="Payment proof full screen" />
               <button className="absolute -top-6 -right-6 h-12 w-12 rounded-full bg-white/10 text-white hover:bg-white/20 transition-all flex items-center justify-center">
                  <XCircle className="h-6 w-6" />
               </button>
@@ -301,5 +346,15 @@ export function PaymentDetailClient({ order: initialOrder }: { order: Order }) {
         </div>
       )}
     </>
+  );
+}
+
+function ReceiptField({ label, value }: { label: string; value?: unknown }) {
+  const text = String(value ?? "").trim();
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{label}</p>
+      <p className="mt-2 break-words text-sm font-black text-slate-900">{text || "Not available"}</p>
+    </div>
   );
 }
