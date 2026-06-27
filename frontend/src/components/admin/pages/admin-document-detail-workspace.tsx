@@ -4,7 +4,6 @@ import { useCallback, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   AlertTriangle,
-  Banknote,
   CheckCircle2,
   Clock,
   CreditCard,
@@ -13,8 +12,6 @@ import {
   FileCheck,
   FileText,
   ImageIcon,
-  MapPin,
-  Package,
   ReceiptText,
   Ruler,
   Truck,
@@ -51,12 +48,6 @@ type OrderRecord = Record<string, unknown> & {
   measurement_snapshot?: Record<string, unknown> | null;
 };
 type ShippingDocument = { url: string; label: string; uploadedAt?: string };
-
-function formatCurrency(value: unknown) {
-  const amount = Number(value);
-  if (!Number.isFinite(amount)) return "$0.00";
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(amount);
-}
 
 function hasValue(value: unknown) {
   return value !== null && value !== undefined && String(value).trim() !== "";
@@ -215,8 +206,6 @@ export function AdminDocumentDetailWorkspace({
   const sections = [
     { id: "view-documents", label: "View Documents", icon: FileText },
     { id: "upload-documents", label: "Upload Documents", icon: UploadCloud },
-    { id: "fulfillment", label: "Delivery Details", icon: isPickup ? MapPin : Truck },
-    { id: "payment", label: "Payment Proof", icon: Banknote },
   ];
 
   return (
@@ -224,7 +213,6 @@ export function AdminDocumentDetailWorkspace({
       activeSection={activeSection}
       onSectionChange={setActiveSection}
       sections={sections}
-      navigationVariant="top"
       topHeader={
         <AdminDetailHeader
           icon={FileText}
