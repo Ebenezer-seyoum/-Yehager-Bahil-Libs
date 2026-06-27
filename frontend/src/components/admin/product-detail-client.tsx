@@ -202,8 +202,8 @@ export function ProductDetailClient({ initialProduct }: { initialProduct: Produc
           icon={Package}
           iconTheme="bg-primary/10 text-primary"
           category="Catalog / Inventory"
-          title={product.name}
-          subtitle={`${product.region} • ${product.subcategory}`}
+          title={product.name ?? "Product detail"}
+          subtitle={`${product.region ?? "No tribe"} • ${product.subcategory ?? "No region"}`}
           onRefresh={refresh}
           onBack={() => router.back()}
         />

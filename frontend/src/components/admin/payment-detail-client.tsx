@@ -71,7 +71,7 @@ export function PaymentDetailClient({ order: initialOrder }: { order: Order }) {
   const stripeCustomerEmail = order.stripeCustomerEmail ?? order.stripe_customer_email ?? order.userEmail ?? order.user_email;
   const stripeCustomerName = order.stripeCustomerName ?? order.stripe_customer_name ?? customerName;
   const stripeFailureReason = order.stripeFailureReason ?? order.stripe_failure_reason;
-  const stripeRefundStatus = order.stripeRefundStatus ?? order.stripe_refund_status;
+  const stripeRefundStatus = stringValue(order.stripeRefundStatus ?? order.stripe_refund_status);
   const stripeRefundAmount = order.stripeRefundAmount ?? order.stripe_refund_amount;
 
   useEffect(() => {

@@ -4,15 +4,20 @@ import { authOptions } from "@/auth-options";
 import { apiRequest } from "@/lib/api-client";
 import { can } from "@/lib/permissions";
 import { AccessRestricted } from "@/components/admin/access-restricted";
-import { AllProfitSummaryDetailWorkspace } from "@/components/admin/pages/admin-profit-detail-workspace";
+import { AllProfitSummaryDetailWorkspace, type ProductProfitRow, type ProfitSummary } from "@/components/admin/pages/admin-profit-detail-workspace";
 
 type ProfitCostsPayload = {
   catalogProducts?: unknown[];
-  allProfitSummary?: Record<string, unknown> | null;
+  allProfitSummary?: ProfitSummary | null;
 };
 
-function records(value: unknown) {
-  return Array.isArray(value) ? (value.filter((row) => row && typeof row === "object") as Record<string, unknown>[]) : [];
+function records(value: unknown): ProductProfitRow[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((row): row is ProductProfitRow => {
+    if (!row || typeof row !== "object") return false;
+    const item = row as Partial<ProductProfitRow>;
+    return typeof item.entityId === "string" && typeof item.title === "string";
+  });
 }
 
 export default async function AdminAllProfitSummaryPage() {
