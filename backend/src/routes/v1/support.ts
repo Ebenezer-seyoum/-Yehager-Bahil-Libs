@@ -16,6 +16,11 @@ import {
 } from "../../lib/db/schema.js";
 import { PERMISSIONS } from "../../lib/auth/permissions.js";
 import type { AppBindings } from "../../types/hono.js";
+import {
+  sendSupportReplyEmail,
+  sendSupportTicketCreatedAdminEmail,
+  sendSupportTicketCreatedCustomerEmail,
+} from "../../services/email-service.js";
 
 // Validation schemas
 const listQuerySchema = z.object({
@@ -62,18 +67,6 @@ export const supportRouter = new Hono<AppBindings>();
 
 // Auth middleware for all support routes
 supportRouter.use("/*", requireAuth);
-
-// Helper function to simulate email sending
-async function sendEmailSimulated({ to, subject, body }: { to: string; subject: string; body: string }) {
-  console.log(`[EMAIL SEND SIMULATION] To: ${to} | Subject: ${subject}`);
-  // Force a failure for testing the error state
-  if (to.toLowerCase() === "fail@example.com" || body.includes("FORCE_EMAIL_FAIL")) {
-    throw new Error("SMTP server connection timeout (504). Please try again.");
-  }
-  // Simulate delay
-  await new Promise((resolve) => setTimeout(resolve, 800));
-  return { success: true, messageId: "msg_" + Math.random().toString(36).substring(2, 11) };
-}
 
 // Helper to auto-detect category if none provided
 function autoDetectCategory(subject: string, message: string, sourcePage?: string): string {
@@ -317,34 +310,14 @@ supportRouter.post(
     throw new HTTPException(404, { message: "Support ticket not found" });
   }
 
-  // 1. Send email (simulated). If it fails, Hono error boundary or try-catch will return error
-  try {
-    await sendEmailSimulated({
-      to: ticket.customerEmail,
-      subject: `Re: [Ticket #${ticket.ticketNumber}] ${ticket.subject}`,
-      body: body.messageBody
-    });
-  } catch (error: any) {
-    console.error(`Email delivery failed to ${ticket.customerEmail}:`, error);
-    
-    // Save as internal note / failed log in audit
-    await db.insert(auditLogs).values({
-      action: "ticket_reply_failed",
-      category: "support",
-      severity: "error",
-      entityType: "support_ticket",
-      entityId: ticketId,
-      performedBy: authUser?.email ?? "admin",
-      details: `Failed to send email to ${ticket.customerEmail}: ${error.message}`,
-      metadata: { error: error.message, draft: body.messageBody },
-    });
-
-    return c.json({
-      error: true,
-      message: `Failed to send email: ${error.message}. The reply was kept as a draft.`,
-      draft: body.messageBody
-    }, 500);
-  }
+  await sendSupportReplyEmail({
+    to: ticket.customerEmail,
+    customerName: ticket.customerName,
+    customerEmail: ticket.customerEmail,
+    ticketNumber: ticket.ticketNumber,
+    subject: ticket.subject,
+    reply: body.messageBody,
+  });
 
   // 2. Query admin name
   let adminName = "Admin Customer Support";
@@ -491,6 +464,22 @@ supportRouter.post("/tickets", zValidator("json", createTicketSchema), async (c)
     entityId: ticket.id,
     performedBy: body.customerEmail,
     details: `Ticket ${ticketNum} created by customer ${body.customerName}`,
+  });
+
+  await sendSupportTicketCreatedCustomerEmail({
+    to: body.customerEmail,
+    customerName: body.customerName,
+    customerEmail: body.customerEmail,
+    ticketNumber: ticket.ticketNumber,
+    subject: ticket.subject,
+    message: body.messageBody,
+  });
+  await sendSupportTicketCreatedAdminEmail({
+    customerName: body.customerName,
+    customerEmail: body.customerEmail,
+    ticketNumber: ticket.ticketNumber,
+    subject: ticket.subject,
+    message: body.messageBody,
   });
 
   return c.json({ data: ticket }, 201);

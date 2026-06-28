@@ -22,7 +22,7 @@ import {
   moneyToNumber,
   numberToMoney,
 } from "./checkout-utils.js";
-import { sendOrderStatusEmail } from "./email-service.js";
+import { sendAdminOrderCreatedEmail, sendOrderStatusEmail } from "./email-service.js";
 import { calculateCouponDiscount, markCouponRedeemed } from "./discounts-service.js";
 import { awardCustomerCreditForPaidOrder } from "./customer-credits-service.js";
 import { hasPermission } from "./permissions-service.js";
@@ -775,6 +775,16 @@ export async function createCheckoutIntent(payload: {
     status: result.order.status,
     paymentStatus: result.order.paymentStatus,
     fulfillmentType: result.order.fulfillmentType,
+  });
+  await sendAdminOrderCreatedEmail({
+    orderId: result.order.id,
+    orderNumber: result.order.orderNumber,
+    customerName: result.order.customerName,
+    customerEmail: result.order.userEmail,
+    status: result.order.status,
+    paymentStatus: result.order.paymentStatus,
+    totalUsd: result.order.totalUsd,
+    paymentMethod: result.order.paymentMethod,
   });
   return result;
 }

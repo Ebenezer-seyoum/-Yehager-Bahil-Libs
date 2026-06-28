@@ -23,6 +23,12 @@ const envSchema = z.object({
   SMTP_USER: z.string().min(1).optional(),
   SMTP_PASS: z.string().min(1).optional(),
   EMAIL_FROM: z.string().min(1).optional(),
+  RESEND_API_KEY: z.string().min(1).optional(),
+  EMAIL_NOTIFICATIONS_FROM: z.string().min(1).optional(),
+  EMAIL_SUPPORT_FROM: z.string().min(1).optional(),
+  EMAIL_TEAM_FROM: z.string().min(1).optional(),
+  ADMIN_NOTIFICATION_EMAIL: z.string().email().optional(),
+  SUPPORT_NOTIFICATION_EMAIL: z.string().email().optional(),
 });
 
 export const env = envSchema.parse(process.env);

@@ -4,7 +4,7 @@ import { db } from "../lib/db/drizzle.js";
 import { auditLogs, cartItems, events, familyGroups, systemAlerts, uploadedDesigns, familyMembers, eventParticipants } from "../lib/db/schema.js";
 import { numberToMoney } from "./checkout-utils.js";
 import { getUserByEmail } from "../repositories/users-repository.js";
-import { sendCustomDesignApprovedEmail, sendCustomDesignDeclinedEmail } from "./email-service.js";
+import { sendCustomDesignApprovedEmail, sendCustomDesignDeclinedEmail, sendCustomDesignSubmittedAdminEmail } from "./email-service.js";
 
 function makeSubmissionNumber(date = new Date(), randomPart = Math.floor(1000 + Math.random() * 9000)) {
   const yyyy = date.getUTCFullYear();
@@ -137,6 +137,13 @@ export async function createUploadedDesignSubmission(payload: {
     type: "design_review",
     severity: "info",
     entityId: submission.id,
+  });
+
+  await sendCustomDesignSubmittedAdminEmail({
+    customerName: submission.customerName,
+    customerEmail: submission.userEmail,
+    submissionNumber: submission.submissionNumber,
+    designTitle: submission.designTitle,
   });
 
   return submission;

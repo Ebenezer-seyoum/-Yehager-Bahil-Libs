@@ -13,7 +13,7 @@ import {
 } from "../repositories/payments-repository.js";
 import { deleteCartItemsByIdsForUser } from "../repositories/cart-repository.js";
 import { canTransitionPaymentStatus, deriveOrderStatusOnPayment } from "./order-state-machine.js";
-import { sendOrderStatusEmail } from "./email-service.js";
+import { sendAdminPaymentReceivedEmail, sendOrderStatusEmail } from "./email-service.js";
 import { awardCustomerCreditForPaidOrder } from "./customer-credits-service.js";
 
 const stripe = new Stripe(env.STRIPE_SECRET_KEY);
@@ -213,6 +213,16 @@ export async function processStripeWebhook(payload: { body: string; signature?: 
           status: updatedOrder?.status ?? nextOrderStatus,
           paymentStatus: updatedOrder?.paymentStatus ?? nextPayment,
           fulfillmentType: updatedOrder?.fulfillmentType ?? order.fulfillmentType,
+        });
+        await sendAdminPaymentReceivedEmail({
+          orderId: updatedOrder?.id ?? order.id,
+          orderNumber: updatedOrder?.orderNumber ?? order.orderNumber,
+          customerName: updatedOrder?.customerName ?? order.customerName,
+          customerEmail: updatedOrder?.userEmail ?? order.userEmail,
+          status: updatedOrder?.status ?? nextOrderStatus,
+          paymentStatus: updatedOrder?.paymentStatus ?? nextPayment,
+          totalUsd: updatedOrder?.totalUsd ?? order.totalUsd,
+          paymentMethod: updatedOrder?.paymentMethod ?? order.paymentMethod,
         });
 
         await db.insert(auditLogs).values({
