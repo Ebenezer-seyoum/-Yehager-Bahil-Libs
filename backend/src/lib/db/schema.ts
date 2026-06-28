@@ -84,6 +84,27 @@ export const passwordResetRequests = pgTable(
   (table) => [index("password_reset_requests_user_id_idx").on(table.userId), index("password_reset_requests_expires_at_idx").on(table.expiresAt)],
 );
 
+export const pendingCustomerRegistrations = pgTable(
+  "pending_customer_registrations",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    email: varchar("email", { length: 320 }).notNull(),
+    name: varchar("name", { length: 255 }),
+    passwordHash: text("password_hash").notNull(),
+    codeHash: text("code_hash").notNull(),
+    attempts: integer("attempts").default(0).notNull(),
+    resendAvailableAt: timestamp("resend_available_at", { withTimezone: true }).notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    verifiedAt: timestamp("verified_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("pending_customer_registrations_email_unique").on(table.email),
+    index("pending_customer_registrations_expires_at_idx").on(table.expiresAt),
+  ],
+);
+
 export const employeeProfiles = pgTable(
   "employee_profiles",
   {

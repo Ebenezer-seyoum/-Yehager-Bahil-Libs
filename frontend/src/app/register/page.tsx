@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, Home, Eye, EyeOff, CheckCircle2, XCircle } from "lucide-react";
+import { ArrowLeft, Home, Eye, EyeOff, CheckCircle2, XCircle, ShieldCheck } from "lucide-react";
 import { useState, useEffect } from "react";
 
 type Feedback = {
@@ -72,6 +72,9 @@ export default function RegisterPage() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [feedback, setFeedback] = useState<Feedback>(null);
+  const [step, setStep] = useState<"details" | "verify">("details");
+  const [verificationCode, setVerificationCode] = useState("");
+  const [codeError, setCodeError] = useState("");
   
   const [emailError, setEmailError] = useState("");
   const [passwordError, setPasswordError] = useState("");
@@ -80,6 +83,7 @@ export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [resending, setResending] = useState(false);
 
   useEffect(() => {
     if (feedback) {
@@ -130,7 +134,7 @@ export default function RegisterPage() {
     setSubmitting(true);
 
     try {
-      const response = await fetch("/api/backend/auth/register", {
+      const response = await fetch("/api/backend/auth/register/start", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -149,7 +153,50 @@ export default function RegisterPage() {
 
       setFeedback({
         type: "success",
-        message: "Account created successfully. Redirecting to sign in...",
+        message: "Verification code sent. Check your email to finish creating your account.",
+      });
+      setStep("verify");
+      setSubmitting(false);
+    } catch (err) {
+      setFeedback({
+        type: "error",
+        message: err instanceof Error ? err.message : "Could not create account",
+      });
+      setSubmitting(false);
+    }
+  }
+
+  async function onVerify(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setFeedback(null);
+    setCodeError("");
+
+    const code = verificationCode.trim();
+    if (!/^\d{6}$/.test(code)) {
+      setCodeError("Enter the 6-digit code from your email.");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const response = await fetch("/api/backend/auth/register/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, code }),
+      });
+
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as
+          | { error?: { message?: string } | string; message?: string }
+          | null;
+        const nestedError =
+          typeof payload?.error === "string" ? payload.error : payload?.error?.message;
+        throw new Error(payload?.message ?? nestedError ?? "Could not verify account");
+      }
+
+      setFeedback({
+        type: "success",
+        message: "Account verified and created successfully. Redirecting to sign in...",
       });
 
       window.setTimeout(() => {
@@ -158,13 +205,42 @@ export default function RegisterPage() {
           email,
         });
         window.location.href = `/signin?${params.toString()}`;
-      }, 750);
+      }, 900);
     } catch (err) {
       setFeedback({
         type: "error",
-        message: err instanceof Error ? err.message : "Could not create account",
+        message: err instanceof Error ? err.message : "Could not verify account",
       });
       setSubmitting(false);
+    }
+  }
+
+  async function resendCode() {
+    setFeedback(null);
+    setCodeError("");
+    setResending(true);
+    try {
+      const response = await fetch("/api/backend/auth/register/resend-code", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as
+          | { error?: { message?: string } | string; message?: string }
+          | null;
+        const nestedError =
+          typeof payload?.error === "string" ? payload.error : payload?.error?.message;
+        throw new Error(payload?.message ?? nestedError ?? "Could not resend code");
+      }
+      setFeedback({ type: "success", message: "A new verification code was sent." });
+    } catch (err) {
+      setFeedback({
+        type: "error",
+        message: err instanceof Error ? err.message : "Could not resend code",
+      });
+    } finally {
+      setResending(false);
     }
   }
 
@@ -185,12 +261,18 @@ export default function RegisterPage() {
           Back to sign in
         </Link>
           
-        <h1 className="text-[26px] font-bold leading-tight text-[#0f172a] text-center mb-8">
-          Create your account
+        <h1 className="text-[26px] font-bold leading-tight text-[#0f172a] text-center mb-3">
+          {step === "details" ? "Create your account" : "Verify your email"}
         </h1>
+        {step === "verify" && (
+          <p className="mb-8 text-center text-sm font-medium text-[#64748b]">
+            Enter the 6-digit code sent to {email}.
+          </p>
+        )}
 
         <FeedbackBanner feedback={feedback} />
 
+        {step === "details" ? (
         <form onSubmit={onSubmit} noValidate>
           <div className="mb-5">
             <label className="block text-center mb-1.5 text-[14px] font-semibold text-[#1e293b]">Email</label>
@@ -265,6 +347,60 @@ export default function RegisterPage() {
             {submitting ? "Creating account..." : "Create account"}
           </button>
         </form>
+        ) : (
+          <form onSubmit={onVerify} noValidate>
+            <div className="mb-6">
+              <label className="block text-center mb-1.5 text-[14px] font-semibold text-[#1e293b]">Verification Code</label>
+              <div className={`flex items-center gap-3 rounded-xl border ${codeError ? "border-red-400" : "border-[#cbd5e1]"} bg-white px-4 py-3.5 focus-within:border-[#94a3b8]`}>
+                <ShieldCheck className="h-5 w-5 flex-shrink-0 text-[#9badc5]" />
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={6}
+                  value={verificationCode}
+                  onChange={(event) => {
+                    setVerificationCode(event.target.value.replace(/\D/g, "").slice(0, 6));
+                    setCodeError("");
+                  }}
+                  placeholder="123456"
+                  required
+                  className="w-full bg-transparent text-center text-[22px] font-black tracking-[0.35em] text-[#0f172a] outline-none placeholder:text-[#94a3b8]"
+                />
+              </div>
+              {codeError && <p className="mt-1.5 text-[13px] font-medium text-red-700 text-center">{codeError}</p>}
+            </div>
+
+            <button
+              type="submit"
+              disabled={submitting}
+              className="w-full rounded-xl bg-[#0f172a] py-3.5 text-[16px] font-semibold text-white transition hover:bg-[#1e293b] disabled:opacity-60"
+            >
+              {submitting ? "Verifying..." : "Verify and create account"}
+            </button>
+
+            <div className="mt-5 flex flex-col gap-3 text-center">
+              <button
+                type="button"
+                disabled={resending}
+                onClick={() => void resendCode()}
+                className="text-sm font-bold text-[#0f172a] hover:underline disabled:opacity-60"
+              >
+                {resending ? "Sending..." : "Resend code"}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setStep("details");
+                  setVerificationCode("");
+                  setFeedback(null);
+                }}
+                className="text-sm font-semibold text-[#64748b] hover:text-[#0f172a]"
+              >
+                Change email
+              </button>
+            </div>
+          </form>
+        )}
       </div>
     </div>
   );

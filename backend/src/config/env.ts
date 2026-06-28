@@ -27,6 +27,7 @@ const envSchema = z.object({
   EMAIL_NOTIFICATIONS_FROM: z.string().min(1).optional(),
   EMAIL_SUPPORT_FROM: z.string().min(1).optional(),
   EMAIL_TEAM_FROM: z.string().min(1).optional(),
+  EMAIL_LOGO_URL: z.url().optional(),
   ADMIN_NOTIFICATION_EMAIL: z.string().email().optional(),
   SUPPORT_NOTIFICATION_EMAIL: z.string().email().optional(),
 });

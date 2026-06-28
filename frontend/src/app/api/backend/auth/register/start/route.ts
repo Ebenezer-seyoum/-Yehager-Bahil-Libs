@@ -2,9 +2,7 @@ import { NextResponse } from "next/server";
 
 function requiredEnv(name: string) {
   const value = process.env[name];
-  if (!value) {
-    throw new Error(`${name} is required`);
-  }
+  if (!value) throw new Error(`${name} is required`);
   return value;
 }
 
@@ -13,13 +11,10 @@ export async function POST(request: Request) {
     const body = await request.json();
     const response = await fetch(`${requiredEnv("BACKEND_API_URL")}/api/v1/auth/register/start`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
       cache: "no-store",
     });
-
     const payload = await response.json().catch(() => ({}));
     return NextResponse.json(payload, { status: response.status });
   } catch (error) {

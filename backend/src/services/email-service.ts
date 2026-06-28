@@ -39,6 +39,13 @@ type OrderStatusPayload = {
   fulfillmentType?: string | null;
 };
 
+type VerificationCodePayload = {
+  to?: string | null;
+  name?: string | null;
+  code: string;
+  expiresInMinutes: number;
+};
+
 type AdminOrderPayload = {
   orderId?: string | null;
   orderNumber?: string | null;
@@ -97,28 +104,35 @@ function detailsList(items: Array<[string, unknown]>) {
     .filter(([, value]) => value !== undefined && value !== null && value !== "")
     .map(
       ([label, value]) =>
-        `<tr><td style="padding:8px 0;color:#64748b;font-size:13px">${escapeHtml(label)}</td><td style="padding:8px 0;color:#0f172a;font-size:13px;font-weight:700;text-align:right">${escapeHtml(value)}</td></tr>`,
+        `<tr><td style="padding:8px 0;color:#b8a46e;font-size:13px">${escapeHtml(label)}</td><td style="padding:8px 0;color:#fff7df;font-size:13px;font-weight:700;text-align:right">${escapeHtml(value)}</td></tr>`,
     )
     .join("");
   if (!rows) return "";
-  return `<table role="presentation" style="width:100%;border-collapse:collapse;margin:20px 0;border-top:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0">${rows}</table>`;
+  return `<table role="presentation" style="width:100%;border-collapse:collapse;margin:20px 0;border-top:1px solid #3d321d;border-bottom:1px solid #3d321d">${rows}</table>`;
 }
 
 function actionButton(label: string, href: string) {
-  return `<p style="margin:24px 0"><a href="${escapeHtml(href)}" style="display:inline-block;background:#0f172a;color:#ffffff;text-decoration:none;border-radius:6px;padding:12px 18px;font-weight:700">${escapeHtml(label)}</a></p>`;
+  return `<p style="margin:24px 0"><a href="${escapeHtml(href)}" style="display:inline-block;background:#d6a43d;color:#18130a;text-decoration:none;border-radius:6px;padding:12px 18px;font-weight:800">${escapeHtml(label)}</a></p>`;
+}
+
+function logoUrl() {
+  return env.EMAIL_LOGO_URL || appLink("/images/email-logo.jpg");
 }
 
 function htmlShell(title: string, body: string) {
   return `
-    <div style="margin:0;padding:0;background:#f8fafc">
-      <div style="font-family:Arial,sans-serif;line-height:1.6;color:#0f172a;max-width:640px;margin:0 auto;padding:28px 18px">
-        <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:8px;padding:28px">
-          <p style="margin:0 0 12px;color:#0f766e;font-weight:800;letter-spacing:.02em">Yehager Bahil</p>
-          <h1 style="font-size:24px;line-height:1.25;margin:0 0 16px;color:#0f172a">${escapeHtml(title)}</h1>
+    <div style="margin:0;padding:0;background:#120f09">
+      <div style="font-family:Arial,sans-serif;line-height:1.6;color:#f8f1dc;max-width:640px;margin:0 auto;padding:28px 18px">
+        <div style="background:#1b160d;border:1px solid #4d3714;border-radius:8px;padding:28px">
+          <div style="text-align:center;margin-bottom:22px">
+            <img src="${escapeHtml(logoUrl())}" alt="Yehager Bahil Libs" width="180" style="display:inline-block;max-width:180px;width:100%;height:auto;border-radius:6px" />
+          </div>
+          <p style="margin:0 0 12px;color:#d6a43d;font-weight:800;letter-spacing:.02em">Yehager Bahil Libs</p>
+          <h1 style="font-size:24px;line-height:1.25;margin:0 0 16px;color:#fff7df">${escapeHtml(title)}</h1>
           ${body}
-          <p style="margin-top:28px;color:#64748b;font-size:13px">Need help? Reply to this email or contact support@yehagerbahillibs.com.</p>
+          <p style="margin-top:28px;color:#c8b98b;font-size:13px">Need help? Reply to this email or contact support@yehagerbahillibs.com.</p>
         </div>
-        <p style="margin:16px 0 0;color:#94a3b8;font-size:12px;text-align:center">Yehager Bahil Libs</p>
+        <p style="margin:16px 0 0;color:#a88b4a;font-size:12px;text-align:center">Yehager Bahil Libs · yehagerbahillibs.com</p>
       </div>
     </div>
   `;
@@ -161,6 +175,25 @@ export function resetPasswordLink(token: string) {
   return appLink(`/reset-password?token=${encodeURIComponent(token)}`);
 }
 
+export async function sendCustomerVerificationCodeEmail(payload: VerificationCodePayload) {
+  const name = payload.name || "Customer";
+  return sendTransactionalEmailSafely({
+    channel: "notifications",
+    to: payload.to,
+    subject: "Verify your Yehager Bahil account",
+    text: paragraph([
+      `Hello ${name},`,
+      `Your verification code is ${payload.code}.`,
+      `This code expires in ${payload.expiresInMinutes} minutes.`,
+      "If you did not request this, you can ignore this email.",
+    ]),
+    html: htmlShell(
+      "Verify your account",
+      `<p>Hello ${escapeHtml(name)},</p><p>Use this code to finish creating your Yehager Bahil account.</p><div style="margin:24px 0;padding:18px;border:1px solid #6f511f;border-radius:8px;background:#241b0c;text-align:center"><p style="margin:0 0 8px;color:#c8b98b;font-size:13px;font-weight:700">Verification code</p><p style="margin:0;color:#ffd166;font-size:34px;letter-spacing:8px;font-weight:900">${escapeHtml(payload.code)}</p></div><p style="color:#c8b98b">This code expires in ${escapeHtml(payload.expiresInMinutes)} minutes.</p>`,
+    ),
+  });
+}
+
 export async function sendRegistrationEmail(payload: { to?: string | null; name?: string | null }) {
   const name = payload.name || "Customer";
   const signInUrl = appLink("/signin");
@@ -196,7 +229,7 @@ export async function sendPasswordSetupEmail(payload: PasswordLinkPayload) {
     ]),
     html: htmlShell(
       "Create your password",
-      `<p>Hello ${escapeHtml(name)},</p><p>An account has been created for you as <b>${escapeHtml(payload.accountType ?? "user")}</b>.</p>${actionButton("Create password", payload.link)}<p style="color:#64748b">This link expires at ${escapeHtml(expires)}.</p>`,
+      `<p>Hello ${escapeHtml(name)},</p><p>An account has been created for you as <b>${escapeHtml(payload.accountType ?? "user")}</b>.</p>${actionButton("Create password", payload.link)}<p style="color:#c8b98b">This link expires at ${escapeHtml(expires)}.</p>`,
     ),
   });
 }
@@ -216,7 +249,7 @@ export async function sendPasswordResetEmail(payload: PasswordLinkPayload) {
     ]),
     html: htmlShell(
       "Reset your password",
-      `<p>Hello ${escapeHtml(name)},</p><p>Reset your password using the secure link below.</p>${actionButton("Reset password", payload.link)}<p style="color:#64748b">This link expires at ${escapeHtml(expires)}. If you did not request this, you can ignore this email.</p>`,
+      `<p>Hello ${escapeHtml(name)},</p><p>Reset your password using the secure link below.</p>${actionButton("Reset password", payload.link)}<p style="color:#c8b98b">This link expires at ${escapeHtml(expires)}. If you did not request this, you can ignore this email.</p>`,
     ),
   });
 }
@@ -384,7 +417,7 @@ export async function sendSupportTicketCreatedAdminEmail(payload: SupportTicketP
         ["Ticket", payload.ticketNumber],
         ["Subject", payload.subject],
         ["Customer", payload.customerName || payload.customerEmail],
-      ])}${payload.message ? `<p style="padding:14px;background:#f8fafc;border-radius:6px">${escapeHtml(payload.message)}</p>` : ""}${actionButton("Open support inbox", supportUrl)}`,
+      ])}${payload.message ? `<p style="padding:14px;background:#241b0c;border-radius:6px">${escapeHtml(payload.message)}</p>` : ""}${actionButton("Open support inbox", supportUrl)}`,
     ),
   });
 }
@@ -429,7 +462,7 @@ export async function sendSupportReplyEmail(payload: SupportTicketPayload & { to
       `<p>Hello ${escapeHtml(payload.customerName || "Customer")},</p><p>Our support team replied to your ticket.</p>${detailsList([
         ["Ticket", payload.ticketNumber],
         ["Subject", payload.subject],
-      ])}${payload.reply ? `<p style="padding:14px;background:#f8fafc;border-radius:6px">${escapeHtml(payload.reply)}</p>` : ""}${actionButton("Open support", supportUrl)}`,
+      ])}${payload.reply ? `<p style="padding:14px;background:#241b0c;border-radius:6px">${escapeHtml(payload.reply)}</p>` : ""}${actionButton("Open support", supportUrl)}`,
     ),
   });
 }

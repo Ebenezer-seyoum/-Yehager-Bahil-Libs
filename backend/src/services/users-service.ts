@@ -11,6 +11,7 @@ import {
   familyMembers,
   measurements,
   orders,
+  pendingCustomerRegistrations,
   roles,
   uploadedDesigns,
 } from "../lib/db/schema.js";
@@ -40,6 +41,7 @@ import { assignAdditionalRoleToUser, ensureSystemRoleAssignment, replaceUserAddi
 import { updateUserPermissionsForAdmin } from "./permissions-service.js";
 import {
   resetPasswordLink,
+  sendCustomerVerificationCodeEmail,
   sendPasswordResetEmail,
   sendPasswordSetupEmail,
   sendRegistrationEmail,
@@ -47,6 +49,21 @@ import {
 
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
+}
+
+const CUSTOMER_VERIFICATION_EXPIRES_MINUTES = 10;
+const CUSTOMER_VERIFICATION_RESEND_SECONDS = 60;
+const CUSTOMER_VERIFICATION_MAX_ATTEMPTS = 5;
+
+function verificationCodeHash(email: string, code: string) {
+  return crypto
+    .createHash("sha256")
+    .update(`${normalizeEmail(email)}:${code}:${process.env.NEXTAUTH_SECRET ?? "yehager"}`)
+    .digest("hex");
+}
+
+function generateVerificationCode() {
+  return String(crypto.randomInt(100000, 1000000));
 }
 
 function toPublicUser<T extends { passwordHash?: string | null }>(user: T | undefined | null) {
@@ -323,6 +340,149 @@ export async function listCustomerMeasurementsForAdmin(userId: string) {
     where: filters,
     orderBy: [desc(measurements.updatedAt)],
   });
+}
+
+export async function startCustomerRegistration(payload: { email: string; name?: string; password: string }) {
+  const email = normalizeEmail(payload.email);
+  const existing = await getUserByEmail(email);
+  if (existing) {
+    throw new HTTPException(409, { message: "An account with this email already exists" });
+  }
+
+  const now = new Date();
+  const code = generateVerificationCode();
+  const expiresAt = new Date(now.getTime() + CUSTOMER_VERIFICATION_EXPIRES_MINUTES * 60 * 1000);
+  const resendAvailableAt = new Date(now.getTime() + CUSTOMER_VERIFICATION_RESEND_SECONDS * 1000);
+
+  await db
+    .insert(pendingCustomerRegistrations)
+    .values({
+      email,
+      name: payload.name?.trim() || email.split("@")[0],
+      passwordHash: await hashPassword(payload.password),
+      codeHash: verificationCodeHash(email, code),
+      attempts: 0,
+      expiresAt,
+      resendAvailableAt,
+      updatedAt: now,
+    })
+    .onConflictDoUpdate({
+      target: pendingCustomerRegistrations.email,
+      set: {
+        name: payload.name?.trim() || email.split("@")[0],
+        passwordHash: await hashPassword(payload.password),
+        codeHash: verificationCodeHash(email, code),
+        attempts: 0,
+        expiresAt,
+        resendAvailableAt,
+        verifiedAt: null,
+        updatedAt: now,
+      },
+    });
+
+  await sendCustomerVerificationCodeEmail({
+    to: email,
+    name: payload.name?.trim() || email.split("@")[0],
+    code,
+    expiresInMinutes: CUSTOMER_VERIFICATION_EXPIRES_MINUTES,
+  });
+
+  return {
+    email,
+    expiresAt,
+    resendAvailableAt,
+  };
+}
+
+export async function resendCustomerRegistrationCode(payload: { email: string }) {
+  const email = normalizeEmail(payload.email);
+  const pending = await db.query.pendingCustomerRegistrations.findFirst({
+    where: eq(pendingCustomerRegistrations.email, email),
+  });
+  if (!pending) {
+    throw new HTTPException(404, { message: "No pending registration found for this email" });
+  }
+  if (pending.verifiedAt) {
+    throw new HTTPException(400, { message: "This registration has already been verified" });
+  }
+
+  const now = new Date();
+  if (pending.resendAvailableAt > now) {
+    throw new HTTPException(429, { message: "Please wait before requesting another code" });
+  }
+
+  const code = generateVerificationCode();
+  const expiresAt = new Date(now.getTime() + CUSTOMER_VERIFICATION_EXPIRES_MINUTES * 60 * 1000);
+  const resendAvailableAt = new Date(now.getTime() + CUSTOMER_VERIFICATION_RESEND_SECONDS * 1000);
+
+  await db
+    .update(pendingCustomerRegistrations)
+    .set({
+      codeHash: verificationCodeHash(email, code),
+      attempts: 0,
+      expiresAt,
+      resendAvailableAt,
+      updatedAt: now,
+    })
+    .where(eq(pendingCustomerRegistrations.email, email));
+
+  await sendCustomerVerificationCodeEmail({
+    to: email,
+    name: pending.name,
+    code,
+    expiresInMinutes: CUSTOMER_VERIFICATION_EXPIRES_MINUTES,
+  });
+
+  return { email, expiresAt, resendAvailableAt };
+}
+
+export async function verifyCustomerRegistration(payload: { email: string; code: string }) {
+  const email = normalizeEmail(payload.email);
+  const pending = await db.query.pendingCustomerRegistrations.findFirst({
+    where: eq(pendingCustomerRegistrations.email, email),
+  });
+  if (!pending || pending.verifiedAt) {
+    throw new HTTPException(404, { message: "No pending registration found for this email" });
+  }
+
+  const now = new Date();
+  if (pending.expiresAt < now) {
+    throw new HTTPException(400, { message: "Verification code expired. Please request a new code." });
+  }
+  if (pending.attempts >= CUSTOMER_VERIFICATION_MAX_ATTEMPTS) {
+    throw new HTTPException(429, { message: "Too many verification attempts. Please request a new code." });
+  }
+
+  const matches = verificationCodeHash(email, payload.code) === pending.codeHash;
+  if (!matches) {
+    await db
+      .update(pendingCustomerRegistrations)
+      .set({ attempts: pending.attempts + 1, updatedAt: now })
+      .where(eq(pendingCustomerRegistrations.email, email));
+    throw new HTTPException(400, { message: "Invalid verification code" });
+  }
+
+  const existing = await getUserByEmail(email);
+  if (existing) {
+    await db.delete(pendingCustomerRegistrations).where(eq(pendingCustomerRegistrations.email, email));
+    throw new HTTPException(409, { message: "An account with this email already exists" });
+  }
+
+  const user = await createUser({
+    email,
+    name: pending.name || email.split("@")[0],
+    passwordHash: pending.passwordHash,
+    role: "customer",
+  });
+  if (!user) {
+    throw new HTTPException(409, { message: "An account with this email already exists" });
+  }
+
+  await ensureSystemRoleAssignment(user.id, user.role);
+  await db.delete(pendingCustomerRegistrations).where(eq(pendingCustomerRegistrations.email, email));
+  await sendRegistrationEmail({ to: user.email, name: user.name });
+
+  return toPublicUser(user);
 }
 
 const requiredFamilyMeasurementFields = ["chest", "waist", "hips", "shoulderWidth", "armLength", "torsoLength"];
