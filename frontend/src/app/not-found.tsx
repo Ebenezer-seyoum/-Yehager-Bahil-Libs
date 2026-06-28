@@ -1,39 +1,32 @@
-"use client";
-
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { Home, Search } from "lucide-react";
 
 export default function NotFound() {
-  const pathname = usePathname();
-  const pageName = (pathname ?? "/").replace("/", "");
-
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-50 p-6">
-      <div className="w-full max-w-md">
-        <div className="space-y-6 text-center">
-          <div className="space-y-2">
-            <h1 className="text-7xl font-light text-slate-300">404</h1>
-            <div className="mx-auto h-0.5 w-16 bg-slate-200" />
-          </div>
-
-          <div className="space-y-3">
-            <h2 className="text-2xl font-medium text-slate-800">Page Not Found</h2>
-            <p className="leading-relaxed text-slate-600">
-              The page <span className="font-medium text-slate-700">&quot;{pageName}&quot;</span> could not be found in this
-              application.
-            </p>
-          </div>
-
-          <div className="pt-6">
-            <Link
-              href="/"
-              className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-colors duration-200 hover:border-slate-300 hover:bg-slate-50"
-            >
-              Go Home
-            </Link>
-          </div>
+    <main className="flex min-h-[70vh] items-center justify-center bg-[#120f09] px-6 py-20 text-[#fff7df]">
+      <section className="w-full max-w-xl text-center">
+        <p className="text-sm font-black uppercase tracking-[0.28em] text-[#d6a43d]">Page not found</p>
+        <h1 className="mt-5 font-heading text-4xl font-bold sm:text-5xl">This page has moved</h1>
+        <p className="mx-auto mt-5 max-w-md text-sm font-medium leading-7 text-[#c8b98b]">
+          The link may be from an older search result. Continue to the homepage or browse the current catalog.
+        </p>
+        <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
+          <Link
+            href="/"
+            className="inline-flex items-center justify-center gap-2 rounded-md bg-[#d6a43d] px-5 py-3 text-sm font-black text-[#18130a] transition hover:bg-[#e6b957]"
+          >
+            <Home className="h-4 w-4" />
+            Home
+          </Link>
+          <Link
+            href="/catalog"
+            className="inline-flex items-center justify-center gap-2 rounded-md border border-[#6f511f] px-5 py-3 text-sm font-black text-[#fff7df] transition hover:bg-[#241b0c]"
+          >
+            <Search className="h-4 w-4" />
+            Browse catalog
+          </Link>
         </div>
-      </div>
-    </div>
+      </section>
+    </main>
   );
 }
