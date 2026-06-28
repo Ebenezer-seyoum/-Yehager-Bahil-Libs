@@ -12,6 +12,7 @@ declare module "next-auth" {
       assignedRoleActive?: boolean | null;
       assignedRoleName?: string | null;
       accountStatus?: string;
+      mustChangePassword?: boolean;
       email?: string | null;
       name?: string | null;
       image?: string | null;
@@ -28,5 +29,6 @@ declare module "next-auth/jwt" {
     assignedRoleActive?: boolean | null;
     assignedRoleName?: string | null;
     accountStatus?: string;
+    mustChangePassword?: boolean;
   }
 }

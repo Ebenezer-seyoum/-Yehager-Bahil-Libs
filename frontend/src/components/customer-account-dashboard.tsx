@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import {
   HEM_STYLE_OPTIONS,
   PANTS_MEASUREMENT_FIELDS,
@@ -45,6 +46,11 @@ type Profile = {
   status?: string | null;
   mustChangePassword?: boolean | null;
   phone?: string | null;
+  address?: string | null;
+  country?: string | null;
+  city?: string | null;
+  notes?: string | null;
+  profileComplete?: boolean | null;
   createdAt?: string | null;
   lastLoginAt?: string | null;
 };
@@ -146,11 +152,59 @@ export function CustomerAccountDashboard({
   deleteMeasurement: ServerAction;
 }) {
   const mustChangePassword = Boolean(profile.mustChangePassword);
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const mustCompleteProfile = profile.role === "customer" && profile.profileComplete === false;
   const [tab, setTab] = useState(mustChangePassword ? "security" : "profile");
-  const [editingProfile, setEditingProfile] = useState(false);
+  const [editingProfile, setEditingProfile] = useState(mustCompleteProfile || searchParams?.get("completeProfile") === "1");
+  const [profileForm, setProfileForm] = useState({
+    name: profile.name ?? "",
+    phone: profile.phone ?? "",
+    address: profile.address ?? "",
+    country: profile.country ?? "",
+    city: profile.city ?? "",
+    notes: profile.notes ?? "",
+  });
+  const [profileStatus, setProfileStatus] = useState<{ type: "success" | "error"; message: string } | null>(
+    mustCompleteProfile ? { type: "error", message: "Please complete your full name, phone / WhatsApp, and residential address before placing an order." } : null,
+  );
+  const [savingProfile, setSavingProfile] = useState(false);
   const displayName = profile.name ?? "Customer";
   const email = profile.email ?? "";
   const initials = displayName.charAt(0).toUpperCase() || email.charAt(0).toUpperCase() || "?";
+
+  async function saveProfile() {
+    setProfileStatus(null);
+    if (!profileForm.name.trim() || !profileForm.phone.trim() || !profileForm.address.trim()) {
+      setProfileStatus({ type: "error", message: "Full name, phone / WhatsApp, and residential address are required." });
+      return;
+    }
+
+    setSavingProfile(true);
+    try {
+      const response = await fetch("/api/backend/users/me", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: profileForm.name,
+          phone: profileForm.phone,
+          address: profileForm.address,
+          country: profileForm.country || null,
+          city: profileForm.city || null,
+          notes: profileForm.notes || null,
+        }),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(payload?.error ?? "Could not save profile.");
+      setProfileStatus({ type: "success", message: "Account details saved successfully." });
+      setEditingProfile(false);
+      router.refresh();
+    } catch (error) {
+      setProfileStatus({ type: "error", message: error instanceof Error ? error.message : "Could not save profile." });
+    } finally {
+      setSavingProfile(false);
+    }
+  }
 
   const tabs = [
     { key: "profile", label: "My Profile", icon: User },
@@ -167,6 +221,11 @@ export function CustomerAccountDashboard({
         <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 shadow-sm">
           <p className="font-semibold">Password reset required</p>
           <p className="mt-0.5">Your password was reset. Please change it now to continue using your account securely.</p>
+        </div>
+      ) : null}
+      {profileStatus ? (
+        <div className={`mb-4 rounded-2xl border px-4 py-3 text-sm shadow-sm ${profileStatus.type === "success" ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-amber-200 bg-amber-50 text-amber-900"}`}>
+          {profileStatus.message}
         </div>
       ) : null}
       <div className="mb-8 rounded-2xl bg-foreground p-6 text-background sm:p-8">
@@ -248,20 +307,36 @@ export function CustomerAccountDashboard({
             {editingProfile ? (
               <div className="space-y-4">
                 <label className="block">
-                  <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Full Name</span>
-                  <p className="mt-1 text-xs italic text-muted-foreground">Name changes require contacting support.</p>
-                  <input value={displayName} disabled className="mt-1 h-10 w-full cursor-not-allowed rounded-lg border border-input bg-background px-3 text-sm opacity-50" />
+                  <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Full Name *</span>
+                  <input value={profileForm.name} onChange={(event) => setProfileForm((current) => ({ ...current, name: event.target.value }))} className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm" />
                 </label>
                 <label className="block">
-                  <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Phone Number</span>
-                  <p className="mt-1 text-xs italic text-muted-foreground">Contact support to update your phone number.</p>
-                  <input value={profile.phone ?? ""} disabled placeholder="Not set" className="mt-1 h-10 w-full cursor-not-allowed rounded-lg border border-input bg-background px-3 text-sm opacity-60" />
+                  <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Phone / WhatsApp *</span>
+                  <input value={profileForm.phone} onChange={(event) => setProfileForm((current) => ({ ...current, phone: event.target.value }))} placeholder="+251..." className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm" />
+                </label>
+                <label className="block">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Residential Address *</span>
+                  <textarea value={profileForm.address} onChange={(event) => setProfileForm((current) => ({ ...current, address: event.target.value }))} rows={3} className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm" />
+                </label>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="block">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Country</span>
+                    <input value={profileForm.country} onChange={(event) => setProfileForm((current) => ({ ...current, country: event.target.value }))} className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm" />
+                  </label>
+                  <label className="block">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">City</span>
+                    <input value={profileForm.city} onChange={(event) => setProfileForm((current) => ({ ...current, city: event.target.value }))} className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm" />
+                  </label>
+                </div>
+                <label className="block">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Additional Notes</span>
+                  <textarea value={profileForm.notes} onChange={(event) => setProfileForm((current) => ({ ...current, notes: event.target.value }))} rows={3} className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm" />
                 </label>
                 <div className="flex gap-3 pt-1">
-                  <button type="button" onClick={() => setEditingProfile(false)} className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground">
-                    <Check className="h-3.5 w-3.5" /> Done
+                  <button type="button" onClick={() => void saveProfile()} disabled={savingProfile} className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60">
+                    <Check className="h-3.5 w-3.5" /> {savingProfile ? "Saving..." : "Save"}
                   </button>
-                  <button type="button" onClick={() => setEditingProfile(false)} className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm">
+                  <button type="button" onClick={() => setEditingProfile(false)} disabled={mustCompleteProfile} className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm disabled:opacity-50">
                     <X className="h-3.5 w-3.5" /> Cancel
                   </button>
                 </div>
@@ -271,7 +346,9 @@ export function CustomerAccountDashboard({
                 {[
                   { icon: User, label: "Full Name", value: displayName },
                   { icon: Mail, label: "Email Address", value: email },
-                  { icon: Phone, label: "Phone Number", value: profile.phone || "Not set" },
+                  { icon: Phone, label: "Phone / WhatsApp", value: profile.phone || "Not set" },
+                  { icon: MapPin, label: "Residential Address", value: profile.address || "Not set" },
+                  { icon: MapPin, label: "City / Country", value: [profile.city, profile.country].filter(Boolean).join(", ") || "Not set" },
                   { icon: ShieldCheck, label: "Account Status", value: profile.status ?? "active" },
                   { icon: CalendarDays, label: "Member Since", value: formatDate(profile.createdAt) || "—" },
                   { icon: RefreshCw, label: "Last Login", value: formatDate(profile.lastLoginAt) || "—" },
@@ -685,7 +762,7 @@ function MeasurementEditForm({
             <div className="mt-6 space-y-5">
               <div>
                 <p className="text-sm font-semibold text-zinc-400 mb-3">Hem Style <span className="text-[#f5a623]">*</span></p>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 gap-3">
                   {HEM_STYLE_OPTIONS.map((option) => (
                     <ChoiceCard key={option.value} title={option.title} description={option.description} selected={hemStyle === option.value} onClick={() => setHemStyle(option.value)} />
                   ))}
@@ -693,7 +770,7 @@ function MeasurementEditForm({
               </div>
               <div>
                 <p className="text-sm font-semibold text-zinc-400 mb-3">Pressing (Iron) Style <span className="text-[#f5a623]">*</span></p>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 gap-3">
                   {PRESSING_STYLE_OPTIONS.map((option) => (
                     <ChoiceCard key={option.value} title={option.title} description={option.description} selected={pressingStyle === option.value} onClick={() => setPressingStyle(option.value)} />
                   ))}

@@ -964,6 +964,10 @@ export function CustomerDetailClient({
         name: [cleanFirstName, cleanFatherName, cleanGrandfatherName].filter(Boolean).join(" ") || fullName,
         email: cleanEmail,
         phone: cleanPhone || null,
+        address: cleanOptionalText(address),
+        country: cleanOptionalText(country),
+        city: cleanOptionalText(city),
+        notes: cleanOptionalText(notes),
         profile: profilePayload,
       };
       if (["active", "invited", "pending"].includes(accountStatus)) {

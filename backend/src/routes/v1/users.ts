@@ -7,6 +7,7 @@ import {
   getCurrentUserByEmail,
   syncCurrentUserFromAuth,
   updateCurrentUserProfile,
+  updateCurrentUserPresence,
 } from "../../services/users-service.js";
 import type { AppBindings } from "../../types/hono.js";
 
@@ -15,6 +16,10 @@ export const usersRouter = new Hono<AppBindings>();
 const profilePatchSchema = z.object({
   name: z.string().trim().min(1).max(255).optional(),
   phone: z.string().trim().max(50).nullable().optional(),
+  address: z.string().trim().max(1000).nullable().optional(),
+  country: z.string().trim().max(120).nullable().optional(),
+  city: z.string().trim().max(120).nullable().optional(),
+  notes: z.string().trim().max(1000).nullable().optional(),
   avatarUrl: z.string().trim().url().nullable().optional(),
   profile: z
     .object({
@@ -33,8 +38,12 @@ const profilePatchSchema = z.object({
       notes: z.string().trim().nullable().optional(),
     })
     .optional(),
-}).refine((value) => Boolean(value.name || value.phone !== undefined || value.avatarUrl !== undefined || value.profile), {
+}).refine((value) => Boolean(value.name || value.phone !== undefined || value.address !== undefined || value.country !== undefined || value.city !== undefined || value.notes !== undefined || value.avatarUrl !== undefined || value.profile), {
   message: "At least one field must be provided",
+});
+
+const presenceSchema = z.object({
+  online: z.boolean(),
 });
 
 const passwordPatchSchema = z.object({
@@ -64,6 +73,16 @@ usersRouter.patch("/me/password", requireAuth, zValidator("json", passwordPatchS
   const user = await changeCurrentUserPassword({
     email: authUser?.email ?? "",
     ...body,
+  });
+  return c.json({ data: user });
+});
+
+usersRouter.post("/me/presence", requireAuth, zValidator("json", presenceSchema), async (c) => {
+  const authUser = c.get("authUser");
+  const body = c.req.valid("json");
+  const user = await updateCurrentUserPresence({
+    email: authUser?.email ?? "",
+    online: body.online,
   });
   return c.json({ data: user });
 });

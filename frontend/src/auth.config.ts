@@ -73,6 +73,7 @@ const providers: NonNullable<NextAuthOptions["providers"]> = [
           assignedRoleActive?: boolean | null;
           assignedRoleName?: string | null;
           accountStatus?: string;
+          mustChangePassword?: boolean | null;
         };
       };
       const user = payload.data;
@@ -97,6 +98,7 @@ const providers: NonNullable<NextAuthOptions["providers"]> = [
         assignedRoleActive: user.assignedRoleActive ?? null,
         assignedRoleName: user.assignedRoleName ?? null,
         accountStatus: user.accountStatus ?? "active",
+        mustChangePassword: Boolean(user.mustChangePassword),
       };
     },
   }),
@@ -131,6 +133,7 @@ export const authConfig = {
           assignedRoleActive?: unknown;
           assignedRoleName?: unknown;
           accountStatus?: unknown;
+          mustChangePassword?: unknown;
         };
         token.role = normalizeRole(authUser.role);
         token.permissions = Array.isArray(authUser.permissions)
@@ -143,6 +146,7 @@ export const authConfig = {
         token.assignedRoleActive = typeof authUser.assignedRoleActive === "boolean" ? authUser.assignedRoleActive : null;
         token.assignedRoleName = typeof authUser.assignedRoleName === "string" ? authUser.assignedRoleName : null;
         token.accountStatus = String(authUser.accountStatus ?? "active");
+        token.mustChangePassword = Boolean(authUser.mustChangePassword);
       }
 
       return token;
@@ -160,6 +164,7 @@ export const authConfig = {
         session.user.assignedRoleActive = typeof token.assignedRoleActive === "boolean" ? token.assignedRoleActive : null;
         session.user.assignedRoleName = typeof token.assignedRoleName === "string" ? token.assignedRoleName : null;
         session.user.accountStatus = String(token.accountStatus ?? "active");
+        session.user.mustChangePassword = Boolean(token.mustChangePassword);
       }
       return session;
     },

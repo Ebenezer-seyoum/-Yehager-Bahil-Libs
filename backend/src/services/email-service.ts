@@ -35,8 +35,11 @@ type OrderStatusPayload = {
   customerName?: string | null;
   orderNumber?: string | null;
   status?: string | null;
+  deliveryStatus?: string | null;
   paymentStatus?: string | null;
   fulfillmentType?: string | null;
+  carrier?: string | null;
+  trackingNumber?: string | null;
 };
 
 type VerificationCodePayload = {
@@ -55,6 +58,23 @@ type AdminOrderPayload = {
   paymentStatus?: string | null;
   totalUsd?: string | number | null;
   paymentMethod?: string | null;
+};
+
+type AdminOrderStatusPayload = AdminOrderPayload & {
+  previousStatus?: string | null;
+  deliveryStatus?: string | null;
+  carrier?: string | null;
+  trackingNumber?: string | null;
+  changedBy?: string | null;
+};
+
+type AccountStatusPayload = {
+  to?: string | null;
+  name?: string | null;
+  email?: string | null;
+  role?: string | null;
+  status?: string | null;
+  changedBy?: string | null;
 };
 
 type SupportTicketPayload = {
@@ -123,16 +143,26 @@ function htmlShell(title: string, body: string) {
   return `
     <div style="margin:0;padding:0;background:#120f09">
       <div style="font-family:Arial,sans-serif;line-height:1.6;color:#f8f1dc;max-width:640px;margin:0 auto;padding:28px 18px">
-        <div style="background:#1b160d;border:1px solid #4d3714;border-radius:8px;padding:28px">
+        <div style="background:#1b160d;border:1px solid #4d3714;border-radius:8px;padding:32px 28px">
           <div style="text-align:center;margin-bottom:22px">
-            <img src="${escapeHtml(logoUrl())}" alt="Yehager Bahil Libs" width="180" style="display:inline-block;max-width:180px;width:100%;height:auto;border-radius:6px" />
+            <div style="display:inline-block;width:104px;height:104px;border-radius:999px;background:#241b0c;border:2px solid #d6a43d;padding:8px;box-shadow:0 8px 26px rgba(0,0,0,.28);overflow:hidden">
+              <img src="${escapeHtml(logoUrl())}" alt="Yehager Bahil Libs" width="88" height="88" style="display:block;width:88px;height:88px;object-fit:cover;border-radius:999px" />
+            </div>
           </div>
-          <p style="margin:0 0 12px;color:#d6a43d;font-weight:800;letter-spacing:.02em">Yehager Bahil Libs</p>
+          <p style="margin:0 0 8px;text-align:center;color:#d6a43d;font-size:22px;font-weight:900;letter-spacing:.01em">Yehager Bahil Libs</p>
           <h1 style="font-size:24px;line-height:1.25;margin:0 0 16px;color:#fff7df">${escapeHtml(title)}</h1>
           ${body}
-          <p style="margin-top:28px;color:#c8b98b;font-size:13px">Need help? Reply to this email or contact support@yehagerbahillibs.com.</p>
+          <div style="margin-top:28px;padding-top:20px;border-top:1px solid #3d321d;color:#c8b98b;font-size:13px">
+            <p style="margin:0 0 12px">If you have any questions or need any changes before placing your order, please contact us at the details below before proceeding.</p>
+            <p style="margin:0 0 8px;color:#fff7df;font-weight:800">Questions? Contact Us Directly:</p>
+            <p style="margin:0 0 4px">+251 92 394 0978 (WhatsApp)</p>
+            <p style="margin:0 0 12px">yehagerbahillibs@gmail.com</p>
+            <p style="margin:0 0 4px">Thank you for choosing us.</p>
+            <p style="margin:0 0 12px">Wear your culture with pride.</p>
+            <p style="margin:0"><a href="https://www.yehagerbahillibs.com/" style="color:#d6a43d;text-decoration:none;font-weight:800">YehagerBahilLibs.com</a></p>
+          </div>
         </div>
-        <p style="margin:16px 0 0;color:#a88b4a;font-size:12px;text-align:center">Yehager Bahil Libs · yehagerbahillibs.com</p>
+        <p style="margin:16px 0 0;color:#a88b4a;font-size:12px;text-align:center">© 2025 Yehager Bahil Libs · Naomi Investments LLC · Minnesota, USA</p>
       </div>
     </div>
   `;
@@ -325,8 +355,17 @@ export async function sendCustomDesignDeclinedEmail(payload: CustomDesignPayload
 }
 
 export async function sendOrderStatusEmail(payload: OrderStatusPayload) {
-  const orderUrl = payload.orderNumber ? appLink("/dashboard/orders") : appLink("/dashboard");
+  const orderUrl = payload.orderNumber ? appLink("/my-orders") : appLink("/dashboard");
   const statusLabel = String(payload.status ?? "updated").replaceAll("_", " ");
+  const deliveryStatusLabel = payload.deliveryStatus ? payload.deliveryStatus.replaceAll("_", " ") : null;
+  const trackingUrl =
+    payload.carrier === "Ethiopian Mail Service"
+      ? "https://www.ethiopianpostalservice.com"
+      : payload.carrier === "DHL"
+        ? "https://www.dhl.com/en/express/tracking.html"
+        : payload.carrier === "UPS"
+          ? "https://www.ups.com/track"
+          : null;
   return sendTransactionalEmailSafely({
     channel: "notifications",
     to: payload.to,
@@ -336,6 +375,10 @@ export async function sendOrderStatusEmail(payload: OrderStatusPayload) {
       `Your order ${payload.orderNumber ?? ""} status is now: ${statusLabel}.`.trim(),
       payload.paymentStatus ? `Payment status: ${payload.paymentStatus.replaceAll("_", " ")}` : null,
       payload.fulfillmentType ? `Delivery method: ${payload.fulfillmentType}` : null,
+      payload.carrier ? `Delivery provider: ${payload.carrier}` : null,
+      deliveryStatusLabel ? `Delivery status: ${deliveryStatusLabel}` : null,
+      payload.trackingNumber ? `Tracking number: ${payload.trackingNumber}` : null,
+      trackingUrl && payload.trackingNumber ? `Track shipment: ${trackingUrl}` : null,
       `View your orders: ${orderUrl}`,
     ]),
     html: htmlShell(
@@ -343,7 +386,10 @@ export async function sendOrderStatusEmail(payload: OrderStatusPayload) {
       `<p>Hello ${escapeHtml(payload.customerName || "Customer")},</p><p>Your order <b>${escapeHtml(payload.orderNumber ?? "")}</b> status is now <b>${escapeHtml(statusLabel)}</b>.</p>${detailsList([
         ["Payment status", payload.paymentStatus?.replaceAll("_", " ")],
         ["Delivery method", payload.fulfillmentType],
-      ])}${actionButton("View your orders", orderUrl)}`,
+        ["Delivery provider", payload.carrier],
+        ["Delivery status", deliveryStatusLabel],
+        ["Tracking number", payload.trackingNumber],
+      ])}${trackingUrl && payload.trackingNumber ? actionButton("Track shipment", trackingUrl) : ""}${actionButton("View your orders", orderUrl)}`,
     ),
   });
 }
@@ -370,6 +416,99 @@ export async function sendAdminOrderCreatedEmail(payload: AdminOrderPayload) {
         ["Payment", payload.paymentStatus],
         ["Payment method", payload.paymentMethod],
       ])}${actionButton("Open order", orderUrl)}`,
+    ),
+  });
+}
+
+export async function sendAdminOrderStatusChangedEmail(payload: AdminOrderStatusPayload) {
+  const orderUrl = payload.orderId ? appLink(`/admin/orders/${payload.orderId}`) : appLink("/admin/orders");
+  const statusLabel = String(payload.status ?? "updated").replaceAll("_", " ");
+  return sendTransactionalEmailSafely({
+    channel: "team",
+    to: env.ADMIN_NOTIFICATION_EMAIL,
+    subject: `Order status changed${payload.orderNumber ? `: ${payload.orderNumber}` : ""}`,
+    text: paragraph([
+      `Order ${payload.orderNumber ?? ""} status changed to ${statusLabel}.`.trim(),
+      payload.previousStatus ? `Previous status: ${payload.previousStatus.replaceAll("_", " ")}` : null,
+      payload.customerEmail ? `Customer: ${payload.customerEmail}` : null,
+      payload.paymentStatus ? `Payment: ${payload.paymentStatus.replaceAll("_", " ")}` : null,
+      payload.deliveryStatus ? `Delivery status: ${payload.deliveryStatus.replaceAll("_", " ")}` : null,
+      payload.carrier ? `Delivery provider: ${payload.carrier}` : null,
+      payload.trackingNumber ? `Tracking number: ${payload.trackingNumber}` : null,
+      payload.changedBy ? `Changed by: ${payload.changedBy}` : null,
+      `Open order: ${orderUrl}`,
+    ]),
+    html: htmlShell(
+      "Order status changed",
+      `<p>An order status was updated and may require operational follow-up.</p>${detailsList([
+        ["Order", payload.orderNumber],
+        ["Customer", payload.customerName || payload.customerEmail],
+        ["Previous status", payload.previousStatus?.replaceAll("_", " ")],
+        ["New status", statusLabel],
+        ["Payment", payload.paymentStatus?.replaceAll("_", " ")],
+        ["Delivery status", payload.deliveryStatus?.replaceAll("_", " ")],
+        ["Delivery provider", payload.carrier],
+        ["Tracking number", payload.trackingNumber],
+        ["Changed by", payload.changedBy],
+      ])}${actionButton("Open admin order", orderUrl)}`,
+    ),
+  });
+}
+
+export async function sendAccountStatusChangedEmail(payload: AccountStatusPayload) {
+  const status = String(payload.status ?? "updated").toLowerCase();
+  const isActive = status === "active";
+  const isStaff = payload.role === "employee" || payload.role === "admin";
+  const signInUrl = appLink("/signin");
+  return sendTransactionalEmailSafely({
+    channel: isStaff ? "team" : "notifications",
+    to: payload.to,
+    subject: isActive ? "Your Yehager Bahil account is active" : "Your Yehager Bahil account has been deactivated",
+    text: paragraph([
+      `Hello ${payload.name || "there"},`,
+      isActive
+        ? "Your account has been activated. You can now sign in and continue using Yehager Bahil Libs."
+        : "Your account has been deactivated. Access is paused until an administrator activates it again.",
+      isStaff ? "This notice applies to your staff workspace access." : "This notice applies to your customer account access.",
+      isActive ? `Sign in: ${signInUrl}` : "If you believe this is a mistake, please contact support.",
+    ]),
+    html: htmlShell(
+      isActive ? "Account activated" : "Account deactivated",
+      `<p>Hello ${escapeHtml(payload.name || "there")},</p><p>${isActive
+        ? "Your account has been activated. You can now sign in and continue using Yehager Bahil Libs."
+        : "Your account has been deactivated. Access is paused until an administrator activates it again."
+      }</p>${detailsList([
+        ["Account", payload.email],
+        ["Role", payload.role],
+        ["Status", status],
+      ])}${isActive ? actionButton("Sign in", signInUrl) : "<p>If you believe this is a mistake, please contact support.</p>"}`,
+    ),
+  });
+}
+
+export async function sendAdminAccountStatusChangedEmail(payload: AccountStatusPayload) {
+  const adminUrl = payload.role === "customer" ? appLink("/admin/customers") : appLink("/admin/users");
+  const status = String(payload.status ?? "updated").toLowerCase();
+  return sendTransactionalEmailSafely({
+    channel: "team",
+    to: env.ADMIN_NOTIFICATION_EMAIL,
+    subject: `Account ${status}: ${payload.email ?? payload.name ?? "user"}`,
+    text: paragraph([
+      `Account status changed to ${status}.`,
+      payload.email ? `Account: ${payload.email}` : null,
+      payload.role ? `Role: ${payload.role}` : null,
+      payload.changedBy ? `Changed by: ${payload.changedBy}` : null,
+      `Open admin: ${adminUrl}`,
+    ]),
+    html: htmlShell(
+      "Account status changed",
+      `<p>An account status was updated.</p>${detailsList([
+        ["Account", payload.email],
+        ["Name", payload.name],
+        ["Role", payload.role],
+        ["Status", status],
+        ["Changed by", payload.changedBy],
+      ])}${actionButton("Open admin", adminUrl)}`,
     ),
   });
 }

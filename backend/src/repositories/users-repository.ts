@@ -50,7 +50,15 @@ export async function createUser(payload: {
   accountStatus?: "active" | "invited" | "pending";
   roleStatus?: "unassigned" | "assigned";
   phone?: string | null;
+  address?: string | null;
+  country?: string | null;
+  city?: string | null;
+  notes?: string | null;
   avatarUrl?: string | null;
+  mustChangePassword?: boolean;
+  passwordStatus?: string;
+  lastPasswordResetAt?: Date | null;
+  lastPasswordResetMethod?: string | null;
 }) {
   const [row] = await db
     .insert(users)
@@ -63,7 +71,15 @@ export async function createUser(payload: {
       accountStatus: payload.accountStatus ?? "active",
       roleStatus: payload.roleStatus ?? "assigned",
       phone: payload.phone ?? null,
+      address: payload.address ?? null,
+      country: payload.country ?? null,
+      city: payload.city ?? null,
+      notes: payload.notes ?? null,
       avatarUrl: payload.avatarUrl ?? null,
+      mustChangePassword: payload.mustChangePassword ?? false,
+      passwordStatus: payload.passwordStatus ?? "never_reset",
+      lastPasswordResetAt: payload.lastPasswordResetAt ?? null,
+      lastPasswordResetMethod: payload.lastPasswordResetMethod ?? null,
     })
     .onConflictDoNothing()
     .returning();
@@ -83,8 +99,16 @@ export async function listUsers(limit = 200) {
       roleStatus: users.roleStatus,
       assignedRoleId: users.assignedRoleId,
       phone: users.phone,
+      address: users.address,
+      country: users.country,
+      city: users.city,
+      notes: users.notes,
       avatarUrl: users.avatarUrl,
       lastLoginAt: users.lastLoginAt,
+      profileCompletedAt: users.profileCompletedAt,
+      isOnline: users.isOnline,
+      lastSeenAt: users.lastSeenAt,
+      lastHeartbeatAt: users.lastHeartbeatAt,
       mustChangePassword: users.mustChangePassword,
       createdAt: users.createdAt,
       updatedAt: users.updatedAt,
@@ -108,11 +132,15 @@ export async function updateUserRole(payload: { userId: string; role: UserRole }
 }
 
 export async function updateLastLoginAt(userId: string) {
+  const now = new Date();
   const [row] = await db
     .update(users)
     .set({
-      lastLoginAt: new Date(),
-      updatedAt: new Date(),
+      lastLoginAt: now,
+      isOnline: true,
+      lastSeenAt: now,
+      lastHeartbeatAt: now,
+      updatedAt: now,
     })
     .where(eq(users.id, userId))
     .returning();
@@ -139,6 +167,11 @@ export async function updateEmployeeCoreForAdmin(payload: {
   name?: string;
   email?: string;
   phone?: string | null;
+  address?: string | null;
+  country?: string | null;
+  city?: string | null;
+  notes?: string | null;
+  profileCompletedAt?: Date | null;
   accountStatus?: "active" | "invited" | "pending";
   avatarUrl?: string | null;
 }) {
@@ -148,6 +181,11 @@ export async function updateEmployeeCoreForAdmin(payload: {
       ...(payload.name !== undefined ? { name: payload.name } : {}),
       ...(payload.email !== undefined ? { email: payload.email } : {}),
       ...(payload.phone !== undefined ? { phone: payload.phone } : {}),
+      ...(payload.address !== undefined ? { address: payload.address } : {}),
+      ...(payload.country !== undefined ? { country: payload.country } : {}),
+      ...(payload.city !== undefined ? { city: payload.city } : {}),
+      ...(payload.notes !== undefined ? { notes: payload.notes } : {}),
+      ...(payload.profileCompletedAt !== undefined ? { profileCompletedAt: payload.profileCompletedAt } : {}),
       ...(payload.accountStatus !== undefined ? { accountStatus: payload.accountStatus } : {}),
       ...(payload.avatarUrl !== undefined ? { avatarUrl: payload.avatarUrl } : {}),
       updatedAt: new Date(),
@@ -168,6 +206,38 @@ export async function updateUserStatus(payload: { userId: string; status: "activ
     .where(eq(users.id, payload.userId))
     .returning();
 
+  return row;
+}
+
+export async function updateUserPresence(payload: { userId: string; online: boolean }) {
+  const now = new Date();
+  const [row] = await db
+    .update(users)
+    .set({
+      isOnline: payload.online,
+      lastSeenAt: now,
+      lastHeartbeatAt: payload.online ? now : null,
+      updatedAt: now,
+    })
+    .where(eq(users.id, payload.userId))
+    .returning();
+
+  return row;
+}
+
+export async function getPasswordResetRequestByTokenHash(tokenHash: string) {
+  return db.query.passwordResetRequests.findFirst({
+    where: eq(passwordResetRequests.tokenHash, tokenHash),
+    orderBy: [desc(passwordResetRequests.createdAt)],
+  });
+}
+
+export async function markPasswordResetRequestUsed(requestId: string) {
+  const [row] = await db
+    .update(passwordResetRequests)
+    .set({ usedAt: new Date() })
+    .where(eq(passwordResetRequests.id, requestId))
+    .returning();
   return row;
 }
 

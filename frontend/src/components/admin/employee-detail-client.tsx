@@ -62,9 +62,7 @@ function getAccessStatus(user: EmployeeUser) {
     return "Blocked";
   }
 
-  const lastLogin = user.lastLoginAt ? new Date(user.lastLoginAt).getTime() : NaN;
-  const isOnline = Number.isFinite(lastLogin) && Date.now() - lastLogin < 5 * 60 * 1000;
-  return isOnline ? "Online" : "Unblocked";
+  return user.isOnline ? "Online" : "Offline";
 }
 
 function Field({
@@ -592,7 +590,7 @@ export function EmployeeDetailClient({
     const currentStatus = String(user.status ?? "").toLowerCase();
     const currentAccountStatus = String(user.accountStatus ?? "").toLowerCase();
     const isBlocked =
-      currentStatus === "inactive" || currentStatus === "suspended" || currentAccountStatus === "blocked";
+      currentStatus === "inactive" || currentAccountStatus === "blocked";
     const confirmed = await dashboardConfirm({
       title: isBlocked ? "Unblock this user?" : "Block this user?",
       text: isBlocked ? "Unblocking will restore dashboard access for this user." : "Blocking will remove dashboard access for this user.",
@@ -611,7 +609,7 @@ export function EmployeeDetailClient({
       const res = await fetch(`/api/backend/admin/users/${user.id}/status`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: isBlocked ? "active" : "suspended" }),
+        body: JSON.stringify({ status: isBlocked ? "active" : "inactive" }),
       });
       const json = (await res.json().catch(() => null)) as ApiResponse<unknown> | null;
       if (!res.ok) {
@@ -788,7 +786,7 @@ export function EmployeeDetailClient({
   const roleStatusValue = user?.roleStatus ?? "unassigned";
   const userStatusValue = String(user.status ?? "").toLowerCase();
   const userAccountStatusValue = String(user.accountStatus ?? "").toLowerCase();
-  const isBlockedForUi = userStatusValue === "inactive" || userStatusValue === "suspended" || userAccountStatusValue === "blocked" || userAccountStatusValue === "inactive";
+  const isBlockedForUi = userStatusValue === "inactive" || userAccountStatusValue === "blocked" || userAccountStatusValue === "inactive";
   const accessStatusLabel = getAccessStatus(user);
 
   function goToSection(sectionId: EmployeeSectionId) {

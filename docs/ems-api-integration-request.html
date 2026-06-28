@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>EMS API Integration Request - Yehager Bahil Libs</title>
+    <style>
+      @page {
+        size: A4;
+        margin: 18mm;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: #f5f2ea;
+        color: #1f2933;
+        font-family: Arial, Helvetica, sans-serif;
+        line-height: 1.55;
+      }
+
+      .page {
+        max-width: 820px;
+        margin: 24px auto;
+        background: #ffffff;
+        border: 1px solid #e5decf;
+        box-shadow: 0 18px 48px rgba(31, 41, 51, 0.12);
+      }
+
+      .header {
+        padding: 34px 42px;
+        background: #17120a;
+        color: #fff8e6;
+        border-bottom: 5px solid #d6a43d;
+      }
+
+      .brand {
+        color: #d6a43d;
+        font-size: 14px;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        margin: 10px 0 0;
+        font-size: 30px;
+        line-height: 1.2;
+      }
+
+      .subtitle {
+        margin: 12px 0 0;
+        max-width: 650px;
+        color: #e8d7a8;
+        font-size: 15px;
+      }
+
+      .content {
+        padding: 34px 42px 40px;
+      }
+
+      .intro {
+        margin: 0 0 26px;
+        padding: 18px 20px;
+        border-left: 4px solid #d6a43d;
+        background: #fffaf0;
+        color: #2d3748;
+      }
+
+      h2 {
+        margin: 28px 0 10px;
+        color: #111827;
+        font-size: 18px;
+      }
+
+      ol {
+        margin: 0;
+        padding-left: 22px;
+      }
+
+      li {
+        margin: 6px 0;
+      }
+
+      .section {
+        padding: 18px 0;
+        border-bottom: 1px solid #ece4d4;
+      }
+
+      .section:first-of-type {
+        padding-top: 0;
+      }
+
+      .section-title {
+        display: block;
+        margin-bottom: 8px;
+        color: #8a5b08;
+        font-size: 15px;
+        font-weight: 800;
+      }
+
+      .example {
+        display: inline-block;
+        margin-top: 4px;
+        padding: 3px 7px;
+        border-radius: 5px;
+        background: #f3f4f6;
+        color: #111827;
+        font-family: Consolas, "Courier New", monospace;
+        font-size: 12px;
+      }
+
+      .important {
+        margin-top: 26px;
+        padding: 20px;
+        border: 1px solid #d6a43d;
+        border-radius: 8px;
+        background: #17120a;
+        color: #fff8e6;
+      }
+
+      .important h2 {
+        margin-top: 0;
+        color: #d6a43d;
+      }
+
+      .important ul {
+        margin: 8px 0 0;
+        padding-left: 20px;
+      }
+
+      .footer {
+        padding: 18px 42px;
+        background: #faf7ef;
+        color: #6b5a37;
+        font-size: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <header class="header">
+        <div class="brand">Yehager Bahil Libs</div>
+        <h1>EMS Tracking API Integration Request</h1>
+        <p class="subtitle">
+          Request for technical/API details needed to connect EMS shipment tracking with our ecommerce website.
+        </p>
+      </header>
+
+      <section class="content">
+        <p class="intro">
+          Hello, we want to integrate EMS tracking into our ecommerce website so customers can automatically track their orders.
+          Please provide the technical/API integration details listed below.
+        </p>
+
+        <div class="section">
+          <span class="section-title">1. API Availability</span>
+          <ol>
+            <li>Do you provide an API for shipment tracking?</li>
+            <li>Is the API public, partner-only, or paid?</li>
+            <li>How can our company apply for access?</li>
+          </ol>
+        </div>
+
+        <div class="section">
+          <span class="section-title">2. API Credentials</span>
+          <ol>
+            <li>API key or access token.</li>
+            <li>Username and password, if required.</li>
+            <li>Account ID, customer ID, or merchant ID, if required.</li>
+            <li>Sandbox or test credentials, if available.</li>
+          </ol>
+        </div>
+
+        <div class="section">
+          <span class="section-title">3. Tracking API Endpoint</span>
+          <ol>
+            <li>Tracking endpoint URL.</li>
+            <li>Request method: GET or POST.</li>
+            <li>Example endpoint format.</li>
+          </ol>
+          <span class="example">https://api.example.com/track</span>
+        </div>
+
+        <div class="section">
+          <span class="section-title">4. Required Request Format</span>
+          <ol>
+            <li>What fields must we send in each request?</li>
+            <li>Tracking number field name.</li>
+            <li>Account ID, country, language, or other required parameters.</li>
+            <li>Sample request body or sample tracking URL.</li>
+          </ol>
+        </div>
+
+        <div class="section">
+          <span class="section-title">5. Response Format</span>
+          <ol>
+            <li>Sample successful tracking response.</li>
+            <li>Sample invalid tracking number response.</li>
+            <li>Sample delivered shipment response.</li>
+            <li>Please confirm if the API returns JSON, XML, or another format.</li>
+          </ol>
+        </div>
+
+        <div class="section">
+          <span class="section-title">6. Tracking Status List</span>
+          <ol>
+            <li>Shipment received.</li>
+            <li>In transit.</li>
+            <li>Arrived at hub.</li>
+            <li>Out for delivery.</li>
+            <li>Delivered.</li>
+            <li>Failed delivery attempt.</li>
+            <li>Returned.</li>
+            <li>Any other EMS-specific statuses.</li>
+          </ol>
+        </div>
+
+        <div class="section">
+          <span class="section-title">7. Rate Limits And Cost</span>
+          <ol>
+            <li>How many API requests are allowed per minute, hour, and day?</li>
+            <li>Is there any cost for API usage?</li>
+            <li>Is there an extra charge for high-volume tracking requests?</li>
+          </ol>
+        </div>
+
+        <div class="section">
+          <span class="section-title">8. Webhook Support</span>
+          <ol>
+            <li>Can EMS send automatic delivery status updates to our system?</li>
+            <li>If yes, what webhook URL format do you need from us?</li>
+            <li>What security method is used for webhook verification?</li>
+          </ol>
+        </div>
+
+        <div class="section">
+          <span class="section-title">9. Public Tracking Link</span>
+          <ol>
+            <li>Is there a public EMS tracking website link?</li>
+            <li>Can we open tracking directly by URL using the tracking number?</li>
+          </ol>
+          <span class="example">https://ems-site.com/track/TRACKING_NUMBER</span>
+        </div>
+
+        <div class="section">
+          <span class="section-title">10. Technical Support Contact</span>
+          <ol>
+            <li>Technical support email.</li>
+            <li>Phone or WhatsApp support contact.</li>
+            <li>API documentation link or PDF.</li>
+          </ol>
+        </div>
+
+        <div class="important">
+          <h2>Important Requested Materials</h2>
+          <p>Please send the following if available:</p>
+          <ul>
+            <li>API documentation PDF or link.</li>
+            <li>Test tracking number.</li>
+            <li>Sandbox API key or sandbox credentials.</li>
+            <li>Live API key application process.</li>
+          </ul>
+        </div>
+      </section>
+
+      <footer class="footer">
+        Prepared for Yehager Bahil Libs ecommerce EMS tracking integration.
+      </footer>
+    </main>
+  </body>
+</html>

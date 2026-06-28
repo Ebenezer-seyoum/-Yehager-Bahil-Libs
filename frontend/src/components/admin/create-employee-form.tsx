@@ -9,7 +9,7 @@ import { filterAssignableEmployeeRoles } from "@/lib/admin/assignable-roles";
 
 type Role = { id: string; name: string; key?: string | null; isSystem?: boolean | null };
 
-const STATUS_OPTIONS = ["active", "inactive", "suspended"] as const;
+const STATUS_OPTIONS = ["active", "inactive"] as const;
 
 function SubmitButton({ disabled }: { disabled?: boolean }) {
   const { pending } = useFormStatus();

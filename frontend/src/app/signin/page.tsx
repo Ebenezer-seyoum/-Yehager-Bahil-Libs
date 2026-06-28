@@ -184,13 +184,15 @@ function SignInForm() {
       }
 
       window.setTimeout(() => {
-        window.location.href =
-          session?.user?.role === "employee" &&
-          (session.user.roleStatus === "unassigned" ||
-            session.user.assignedRoleActive === false ||
-            (session.user.permissions ?? []).length === 0)
+        const redirectTo = session?.user?.mustChangePassword
+          ? "/change-password-required"
+          : session?.user?.role === "employee" &&
+              (session.user.roleStatus === "unassigned" ||
+                session.user.assignedRoleActive === false ||
+                (session.user.permissions ?? []).length === 0)
             ? "/employee/access-pending"
             : getPostLoginRedirect(session?.user?.role, callbackUrl, session?.user?.permissions ?? []);
+        window.location.href = redirectTo;
       }, 650);
     } catch {
       setFeedback({

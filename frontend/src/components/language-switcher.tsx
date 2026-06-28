@@ -68,18 +68,18 @@ export function LanguageSwitcher({ compact = false, navbar = false }: { compact?
           if (open) setQuery("");
         }}
         className={`relative flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm transition-colors ${
-          navbar ? "xl:h-[58px] xl:w-[160px] xl:justify-between xl:rounded-lg xl:border xl:border-primary xl:bg-[#2a2014] xl:px-3 xl:text-primary" : ""
+          navbar ? "xl:h-11 xl:w-[124px] xl:justify-between xl:rounded-lg xl:border xl:border-primary xl:bg-[#2a2014] xl:px-2 xl:text-xs xl:text-primary" : ""
         } ${showHint ? "bg-primary/15 text-primary ring-1 ring-primary/40" : "text-muted-foreground hover:bg-secondary hover:text-foreground"}`}
       >
-        <span className="flex items-center gap-1.5">
-          <Globe className="h-4 w-4" />
-          {!compact ? <span className="hidden font-medium sm:inline">{currentLanguage.nativeName}</span> : null}
+        <span className="flex min-w-0 items-center gap-1.5">
+          <Globe className="h-4 w-4 shrink-0" />
+          {!compact ? <span className="hidden truncate font-medium sm:inline">{currentLanguage.nativeName}</span> : null}
           <span className="text-xs font-bold uppercase sm:hidden">{currentLanguage.code}</span>
         </span>
         {navbar ? (
           <span
             aria-hidden="true"
-            className={`hidden h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary text-center text-[8px] font-black uppercase leading-[1.12] text-primary-foreground shadow-[0_0_0_1px_rgba(0,0,0,0.35)] xl:flex ${
+            className={`hidden h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-center text-[6px] font-black uppercase leading-[1.12] text-primary-foreground shadow-[0_0_0_1px_rgba(0,0,0,0.35)] xl:flex ${
               showHint ? "ring-1 ring-primary-foreground/70" : ""
             }`}
           >

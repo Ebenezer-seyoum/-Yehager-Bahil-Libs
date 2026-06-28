@@ -70,22 +70,22 @@ export function SiteNavbar() {
 
   return (
     <header className="sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur-lg">
-      <div className="w-full px-4 sm:px-6 lg:px-8">
-        <div className="flex h-16 items-center justify-between sm:h-[88px]">
-          <Link href="/" className="flex shrink-0 items-center xl:mr-5">
+      <div className="w-full px-3 sm:px-4 lg:px-5">
+        <div className="flex h-16 items-center justify-between sm:h-[76px]">
+          <Link href="/" className="flex shrink-0 items-center xl:mr-3">
             <img
               src="https://media.base44.com/images/public/69cc55fa50bba233144fe99d/5050da81c_YeHagerBahilLibs-03.png"
               alt="Yehager Bahil Libs"
-              className="h-12 w-12 rounded-full object-cover sm:h-14 sm:w-14"
+              className="h-11 w-11 rounded-full object-cover sm:h-12 sm:w-12"
             />
           </Link>
 
-          <nav className="hidden min-w-0 flex-1 items-stretch justify-center gap-1 xl:flex">
-            <div className="flex min-w-0 flex-1 items-center gap-2">
-              <Link href="/" className="shrink-0 rounded-md px-2 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground">
+          <nav className="hidden min-w-0 flex-1 items-center justify-center gap-1 xl:flex">
+            <div className="flex min-w-0 flex-1 items-center gap-1">
+              <Link href="/" className="shrink-0 rounded-md px-1.5 py-2 text-xs font-semibold text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground">
                 Home
               </Link>
-              <div className="flex min-w-0 flex-1 items-center justify-center gap-1 overflow-visible">
+              <div className="flex min-w-0 flex-1 items-center justify-center gap-0.5 overflow-visible">
                 {desktopRegions.map((region) => {
                   const subs = region.collections?.map((collection) => collection.name) ?? [];
                   const label = region.name === "Mila's Choice" ? "Designer's Choice" : region.name;
@@ -94,7 +94,7 @@ export function SiteNavbar() {
                       <Link
                         href={`/catalog?region=${encodeURIComponent(region.name)}`}
                         onClick={() => setActiveMenu(null)}
-                        className="flex min-h-10 max-w-[96px] items-center gap-1 rounded-md px-2 py-2 text-sm font-medium leading-tight text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                        className="flex min-h-9 max-w-[82px] items-center gap-0.5 rounded-md px-1.5 py-1.5 text-xs font-semibold leading-tight text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
                       >
                         <span className="whitespace-normal text-center">{label}</span>
                         {subs.length > 0 ? <ChevronDown className="h-3 w-3 shrink-0" /> : null}
@@ -129,23 +129,23 @@ export function SiteNavbar() {
             </div>
             <Link
               href={uploadDesignHref}
-              className="inline-flex h-[58px] w-[96px] shrink-0 items-center justify-center gap-1.5 rounded-lg border border-primary bg-primary/10 px-3 text-center text-xs font-black leading-tight text-primary transition-colors hover:bg-primary hover:text-primary-foreground"
+              className="inline-flex h-11 w-[88px] shrink-0 items-center justify-center gap-1 rounded-lg border border-primary bg-primary/10 px-2 text-center text-[11px] font-black leading-tight text-primary transition-colors hover:bg-primary hover:text-primary-foreground"
             >
-              <Sparkles className="h-4 w-4 shrink-0" />
-              <span className="max-w-[56px]">Upload Your Design</span>
+              <Sparkles className="h-3.5 w-3.5 shrink-0" />
+              <span className="max-w-[54px]">Upload Design</span>
             </Link>
             <button
               type="button"
               onClick={() => setGroupOrderOpen(true)}
-              className="inline-flex h-[58px] w-[110px] shrink-0 items-center justify-center rounded-lg bg-primary px-3 text-center text-sm font-semibold leading-tight text-primary-foreground transition-colors hover:bg-primary/90"
+              className="inline-flex h-11 w-[98px] shrink-0 items-center justify-center rounded-lg bg-primary px-2 text-center text-xs font-bold leading-tight text-primary-foreground transition-colors hover:bg-primary/90"
             >
               Create Group Order
             </button>
           </nav>
 
-          <div className="flex shrink-0 items-center gap-1.5 xl:ml-2">
+          <div className="flex shrink-0 items-center gap-1 xl:ml-1">
             <LanguageSwitcher navbar />
-            <Link href="/cart" className="relative rounded-full p-2 transition-colors hover:bg-secondary" aria-label="Cart">
+            <Link href="/cart" className="relative rounded-full p-1.5 transition-colors hover:bg-secondary" aria-label="Cart">
               <ShoppingBag className="h-5 w-5" />
               {cartCount > 0 ? (
                 <span className="absolute -right-0.5 -top-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">
@@ -156,23 +156,23 @@ export function SiteNavbar() {
             <div className="hidden items-center gap-1.5 sm:flex">
               {isAuthed ? (
                 <>
-                  <Link href="/my-account" className="inline-flex items-center justify-center whitespace-nowrap rounded-lg px-2.5 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground">
+                  <Link href="/my-account" className="inline-flex items-center justify-center whitespace-nowrap rounded-lg px-2 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground">
                     Account
                   </Link>
                   <button
                     type="button"
                     onClick={() => signOut({ callbackUrl: "/" })}
-                    className="inline-flex min-h-12 items-center justify-center rounded-lg bg-primary px-4 py-1.5 text-center text-sm font-semibold leading-tight text-primary-foreground transition-colors hover:bg-primary/90"
+                    className="inline-flex h-11 items-center justify-center rounded-lg bg-primary px-3 py-1.5 text-center text-xs font-bold leading-tight text-primary-foreground transition-colors hover:bg-primary/90"
                   >
                     Sign Out
                   </button>
                 </>
               ) : (
                 <>
-                  <Link href="/signin" className="inline-flex items-center justify-center whitespace-nowrap rounded-lg px-2.5 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground">
+                  <Link href="/signin" className="inline-flex items-center justify-center whitespace-nowrap rounded-lg px-2 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground">
                     Sign In
                   </Link>
-                  <Link href="/register" className="inline-flex h-[58px] w-[110px] items-center justify-center rounded-lg bg-primary px-3 text-center text-sm font-semibold leading-tight text-primary-foreground transition-colors hover:bg-primary/90">
+                  <Link href="/register" className="inline-flex h-11 w-[96px] items-center justify-center rounded-lg bg-primary px-2 text-center text-xs font-bold leading-tight text-primary-foreground transition-colors hover:bg-primary/90">
                     Create Account
                   </Link>
                 </>

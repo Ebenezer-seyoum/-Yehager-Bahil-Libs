@@ -14,6 +14,7 @@ type CustomerRow = {
   city?: string | null;
   customerType?: string | null;
   accountStatus?: string | null;
+  isOnline?: boolean | null;
   avatarUrl?: string | null;
   profilePhotoUrl?: string | null;
   profile_photo_url?: string | null;
@@ -78,6 +79,7 @@ export function AdminCustomersDirectory({
                 <TableHeadCell>Customer Name</TableHeadCell>
                 <TableHeadCell>Email</TableHeadCell>
                 <TableHeadCell>Account Status</TableHeadCell>
+                <TableHeadCell>Online Status</TableHeadCell>
                 <TableHeadCell>Created Date</TableHeadCell>
                 <TableHeadCell>Actions</TableHeadCell>
               </TableHeadRow>
@@ -85,7 +87,7 @@ export function AdminCustomersDirectory({
             <tbody>
               {customers.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-10 text-center text-sm text-muted-foreground">
+                  <td colSpan={8} className="px-4 py-10 text-center text-sm text-muted-foreground">
                     {tab === "active"
                       ? "No active customers found."
                       : tab === "inactive"
@@ -136,6 +138,11 @@ export function AdminCustomersDirectory({
                       <td className="px-4 py-4">
                         <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${accountTone(customer.accountStatus)}`}>
                           {String(customer.accountStatus ?? "—")}
+                        </span>
+                      </td>
+                      <td className="px-4 py-4">
+                        <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${customer.isOnline ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-700"}`}>
+                          {customer.isOnline ? "Online" : "Offline"}
                         </span>
                       </td>
                       <td className="px-4 py-4 text-sm text-slate-700">{formatDate(customer.createdAt)}</td>

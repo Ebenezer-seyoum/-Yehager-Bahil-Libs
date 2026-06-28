@@ -1,6 +1,7 @@
 "use client";
 
 import { AlertTriangle, Banknote, CreditCard, DollarSign, Info, Mail, MapPin, ShieldCheck, Truck } from "lucide-react";
+import type { FormEvent } from "react";
 import { useMemo, useState } from "react";
 
 type CartItem = {
@@ -92,6 +93,7 @@ export function CheckoutFlow({ items, event, error, etbRate, startCheckoutAction
   const [couponCode, setCouponCode] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState<AppliedCoupon | null>(null);
   const [couponError, setCouponError] = useState("");
+  const [clientError, setClientError] = useState("");
   const [isApplyingCoupon, setIsApplyingCoupon] = useState(false);
 
   const totalItems = items.reduce((sum, item) => sum + Number(item.quantity ?? 1), 0);
@@ -166,8 +168,38 @@ export function CheckoutFlow({ items, event, error, etbRate, startCheckoutAction
     }
   }
 
+  function validateBeforeSubmit(event: FormEvent<HTMLFormElement>) {
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    const agreed = data.get("agreeTerms") === "on";
+    if (!agreed) {
+      event.preventDefault();
+      setClientError("Please agree to the custom tailoring terms before placing your order.");
+      return;
+    }
+
+    if (fulfillmentType === "mail" && shipChoice === "own") {
+      const missing = ["street", "city", "country", "phone"].some((field) => !String(data.get(field) ?? "").trim());
+      if (missing) {
+        event.preventDefault();
+        setClientError("Please complete the required shipping address fields.");
+        return;
+      }
+    }
+
+    if (fulfillmentType === "pickup") {
+      if (!String(data.get("pickupPersonName") ?? "").trim() || !String(data.get("pickupPersonPhone") ?? "").trim()) {
+        event.preventDefault();
+        setClientError("Please provide the pickup person's name and phone number.");
+        return;
+      }
+    }
+
+    setClientError("");
+  }
+
   return (
-    <form action={startCheckoutAction} className="space-y-6">
+    <form action={startCheckoutAction} onSubmit={validateBeforeSubmit} className="space-y-6">
       <input type="hidden" name="fulfillmentType" value={fulfillmentType} />
       <input type="hidden" name="shipChoice" value={shipChoice} />
       <input type="hidden" name="paymentMethod" value={paymentMethod} />
@@ -175,7 +207,7 @@ export function CheckoutFlow({ items, event, error, etbRate, startCheckoutAction
       <input type="hidden" name="tailorNote" value={tailorNote} />
       <input type="hidden" name="couponCode" value={appliedCoupon?.code ?? ""} />
 
-      {message ? <div className="rounded-xl border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">{message}</div> : null}
+      {clientError || message ? <div className="rounded-xl border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">{clientError || message}</div> : null}
 
       <div className="rounded-xl border border-amber-100 bg-amber-50 p-4 text-orange-700">
         <div className="flex items-start gap-4">

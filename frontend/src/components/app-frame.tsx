@@ -9,6 +9,7 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
     pathname === "/signin" ||
     pathname === "/register" ||
     pathname === "/forgot-password" ||
+    pathname === "/change-password-required" ||
     pathname.startsWith("/admin") ||
     pathname.startsWith("/employee");
 

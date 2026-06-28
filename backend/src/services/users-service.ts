@@ -14,6 +14,7 @@ import {
   pendingCustomerRegistrations,
   roles,
   uploadedDesigns,
+  users,
 } from "../lib/db/schema.js";
 import { hashPassword, verifyPassword } from "../lib/auth/password.js";
 import { isUserRole, type UserRole } from "../lib/auth/roles.js";
@@ -34,13 +35,18 @@ import {
   updateOwnPassword,
   upsertUserFromAuth,
   createPasswordResetRequest,
+  getPasswordResetRequestByTokenHash,
   markPasswordResetLinkSent,
+  markPasswordResetRequestUsed,
+  updateUserPresence,
 } from "../repositories/users-repository.js";
 import { getEffectivePermissionsForUser } from "./permissions-service.js";
 import { assignAdditionalRoleToUser, ensureSystemRoleAssignment, replaceUserAdditionalRolesForAdmin, replaceUserSystemRole } from "./roles-service.js";
 import { updateUserPermissionsForAdmin } from "./permissions-service.js";
 import {
   resetPasswordLink,
+  sendAccountStatusChangedEmail,
+  sendAdminAccountStatusChangedEmail,
   sendCustomerVerificationCodeEmail,
   sendPasswordResetEmail,
   sendPasswordSetupEmail,
@@ -70,6 +76,50 @@ function toPublicUser<T extends { passwordHash?: string | null }>(user: T | unde
   if (!user) return user ?? null;
   const { passwordHash: _passwordHash, ...safeUser } = user;
   return safeUser;
+}
+
+function isFreshOnline(user: { isOnline?: boolean | null; lastHeartbeatAt?: Date | string | null }) {
+  if (!user.isOnline || !user.lastHeartbeatAt) return false;
+  const heartbeat = new Date(user.lastHeartbeatAt).getTime();
+  return Number.isFinite(heartbeat) && Date.now() - heartbeat < 5 * 60 * 1000;
+}
+
+function customerProfileComplete(user: { name?: string | null; phone?: string | null; address?: string | null }) {
+  return Boolean(user.name?.trim() && user.phone?.trim() && user.address?.trim());
+}
+
+function withComputedUserState<T extends {
+  passwordHash?: string | null;
+  role?: string | null;
+  name?: string | null;
+  phone?: string | null;
+  address?: string | null;
+  isOnline?: boolean | null;
+  lastHeartbeatAt?: Date | string | null;
+}>(user: T | undefined | null): (Omit<T, "passwordHash"> & {
+  isOnline: boolean;
+  profileComplete: boolean;
+  requiredProfileMissing: { name?: boolean; phone?: boolean; address?: boolean };
+}) | null {
+  if (!user) return user ?? null;
+  const safeUser = toPublicUser(user) as Record<string, unknown>;
+  const isCustomer = user.role === "customer";
+  return {
+    ...safeUser,
+    isOnline: isFreshOnline(user),
+    profileComplete: isCustomer ? customerProfileComplete(user) : true,
+    requiredProfileMissing: isCustomer
+      ? {
+          name: !user.name?.trim(),
+          phone: !user.phone?.trim(),
+          address: !user.address?.trim(),
+        }
+      : {},
+  } as Omit<T, "passwordHash"> & {
+    isOnline: boolean;
+    profileComplete: boolean;
+    requiredProfileMissing: { name?: boolean; phone?: boolean; address?: boolean };
+  };
 }
 
 function employeeDisplayName(
@@ -115,7 +165,7 @@ export async function syncCurrentUserFromAuth(payload: {
   });
   await ensureSystemRoleAssignment(user.id, user.role);
 
-  return toPublicUser(user);
+  return withComputedUserState(user);
 }
 
 export async function getCurrentUserByEmail(email?: string) {
@@ -131,7 +181,7 @@ export async function getCurrentUserByEmail(email?: string) {
     ? await db.query.employeeProfiles.findFirst({ where: eq(employeeProfiles.userId, user.id) })
     : null;
   return {
-    ...toPublicUser(user),
+    ...withComputedUserState(user),
     displayName: user.role === "employee" ? employeeDisplayName(profile, user.name) : user.name,
     profile,
     assignedRoleActive: assignedRole ? assignedRole.color !== "inactive" : null,
@@ -144,6 +194,10 @@ export async function updateCurrentUserProfile(payload: {
   email: string;
   name?: string;
   phone?: string | null;
+  address?: string | null;
+  country?: string | null;
+  city?: string | null;
+  notes?: string | null;
   avatarUrl?: string | null;
   profile?: Partial<{
     firstName: string;
@@ -166,10 +220,22 @@ export async function updateCurrentUserProfile(payload: {
     throw new HTTPException(404, { message: "User not found" });
   }
 
+  const nextName = payload.name?.trim();
+  const nextPhone = payload.phone ?? undefined;
+  const nextAddress = payload.address !== undefined ? payload.address?.trim() || null : undefined;
   const updated = await updateEmployeeCoreForAdmin({
     userId: user.id,
-    name: payload.name?.trim(),
-    phone: payload.phone ?? undefined,
+    name: nextName,
+    phone: nextPhone,
+    address: nextAddress,
+    country: payload.country !== undefined ? payload.country?.trim() || null : undefined,
+    city: payload.city !== undefined ? payload.city?.trim() || null : undefined,
+    notes: payload.notes !== undefined ? payload.notes?.trim() || null : undefined,
+    profileCompletedAt: user.role === "customer" && customerProfileComplete({
+      name: nextName ?? user.name,
+      phone: nextPhone ?? user.phone,
+      address: nextAddress ?? user.address,
+    }) ? user.profileCompletedAt ?? new Date() : undefined,
     avatarUrl: payload.avatarUrl ?? undefined,
   });
 
@@ -244,7 +310,7 @@ export async function changeCurrentUserPassword(payload: {
     userId: user.id,
     passwordHash: await hashPassword(payload.newPassword),
   });
-  return toPublicUser(updated);
+  return withComputedUserState(updated);
 }
 
 export async function registerCustomer(payload: { email: string; name?: string; password: string }) {
@@ -276,7 +342,7 @@ export async function authenticateUser(payload: { email: string; password: strin
     throw new HTTPException(401, { message: "Invalid credentials" });
   }
   if (user.status !== "active") {
-    throw new HTTPException(403, { message: "Please contact admin. Account has been blocked." });
+    throw new HTTPException(403, { message: "Your account is inactive. Please contact admin to activate it." });
   }
 
   const matches = await verifyPassword(payload.password, user.passwordHash);
@@ -295,7 +361,7 @@ export async function authenticateUser(payload: { email: string; password: strin
     : null;
 
   return {
-    ...toPublicUser(user),
+    ...withComputedUserState({ ...user, isOnline: true, lastHeartbeatAt: new Date() }),
     displayName: user.role === "employee" ? employeeDisplayName(profile, user.name) : user.name,
     profile,
     assignedRoleActive: assignedRole ? assignedRole.color !== "inactive" : null,
@@ -305,7 +371,8 @@ export async function authenticateUser(payload: { email: string; password: strin
 }
 
 export async function listUsersForAdmin(limit = 200) {
-  return listUsers(limit);
+  const rows = await listUsers(limit);
+  return rows.map((user) => withComputedUserState(user));
 }
 
 export async function listCustomersForAdmin(limit = 200) {
@@ -324,7 +391,7 @@ async function requireCustomerForAdmin(userId: string) {
 export async function getCustomerDetailForAdmin(userId: string) {
   const user = await requireCustomerForAdmin(userId);
   return {
-    user: toPublicUser(user),
+    user: withComputedUserState(user),
     permissions: await getEffectivePermissionsForUser(user.id),
   };
 }
@@ -482,7 +549,7 @@ export async function verifyCustomerRegistration(payload: { email: string; code:
   await db.delete(pendingCustomerRegistrations).where(eq(pendingCustomerRegistrations.email, email));
   await sendRegistrationEmail({ to: user.email, name: user.name });
 
-  return toPublicUser(user);
+  return withComputedUserState(user);
 }
 
 const requiredFamilyMeasurementFields = ["chest", "waist", "hips", "shoulderWidth", "armLength", "torsoLength"];
@@ -727,6 +794,10 @@ export async function createEmployeeForAdmin(payload: {
     roleStatus: payload.roleId ? "assigned" : "unassigned",
     phone: payload.phone ?? null,
     avatarUrl: payload.avatarUrl ?? null,
+    mustChangePassword: true,
+    passwordStatus: "temporary_password_set",
+    lastPasswordResetAt: new Date(),
+    lastPasswordResetMethod: "temporary_password",
   });
 
   if (!user) {
@@ -808,6 +879,10 @@ export async function createCustomerForAdmin(payload: {
     name: payload.name.trim(),
     passwordHash: await hashPassword(payload.password),
     role: "customer",
+    mustChangePassword: true,
+    passwordStatus: "temporary_password_set",
+    lastPasswordResetAt: new Date(),
+    lastPasswordResetMethod: "temporary_password",
   });
   if (!user) {
     throw new HTTPException(409, { message: "An account with this email already exists" });
@@ -926,6 +1001,10 @@ export async function updateUserProfileForAdminService(payload: {
   name?: string;
   email?: string;
   phone?: string | null;
+  address?: string | null;
+  country?: string | null;
+  city?: string | null;
+  notes?: string | null;
   accountStatus?: "active" | "invited" | "pending";
   avatarUrl?: string | null;
   profile?: Partial<{
@@ -958,11 +1037,22 @@ export async function updateUserProfileForAdminService(payload: {
     }
   }
 
+  const nextName = payload.name?.trim();
+  const nextAddress = payload.address !== undefined ? payload.address?.trim() || null : undefined;
   const updated = await updateEmployeeCoreForAdmin({
     userId: payload.userId,
-    name: payload.name?.trim(),
+    name: nextName,
     email: nextEmail,
     phone: payload.phone ?? undefined,
+    address: nextAddress,
+    country: payload.country !== undefined ? payload.country?.trim() || null : undefined,
+    city: payload.city !== undefined ? payload.city?.trim() || null : undefined,
+    notes: payload.notes !== undefined ? payload.notes?.trim() || null : undefined,
+    profileCompletedAt: existing.role === "customer" && customerProfileComplete({
+      name: nextName ?? existing.name,
+      phone: payload.phone ?? existing.phone,
+      address: nextAddress ?? existing.address,
+    }) ? existing.profileCompletedAt ?? new Date() : undefined,
     accountStatus: payload.accountStatus,
     avatarUrl: payload.avatarUrl ?? undefined,
   });
@@ -1034,7 +1124,7 @@ export async function updateUserProfileForAdminService(payload: {
     metadata: { previous_email: existing.email, current_email: updated.email },
   });
 
-  return toPublicUser(updated);
+  return withComputedUserState(updated);
 }
 
 export async function updateCustomerProfileForAdmin(payload: Parameters<typeof updateUserProfileForAdminService>[0]) {
@@ -1048,7 +1138,7 @@ export async function updateCustomerProfileForAdmin(payload: Parameters<typeof u
 
 export async function updateUserStatusForAdmin(payload: {
   userId: string;
-  status: "active" | "inactive" | "suspended";
+  status: "active" | "inactive";
   performedBy?: string;
 }) {
   const existing = await getUserById(payload.userId);
@@ -1075,7 +1165,25 @@ export async function updateUserStatusForAdmin(payload: {
     metadata: { previous_status: existing.status, current_status: updated.status },
   });
 
-  return toPublicUser(updated);
+  if (existing.status !== updated.status) {
+    await sendAccountStatusChangedEmail({
+      to: updated.email,
+      name: updated.name,
+      email: updated.email,
+      role: updated.role,
+      status: updated.status,
+      changedBy: payload.performedBy ?? "admin",
+    });
+    await sendAdminAccountStatusChangedEmail({
+      name: updated.name,
+      email: updated.email,
+      role: updated.role,
+      status: updated.status,
+      changedBy: payload.performedBy ?? "admin",
+    });
+  }
+
+  return withComputedUserState(updated);
 }
 
 export async function updateCustomerStatusForAdmin(payload: Parameters<typeof updateUserStatusForAdmin>[0]) {
@@ -1116,7 +1224,16 @@ export async function resetUserPasswordForAdmin(payload: {
     metadata: { email: updated.email },
   });
 
-  return toPublicUser(updated);
+  return withComputedUserState(updated);
+}
+
+export async function updateCurrentUserPresence(payload: { email: string; online: boolean }) {
+  const user = await getUserByEmail(normalizeEmail(payload.email));
+  if (!user) {
+    throw new HTTPException(404, { message: "User not found" });
+  }
+  const updated = await updateUserPresence({ userId: user.id, online: payload.online });
+  return withComputedUserState(updated);
 }
 
 export async function resetCustomerPasswordForAdmin(payload: Parameters<typeof resetUserPasswordForAdmin>[0]) {
@@ -1194,6 +1311,38 @@ export async function requestPasswordResetByEmail(payload: { email: string }) {
   });
 
   return { accepted: true };
+}
+
+export async function confirmPasswordResetWithToken(payload: { token: string; password: string }) {
+  const tokenHash = sha256Hex(payload.token);
+  const request = await getPasswordResetRequestByTokenHash(tokenHash);
+  if (!request || request.usedAt) {
+    throw new HTTPException(400, { message: "Password reset link is invalid or already used." });
+  }
+  if (request.expiresAt < new Date()) {
+    throw new HTTPException(400, { message: "Password reset link has expired. Please request a new one." });
+  }
+
+  const updated = await updateOwnPassword({
+    userId: request.userId,
+    passwordHash: await hashPassword(payload.password),
+  });
+  if (!updated) {
+    throw new HTTPException(404, { message: "User not found" });
+  }
+
+  await markPasswordResetRequestUsed(request.id);
+  await db
+    .update(users)
+    .set({
+      passwordStatus: "reset_completed",
+      lastPasswordResetAt: new Date(),
+      lastPasswordResetMethod: "email_reset_link",
+      updatedAt: new Date(),
+    })
+    .where(eq(users.id, request.userId));
+
+  return withComputedUserState(updated);
 }
 
 export async function deleteUserForAdmin(payload: { userId: string; performedBy?: string }) {

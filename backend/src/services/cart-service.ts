@@ -43,6 +43,7 @@ export async function addItemToCart(payload: {
   productId: string;
   quantity: number;
   measurementId?: string;
+  measurementSnapshot?: Record<string, unknown>;
   eventId?: string;
   eventName?: string;
   roleLabel?: string;
@@ -105,6 +106,8 @@ export async function addItemToCart(payload: {
           neck: measurement.neck,
           ...(measurement.measurementDetails ?? {}),
         }
+      : payload.measurementSnapshot
+        ? payload.measurementSnapshot
       : undefined,
     eventId: payload.eventId,
     eventName: payload.eventName,

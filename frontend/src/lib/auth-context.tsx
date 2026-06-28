@@ -71,11 +71,46 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     void checkAppState();
   }, [checkAppState]);
 
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const markOnline = () => {
+      void fetch("/api/backend/users/me/presence", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ online: true }),
+        keepalive: true,
+      }).catch(() => undefined);
+    };
+    const markOffline = () => {
+      void fetch("/api/backend/users/me/presence", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ online: false }),
+        keepalive: true,
+      }).catch(() => undefined);
+    };
+
+    markOnline();
+    const interval = window.setInterval(markOnline, 60_000);
+    window.addEventListener("pagehide", markOffline);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("pagehide", markOffline);
+    };
+  }, [isAuthenticated]);
+
   const navigateToLogin = useCallback(() => {
     void signIn(undefined, { callbackUrl: window.location.href });
   }, []);
 
   const logout = useCallback(() => {
+    void fetch("/api/backend/users/me/presence", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ online: false }),
+      keepalive: true,
+    }).catch(() => undefined);
     void signOut({ callbackUrl: "/" });
   }, []);
 

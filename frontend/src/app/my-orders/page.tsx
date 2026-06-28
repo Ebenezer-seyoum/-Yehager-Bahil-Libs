@@ -25,6 +25,8 @@ type Order = {
   eventName?: string | null;
   fulfillmentType?: "mail" | "pickup";
   carrier?: string | null;
+  trackingNumber?: string | null;
+  deliveryStatus?: string | null;
   shippingAddress?: { city?: string; country?: string } | null;
   pickupLocation?: string | null;
   pickupPersonName?: string | null;
@@ -59,6 +61,12 @@ const CARRIER_TRACKING: Record<string, { name: string; url: string }> = {
 
 const STEP_LABELS_MAIL = ["Received", "Tailoring", "QC", "Shipped", "Delivered"];
 const STEP_LABELS_PICKUP = ["Received", "Tailoring", "QC", "Ready", "Picked Up"];
+
+function titleCase(value?: string | null) {
+  return String(value ?? "")
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
 
 function getOrderSteps(fulfillmentType?: "mail" | "pickup") {
   return fulfillmentType === "pickup"
@@ -222,6 +230,16 @@ export default async function MyOrdersPage({
                           <Truck className="h-3.5 w-3.5 text-primary" />
                           <span className="font-medium text-foreground">{order.carrier ?? "Carrier TBD"}</span>
                           {order.shippingAddress?.city ? <span>→ {order.shippingAddress.city}, {order.shippingAddress.country}</span> : null}
+                          {order.deliveryStatus ? (
+                            <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-blue-700">
+                              {titleCase(order.deliveryStatus)}
+                            </span>
+                          ) : null}
+                          {order.trackingNumber ? (
+                            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-700">
+                              Tracking: {order.trackingNumber}
+                            </span>
+                          ) : null}
                           {order.carrier && CARRIER_TRACKING[order.carrier] ? (
                             <a
                               href={CARRIER_TRACKING[order.carrier].url}

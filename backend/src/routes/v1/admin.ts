@@ -183,7 +183,7 @@ const createEmployeeSchema = z.object({
   email: z.string().trim().email().max(320),
   password: z.string().min(8).max(128),
   roleId: z.string().uuid().optional(),
-  status: z.enum(["active", "inactive", "suspended"]).optional(),
+  status: z.enum(["active", "inactive"]).optional(),
   accountStatus: z.enum(["active", "invited", "pending"]).optional(),
   phone: z.string().trim().min(1).max(50).optional(),
   avatarUrl: z.string().trim().url().optional(),
@@ -243,6 +243,10 @@ const userProfilePatchSchema = z.object({
   name: z.string().trim().min(1).max(255).optional(),
   email: z.string().trim().email().max(320).optional(),
   phone: z.string().trim().min(1).max(50).optional().nullable(),
+  address: z.string().trim().max(1000).optional().nullable(),
+  country: z.string().trim().max(120).optional().nullable(),
+  city: z.string().trim().max(120).optional().nullable(),
+  notes: z.string().trim().max(1000).optional().nullable(),
   accountStatus: z.enum(["active", "invited", "pending"]).optional(),
   avatarUrl: z.string().trim().url().optional().nullable(),
   profile: z
@@ -262,11 +266,11 @@ const userProfilePatchSchema = z.object({
       notes: z.string().trim().optional().nullable(),
     })
     .optional(),
-}).refine((value) => Boolean(value.name || value.email || value.phone || value.accountStatus || value.avatarUrl || value.profile), {
+}).refine((value) => Boolean(value.name || value.email || value.phone || value.address || value.country || value.city || value.notes || value.accountStatus || value.avatarUrl || value.profile), {
   message: "At least one field must be provided",
 });
 const userStatusPatchSchema = z.object({
-  status: z.enum(["active", "inactive", "suspended"]),
+  status: z.enum(["active", "inactive"]),
 });
 const userPasswordResetSchema = z.object({
   password: z.string().min(8).max(128),

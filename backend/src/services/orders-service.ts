@@ -22,7 +22,7 @@ import {
   moneyToNumber,
   numberToMoney,
 } from "./checkout-utils.js";
-import { sendAdminOrderCreatedEmail, sendOrderStatusEmail } from "./email-service.js";
+import { sendAdminOrderCreatedEmail, sendAdminOrderStatusChangedEmail, sendOrderStatusEmail } from "./email-service.js";
 import { calculateCouponDiscount, markCouponRedeemed } from "./discounts-service.js";
 import { awardCustomerCreditForPaidOrder } from "./customer-credits-service.js";
 import { hasPermission } from "./permissions-service.js";
@@ -555,8 +555,24 @@ export async function updateOrderAdminState(payload: {
       customerName: updated.customerName,
       orderNumber: updated.orderNumber,
       status: updated.status,
+      deliveryStatus: updated.deliveryStatus,
       paymentStatus: updated.paymentStatus,
       fulfillmentType: updated.fulfillmentType,
+      carrier: updated.carrier,
+      trackingNumber: updated.trackingNumber,
+    });
+    await sendAdminOrderStatusChangedEmail({
+      orderId: updated.id,
+      orderNumber: updated.orderNumber,
+      customerName: updated.customerName,
+      customerEmail: updated.userEmail,
+      previousStatus: order.status,
+      status: updated.status,
+      paymentStatus: updated.paymentStatus,
+      deliveryStatus: updated.deliveryStatus,
+      carrier: updated.carrier,
+      trackingNumber: updated.trackingNumber,
+      changedBy: payload.performedBy ?? "admin",
     });
   }
 

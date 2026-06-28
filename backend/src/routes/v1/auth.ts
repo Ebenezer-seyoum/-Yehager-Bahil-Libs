@@ -4,6 +4,7 @@ import { zValidator } from "@hono/zod-validator";
 import { requireAuth } from "../../middleware/auth.js";
 import {
   authenticateUser,
+  confirmPasswordResetWithToken,
   requestPasswordResetByEmail,
   resendCustomerRegistrationCode,
   startCustomerRegistration,
@@ -26,6 +27,11 @@ const loginSchema = z.object({
 
 const passwordResetRequestSchema = z.object({
   email: z.string().trim().email().max(320),
+});
+
+const passwordResetConfirmSchema = z.object({
+  token: z.string().trim().min(32).max(256),
+  password: z.string().min(8).max(128),
 });
 
 const verifyRegistrationSchema = z.object({
@@ -74,6 +80,13 @@ authRouter.post("/password-reset", zValidator("json", passwordResetRequestSchema
   const payload = c.req.valid("json");
   c.get("log")?.info({ email: payload.email }, "auth_password_reset_request");
   const data = await requestPasswordResetByEmail(payload);
+  return c.json({ data });
+});
+
+authRouter.post("/password-reset/confirm", zValidator("json", passwordResetConfirmSchema), async (c) => {
+  const payload = c.req.valid("json");
+  c.get("log")?.info("auth_password_reset_confirm");
+  const data = await confirmPasswordResetWithToken(payload);
   return c.json({ data });
 });
 
