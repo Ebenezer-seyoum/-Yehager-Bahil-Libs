@@ -14,18 +14,22 @@ type I18nContextValue = {
 
 const I18nContext = createContext<I18nContextValue | null>(null);
 
+function isSupportedLanguage(code: string | null): code is string {
+  return Boolean(code && LANGUAGES.some((language) => language.code === code));
+}
+
 export function I18nProvider({ children }: { children: React.ReactNode }) {
   const [language, setLanguageState] = useState(() => {
     if (typeof window === "undefined") {
       return DEFAULT_LANGUAGE;
     }
     const stored = window.localStorage.getItem(STORAGE_KEY);
-    if (stored && TRANSLATIONS[stored]) return stored;
+    if (isSupportedLanguage(stored)) return stored;
     return DEFAULT_LANGUAGE;
   });
 
   const setLanguage = useCallback((code: string) => {
-    if (!TRANSLATIONS[code]) return;
+    if (!isSupportedLanguage(code)) return;
     setLanguageState(code);
     window.localStorage.setItem(STORAGE_KEY, code);
   }, []);

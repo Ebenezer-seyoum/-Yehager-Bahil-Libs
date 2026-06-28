@@ -13,7 +13,7 @@ type SignedUpload = {
   signature: string;
 };
 
-const QR_CODE_URL = "/images/bank-transfer-qr-behailu.jpg";
+const QR_CODE_URL = "/images/bank-transfer-qr-behailu-code.jpg";
 const BANK_ACCOUNT_NAME = "BEHAILU ABERA GADISA";
 const BANK_ACCOUNT_NUMBER = "97584516";
 
@@ -111,8 +111,8 @@ export function EtbPaymentProof({
       <div className="grid gap-5 md:grid-cols-2">
         <div className="flex flex-col items-center rounded-xl border border-border bg-card p-5 text-center">
           <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-primary">Bank Transfer QR Code</p>
-          <div className="rounded-xl bg-white p-4 shadow-sm">
-            <img src={QR_CODE_URL} alt={`${BANK_ACCOUNT_NAME} bank transfer QR code`} className="h-56 w-56 object-contain" />
+          <div className="rounded-xl bg-white p-5 shadow-sm">
+            <img src={QR_CODE_URL} alt={`${BANK_ACCOUNT_NAME} bank transfer QR code`} className="h-64 w-64 object-contain" />
           </div>
           <div className="mt-4 w-full rounded-xl border border-primary/20 bg-primary/5 p-3">
             <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Account Name</p>

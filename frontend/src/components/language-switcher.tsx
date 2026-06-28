@@ -1,7 +1,7 @@
 "use client";
 
-import { Check, Globe } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { Check, Globe, Search } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { LANGUAGES } from "@/lib/i18n/languages";
 import { useT } from "@/lib/i18n/I18nContext";
 
@@ -10,17 +10,23 @@ const HINT_KEY = "ybl_lang_hint_dismissed";
 export function LanguageSwitcher({ compact = false, navbar = false }: { compact?: boolean; navbar?: boolean }) {
   const { language, setLanguage } = useT();
   const [open, setOpen] = useState(false);
-  const [showHint, setShowHint] = useState(false);
+  const [showHint, setShowHint] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return !window.localStorage.getItem(HINT_KEY);
+  });
+  const [query, setQuery] = useState("");
   const ref = useRef<HTMLDivElement | null>(null);
   const currentLanguage = LANGUAGES.find((item) => item.code === language) ?? LANGUAGES[0];
-  const localLanguages = LANGUAGES.filter((item) => item.group === "local");
-  const internationalLanguages = LANGUAGES.filter((item) => item.group === "international");
-
-  useEffect(() => {
-    if (!window.localStorage.getItem(HINT_KEY)) {
-      setShowHint(true);
-    }
-  }, []);
+  const filteredLanguages = useMemo(() => {
+    const normalized = query.trim().toLowerCase();
+    if (!normalized) return LANGUAGES;
+    return LANGUAGES.filter((item) => {
+      return [item.code, item.name, item.nativeName].some((value) => value.toLowerCase().includes(normalized));
+    });
+  }, [query]);
+  const priorityLanguages = filteredLanguages.filter((item) => item.priority);
+  const localLanguages = filteredLanguages.filter((item) => item.group === "local" && !item.priority);
+  const internationalLanguages = filteredLanguages.filter((item) => item.group === "international" && !item.priority);
 
   useEffect(() => {
     function handleClick(event: MouseEvent) {
@@ -42,6 +48,7 @@ export function LanguageSwitcher({ compact = false, navbar = false }: { compact?
     setLanguage(code);
     dismissHint();
     setOpen(false);
+    setQuery("");
   }
 
   return (
@@ -58,6 +65,7 @@ export function LanguageSwitcher({ compact = false, navbar = false }: { compact?
         onClick={() => {
           setOpen((value) => !value);
           dismissHint();
+          if (open) setQuery("");
         }}
         className={`relative flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm transition-colors ${
           navbar ? "xl:h-[58px] xl:w-[160px] xl:justify-between xl:rounded-lg xl:border xl:border-primary xl:bg-[#2a2014] xl:px-3 xl:text-primary" : ""
@@ -66,7 +74,7 @@ export function LanguageSwitcher({ compact = false, navbar = false }: { compact?
         <span className="flex items-center gap-1.5">
           <Globe className="h-4 w-4" />
           {!compact ? <span className="hidden font-medium sm:inline">{currentLanguage.nativeName}</span> : null}
-          <span className="text-xs font-bold uppercase sm:hidden">{language}</span>
+          <span className="text-xs font-bold uppercase sm:hidden">{currentLanguage.code}</span>
         </span>
         {navbar ? (
           <span
@@ -75,29 +83,52 @@ export function LanguageSwitcher({ compact = false, navbar = false }: { compact?
               showHint ? "ring-1 ring-primary-foreground/70" : ""
             }`}
           >
-            ET
+            LANG
             <br />
-            AM/ORO/
+            LOCAL/
             <br />
-            TI
+            INTL
           </span>
         ) : null}
       </button>
 
       {open ? (
-        <div className="absolute right-0 z-50 mt-2 w-64 overflow-hidden rounded-xl border border-border bg-card shadow-2xl">
-          <div className="p-2">
-            <p className="px-2 py-1.5 text-[10px] font-bold uppercase tracking-widest text-primary">Local languages</p>
+        <div className="absolute right-0 z-50 mt-2 w-80 overflow-hidden rounded-xl border border-border bg-card shadow-2xl">
+          <div className="border-b border-border p-2">
+            <label className="flex h-10 items-center gap-2 rounded-lg border border-border bg-background px-3 text-sm">
+              <Search className="h-4 w-4 text-muted-foreground" />
+              <input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search language..."
+                className="min-w-0 flex-1 bg-transparent font-medium outline-none placeholder:text-muted-foreground"
+              />
+            </label>
+          </div>
+          <div className="max-h-[440px] overflow-y-auto p-2">
+            {priorityLanguages.length ? (
+              <>
+                <p className="px-2 py-1.5 text-[10px] font-bold uppercase tracking-widest text-primary">Fast access</p>
+                {priorityLanguages.map((item) => (
+                  <LanguageOption key={item.code} item={item} active={language === item.code} onSelect={() => chooseLanguage(item.code)} />
+                ))}
+              </>
+            ) : null}
+            {localLanguages.length ? (
+              <p className="px-2 py-1.5 text-[10px] font-bold uppercase tracking-widest text-primary">Local languages</p>
+            ) : null}
             {localLanguages.map((item) => (
               <LanguageOption key={item.code} item={item} active={language === item.code} onSelect={() => chooseLanguage(item.code)} />
             ))}
-          </div>
-          <div className="border-t border-border" />
-          <div className="p-2">
-            <p className="px-2 py-1.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">International</p>
+            {internationalLanguages.length ? (
+              <p className="px-2 py-1.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">International</p>
+            ) : null}
             {internationalLanguages.map((item) => (
               <LanguageOption key={item.code} item={item} active={language === item.code} onSelect={() => chooseLanguage(item.code)} />
             ))}
+            {!filteredLanguages.length ? (
+              <p className="px-2 py-8 text-center text-sm font-semibold text-muted-foreground">No language found.</p>
+            ) : null}
           </div>
         </div>
       ) : null}
