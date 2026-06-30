@@ -1,8 +1,25 @@
 import type { NextAuthOptions } from "next-auth";
+import type { JWT } from "next-auth/jwt";
 import CredentialsProvider from "next-auth/providers/credentials";
 import GoogleProvider from "next-auth/providers/google";
+import { SignJWT } from "jose";
 
 type AppRole = "admin" | "customer" | "employee";
+
+type BackendAuthUser = {
+  id?: string;
+  email?: string;
+  name?: string | null;
+  displayName?: string | null;
+  role?: AppRole;
+  permissions?: string[];
+  roleStatus?: "unassigned" | "assigned";
+  assignedRoleId?: string | null;
+  assignedRoleActive?: boolean | null;
+  assignedRoleName?: string | null;
+  accountStatus?: string;
+  mustChangePassword?: boolean | null;
+};
 
 function requiredEnv(name: string) {
   const value = process.env[name];
@@ -14,6 +31,70 @@ function requiredEnv(name: string) {
 
 function normalizeRole(value: unknown): AppRole {
   return value === "admin" || value === "employee" || value === "customer" ? value : "customer";
+}
+
+async function mintBackendBootstrapToken(user: { id?: string | null; email?: string | null; role?: unknown }) {
+  if (!user.id || !user.email) return null;
+
+  const secret = new TextEncoder().encode(requiredEnv("NEXTAUTH_SECRET"));
+  return new SignJWT({
+    email: user.email,
+    role: normalizeRole(user.role),
+  })
+    .setProtectedHeader({ alg: "HS256", typ: "JWT" })
+    .setIssuer(requiredEnv("AUTH_SHARED_JWT_ISSUER"))
+    .setAudience(requiredEnv("AUTH_SHARED_JWT_AUDIENCE"))
+    .setSubject(user.id)
+    .setIssuedAt()
+    .setExpirationTime("2m")
+    .sign(secret);
+}
+
+async function syncBackendUserForProvider(user: {
+  id?: string | null;
+  email?: string | null;
+  name?: string | null;
+  role?: unknown;
+}) {
+  const token = await mintBackendBootstrapToken(user);
+  if (!token) return null;
+
+  const response = await fetch(`${requiredEnv("BACKEND_API_URL")}/api/v1/users/me/sync`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    const errorPayload = await response.json().catch(() => null);
+    console.warn("[auth] backend provider sync failed", {
+      status: response.status,
+      error: errorPayload?.error?.message ?? errorPayload?.error ?? errorPayload ?? null,
+    });
+    return null;
+  }
+
+  const payload = (await response.json()) as { data?: BackendAuthUser };
+  return payload.data ?? null;
+}
+
+function applyBackendUserToToken(token: JWT, user: BackendAuthUser) {
+  if (user.id) token.sub = user.id;
+  if (user.email) token.email = user.email;
+  token.name = user.displayName ?? user.name ?? token.name;
+  token.role = normalizeRole(user.role);
+  token.permissions = Array.isArray(user.permissions) ? user.permissions : [];
+  token.roleStatus = user.roleStatus === "unassigned" || user.roleStatus === "assigned"
+    ? user.roleStatus
+    : "assigned";
+  token.assignedRoleId = typeof user.assignedRoleId === "string" ? user.assignedRoleId : null;
+  token.assignedRoleActive = typeof user.assignedRoleActive === "boolean" ? user.assignedRoleActive : null;
+  token.assignedRoleName = typeof user.assignedRoleName === "string" ? user.assignedRoleName : null;
+  token.accountStatus = String(user.accountStatus ?? "active");
+  token.mustChangePassword = Boolean(user.mustChangePassword);
 }
 
 const providers: NonNullable<NextAuthOptions["providers"]> = [
@@ -60,22 +141,7 @@ const providers: NonNullable<NextAuthOptions["providers"]> = [
         return null;
       }
 
-      const payload = (await response.json()) as {
-        data?: {
-          id?: string;
-          email?: string;
-          name?: string | null;
-          displayName?: string | null;
-          role?: "admin" | "customer" | "employee";
-          permissions?: string[];
-          roleStatus?: "unassigned" | "assigned";
-          assignedRoleId?: string | null;
-          assignedRoleActive?: boolean | null;
-          assignedRoleName?: string | null;
-          accountStatus?: string;
-          mustChangePassword?: boolean | null;
-        };
-      };
+      const payload = (await response.json()) as { data?: BackendAuthUser };
       const user = payload.data;
       if (!user?.id || !user.email || !user.role) {
         console.warn("[auth] backend login payload missing fields", { user });
@@ -126,6 +192,9 @@ export const authConfig = {
     async jwt({ token, user }) {
       if (user) {
         const authUser = user as {
+          id?: string;
+          email?: string | null;
+          name?: string | null;
           role?: unknown;
           permissions?: unknown;
           roleStatus?: unknown;
@@ -135,18 +204,27 @@ export const authConfig = {
           accountStatus?: unknown;
           mustChangePassword?: unknown;
         };
-        token.role = normalizeRole(authUser.role);
-        token.permissions = Array.isArray(authUser.permissions)
-          ? authUser.permissions
-          : [];
-        token.roleStatus = authUser.roleStatus === "unassigned" || authUser.roleStatus === "assigned"
-          ? authUser.roleStatus
-          : "assigned";
-        token.assignedRoleId = typeof authUser.assignedRoleId === "string" ? authUser.assignedRoleId : null;
-        token.assignedRoleActive = typeof authUser.assignedRoleActive === "boolean" ? authUser.assignedRoleActive : null;
-        token.assignedRoleName = typeof authUser.assignedRoleName === "string" ? authUser.assignedRoleName : null;
-        token.accountStatus = String(authUser.accountStatus ?? "active");
-        token.mustChangePassword = Boolean(authUser.mustChangePassword);
+        if (authUser.role) {
+          applyBackendUserToToken(token, authUser as BackendAuthUser);
+        } else {
+          const backendUser = await syncBackendUserForProvider({
+            id: authUser.id ?? token.sub,
+            email: authUser.email ?? token.email,
+            name: authUser.name ?? token.name,
+          });
+          if (backendUser?.id && backendUser.email && backendUser.role) {
+            applyBackendUserToToken(token, backendUser);
+          } else {
+            token.role = normalizeRole(authUser.role);
+            token.permissions = [];
+            token.roleStatus = "assigned";
+            token.assignedRoleId = null;
+            token.assignedRoleActive = null;
+            token.assignedRoleName = null;
+            token.accountStatus = "active";
+            token.mustChangePassword = false;
+          }
+        }
       }
 
       return token;
