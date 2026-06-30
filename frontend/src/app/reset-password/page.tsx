@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { CheckCircle2, Lock, XCircle } from "lucide-react";
 
-export default function ResetPasswordPage() {
+function ResetPasswordForm() {
   const searchParams = useSearchParams();
   const token = searchParams?.get("token") ?? "";
   const [password, setPassword] = useState("");
@@ -98,5 +98,13 @@ export default function ResetPasswordPage() {
         </Link>
       </form>
     </main>
+  );
+}
+
+export default function ResetPasswordPage() {
+  return (
+    <Suspense fallback={<main className="min-h-[70vh]" />}>
+      <ResetPasswordForm />
+    </Suspense>
   );
 }
