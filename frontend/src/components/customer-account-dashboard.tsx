@@ -217,7 +217,14 @@ export function CustomerAccountDashboard({
       if (!response.ok) throw new Error(payload?.error ?? "Could not save profile.");
       customerToast("Account details saved successfully.", undefined, "success");
       setEditingProfile(false);
-      router.refresh();
+      if (checkoutPrompt === "profile_required") {
+        window.setTimeout(() => {
+          router.replace("/cart");
+        }, 800);
+      } else {
+        router.replace("/my-account");
+        router.refresh();
+      }
     } catch (error) {
       customerToast(error instanceof Error ? error.message : "Could not save profile.");
     } finally {

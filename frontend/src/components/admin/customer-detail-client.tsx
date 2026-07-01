@@ -1289,7 +1289,7 @@ export function CustomerDetailClient({
                 <TextInput label="Country" value={country} onChange={setCountry} />
                 <TextInput label="City" value={city} onChange={setCity} />
                 <label className="block text-sm md:col-span-2">
-                  <span className="mb-1.5 block font-medium text-slate-700">Address</span>
+                  <span className="mb-1.5 block font-medium text-slate-700">Residential Address</span>
                   <textarea value={address} onChange={(event) => setAddress(event.target.value)} rows={4} className="w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30" />
                 </label>
               </div>
@@ -1300,7 +1300,10 @@ export function CustomerDetailClient({
                 <Field label="Country" value={country} />
                 <Field label="City" value={city} />
                 <div className="md:col-span-2">
-                  <Field label="Delivery Address" value={address} />
+                  <Field label="Residential Address" value={address} />
+                </div>
+                <div className="md:col-span-2">
+                  <Field label="Customer Notes" value={notes} />
                 </div>
               </div>
             )}
