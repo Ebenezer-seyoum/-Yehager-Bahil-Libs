@@ -25,6 +25,11 @@ type Event = {
   shippingAddress?: Record<string, unknown> | null;
 };
 
+type Profile = {
+  role?: string | null;
+  profileComplete?: boolean | null;
+};
+
 export default async function CheckoutPage({
   searchParams,
 }: {
@@ -144,14 +149,18 @@ export default async function CheckoutPage({
   let event: Event | null = null;
   let etbRate: number | null = null;
   let authRequired = false;
+  let profileComplete = true;
   try {
     await ensureBackendUserSynced();
-    const [cartRes, rateRes] = await Promise.all([
+    const [cartRes, rateRes, profileRes] = await Promise.all([
       apiRequest<{ data: CartItem[] }>("/api/v1/cart"),
       backendPublicRequest("/api/v1/exchange-rate").catch(() => ({ data: null })),
+      apiRequest<{ data?: Profile | null }>("/api/v1/users/me"),
     ]);
     items = Array.isArray(cartRes?.data) ? cartRes.data : [];
     etbRate = Number(rateRes?.data?.rate ?? 0) || null;
+    const profile = profileRes?.data;
+    profileComplete = String(profile?.role ?? role ?? "customer").toLowerCase() !== "customer" || profile?.profileComplete !== false;
     const eventIds = [...new Set(items.map((item) => item.eventId).filter(Boolean))];
     if (eventIds.length === 1) {
       try {
@@ -175,6 +184,10 @@ export default async function CheckoutPage({
         </Link>
       </div>
     );
+  }
+
+  if (!profileComplete) {
+    redirect("/my-account?completeProfile=1&checkout=profile_required");
   }
 
   if (items.length === 0) {

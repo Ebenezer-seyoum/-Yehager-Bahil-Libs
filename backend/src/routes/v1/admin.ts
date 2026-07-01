@@ -4,7 +4,7 @@ import { zValidator } from "@hono/zod-validator";
 import { and, asc, desc, eq } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
 import { requireAuth } from "../../middleware/auth.js";
-import { requirePermission } from "../../middleware/permissions.js";
+import { requireAnyPermission, requirePermission } from "../../middleware/permissions.js";
 import { db } from "../../lib/db/drizzle.js";
 import { auditLogs, homepageSections, orders, products, profitCostSettings, systemAlerts, uploadedDesigns } from "../../lib/db/schema.js";
 import { USER_ROLES } from "../../lib/auth/roles.js";
@@ -1107,7 +1107,7 @@ adminRouter.patch(
 
 adminRouter.patch(
   "/users/:userId/status",
-  requirePermission(PERMISSIONS.EMPLOYEES_STATUS_UPDATE),
+  requireAnyPermission([PERMISSIONS.EMPLOYEES_EDIT, PERMISSIONS.EMPLOYEES_STATUS_UPDATE]),
   zValidator("param", userParamSchema),
   zValidator("json", userStatusPatchSchema),
   async (c) => {

@@ -28,6 +28,7 @@ import {
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useSearchParams } from "next/navigation";
+import { toast } from "sonner";
 import {
   HEM_STYLE_OPTIONS,
   PANTS_MEASUREMENT_FIELDS,
@@ -111,6 +112,18 @@ const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
   picked_up: { label: "Picked Up", color: "bg-green-200 text-green-900" },
 };
 
+function customerToast(message: string, description?: string, type: "error" | "success" = "error") {
+  toast(message, {
+    description,
+    duration: type === "error" ? 4200 : 3200,
+    className:
+      type === "error"
+        ? "!border-red-950 !bg-[#4a0505] !text-red-50"
+        : "!border-emerald-900 !bg-emerald-950 !text-emerald-50",
+    descriptionClassName: type === "error" ? "!text-red-100" : "!text-emerald-100",
+  });
+}
+
 function formatDate(value?: string | null) {
   if (!value) return "";
   return new Date(value).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
@@ -165,18 +178,24 @@ export function CustomerAccountDashboard({
     city: profile.city ?? "",
     notes: profile.notes ?? "",
   });
-  const [profileStatus, setProfileStatus] = useState<{ type: "success" | "error"; message: string } | null>(
-    mustCompleteProfile ? { type: "error", message: "Please complete your full name, phone / WhatsApp, and residential address before placing an order." } : null,
-  );
   const [savingProfile, setSavingProfile] = useState(false);
   const displayName = profile.name ?? "Customer";
   const email = profile.email ?? "";
   const initials = displayName.charAt(0).toUpperCase() || email.charAt(0).toUpperCase() || "?";
+  const checkoutPrompt = searchParams?.get("checkout");
+
+  useEffect(() => {
+    if (mustCompleteProfile || checkoutPrompt === "profile_required") {
+      customerToast(
+        "Please complete your account details before checkout.",
+        "Full name, phone / WhatsApp, and residential address are required.",
+      );
+    }
+  }, [mustCompleteProfile, checkoutPrompt]);
 
   async function saveProfile() {
-    setProfileStatus(null);
     if (!profileForm.name.trim() || !profileForm.phone.trim() || !profileForm.address.trim()) {
-      setProfileStatus({ type: "error", message: "Full name, phone / WhatsApp, and residential address are required." });
+      customerToast("Full name, phone / WhatsApp, and residential address are required.");
       return;
     }
 
@@ -196,11 +215,11 @@ export function CustomerAccountDashboard({
       });
       const payload = await response.json().catch(() => null);
       if (!response.ok) throw new Error(payload?.error ?? "Could not save profile.");
-      setProfileStatus({ type: "success", message: "Account details saved successfully." });
+      customerToast("Account details saved successfully.", undefined, "success");
       setEditingProfile(false);
       router.refresh();
     } catch (error) {
-      setProfileStatus({ type: "error", message: error instanceof Error ? error.message : "Could not save profile." });
+      customerToast(error instanceof Error ? error.message : "Could not save profile.");
     } finally {
       setSavingProfile(false);
     }
@@ -221,11 +240,6 @@ export function CustomerAccountDashboard({
         <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 shadow-sm">
           <p className="font-semibold">Password reset required</p>
           <p className="mt-0.5">Your password was reset. Please change it now to continue using your account securely.</p>
-        </div>
-      ) : null}
-      {profileStatus ? (
-        <div className={`mb-4 rounded-2xl border px-4 py-3 text-sm shadow-sm ${profileStatus.type === "success" ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-amber-200 bg-amber-50 text-amber-900"}`}>
-          {profileStatus.message}
         </div>
       ) : null}
       <div className="mb-8 rounded-2xl bg-foreground p-6 text-background sm:p-8">
@@ -657,15 +671,7 @@ function MeasurementEditForm({
 }) {
   const router = useRouter();
   const [isPantsOpen, setIsPantsOpen] = useState(true);
-  const [status, setStatus] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const topRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (status) {
-      const timer = setTimeout(() => setStatus(null), 4000);
-      return () => clearTimeout(timer);
-    }
-  }, [status]);
 
   const scrollToTop = () => {
     if (topRef.current) {
@@ -674,14 +680,11 @@ function MeasurementEditForm({
   };
 
   const handleSubmit = async (fd: FormData) => {
-    setStatus(null);
-    
-    // Define mandatory fields
     const mandatoryFields = ["neck", "shoulderWidth", "chest", "waist", "torsoLength", "armLength"];
     const missing = mandatoryFields.filter(f => !fd.get(f) || fd.get(f) === "" || fd.get(f) === "0");
 
     if (missing.length > 0) {
-      setStatus({ type: "error", message: "Please insert a mandatory * inputs" });
+      customerToast("Please insert all mandatory measurement inputs.");
       scrollToTop();
       return;
     }
@@ -691,14 +694,13 @@ function MeasurementEditForm({
       fd.set("pressingStyle", pressingStyle);
       await action(fd);
       router.refresh();
-      setStatus({ type: "success", message: "Successfully Updated" });
+      customerToast("Measurements saved successfully.", undefined, "success");
       scrollToTop();
       setTimeout(() => {
         onComplete();
-        setStatus(null);
-      }, 2500); 
-    } catch (error) {
-      setStatus({ type: "error", message: "Failed to save measurements. Please try again." });
+      }, 1200);
+    } catch {
+      customerToast("Failed to save measurements. Please try again.");
       scrollToTop();
     }
   };
@@ -706,18 +708,6 @@ function MeasurementEditForm({
   return (
     <div ref={topRef} className="relative">
       <form action={handleSubmit} className="space-y-8">
-        {status && (
-          <div className={`rounded-xl border p-5 animate-in fade-in slide-in-from-top-4 duration-500 shadow-lg ${
-            status.type === "success" 
-              ? "border-green-900 bg-green-950/90 text-green-200" 
-              : "border-red-900 bg-red-950/90 text-red-200"
-          }`}>
-            <p className="text-base font-bold flex items-center gap-3">
-              <span className="text-xl">{status.type === "success" ? "✅" : "⚠️"}</span> 
-              {status.message}
-            </p>
-          </div>
-        )}
       {m?.id ? <input type="hidden" name="measurementId" value={m.id} /> : null}
 
       <div className="rounded-2xl border border-white/5 bg-[#141414] p-6">
@@ -759,10 +749,10 @@ function MeasurementEditForm({
               ))}
             </div>
 
-            <div className="mt-6 space-y-5">
+            <div className="mt-6 grid grid-cols-1 gap-5 lg:grid-cols-2">
               <div>
                 <p className="text-sm font-semibold text-zinc-400 mb-3">Hem Style <span className="text-[#f5a623]">*</span></p>
-                <div className="grid grid-cols-1 gap-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
                   {HEM_STYLE_OPTIONS.map((option) => (
                     <ChoiceCard key={option.value} title={option.title} description={option.description} selected={hemStyle === option.value} onClick={() => setHemStyle(option.value)} />
                   ))}
@@ -770,7 +760,7 @@ function MeasurementEditForm({
               </div>
               <div>
                 <p className="text-sm font-semibold text-zinc-400 mb-3">Pressing (Iron) Style <span className="text-[#f5a623]">*</span></p>
-                <div className="grid grid-cols-1 gap-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
                   {PRESSING_STYLE_OPTIONS.map((option) => (
                     <ChoiceCard key={option.value} title={option.title} description={option.description} selected={pressingStyle === option.value} onClick={() => setPressingStyle(option.value)} />
                   ))}

@@ -14,7 +14,7 @@ export const DASHBOARD_PERMISSION_REQUIREMENTS: PermissionRequirement[] = [
   { area: "Employees", route: "/admin/users", feature: "View employee page", action: "View", permissionKey: "employees.view" },
   { area: "Employees", route: "/admin/users/create", feature: "Add employee button", action: "Create", permissionKey: "employees.create" },
   { area: "Employees", route: "/admin/users/employees/[employeeId]", feature: "Edit employee profile", action: "Edit", permissionKey: "employees.edit" },
-  { area: "Employees", route: "/admin/users/employees/[employeeId]", feature: "Activate, deactivate, block, or unblock employee", action: "Manage", permissionKey: "employees.status.update" },
+  { area: "Employees", route: "/admin/users/employees/[employeeId]", feature: "Activate or deactivate employee", action: "Manage", permissionKey: "employees.edit or employees.status.update" },
   { area: "Employees", route: "/admin/users/employees/[employeeId]", feature: "Delete employee account", action: "Delete", permissionKey: "employees.delete" },
   { area: "Roles & Permissions", route: "/admin/roles", feature: "View roles and permissions", action: "View", permissionKey: "roles.view" },
   { area: "Roles & Permissions", route: "/admin/roles", feature: "Create role", action: "Create", permissionKey: "roles.create" },

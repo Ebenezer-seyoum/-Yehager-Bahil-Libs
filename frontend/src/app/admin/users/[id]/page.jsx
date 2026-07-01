@@ -27,6 +27,7 @@ export default async function EmployeeDetailPage({ params }) {
       backTab="all"
       canAssignRole={session.user.role === "admin"}
       canEdit={session.user.role === "admin"}
+      canUpdateStatus={session.user.role === "admin"}
       canDelete={session.user.role === "admin"}
       currentUserId={session.user.id}
     />
