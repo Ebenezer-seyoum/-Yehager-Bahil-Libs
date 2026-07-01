@@ -32,6 +32,15 @@ function getSafeCallbackUrl(value: string | null) {
   return value;
 }
 
+function getOAuthCallbackUrl(callbackUrl?: string) {
+  const params = new URLSearchParams();
+  if (callbackUrl) {
+    params.set("callbackUrl", callbackUrl);
+  }
+  const query = params.toString();
+  return `/auth/redirect${query ? `?${query}` : ""}`;
+}
+
 function GoogleMark() {
   return (
     <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5">
@@ -213,7 +222,7 @@ function SignInForm() {
       return;
     }
     setGoogleSubmitting(true);
-    await signIn("google", { callbackUrl: callbackUrl ?? "/my-account" });
+    await signIn("google", { callbackUrl: getOAuthCallbackUrl(callbackUrl) });
   }
 
   return (
