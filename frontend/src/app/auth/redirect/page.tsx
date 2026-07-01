@@ -27,6 +27,11 @@ export default async function AuthRedirectPage({ searchParams }: AuthRedirectPag
     redirect(`/signin${signinParams.toString() ? `?${signinParams.toString()}` : ""}`);
   }
 
+  const accountStatus = String(session.user.accountStatus ?? "active").toLowerCase();
+  if (accountStatus === "inactive" || accountStatus === "blocked" || accountStatus === "pending" || accountStatus === "suspended") {
+    redirect("/signin?error=AccountBlocked");
+  }
+
   if (session.user.mustChangePassword) {
     redirect("/change-password-required");
   }

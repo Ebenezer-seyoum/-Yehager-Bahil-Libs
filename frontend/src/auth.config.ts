@@ -17,6 +17,7 @@ type BackendAuthUser = {
   assignedRoleId?: string | null;
   assignedRoleActive?: boolean | null;
   assignedRoleName?: string | null;
+  status?: string;
   accountStatus?: string;
   mustChangePassword?: boolean | null;
 };
@@ -31,6 +32,16 @@ function requiredEnv(name: string) {
 
 function normalizeRole(value: unknown): AppRole {
   return value === "admin" || value === "employee" || value === "customer" ? value : "customer";
+}
+
+function accountAccessStatus(user: { status?: string | null; accountStatus?: string | null }) {
+  const status = String(user.status ?? "active").toLowerCase();
+  if (status !== "active") return status;
+  return String(user.accountStatus ?? "active").toLowerCase();
+}
+
+function isBlockedAccountStatus(status: string) {
+  return status === "inactive" || status === "blocked" || status === "pending" || status === "suspended";
 }
 
 async function mintBackendBootstrapToken(user: { id?: string | null; email?: string | null; role?: unknown }) {
@@ -93,7 +104,7 @@ function applyBackendUserToToken(token: JWT, user: BackendAuthUser) {
   token.assignedRoleId = typeof user.assignedRoleId === "string" ? user.assignedRoleId : null;
   token.assignedRoleActive = typeof user.assignedRoleActive === "boolean" ? user.assignedRoleActive : null;
   token.assignedRoleName = typeof user.assignedRoleName === "string" ? user.assignedRoleName : null;
-  token.accountStatus = String(user.accountStatus ?? "active");
+  token.accountStatus = accountAccessStatus(user);
   token.mustChangePassword = Boolean(user.mustChangePassword);
 }
 
@@ -135,7 +146,7 @@ const providers: NonNullable<NextAuthOptions["providers"]> = [
           status: response.status,
           error: errorPayload?.error?.message ?? errorPayload?.error ?? errorPayload ?? null,
         });
-        if (response.status === 403 || backendMessage.includes("blocked")) {
+        if (response.status === 403 || backendMessage.includes("blocked") || backendMessage.includes("inactive")) {
           throw new Error("AccountBlocked");
         }
         return null;
@@ -148,8 +159,8 @@ const providers: NonNullable<NextAuthOptions["providers"]> = [
         return null;
       }
 
-      const status = String(user.accountStatus ?? "active").toLowerCase();
-      if (status === "inactive" || status === "blocked" || status === "pending" || status === "suspended") {
+      const status = accountAccessStatus(user);
+      if (isBlockedAccountStatus(status)) {
         throw new Error("AccountBlocked");
       }
 
@@ -163,7 +174,7 @@ const providers: NonNullable<NextAuthOptions["providers"]> = [
         assignedRoleId: user.assignedRoleId ?? null,
         assignedRoleActive: user.assignedRoleActive ?? null,
         assignedRoleName: user.assignedRoleName ?? null,
-        accountStatus: user.accountStatus ?? "active",
+        accountStatus: status,
         mustChangePassword: Boolean(user.mustChangePassword),
       };
     },
@@ -189,6 +200,19 @@ export const authConfig = {
     strategy: "jwt",
   },
   callbacks: {
+    async signIn({ user, account }) {
+      if (account?.provider !== "google") return true;
+      const backendUser = await syncBackendUserForProvider({
+        id: user.id,
+        email: user.email,
+        name: user.name,
+      });
+      const status = accountAccessStatus(backendUser ?? {});
+      if (isBlockedAccountStatus(status)) {
+        return "/signin?error=AccountBlocked";
+      }
+      return true;
+    },
     async jwt({ token, user }) {
       if (user) {
         const authUser = user as {

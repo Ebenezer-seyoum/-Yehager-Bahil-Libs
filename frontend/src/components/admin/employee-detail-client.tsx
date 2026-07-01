@@ -592,9 +592,11 @@ export function EmployeeDetailClient({
     const isBlocked =
       currentStatus === "inactive" || currentAccountStatus === "blocked";
     const confirmed = await dashboardConfirm({
-      title: isBlocked ? "Unblock this user?" : "Block this user?",
-      text: isBlocked ? "Unblocking will restore dashboard access for this user." : "Blocking will remove dashboard access for this user.",
-      confirmButtonText: isBlocked ? "Yes, unblock" : "Yes, block",
+      title: isBlocked ? "Activate this account?" : "Deactivate this account?",
+      text: isBlocked
+        ? "Activating will restore dashboard access for this employee and send an email notification."
+        : "Deactivating will remove dashboard access for this employee and send an email notification.",
+      confirmButtonText: isBlocked ? "Yes, activate" : "Yes, deactivate",
       cancelButtonText: "No, cancel",
       tone: isBlocked ? "success" : "warning",
       icon: "warning",
@@ -603,7 +605,7 @@ export function EmployeeDetailClient({
     if (!confirmed) return;
     setBusy(true);
     try {
-      dashboardLoading(isBlocked ? "Unblocking…" : "Blocking…", "Please wait a moment.", {
+      dashboardLoading(isBlocked ? "Activating..." : "Deactivating...", "Please wait a moment.", {
         target: swalTargetRef.current ?? undefined,
       });
       const res = await fetch(`/api/backend/admin/users/${user.id}/status`, {
@@ -616,16 +618,14 @@ export function EmployeeDetailClient({
         throw new Error(String(json?.message ?? "Could not update user status."));
       }
 
-      const successIconHtml = isBlocked
-        ? '<svg aria-hidden="true" viewBox="0 0 24 24" width="36" height="36" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="10" width="14" height="10" rx="2"/><path d="M7 10V7a5 5 0 0 1 9.6-2"/><path d="M8.2 15.2l1.7 1.7 4.2-4.2"/></svg>'
-        : '<svg aria-hidden="true" viewBox="0 0 24 24" width="36" height="36" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 10V7a5 5 0 0 1 10 0v3"/><rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8.2 15.2l1.7 1.7 4.2-4.2"/></svg>';
-
       // Close loading state before showing final feedback.
       dashboardLoading.close();
 
       await dashboardAlert(
-        isBlocked ? "User Unblocked" : "User Blocked",
-        isBlocked ? "This employee has been unblocked successfully." : "This employee has been blocked successfully.",
+        isBlocked ? "Account Activated" : "Account Deactivated",
+        isBlocked
+          ? "Employee account has been activated successfully. Notification emails have been sent."
+          : "Employee account has been deactivated successfully. Notification emails have been sent.",
         { target: swalTargetRef.current ?? undefined, icon: "success", tone: "success", confirmButtonText: "OK" },
       );
       await reloadDetails();
@@ -958,6 +958,20 @@ export function EmployeeDetailClient({
                       <Edit className="h-4 w-4" />
                       Edit User
                     </button>
+                    {canUpdateStatus ? (
+                      <button
+                        type="button"
+                        onClick={toggleBlock}
+                        disabled={busy}
+                        className={cn(
+                          "inline-flex h-10 items-center gap-2 rounded-xl px-4 text-sm font-semibold text-white shadow-sm disabled:opacity-50",
+                          isBlockedForUi ? "bg-[#16A34A] hover:bg-[#15803D]" : "bg-[#EA580C] hover:bg-[#C2410C]",
+                        )}
+                      >
+                        {isBlockedForUi ? <Unlock className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
+                        {isBlockedForUi ? "Activate Account" : "Deactivate Account"}
+                      </button>
+                    ) : null}
                     <button
                       type="button"
                       onClick={openResetPasswordModal}
@@ -968,20 +982,6 @@ export function EmployeeDetailClient({
                       Reset Password
                     </button>
                   </>
-                ) : null}
-                {canUpdateStatus ? (
-                  <button
-                    type="button"
-                    onClick={toggleBlock}
-                    disabled={busy}
-                    className={cn(
-                      "inline-flex h-10 items-center gap-2 rounded-xl px-4 text-sm font-semibold text-white shadow-sm disabled:opacity-50",
-                      isBlockedForUi ? "bg-[#16A34A] hover:bg-[#15803D]" : "bg-[#EA580C] hover:bg-[#C2410C]",
-                    )}
-                  >
-                    {isBlockedForUi ? <Unlock className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
-                    {isBlockedForUi ? "Unblock User" : "Block User"}
-                  </button>
                 ) : null}
                 {canDelete ? (
                   <button
