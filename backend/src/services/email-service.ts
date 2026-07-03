@@ -98,7 +98,7 @@ function fromAddress(channel: MailChannel = "notifications") {
   if (channel === "team") {
     return env.EMAIL_TEAM_FROM || env.EMAIL_FROM || "Yehager Bahil Team <team@yehagerbahillibs.com>";
   }
-  return env.EMAIL_NOTIFICATIONS_FROM || env.EMAIL_FROM || "Yehager Bahil Notifications <notifications@yehagerbahillibs.com>";
+  return env.EMAIL_NOTIFICATIONS_FROM || env.EMAIL_FROM || "Yehager Bahil Notifications <info@yehagerbahillibs.com>";
 }
 
 function defaultReplyTo(channel: MailChannel = "notifications") {
