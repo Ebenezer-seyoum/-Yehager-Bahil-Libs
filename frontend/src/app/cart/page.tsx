@@ -3,7 +3,8 @@ import { revalidatePath } from "next/cache";
 import { apiRequest } from "@/lib/api-client";
 import { ensureBackendUserSynced } from "@/lib/backend-user-sync";
 import { CartItemCard } from "@/components/cart-item-card";
-import { ArrowRight, ShoppingBag } from "lucide-react";
+import { CustomerCheckoutButton } from "@/components/customer-checkout-button";
+import { ShoppingBag } from "lucide-react";
 
 type CartItem = {
   id: string;
@@ -43,11 +44,17 @@ export default async function CartPage({
 
   let items: CartItem[] = [];
   let authRequired = authHint;
+  let profileComplete = true;
 
   try {
     await ensureBackendUserSynced();
-    const response = await apiRequest<{ data: CartItem[] }>("/api/v1/cart");
-    items = Array.isArray(response?.data) ? response.data : [];
+    const [cartResponse, profileResponse] = await Promise.all([
+      apiRequest<{ data: CartItem[] }>("/api/v1/cart"),
+      apiRequest<{ data?: { profileComplete?: boolean | null; role?: string | null } | null }>("/api/v1/users/me"),
+    ]);
+    items = Array.isArray(cartResponse?.data) ? cartResponse.data : [];
+    const profile = profileResponse?.data;
+    profileComplete = String(profile?.role ?? "customer").toLowerCase() !== "customer" || profile?.profileComplete !== false;
   } catch {
     authRequired = true;
   }
@@ -101,9 +108,7 @@ export default async function CartPage({
           </div>
           <p className="text-xs text-muted-foreground mb-4">Shipping calculated at checkout</p>
 
-          <Link href="/checkout" className="inline-flex h-14 w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 text-lg font-semibold text-black hover:bg-primary/90">
-            Proceed to Checkout <ArrowRight className="h-5 w-5" />
-          </Link>
+          <CustomerCheckoutButton profileComplete={profileComplete} />
         </aside>
       </div>
     </div>

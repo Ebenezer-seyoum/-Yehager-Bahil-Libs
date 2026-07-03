@@ -1,26 +1,10 @@
 import type { Metadata } from "next";
-import { Cormorant_Garamond, Inter } from "next/font/google";
 import { Providers } from "@/components/providers";
 import { AppFrame } from "@/components/app-frame";
 import { AuthenticatedGate } from "@/components/authenticated-gate";
 import "./globals.css";
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? process.env.NEXTAUTH_URL ?? "https://www.yehagerbahillibs.com";
-
-const cormorant = Cormorant_Garamond({
-  subsets: ["latin"],
-  variable: "--font-cormorant",
-  display: "swap",
-  weight: ["300", "400", "500", "600", "700"],
-  style: ["normal", "italic"],
-});
-
-const inter = Inter({
-  subsets: ["latin"],
-  variable: "--font-inter",
-  display: "swap",
-  weight: ["300", "400", "500", "600"],
-});
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
@@ -55,7 +39,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${cormorant.variable} ${inter.variable} dark h-full`}
+      className="dark h-full"
       suppressHydrationWarning
     >
       <body className="min-h-full flex flex-col">

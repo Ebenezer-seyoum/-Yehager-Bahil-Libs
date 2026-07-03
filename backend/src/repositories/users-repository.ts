@@ -1,4 +1,4 @@
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, sql } from "drizzle-orm";
 import { db } from "../lib/db/drizzle.js";
 import { passwordResetRequests, users } from "../lib/db/schema.js";
 import type { UserRole } from "../lib/auth/roles.js";
@@ -21,7 +21,7 @@ export async function upsertUserFromAuth(payload: {
     .onConflictDoUpdate({
       target: users.email,
       set: {
-        name: payload.name ?? null,
+        name: sql`coalesce(nullif(${users.name}, ''), ${payload.name ?? null})`,
       },
     })
     .returning();

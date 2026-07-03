@@ -1058,8 +1058,10 @@ export function CustomerDetailClient({
     if (!canEdit) return;
     const next = isBlocked ? "active" : "inactive";
     const confirmed = await dashboardConfirm({
-      title: isBlocked ? "Activate this customer?" : "Deactivate this customer?",
-      text: isBlocked ? "Activating will restore customer account access." : "Deactivating will remove customer account access.",
+      title: isBlocked ? "Activate this account?" : "Deactivate this account?",
+      text: isBlocked
+        ? "Activating will restore customer account access and send an email notification."
+        : "Deactivating will remove customer account access and send an email notification.",
       confirmButtonText: isBlocked ? "Yes, activate" : "Yes, deactivate",
       cancelButtonText: "No, cancel",
       tone: isBlocked ? "success" : "warning",
@@ -1079,8 +1081,10 @@ export function CustomerDetailClient({
       setAccountStatus(next);
       dashboardLoading.close();
       await dashboardAlert(
-        next === "active" ? "Customer Activated" : "Customer Deactivated",
-        next === "active" ? "Customer account has been activated successfully." : "Customer account has been deactivated successfully.",
+        next === "active" ? "Account Activated" : "Account Deactivated",
+        next === "active"
+          ? "Customer account has been activated successfully. Notification emails have been sent."
+          : "Customer account has been deactivated successfully. Notification emails have been sent.",
         { icon: "success", tone: "success", confirmButtonText: "OK" },
       );
       await refreshDetail();
@@ -1216,15 +1220,15 @@ export function CustomerDetailClient({
                     <>
                       <button type="button" onClick={() => setEditMode(true)} className="inline-flex h-10 items-center gap-2 rounded-xl bg-[#2563EB] px-4 text-sm font-semibold text-white shadow-sm hover:bg-[#1D4ED8]">
                         <Pencil className="h-4 w-4" />
-                        Edit
+                        Edit User
+                      </button>
+                      <button type="button" onClick={() => void toggleActive()} disabled={busy} className={cn("inline-flex h-10 items-center gap-2 rounded-xl px-4 text-sm font-semibold text-white shadow-sm disabled:opacity-50", isBlocked ? "bg-[#16A34A] hover:bg-[#15803D]" : "bg-[#EA580C] hover:bg-[#C2410C]")}>
+                        {isBlocked ? <Unlock className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
+                        {isBlocked ? "Activate Account" : "Deactivate Account"}
                       </button>
                       <button type="button" onClick={openResetPasswordModal} disabled={busy} className="inline-flex h-10 items-center gap-2 rounded-xl bg-[#7C3AED] px-4 text-sm font-semibold text-white shadow-sm hover:bg-[#6D28D9] disabled:opacity-50">
                         <Lock className="h-4 w-4" />
                         Reset Password
-                      </button>
-                      <button type="button" onClick={() => void toggleActive()} disabled={busy} className={cn("inline-flex h-10 items-center gap-2 rounded-xl px-4 text-sm font-semibold text-white shadow-sm disabled:opacity-50", isBlocked ? "bg-[#16A34A] hover:bg-[#15803D]" : "bg-[#EA580C] hover:bg-[#C2410C]")}>
-                        {isBlocked ? <Unlock className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
-                        {isBlocked ? "Activate" : "Deactivate"}
                       </button>
                     </>
                   ) : null}
@@ -1285,7 +1289,7 @@ export function CustomerDetailClient({
                 <TextInput label="Country" value={country} onChange={setCountry} />
                 <TextInput label="City" value={city} onChange={setCity} />
                 <label className="block text-sm md:col-span-2">
-                  <span className="mb-1.5 block font-medium text-slate-700">Address</span>
+                  <span className="mb-1.5 block font-medium text-slate-700">Residential Address</span>
                   <textarea value={address} onChange={(event) => setAddress(event.target.value)} rows={4} className="w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30" />
                 </label>
               </div>
@@ -1296,7 +1300,10 @@ export function CustomerDetailClient({
                 <Field label="Country" value={country} />
                 <Field label="City" value={city} />
                 <div className="md:col-span-2">
-                  <Field label="Delivery Address" value={address} />
+                  <Field label="Residential Address" value={address} />
+                </div>
+                <div className="md:col-span-2">
+                  <Field label="Customer Notes" value={notes} />
                 </div>
               </div>
             )}

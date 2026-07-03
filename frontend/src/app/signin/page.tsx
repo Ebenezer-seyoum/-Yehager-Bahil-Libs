@@ -15,7 +15,7 @@ type Feedback = {
 const authErrorMessages: Record<string, string> = {
   AccessDenied: "Google sign-in was cancelled or denied.",
   CredentialsSignin: "Invalid email or password.",
-  AccountBlocked: "Please contact admin. Account has been blocked.",
+  AccountBlocked: "Please contact admin. Account has been deactivated.",
   OAuthAccountNotLinked: "Please sign in with the same method you used before.",
   OAuthCallback: "Google sign-in could not be completed. Please try again.",
   OAuthSignin: "Google sign-in could not be started. Please try again.",
@@ -30,6 +30,15 @@ function getSafeCallbackUrl(value: string | null) {
   if (!value || value === "/signin" || value.startsWith("/signin?")) return undefined;
   if (!value.startsWith("/") || value.startsWith("//")) return undefined;
   return value;
+}
+
+function getOAuthCallbackUrl(callbackUrl?: string) {
+  const params = new URLSearchParams();
+  if (callbackUrl) {
+    params.set("callbackUrl", callbackUrl);
+  }
+  const query = params.toString();
+  return `/auth/redirect${query ? `?${query}` : ""}`;
 }
 
 function GoogleMark() {
@@ -177,7 +186,7 @@ function SignInForm() {
         await signOut({ redirect: false });
         setFeedback({
           type: "error",
-          message: "Please contact admin. Account has been blocked.",
+          message: "Please contact admin. Account has been deactivated.",
         });
         setSubmitting(false);
         return;
@@ -213,7 +222,7 @@ function SignInForm() {
       return;
     }
     setGoogleSubmitting(true);
-    await signIn("google", { callbackUrl: callbackUrl ?? "/my-account" });
+    await signIn("google", { callbackUrl: getOAuthCallbackUrl(callbackUrl) });
   }
 
   return (
