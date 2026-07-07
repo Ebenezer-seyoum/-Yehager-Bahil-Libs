@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { BookOpen, Check, CheckCircle2, ChevronDown, Loader2, Mail, Palette, Phone, Play, Ruler } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { uploadFileToS3 } from "@/lib/uploads";
 import {
   HEM_STYLE_OPTIONS,
   PANTS_MEASUREMENT_FIELDS,
@@ -14,15 +15,6 @@ import {
   measurementDisplayGroups,
   measurementSnapshotFromStringValues,
 } from "@/lib/measurement-fields";
-
-type SignedUpload = {
-  cloudName: string;
-  apiKey: string;
-  folder: string;
-  publicId?: string;
-  timestamp: number;
-  signature: string;
-};
 
 type UploadedFileState = {
   url: string;
@@ -74,32 +66,8 @@ const colorOptions = [
   "Custom (Specify in Remarks)",
 ];
 
-async function uploadToCloudinary(file: File, folder: string) {
-  const signRes = await fetch("/api/backend/uploads/sign", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ folder }),
-  });
-  if (!signRes.ok) throw new Error("Could not start upload");
-  const signedPayload = (await signRes.json()) as { data: SignedUpload };
-  const signed = signedPayload.data;
-
-  const formData = new FormData();
-  formData.append("file", file);
-  formData.append("api_key", signed.apiKey);
-  formData.append("timestamp", String(signed.timestamp));
-  formData.append("signature", signed.signature);
-  formData.append("folder", signed.folder);
-  if (signed.publicId) formData.append("public_id", signed.publicId);
-
-  const uploadRes = await fetch(`https://api.cloudinary.com/v1_1/${signed.cloudName}/auto/upload`, {
-    method: "POST",
-    body: formData,
-  });
-  if (!uploadRes.ok) throw new Error("Upload failed");
-  const uploadJson = (await uploadRes.json()) as { secure_url?: string };
-  if (!uploadJson.secure_url) throw new Error("Upload response missing URL");
-  return uploadJson.secure_url;
+async function uploadToS3(file: File, folder: string) {
+  return uploadFileToS3(file, folder);
 }
 
 function StepPills({ step, setStep }: { step: number; setStep: (step: number) => void }) {
@@ -271,7 +239,7 @@ export function UploadDesignWizard({ familyGroupId, eventId, savedMeasurement }:
     setError(null);
     setBusy(which);
     try {
-      const url = await uploadToCloudinary(file, "upload-designs/references");
+      const url = await uploadToS3(file, "upload-designs/references");
       const next = { url, name: file.name };
       if (which === "front") setFrontImage(next);
       if (which === "side") setSideImage(next);

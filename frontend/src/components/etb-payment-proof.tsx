@@ -3,15 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { AlertCircle, Check, CheckCircle2, Copy, Loader2, Upload } from "lucide-react";
-
-type SignedUpload = {
-  cloudName: string;
-  apiKey: string;
-  folder: string;
-  publicId?: string;
-  timestamp: number;
-  signature: string;
-};
+import { uploadFileToS3 } from "@/lib/uploads";
 
 const QR_CODE_URL = "/images/bank-transfer-qr-behailu-code.jpg";
 const BANK_ACCOUNT_NAME = "BEHAILU ABERA GADISA";
@@ -45,31 +37,8 @@ export function EtbPaymentProof({
     setBusy(true);
     setError(null);
     try {
-      const signRes = await fetch("/api/backend/uploads/sign", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ folder: "payments/etb-proofs" }),
-      });
-      if (!signRes.ok) throw new Error("Could not start upload");
-      const signedPayload = (await signRes.json()) as { data: SignedUpload };
-      const signed = signedPayload.data;
-
-      const formData = new FormData();
-      formData.append("file", selected);
-      formData.append("api_key", signed.apiKey);
-      formData.append("timestamp", String(signed.timestamp));
-      formData.append("signature", signed.signature);
-      formData.append("folder", signed.folder);
-      if (signed.publicId) formData.append("public_id", signed.publicId);
-
-      const uploadRes = await fetch(`https://api.cloudinary.com/v1_1/${signed.cloudName}/auto/upload`, {
-        method: "POST",
-        body: formData,
-      });
-      if (!uploadRes.ok) throw new Error("Upload failed");
-      const uploadJson = (await uploadRes.json()) as { secure_url?: string };
-      if (!uploadJson.secure_url) throw new Error("Upload response missing URL");
-      setProofUrl(uploadJson.secure_url);
+      const uploadUrl = await uploadFileToS3(selected, "payments/etb-proofs");
+      setProofUrl(uploadUrl);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed");
     } finally {

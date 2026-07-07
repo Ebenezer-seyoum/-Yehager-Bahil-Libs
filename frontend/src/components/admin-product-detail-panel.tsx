@@ -21,6 +21,7 @@ import {
   EyeOff,
 } from "lucide-react";
 import { dashboardConfirm, dashboardError, dashboardSuccess } from "@/lib/dashboard-swal";
+import { uploadFileToS3 } from "@/lib/uploads";
 import { cn } from "@/lib/utils";
 
 type Product = {
@@ -50,15 +51,6 @@ type ProductPatch = Partial<Product> & {
   designerCostUsd?: number;
   taxPercent?: number;
   otherCostUsd?: number;
-};
-
-type SignedUpload = {
-  cloudName: string;
-  apiKey: string;
-  folder: string;
-  publicId?: string;
-  timestamp: number;
-  signature: string;
 };
 
 type TabKey = "info" | "pricing" | "garment" | "storefront" | "images";
@@ -378,32 +370,7 @@ export function AdminProductDetailPanel({
       throw new Error("Each image must be 10MB or smaller");
     }
 
-    const signResponse = await fetch("/api/backend/uploads/sign", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ folder: "products" }),
-    });
-    if (!signResponse.ok) throw new Error("Could not prepare image upload");
-    const signedPayload = (await signResponse.json()) as { data?: SignedUpload };
-    const signed = signedPayload.data;
-    if (!signed) throw new Error("Could not prepare image upload");
-
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("api_key", signed.apiKey);
-    formData.append("timestamp", String(signed.timestamp));
-    formData.append("signature", signed.signature);
-    formData.append("folder", signed.folder);
-    if (signed.publicId) formData.append("public_id", signed.publicId);
-
-    const uploadResponse = await fetch(`https://api.cloudinary.com/v1_1/${signed.cloudName}/image/upload`, {
-      method: "POST",
-      body: formData,
-    });
-    if (!uploadResponse.ok) throw new Error("Image upload failed");
-    const uploaded = (await uploadResponse.json()) as { secure_url?: string };
-    if (!uploaded.secure_url) throw new Error("Image upload failed");
-    return uploaded.secure_url;
+    return uploadFileToS3(file, "products");
   }
 
   async function uploadFiles(files: FileList | null) {

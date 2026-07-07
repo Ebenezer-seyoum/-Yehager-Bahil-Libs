@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Check, Eye, EyeOff, FileText, Loader2, Shield, User2, MapPin, NotebookPen, Lock, Unlock, RotateCcw, Trash2, Edit, X, RefreshCw, ArrowLeft, Users } from "lucide-react";
 import { dashboardConfirm, dashboardError, dashboardLoading, dashboardSuccess, dashboardAlert } from "@/lib/dashboard-swal";
+import { uploadFileToS3 } from "@/lib/uploads";
 import { cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AdminDetailLayout, AdminDetailHeader } from "@/components/admin/admin-detail-layout";
@@ -166,15 +167,6 @@ function validateName(value: string) {
   return nameRegex.test(value.trim());
 }
 
-type CloudinarySignedPayload = {
-  cloudName: string;
-  apiKey: string;
-  folder: string;
-  publicId?: string;
-  timestamp: number;
-  signature: string;
-};
-
 type ApiResponse<T> = {
   message?: string;
   data?: T;
@@ -234,32 +226,7 @@ type ActivityItem = {
 };
 
 async function uploadPhoto(file: File) {
-  const signRes = await fetch("/api/backend/uploads/sign", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ folder: "employees/avatars" }),
-  });
-  if (!signRes.ok) throw new Error("Could not start upload");
-  const signedPayload = (await signRes.json()) as ApiResponse<CloudinarySignedPayload>;
-  const signed = signedPayload.data;
-  if (!signed) throw new Error("Could not start upload");
-
-  const form = new FormData();
-  form.append("file", file);
-  form.append("api_key", signed.apiKey);
-  form.append("timestamp", String(signed.timestamp));
-  form.append("signature", signed.signature);
-  form.append("folder", signed.folder);
-  if (signed.publicId) form.append("public_id", signed.publicId);
-
-  const uploadRes = await fetch(`https://api.cloudinary.com/v1_1/${signed.cloudName}/image/upload`, {
-    method: "POST",
-    body: form,
-  });
-  if (!uploadRes.ok) throw new Error("Upload failed");
-  const uploadJson = (await uploadRes.json()) as { secure_url?: string };
-  if (!uploadJson.secure_url) throw new Error("Upload response missing URL");
-  return uploadJson.secure_url;
+  return uploadFileToS3(file, "employees/avatars");
 }
 
 type EmployeePayload = {

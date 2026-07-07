@@ -21,15 +21,7 @@ import {
 import { cn } from "@/lib/utils";
 import { dashboardConfirm, dashboardSuccess, dashboardError } from "@/lib/dashboard-swal";
 import { REGIONS, TAXONOMY } from "@/lib/taxonomy";
-
-type SignedUpload = {
-  cloudName: string;
-  apiKey: string;
-  folder: string;
-  publicId?: string;
-  timestamp: number;
-  signature: string;
-};
+import { uploadFileToS3 } from "@/lib/uploads";
 
 type BulkProduct = {
   id: string;
@@ -320,7 +312,7 @@ export function ProductCreateClient() {
   const [bulkProducts, setBulkProducts] = useState<BulkProduct[]>([]);
   const [bulkProgress, setBulkProgress] = useState<{ current: number; total: number } | null>(null);
 
-  // Cloudinary image upload helper
+  // S3 image upload helper
   async function uploadOneImage(file: File): Promise<string> {
     if (!file.type.startsWith("image/")) {
       throw new Error("Only image files are allowed");
@@ -329,32 +321,7 @@ export function ProductCreateClient() {
       throw new Error("Each image must be 10MB or smaller");
     }
 
-    const signResponse = await fetch("/api/backend/uploads/sign", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ folder: "products" }),
-    });
-    if (!signResponse.ok) throw new Error("Could not prepare image upload");
-    const signedPayload = (await signResponse.json()) as { data?: SignedUpload };
-    const signed = signedPayload.data;
-    if (!signed) throw new Error("Could not prepare image upload");
-
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("api_key", signed.apiKey);
-    formData.append("timestamp", String(signed.timestamp));
-    formData.append("signature", signed.signature);
-    formData.append("folder", signed.folder);
-    if (signed.publicId) formData.append("public_id", signed.publicId);
-
-    const uploadResponse = await fetch(`https://api.cloudinary.com/v1_1/${signed.cloudName}/image/upload`, {
-      method: "POST",
-      body: formData,
-    });
-    if (!uploadResponse.ok) throw new Error("Image upload failed");
-    const uploaded = (await uploadResponse.json()) as { secure_url?: string };
-    if (!uploaded.secure_url) throw new Error("Image upload failed");
-    return uploaded.secure_url;
+    return uploadFileToS3(file, "products");
   }
 
   // --- Handle Single Product Create ---
@@ -386,7 +353,7 @@ export function ProductCreateClient() {
     setFormNotice(null);
 
     try {
-      // 2. Upload images to Cloudinary
+      // 2. Upload images to S3
       const imageUrls: string[] = [];
       for (const file of uploadedFiles) {
         const url = await uploadOneImage(file);

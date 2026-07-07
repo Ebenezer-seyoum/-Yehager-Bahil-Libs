@@ -5,16 +5,8 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { CheckCircle2, Download, Eye, FileText, ImageIcon, Trash2, UploadCloud } from "lucide-react";
 import { can } from "@/lib/permissions";
+import { uploadFileToS3 } from "@/lib/uploads";
 import { cn } from "@/lib/utils";
-
-type SignedUpload = {
-  cloudName: string;
-  apiKey: string;
-  folder: string;
-  publicId?: string;
-  timestamp: number;
-  signature: string;
-};
 
 type ShippingDocument = { url: string; label: string; uploadedAt?: string };
 type UploadType = "pickup_id" | "pickup_proof" | "shipping_doc";
@@ -63,37 +55,14 @@ export function AdminOrderDocuments({
     setBusyKey(item.key);
     setError(null);
     try {
-      const signRes = await fetch("/api/backend/uploads/sign", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ folder: `orders/${orderId}` }),
-      });
-      if (!signRes.ok) throw new Error("Could not start upload");
-      const signedPayload = (await signRes.json()) as { data: SignedUpload };
-      const signed = signedPayload.data;
-
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("api_key", signed.apiKey);
-      formData.append("timestamp", String(signed.timestamp));
-      formData.append("signature", signed.signature);
-      formData.append("folder", signed.folder);
-      if (signed.publicId) formData.append("public_id", signed.publicId);
-
-      const uploadRes = await fetch(`https://api.cloudinary.com/v1_1/${signed.cloudName}/auto/upload`, {
-        method: "POST",
-        body: formData,
-      });
-      if (!uploadRes.ok) throw new Error("Upload failed");
-      const uploadJson = (await uploadRes.json()) as { secure_url?: string };
-      if (!uploadJson.secure_url) throw new Error("Upload response missing URL");
+      const uploadUrl = await uploadFileToS3(file, `orders/${orderId}`);
 
       const saveRes = await fetch(`/api/backend/admin/orders/${orderId}/documents`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           type: item.type,
-          url: uploadJson.secure_url,
+          url: uploadUrl,
           label: item.fixedLabel ?? item.label,
         }),
       });

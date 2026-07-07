@@ -2,6 +2,7 @@
 
 import { useMemo, useRef, useState, type FormEvent } from "react";
 import { CalendarDays, Camera, Check, KeyRound, Lock, Mail, Pencil, Phone, RefreshCw, Save, ShieldCheck, UserRound, X } from "lucide-react";
+import { uploadFileToS3 } from "@/lib/uploads";
 import { cn } from "@/lib/utils";
 
 export type EmployeeProfile = {
@@ -36,15 +37,6 @@ export type DashboardProfile = {
 
 type SectionId = "personal" | "contact" | "employment" | "access" | "password";
 
-type CloudinarySignedPayload = {
-  cloudName: string;
-  apiKey: string;
-  folder: string;
-  publicId?: string;
-  timestamp: number;
-  signature: string;
-};
-
 type ApiResponse<T> = {
   data?: T;
   error?: string;
@@ -52,34 +44,7 @@ type ApiResponse<T> = {
 };
 
 async function uploadAvatar(file: File) {
-  const signRes = await fetch("/api/backend/uploads/sign", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ folder: "employees/avatars" }),
-  });
-  const signedPayload = (await signRes.json().catch(() => null)) as ApiResponse<CloudinarySignedPayload> | null;
-  if (!signRes.ok || !signedPayload?.data) {
-    throw new Error(signedPayload?.error ?? signedPayload?.message ?? "Could not start image upload.");
-  }
-
-  const signed = signedPayload.data;
-  const form = new FormData();
-  form.append("file", file);
-  form.append("api_key", signed.apiKey);
-  form.append("timestamp", String(signed.timestamp));
-  form.append("signature", signed.signature);
-  form.append("folder", signed.folder);
-  if (signed.publicId) form.append("public_id", signed.publicId);
-
-  const uploadRes = await fetch(`https://api.cloudinary.com/v1_1/${signed.cloudName}/image/upload`, {
-    method: "POST",
-    body: form,
-  });
-  const uploadJson = (await uploadRes.json().catch(() => null)) as { secure_url?: string; error?: { message?: string } } | null;
-  if (!uploadRes.ok || !uploadJson?.secure_url) {
-    throw new Error(uploadJson?.error?.message ?? "Image upload failed.");
-  }
-  return uploadJson.secure_url;
+  return uploadFileToS3(file, "employees/avatars");
 }
 
 function value(v: unknown, fallback = "Not provided") {
