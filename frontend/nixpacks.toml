@@ -1,0 +1,13 @@
+[variables]
+NODE_ENV = "production"
+HOSTNAME = "0.0.0.0"
+PORT = "3000"
+
+[phases.install]
+cmds = ["npm ci"]
+
+[phases.build]
+cmds = ["npm run build"]
+
+[start]
+cmd = "npm start -- -H 0.0.0.0 -p 3000"
