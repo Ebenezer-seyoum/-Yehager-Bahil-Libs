@@ -1,3 +1,4 @@
+import nodemailer from "nodemailer";
 import { Resend } from "resend";
 import { env } from "../config/env.js";
 
@@ -86,9 +87,21 @@ type SupportTicketPayload = {
 };
 
 const resend = env.RESEND_API_KEY ? new Resend(env.RESEND_API_KEY) : null;
+const smtpTransporter =
+  !resend && env.SMTP_HOST && env.SMTP_USER && env.SMTP_PASS
+    ? nodemailer.createTransport({
+        host: env.SMTP_HOST,
+        port: env.SMTP_PORT ?? 587,
+        secure: (env.SMTP_PORT ?? 587) === 465,
+        auth: {
+          user: env.SMTP_USER,
+          pass: env.SMTP_PASS,
+        },
+      })
+    : null;
 
 function isConfigured() {
-  return Boolean(resend);
+  return Boolean(resend || smtpTransporter);
 }
 
 function fromAddress(channel: MailChannel = "notifications") {
@@ -175,16 +188,31 @@ export function appLink(path: string) {
 
 export async function sendTransactionalEmail(payload: MailPayload) {
   if (!payload.to) return { sent: false, skipped: true, reason: "missing_recipient" };
-  if (!isConfigured() || !resend) return { sent: false, skipped: true, reason: "resend_not_configured" };
+  if (!isConfigured()) return { sent: false, skipped: true, reason: "mail_not_configured" };
 
-  await resend.emails.send({
-    from: fromAddress(payload.channel),
-    to: payload.to,
-    subject: payload.subject,
-    text: payload.text,
-    html: payload.html,
-    replyTo: payload.replyTo ?? defaultReplyTo(payload.channel),
-  });
+  const from = fromAddress(payload.channel);
+  const replyTo = payload.replyTo ?? defaultReplyTo(payload.channel);
+
+  if (resend) {
+    await resend.emails.send({
+      from,
+      to: payload.to,
+      subject: payload.subject,
+      text: payload.text,
+      html: payload.html,
+      replyTo,
+    });
+  } else if (smtpTransporter) {
+    await smtpTransporter.sendMail({
+      from,
+      to: payload.to,
+      subject: payload.subject,
+      text: payload.text,
+      html: payload.html,
+      replyTo,
+    });
+  }
+
   return { sent: true, skipped: false };
 }
 
