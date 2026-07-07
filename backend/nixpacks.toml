@@ -1,0 +1,13 @@
+[variables]
+NODE_ENV = "production"
+HOST = "0.0.0.0"
+PORT = "8787"
+
+[phases.install]
+cmds = ["npm ci"]
+
+[phases.build]
+cmds = ["npm run build"]
+
+[start]
+cmd = "npm start"
