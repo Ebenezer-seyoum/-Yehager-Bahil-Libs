@@ -8,9 +8,10 @@ const app = createApp();
 serve(
   {
     fetch: app.fetch,
+    hostname: env.HOST,
     port: env.PORT,
   },
   (info) => {
-    logger.info(`API listening on http://localhost:${info.port}`);
+    logger.info(`API listening on http://${env.HOST}:${info.port}`);
   },
 );
