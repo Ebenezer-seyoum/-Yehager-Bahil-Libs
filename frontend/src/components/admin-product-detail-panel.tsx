@@ -20,7 +20,11 @@ import {
   Eye,
   EyeOff,
 } from "lucide-react";
-import { dashboardConfirm, dashboardError, dashboardSuccess } from "@/lib/dashboard-swal";
+import {
+  dashboardConfirm,
+  dashboardError,
+  dashboardSuccess,
+} from "@/lib/dashboard-swal";
 import { uploadFileToS3 } from "@/lib/uploads";
 import { cn } from "@/lib/utils";
 
@@ -56,17 +60,40 @@ type ProductPatch = Partial<Product> & {
 type TabKey = "info" | "pricing" | "garment" | "storefront" | "images";
 
 const TABS: { key: TabKey; label: string; icon: React.ReactNode }[] = [
-  { key: "info", label: "Product Information", icon: <Info className="h-4 w-4" /> },
-  { key: "pricing", label: "Pricing & Cost", icon: <DollarSign className="h-4 w-4" /> },
-  { key: "garment", label: "Garment Specs", icon: <Shirt className="h-4 w-4" /> },
-  { key: "storefront", label: "Storefront Controls", icon: <ShieldCheck className="h-4 w-4" /> },
-  { key: "images", label: "Images Manager", icon: <ImageIcon className="h-4 w-4" /> },
+  {
+    key: "info",
+    label: "Product Information",
+    icon: <Info className="h-4 w-4" />,
+  },
+  {
+    key: "pricing",
+    label: "Pricing & Cost",
+    icon: <DollarSign className="h-4 w-4" />,
+  },
+  {
+    key: "garment",
+    label: "Garment Specs",
+    icon: <Shirt className="h-4 w-4" />,
+  },
+  {
+    key: "storefront",
+    label: "Storefront Controls",
+    icon: <ShieldCheck className="h-4 w-4" />,
+  },
+  {
+    key: "images",
+    label: "Images Manager",
+    icon: <ImageIcon className="h-4 w-4" />,
+  },
 ];
 
 function formatCurrency(value: string | number | null | undefined) {
   const amount = Number(value);
   if (!Number.isFinite(amount)) return "$0.00";
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(amount);
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+  }).format(amount);
 }
 
 function formatEtb(value: string | number | null | undefined) {
@@ -91,7 +118,8 @@ function parseImages(value: string) {
 function parseRequiredNumber(value: string, label: string) {
   if (value.trim() === "") throw new Error(`${label} is required.`);
   const parsed = Number(value);
-  if (!Number.isFinite(parsed) || parsed < 0) throw new Error(`${label} must be a valid non-negative number.`);
+  if (!Number.isFinite(parsed) || parsed < 0)
+    throw new Error(`${label} must be a valid non-negative number.`);
   return parsed;
 }
 
@@ -132,16 +160,34 @@ function draftFromProduct(product: Product) {
 function ReadOnlyField({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
-      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">{label}</p>
-      <p className="text-sm font-extrabold capitalize text-slate-900">{value || "—"}</p>
+      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">
+        {label}
+      </p>
+      <p className="text-sm font-extrabold capitalize text-slate-900">
+        {value || "—"}
+      </p>
     </div>
   );
 }
 
-function EditableField({ label, value, onChange, placeholder, type = "text" }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string; type?: string }) {
+function EditableField({
+  label,
+  value,
+  onChange,
+  placeholder,
+  type = "text",
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  type?: string;
+}) {
   return (
     <div className="rounded-2xl border border-emerald-200 bg-emerald-50/30 p-4">
-      <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600 mb-1">{label}</p>
+      <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600 mb-1">
+        {label}
+      </p>
       <input
         type={type}
         value={value}
@@ -167,21 +213,31 @@ export function AdminProductDetailPanel({
   const [product, setProduct] = useState(initialProduct);
   const [busy, setBusy] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
-  const [selectedImage, setSelectedImage] = useState(initialProduct.images?.[0] ?? "");
+  const [selectedImage, setSelectedImage] = useState(
+    initialProduct.images?.[0] ?? "",
+  );
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(draftFromProduct(initialProduct));
   const [activeTab, setActiveTab] = useState<TabKey>("info");
 
   const images = product.images?.filter(Boolean) ?? [];
-  const activeImage = images.includes(selectedImage) ? selectedImage : images[0] ?? "";
+  const activeImage = images.includes(selectedImage)
+    ? selectedImage
+    : (images[0] ?? "");
 
   const nameParts = (product.name || "").split(" — ");
   const cleanProductName = nameParts[0];
-  const displayUniqueId = product.uniqueId || (nameParts.length > 1 ? nameParts[1] : product.id.slice(0, 8).toUpperCase());
-  const designerCost = Number(product.profitCostSetting?.designerCostUsd ?? 0) || 0;
+  const displayUniqueId =
+    product.uniqueId ||
+    (nameParts.length > 1
+      ? nameParts[1]
+      : product.id.slice(0, 8).toUpperCase());
+  const designerCost =
+    Number(product.profitCostSetting?.designerCostUsd ?? 0) || 0;
   const taxPercent = Number(product.profitCostSetting?.taxPercent ?? 0) || 0;
   const otherCost = Number(product.profitCostSetting?.otherCostUsd ?? 0) || 0;
-  const productionTaxCost = (Number(product.priceUsd ?? 0) || 0) * (taxPercent / 100);
+  const productionTaxCost =
+    (Number(product.priceUsd ?? 0) || 0) * (taxPercent / 100);
   const productionUnitCost = designerCost + productionTaxCost + otherCost;
   const unitProfit = (Number(product.priceUsd ?? 0) || 0) - productionUnitCost;
 
@@ -219,49 +275,77 @@ export function AdminProductDetailPanel({
     setDraft(draftFromProduct(product));
   }
 
-  async function confirmAction(title: string, text: string, confirmButtonText: string, icon: "warning" | "question" = "warning") {
+  async function confirmAction(
+    title: string,
+    text: string,
+    confirmButtonText: string,
+    icon: "warning" | "question" = "warning",
+  ) {
     return dashboardConfirm({
       title,
       text,
       confirmButtonText,
       cancelButtonText: "No, cancel",
-      tone: confirmButtonText.toLowerCase().includes("delete") ? "danger" : "success",
+      tone: confirmButtonText.toLowerCase().includes("delete")
+        ? "danger"
+        : "success",
       icon,
     });
   }
 
   function showResult(type: "success" | "error", message: string) {
-    void (type === "success" ? dashboardSuccess("Success", message) : dashboardError("Something went wrong", message));
+    void (type === "success"
+      ? dashboardSuccess("Success", message)
+      : dashboardError("Something went wrong", message));
   }
 
   async function loadFreshProduct(fallback?: Product) {
     const response = await fetch(`/api/backend/admin/products/${product.id}`);
-    if (!response.ok) throw new Error(await responseErrorMessage(response, "Product refresh failed"));
+    if (!response.ok)
+      throw new Error(
+        await responseErrorMessage(response, "Product refresh failed"),
+      );
     const payload = (await response.json()) as { data?: Product };
     return payload.data ?? fallback ?? product;
   }
 
-  async function patchProduct(patch: ProductPatch, successMessage: string, expectedTaxPercent?: number) {
+  async function patchProduct(
+    patch: ProductPatch,
+    successMessage: string,
+    expectedTaxPercent?: number,
+  ) {
     if (!canEdit) {
       showResult("error", "You do not have permission to edit products.");
       return;
     }
     setBusy("patch");
     try {
-      const response = await fetch(`/api/backend/admin/products/${product.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(patch),
-      });
+      const response = await fetch(
+        `/api/backend/admin/products/${product.id}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(patch),
+        },
+      );
       if (!response.ok) {
-        throw new Error(await responseErrorMessage(response, "Product update failed"));
+        throw new Error(
+          await responseErrorMessage(response, "Product update failed"),
+        );
       }
       const payload = (await response.json()) as { data?: Product };
       const freshProduct = await loadFreshProduct(payload.data);
       if (expectedTaxPercent !== undefined) {
-        const savedTaxPercent = Number(freshProduct.profitCostSetting?.taxPercent ?? Number.NaN);
-        if (!Number.isFinite(savedTaxPercent) || !nearlyEqual(savedTaxPercent, expectedTaxPercent)) {
-          throw new Error("Production tax rate was not saved correctly. Please try again.");
+        const savedTaxPercent = Number(
+          freshProduct.profitCostSetting?.taxPercent ?? Number.NaN,
+        );
+        if (
+          !Number.isFinite(savedTaxPercent) ||
+          !nearlyEqual(savedTaxPercent, expectedTaxPercent)
+        ) {
+          throw new Error(
+            "Production tax rate was not saved correctly. Please try again.",
+          );
         }
       }
       setProduct(freshProduct);
@@ -270,7 +354,10 @@ export function AdminProductDetailPanel({
       showResult("success", successMessage);
       router.refresh();
     } catch (error) {
-      showResult("error", error instanceof Error ? error.message : "Product update failed");
+      showResult(
+        "error",
+        error instanceof Error ? error.message : "Product update failed",
+      );
     } finally {
       setBusy(null);
     }
@@ -281,10 +368,18 @@ export function AdminProductDetailPanel({
     const nextActive = !product.isActive;
     const confirmed = await confirmAction(
       nextActive ? "Activate product?" : "Deactivate product?",
-      nextActive ? "This product will become visible to customers." : "This product will be hidden from customers.",
+      nextActive
+        ? "This product will become visible to customers."
+        : "This product will be hidden from customers.",
       nextActive ? "Activate" : "Deactivate",
     );
-    if (confirmed) await patchProduct({ isActive: nextActive }, nextActive ? "Product activated successfully." : "Product deactivated successfully.");
+    if (confirmed)
+      await patchProduct(
+        { isActive: nextActive },
+        nextActive
+          ? "Product activated successfully."
+          : "Product deactivated successfully.",
+      );
   }
 
   async function toggleFeatured() {
@@ -292,11 +387,19 @@ export function AdminProductDetailPanel({
     const nextFeatured = !product.isFeatured;
     const confirmed = await confirmAction(
       nextFeatured ? "Feature product?" : "Remove feature?",
-      nextFeatured ? "This product can be highlighted on the home page." : "This product will no longer be highlighted.",
+      nextFeatured
+        ? "This product can be highlighted on the home page."
+        : "This product will no longer be highlighted.",
       nextFeatured ? "Feature" : "Remove feature",
       "question",
     );
-    if (confirmed) await patchProduct({ isFeatured: nextFeatured }, nextFeatured ? "Product featured successfully." : "Product feature removed successfully.");
+    if (confirmed)
+      await patchProduct(
+        { isFeatured: nextFeatured },
+        nextFeatured
+          ? "Product featured successfully."
+          : "Product feature removed successfully.",
+      );
   }
 
   async function deleteProduct() {
@@ -312,15 +415,23 @@ export function AdminProductDetailPanel({
     if (!confirmed) return;
     setBusy("delete");
     try {
-      const response = await fetch(`/api/backend/admin/products/${product.id}`, { method: "DELETE" });
+      const response = await fetch(
+        `/api/backend/admin/products/${product.id}`,
+        { method: "DELETE" },
+      );
       if (!response.ok) {
-        throw new Error(await responseErrorMessage(response, "Product delete failed"));
+        throw new Error(
+          await responseErrorMessage(response, "Product delete failed"),
+        );
       }
       await dashboardSuccess("Deleted", "Product deleted successfully.");
       router.push("/admin/inventory");
       router.refresh();
     } catch (error) {
-      showResult("error", error instanceof Error ? error.message : "Product delete failed");
+      showResult(
+        "error",
+        error instanceof Error ? error.message : "Product delete failed",
+      );
     } finally {
       setBusy(null);
     }
@@ -332,14 +443,30 @@ export function AdminProductDetailPanel({
     let taxPercent: number;
     let otherCostUsd: number;
     try {
-      designerCostUsd = parseRequiredNumber(draft.designerCostUsd, "Designer labor cost");
+      designerCostUsd = parseRequiredNumber(
+        draft.designerCostUsd,
+        "Designer labor cost",
+      );
       taxPercent = parseRequiredNumber(draft.taxPercent, "Production tax rate");
-      otherCostUsd = parseRequiredNumber(draft.otherCostUsd, "Other production costs");
+      otherCostUsd = parseRequiredNumber(
+        draft.otherCostUsd,
+        "Other production costs",
+      );
     } catch (error) {
-      showResult("error", error instanceof Error ? error.message : "Production cost values are invalid.");
+      showResult(
+        "error",
+        error instanceof Error
+          ? error.message
+          : "Production cost values are invalid.",
+      );
       return;
     }
-    const confirmed = await confirmAction("Save product changes?", "This will update the product information shown in admin and storefront.", "Save", "question");
+    const confirmed = await confirmAction(
+      "Save product changes?",
+      "This will update the product information shown in admin and storefront.",
+      "Save",
+      "question",
+    );
     if (!confirmed) return;
     await patchProduct(
       {
@@ -386,9 +513,15 @@ export function AdminProductDetailPanel({
         ...current,
         imagesText: uploadedUrls.join("\n"),
       }));
-      showResult("success", `${uploadedUrls.length} image${uploadedUrls.length === 1 ? "" : "s"} uploaded. Previous images replaced. Click Save changes to update.`);
+      showResult(
+        "success",
+        `${uploadedUrls.length} image${uploadedUrls.length === 1 ? "" : "s"} uploaded. Previous images replaced. Click Save changes to update.`,
+      );
     } catch (error) {
-      showResult("error", error instanceof Error ? error.message : "Image upload failed");
+      showResult(
+        "error",
+        error instanceof Error ? error.message : "Image upload failed",
+      );
     } finally {
       setUploading(false);
     }
@@ -404,12 +537,21 @@ export function AdminProductDetailPanel({
         </h3>
         {editing ? (
           <div className="space-y-4">
-            <EditableField label="Product Name" value={draft.name} onChange={(v) => setDraft((c) => ({ ...c, name: v }))} placeholder="Outfit name" />
+            <EditableField
+              label="Product Name"
+              value={draft.name}
+              onChange={(v) => setDraft((c) => ({ ...c, name: v }))}
+              placeholder="Outfit name"
+            />
             <div className="rounded-2xl border border-emerald-200 bg-emerald-50/30 p-4">
-              <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600 mb-1">Description</p>
+              <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600 mb-1">
+                Description
+              </p>
               <textarea
                 value={draft.description}
-                onChange={(e) => setDraft((c) => ({ ...c, description: e.target.value }))}
+                onChange={(e) =>
+                  setDraft((c) => ({ ...c, description: e.target.value }))
+                }
                 placeholder="Tell us about the design, context, or significance of this outfit..."
                 className="w-full min-h-28 rounded-lg border border-emerald-200 bg-white px-3 py-2 text-sm font-semibold text-slate-900 outline-none focus:border-emerald-500 resize-y"
               />
@@ -419,12 +561,20 @@ export function AdminProductDetailPanel({
           <div className="space-y-4">
             <ReadOnlyField label="Product Name" value={cleanProductName} />
             <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Description</p>
-              <p className="text-sm leading-7 text-slate-700 whitespace-pre-wrap">{product.description || "No product description has been added yet."}</p>
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">
+                Description
+              </p>
+              <p className="text-sm leading-7 text-slate-700 whitespace-pre-wrap">
+                {product.description ||
+                  "No product description has been added yet."}
+              </p>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <ReadOnlyField label="Tribe" value={product.region} />
-              <ReadOnlyField label="Region" value={product.subcategory || "—"} />
+              <ReadOnlyField
+                label="Region"
+                value={product.subcategory || "—"}
+              />
             </div>
           </div>
         )}
@@ -441,39 +591,85 @@ export function AdminProductDetailPanel({
         {editing ? (
           <div className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
-              <EditableField label="USD Price" value={draft.priceUsd} onChange={(v) => setDraft((c) => ({ ...c, priceUsd: v }))} type="number" placeholder="0.00" />
+              <EditableField
+                label="USD Price"
+                value={draft.priceUsd}
+                onChange={(v) => setDraft((c) => ({ ...c, priceUsd: v }))}
+                type="number"
+                placeholder="0.00"
+              />
               <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">ETB Equivalent</p>
-                <p className="text-2xl font-extrabold text-slate-900">{formatEtb(draft.priceUsd || 0)}</p>
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">
+                  ETB Equivalent
+                </p>
+                <p className="text-2xl font-extrabold text-slate-900">
+                  {formatEtb(draft.priceUsd || 0)}
+                </p>
               </div>
-              <EditableField label="Groom / Men Price (USD)" value={draft.groomPriceUsd} onChange={(v) => setDraft((c) => ({ ...c, groomPriceUsd: v }))} type="number" placeholder="Optional" />
+              <EditableField
+                label="Groom / Men Price (USD)"
+                value={draft.groomPriceUsd}
+                onChange={(v) => setDraft((c) => ({ ...c, groomPriceUsd: v }))}
+                type="number"
+                placeholder="Optional"
+              />
             </div>
             <div className="rounded-2xl border border-emerald-200 bg-emerald-50/40 p-5">
-              <p className="mb-4 text-[10px] font-black uppercase tracking-widest text-emerald-700">Production Cost Detail</p>
+              <p className="mb-4 text-[10px] font-black uppercase tracking-widest text-emerald-700">
+                Production Cost Detail
+              </p>
               <div className="grid gap-4 sm:grid-cols-3">
-                <EditableField label="Designer Labor Cost" value={draft.designerCostUsd} onChange={(v) => setDraft((c) => ({ ...c, designerCostUsd: v }))} type="number" placeholder="0.00" />
-                <EditableField label="Production Tax Rate (%)" value={draft.taxPercent} onChange={(v) => setDraft((c) => ({ ...c, taxPercent: v }))} type="number" placeholder="0" />
-                <EditableField label="Other Production Costs" value={draft.otherCostUsd} onChange={(v) => setDraft((c) => ({ ...c, otherCostUsd: v }))} type="number" placeholder="0.00" />
+                <EditableField
+                  label="Designer Labor Cost"
+                  value={draft.designerCostUsd}
+                  onChange={(v) =>
+                    setDraft((c) => ({ ...c, designerCostUsd: v }))
+                  }
+                  type="number"
+                  placeholder="0.00"
+                />
+                <EditableField
+                  label="Production Tax Rate (%)"
+                  value={draft.taxPercent}
+                  onChange={(v) => setDraft((c) => ({ ...c, taxPercent: v }))}
+                  type="number"
+                  placeholder="0"
+                />
+                <EditableField
+                  label="Other Production Costs"
+                  value={draft.otherCostUsd}
+                  onChange={(v) => setDraft((c) => ({ ...c, otherCostUsd: v }))}
+                  type="number"
+                  placeholder="0.00"
+                />
               </div>
               <div className="mt-4 grid gap-3 sm:grid-cols-3">
                 <ReadOnlyField
                   label="Estimated Unit Cost"
                   value={formatCurrency(
                     (Number(draft.designerCostUsd || 0) || 0) +
-                    ((Number(draft.priceUsd || 0) || 0) * ((Number(draft.taxPercent || 0) || 0) / 100)) +
-                    (Number(draft.otherCostUsd || 0) || 0)
+                      (Number(draft.priceUsd || 0) || 0) *
+                        ((Number(draft.taxPercent || 0) || 0) / 100) +
+                      (Number(draft.otherCostUsd || 0) || 0),
                   )}
                 />
                 <ReadOnlyField
                   label="Estimated Unit Profit"
                   value={formatCurrency(
                     (Number(draft.priceUsd || 0) || 0) -
-                    ((Number(draft.designerCostUsd || 0) || 0) +
-                    ((Number(draft.priceUsd || 0) || 0) * ((Number(draft.taxPercent || 0) || 0) / 100)) +
-                    (Number(draft.otherCostUsd || 0) || 0))
+                      ((Number(draft.designerCostUsd || 0) || 0) +
+                        (Number(draft.priceUsd || 0) || 0) *
+                          ((Number(draft.taxPercent || 0) || 0) / 100) +
+                        (Number(draft.otherCostUsd || 0) || 0)),
                   )}
                 />
-                <ReadOnlyField label="Tax Cost From Price" value={formatCurrency((Number(draft.priceUsd || 0) || 0) * ((Number(draft.taxPercent || 0) || 0) / 100))} />
+                <ReadOnlyField
+                  label="Tax Cost From Price"
+                  value={formatCurrency(
+                    (Number(draft.priceUsd || 0) || 0) *
+                      ((Number(draft.taxPercent || 0) || 0) / 100),
+                  )}
+                />
               </div>
             </div>
           </div>
@@ -481,32 +677,66 @@ export function AdminProductDetailPanel({
           <div className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-3">
               <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-5">
-                <p className="text-xs font-bold uppercase tracking-widest text-emerald-700">USD Price</p>
-                <p className="mt-2 text-3xl font-extrabold text-emerald-800">{formatCurrency(product.priceUsd)}</p>
+                <p className="text-xs font-bold uppercase tracking-widest text-emerald-700">
+                  USD Price
+                </p>
+                <p className="mt-2 text-3xl font-extrabold text-emerald-800">
+                  {formatCurrency(product.priceUsd)}
+                </p>
               </div>
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
-                <p className="text-xs font-bold uppercase tracking-widest text-slate-500">ETB Price</p>
-                <p className="mt-2 text-2xl font-extrabold text-slate-950">{formatEtb(product.priceUsd)}</p>
+                <p className="text-xs font-bold uppercase tracking-widest text-slate-500">
+                  ETB Price
+                </p>
+                <p className="mt-2 text-2xl font-extrabold text-slate-950">
+                  {formatEtb(product.priceUsd)}
+                </p>
               </div>
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
-                <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Men / Groom</p>
-                <p className="mt-2 text-2xl font-extrabold text-slate-950">{product.groomPriceUsd ? formatCurrency(product.groomPriceUsd) : "—"}</p>
+                <p className="text-xs font-bold uppercase tracking-widest text-slate-500">
+                  Men / Groom
+                </p>
+                <p className="mt-2 text-2xl font-extrabold text-slate-950">
+                  {product.groomPriceUsd
+                    ? formatCurrency(product.groomPriceUsd)
+                    : "—"}
+                </p>
               </div>
             </div>
             <div className="rounded-2xl border border-emerald-100 bg-emerald-50/70 p-5">
               <div className="mb-4 flex items-center justify-between gap-3">
-                <p className="text-[10px] font-black uppercase tracking-widest text-emerald-700">Production Cost Detail</p>
+                <p className="text-[10px] font-black uppercase tracking-widest text-emerald-700">
+                  Production Cost Detail
+                </p>
                 <span className="rounded-full border border-emerald-200 bg-white px-3 py-1 text-[10px] font-black uppercase tracking-widest text-emerald-700">
                   Profit {formatCurrency(unitProfit)}
                 </span>
               </div>
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                <ReadOnlyField label="Designer Labor Cost" value={formatCurrency(designerCost)} />
-                <ReadOnlyField label="Production Tax Rate" value={formatPercent(taxPercent)} />
-                <ReadOnlyField label="Tax Cost From Price" value={formatCurrency(productionTaxCost)} />
-                <ReadOnlyField label="Other Production Costs" value={formatCurrency(otherCost)} />
-                <ReadOnlyField label="Estimated Unit Cost" value={formatCurrency(productionUnitCost)} />
-                <ReadOnlyField label="Estimated Net Profit" value={formatCurrency(unitProfit)} />
+                <ReadOnlyField
+                  label="Designer Labor Cost"
+                  value={formatCurrency(designerCost)}
+                />
+                <ReadOnlyField
+                  label="Production Tax Rate"
+                  value={formatPercent(taxPercent)}
+                />
+                <ReadOnlyField
+                  label="Tax Cost From Price"
+                  value={formatCurrency(productionTaxCost)}
+                />
+                <ReadOnlyField
+                  label="Other Production Costs"
+                  value={formatCurrency(otherCost)}
+                />
+                <ReadOnlyField
+                  label="Estimated Unit Cost"
+                  value={formatCurrency(productionUnitCost)}
+                />
+                <ReadOnlyField
+                  label="Estimated Net Profit"
+                  value={formatCurrency(unitProfit)}
+                />
               </div>
             </div>
           </div>
@@ -524,10 +754,17 @@ export function AdminProductDetailPanel({
         {editing ? (
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="rounded-2xl border border-emerald-200 bg-emerald-50/30 p-4">
-              <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600 mb-1">Gender</p>
+              <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600 mb-1">
+                Gender
+              </p>
               <select
                 value={draft.gender}
-                onChange={(e) => setDraft((c) => ({ ...c, gender: e.target.value as Product["gender"] }))}
+                onChange={(e) =>
+                  setDraft((c) => ({
+                    ...c,
+                    gender: e.target.value as Product["gender"],
+                  }))
+                }
                 className="w-full rounded-lg border border-emerald-200 bg-white px-3 py-2 text-sm font-bold outline-none"
               >
                 <option value="female">Female</option>
@@ -535,17 +772,42 @@ export function AdminProductDetailPanel({
                 <option value="unisex">Unisex</option>
               </select>
             </div>
-            <EditableField label="Fabric Texture" value={draft.fabricType} onChange={(v) => setDraft((c) => ({ ...c, fabricType: v }))} placeholder="e.g. Pure Cotton" />
-            <EditableField label="Embroidery Style" value={draft.embroideryStyle} onChange={(v) => setDraft((c) => ({ ...c, embroideryStyle: v }))} placeholder="e.g. Traditional Tilet" />
-            <EditableField label="Estimated Delivery Days" value={draft.tailoringDays} onChange={(v) => setDraft((c) => ({ ...c, tailoringDays: v }))} type="number" placeholder="30" />
+            <EditableField
+              label="Fabric Texture"
+              value={draft.fabricType}
+              onChange={(v) => setDraft((c) => ({ ...c, fabricType: v }))}
+              placeholder="e.g. Pure Cotton"
+            />
+            <EditableField
+              label="Embroidery Style"
+              value={draft.embroideryStyle}
+              onChange={(v) => setDraft((c) => ({ ...c, embroideryStyle: v }))}
+              placeholder="e.g. Traditional Tilet"
+            />
+            <EditableField
+              label="Estimated Delivery Days"
+              value={draft.tailoringDays}
+              onChange={(v) => setDraft((c) => ({ ...c, tailoringDays: v }))}
+              type="number"
+              placeholder="30"
+            />
           </div>
         ) : (
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             <ReadOnlyField label="Product ID" value={displayUniqueId} />
             <ReadOnlyField label="Gender" value={product.gender} />
-            <ReadOnlyField label="Fabric Texture" value={product.fabricType || "—"} />
-            <ReadOnlyField label="Embroidery Style" value={product.embroideryStyle || "—"} />
-            <ReadOnlyField label="Estimated Delivery Days" value={`${product.tailoringDays ?? 30} days`} />
+            <ReadOnlyField
+              label="Fabric Texture"
+              value={product.fabricType || "—"}
+            />
+            <ReadOnlyField
+              label="Embroidery Style"
+              value={product.embroideryStyle || "—"}
+            />
+            <ReadOnlyField
+              label="Estimated Delivery Days"
+              value={`${product.tailoringDays ?? 30} days`}
+            />
           </div>
         )}
       </div>
@@ -565,7 +827,9 @@ export function AdminProductDetailPanel({
               <p className="text-xs font-black uppercase text-slate-900 leading-none flex items-center gap-2">
                 <Star className="h-3.5 w-3.5 text-amber-500" /> Featured Product
               </p>
-              <p className="text-[10px] font-bold text-slate-400">Home page hero boost</p>
+              <p className="text-[10px] font-bold text-slate-400">
+                Home page hero boost
+              </p>
             </div>
             {canEdit ? (
               <button
@@ -573,11 +837,18 @@ export function AdminProductDetailPanel({
                 disabled={Boolean(busy)}
                 className={cn(
                   "relative inline-flex h-7 w-12 rounded-full p-1 transition-all duration-300",
-                  product.isFeatured ? "bg-amber-500 shadow-amber-200 shadow-md" : "bg-slate-200",
-                  busy && "opacity-50"
+                  product.isFeatured
+                    ? "bg-amber-500 shadow-amber-200 shadow-md"
+                    : "bg-slate-200",
+                  busy && "opacity-50",
                 )}
               >
-                <span className={cn("h-5 w-5 rounded-full bg-white shadow transition-all duration-300", product.isFeatured ? "translate-x-5" : "translate-x-0")} />
+                <span
+                  className={cn(
+                    "h-5 w-5 rounded-full bg-white shadow transition-all duration-300",
+                    product.isFeatured ? "translate-x-5" : "translate-x-0",
+                  )}
+                />
               </button>
             ) : null}
           </div>
@@ -586,9 +857,16 @@ export function AdminProductDetailPanel({
           <div className="flex items-center justify-between p-5 border border-slate-200 rounded-2xl bg-white shadow-sm">
             <div className="space-y-1">
               <p className="text-xs font-black uppercase text-slate-900 leading-none flex items-center gap-2">
-                {product.isActive ? <Eye className="h-3.5 w-3.5 text-emerald-600" /> : <EyeOff className="h-3.5 w-3.5 text-slate-400" />} Publicly Active
+                {product.isActive ? (
+                  <Eye className="h-3.5 w-3.5 text-emerald-600" />
+                ) : (
+                  <EyeOff className="h-3.5 w-3.5 text-slate-400" />
+                )}{" "}
+                Publicly Active
               </p>
-              <p className="text-[10px] font-bold text-slate-400">Visible for customers</p>
+              <p className="text-[10px] font-bold text-slate-400">
+                Visible for customers
+              </p>
             </div>
             {canEdit ? (
               <button
@@ -596,11 +874,18 @@ export function AdminProductDetailPanel({
                 disabled={Boolean(busy)}
                 className={cn(
                   "relative inline-flex h-7 w-12 rounded-full p-1 transition-all duration-300",
-                  product.isActive ? "bg-emerald-500 shadow-emerald-200 shadow-md" : "bg-slate-200",
-                  busy && "opacity-50"
+                  product.isActive
+                    ? "bg-emerald-500 shadow-emerald-200 shadow-md"
+                    : "bg-slate-200",
+                  busy && "opacity-50",
                 )}
               >
-                <span className={cn("h-5 w-5 rounded-full bg-white shadow transition-all duration-300", product.isActive ? "translate-x-5" : "translate-x-0")} />
+                <span
+                  className={cn(
+                    "h-5 w-5 rounded-full bg-white shadow transition-all duration-300",
+                    product.isActive ? "translate-x-5" : "translate-x-0",
+                  )}
+                />
               </button>
             ) : null}
           </div>
@@ -608,8 +893,14 @@ export function AdminProductDetailPanel({
 
         {/* Current status display */}
         <div className="grid gap-3 sm:grid-cols-2">
-          <ReadOnlyField label="Visibility Status" value={product.isActive ? "Active (Visible)" : "Hidden"} />
-          <ReadOnlyField label="Home Page Highlight" value={product.isFeatured ? "Featured" : "Normal"} />
+          <ReadOnlyField
+            label="Visibility Status"
+            value={product.isActive ? "Active (Visible)" : "Hidden"}
+          />
+          <ReadOnlyField
+            label="Home Page Highlight"
+            value={product.isFeatured ? "Featured" : "Normal"}
+          />
         </div>
       </div>
     );
@@ -632,21 +923,35 @@ export function AdminProductDetailPanel({
               onClick={() => image && setSelectedImage(image)}
               className={cn(
                 "overflow-hidden rounded-xl border-2 bg-slate-100 aspect-square transition-all hover:scale-[1.03]",
-                image && image === activeImage ? "border-emerald-500 ring-2 ring-emerald-200 shadow-lg" : "border-slate-200"
+                image && image === activeImage
+                  ? "border-emerald-500 ring-2 ring-emerald-200 shadow-lg"
+                  : "border-slate-200",
               )}
             >
-              {image ? <img src={image} alt="" className="h-full w-full object-cover" /> : null}
+              {image ? (
+                <img
+                  src={image}
+                  alt=""
+                  className="h-full w-full object-cover"
+                />
+              ) : null}
             </button>
           ))}
           {displayImages.length === 0 && (
-            <div className="col-span-4 py-10 text-center text-xs font-bold uppercase text-slate-400 tracking-widest">No images available</div>
+            <div className="col-span-4 py-10 text-center text-xs font-bold uppercase text-slate-400 tracking-widest">
+              No images available
+            </div>
           )}
         </div>
 
         {/* Active image large preview */}
         {activeImage && (
           <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-100 shadow-sm">
-            <img src={activeImage} alt="" className="aspect-[4/5] w-full object-cover" />
+            <img
+              src={activeImage}
+              alt=""
+              className="aspect-[4/5] w-full object-cover"
+            />
           </div>
         )}
 
@@ -664,12 +969,23 @@ export function AdminProductDetailPanel({
               onChange={(event) => void uploadFiles(event.target.files)}
               className="block w-full text-xs file:mr-3 file:rounded-xl file:border-0 file:bg-emerald-50 file:px-4 file:py-2.5 file:text-xs file:font-semibold file:text-emerald-900 hover:file:bg-emerald-100 file:cursor-pointer"
             />
-            {uploading && <span className="block text-xs font-semibold text-emerald-700 animate-pulse">Uploading images...</span>}
+            {uploading && (
+              <span className="block text-xs font-semibold text-emerald-700 animate-pulse">
+                Uploading images...
+              </span>
+            )}
             <div className="space-y-1">
-              <label className="text-[10px] font-black uppercase text-slate-400">Image URLs (one per line)</label>
+              <label className="text-[10px] font-black uppercase text-slate-400">
+                Image URLs (one per line)
+              </label>
               <textarea
                 value={draft.imagesText}
-                onChange={(event) => setDraft((current) => ({ ...current, imagesText: event.target.value }))}
+                onChange={(event) =>
+                  setDraft((current) => ({
+                    ...current,
+                    imagesText: event.target.value,
+                  }))
+                }
                 placeholder="Paste Cloudinary or other image links here"
                 className="min-h-28 w-full rounded-xl border border-slate-200 bg-white p-3 text-xs font-bold font-mono outline-none focus:border-emerald-400"
               />
@@ -705,14 +1021,20 @@ export function AdminProductDetailPanel({
                 {displayUniqueId}
               </h1>
               <p className="text-sm font-medium text-slate-500 mt-1">
-                Manage product details, pricing, inventory, and storefront visibility.
+                Manage product details, pricing, inventory, and storefront
+                visibility.
               </p>
             </div>
           </div>
           <div className="flex items-center gap-4 shrink-0">
             <div className="hidden lg:block text-right mr-2 max-w-xs xl:max-w-md">
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-0.5">Full Name</p>
-              <p className="text-sm font-bold text-slate-600 truncate" title={cleanProductName}>
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-0.5">
+                Full Name
+              </p>
+              <p
+                className="text-sm font-bold text-slate-600 truncate"
+                title={cleanProductName}
+              >
                 {cleanProductName}
               </p>
             </div>
@@ -747,9 +1069,15 @@ export function AdminProductDetailPanel({
           <div className="shrink-0">
             <div className="h-[180px] w-[180px] rounded-2xl overflow-hidden border border-slate-200 bg-slate-100 shadow-sm">
               {activeImage ? (
-                <img src={activeImage} alt="" className="h-full w-full object-cover" />
+                <img
+                  src={activeImage}
+                  alt=""
+                  className="h-full w-full object-cover"
+                />
               ) : (
-                <div className="flex h-full w-full items-center justify-center text-xs font-bold text-slate-400 uppercase">No image</div>
+                <div className="flex h-full w-full items-center justify-center text-xs font-bold text-slate-400 uppercase">
+                  No image
+                </div>
               )}
             </div>
           </div>
@@ -757,19 +1085,30 @@ export function AdminProductDetailPanel({
           {/* Center: Info + Badges */}
           <div className="flex-1 min-w-0 flex flex-col justify-center gap-3">
             <div>
-              <h2 className="text-xl font-black text-slate-900 uppercase tracking-tight truncate" title={cleanProductName}>{cleanProductName}</h2>
+              <h2
+                className="text-xl font-black text-slate-900 uppercase tracking-tight truncate"
+                title={cleanProductName}
+              >
+                {cleanProductName}
+              </h2>
               <p className="mt-1 font-mono text-xs font-bold text-slate-500">
                 Product ID: {displayUniqueId}
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
-              <span className={cn(
-                "inline-flex items-center gap-1 rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-widest border",
-                product.isActive
-                  ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                  : "bg-slate-100 text-slate-500 border-slate-200"
-              )}>
-                {product.isActive ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
+              <span
+                className={cn(
+                  "inline-flex items-center gap-1 rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-widest border",
+                  product.isActive
+                    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                    : "bg-slate-100 text-slate-500 border-slate-200",
+                )}
+              >
+                {product.isActive ? (
+                  <Eye className="h-3 w-3" />
+                ) : (
+                  <EyeOff className="h-3 w-3" />
+                )}
                 {product.isActive ? "Active" : "Hidden"}
               </span>
               {product.isFeatured && (
@@ -778,9 +1117,13 @@ export function AdminProductDetailPanel({
                 </span>
               )}
               {product.subcategory && (
-                <span className="rounded-full bg-slate-100 px-3 py-1 text-[10px] font-bold text-slate-600 border border-slate-200">{product.subcategory}</span>
+                <span className="rounded-full bg-slate-100 px-3 py-1 text-[10px] font-bold text-slate-600 border border-slate-200">
+                  {product.subcategory}
+                </span>
               )}
-              <span className="rounded-full bg-emerald-50 px-3 py-1 text-[10px] font-extrabold text-emerald-700 border border-emerald-200">{product.region}</span>
+              <span className="rounded-full bg-emerald-50 px-3 py-1 text-[10px] font-extrabold text-emerald-700 border border-emerald-200">
+                {product.region}
+              </span>
             </div>
             <div className="flex items-center gap-4 text-xs font-bold text-slate-500 mt-1">
               <span className="capitalize">Gender: {product.gender}</span>
@@ -791,69 +1134,69 @@ export function AdminProductDetailPanel({
 
           {/* Right: Vertical Button Stack */}
           {(canEdit || canDelete) && (
-          <div className="flex flex-col gap-2 shrink-0 lg:w-44">
-            {editing ? (
-              <>
-                <button
-                  type="button"
-                  disabled={Boolean(busy) || uploading}
-                  onClick={() => void saveEdit()}
-                  className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-emerald-800 px-4 text-sm font-bold text-white shadow-lg hover:bg-emerald-900 transition-all active:scale-95 disabled:opacity-50 w-full"
-                >
-                  <Save className="h-4 w-4" />
-                  {busy === "patch" ? "Saving..." : "Save changes"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void cancelEditMode()}
-                  className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-900 shadow-sm hover:bg-slate-50 transition-all w-full"
-                >
-                  <X className="h-4 w-4" />
-                  Cancel edit
-                </button>
-              </>
-            ) : (
-              <>
-                {canEdit ? (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => setEditing(true)}
-                      className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 text-sm font-bold text-white shadow-md hover:bg-slate-800 transition-all active:scale-95 w-full"
-                    >
-                      <Pencil className="h-4 w-4" />
-                      Edit Product
-                    </button>
+            <div className="flex flex-col gap-2 shrink-0 lg:w-44">
+              {editing ? (
+                <>
+                  <button
+                    type="button"
+                    disabled={Boolean(busy) || uploading}
+                    onClick={() => void saveEdit()}
+                    className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-emerald-800 px-4 text-sm font-bold text-white shadow-lg hover:bg-emerald-900 transition-all active:scale-95 disabled:opacity-50 w-full"
+                  >
+                    <Save className="h-4 w-4" />
+                    {busy === "patch" ? "Saving..." : "Save changes"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void cancelEditMode()}
+                    className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-900 shadow-sm hover:bg-slate-50 transition-all w-full"
+                  >
+                    <X className="h-4 w-4" />
+                    Cancel edit
+                  </button>
+                </>
+              ) : (
+                <>
+                  {canEdit ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setEditing(true)}
+                        className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 text-sm font-bold text-white shadow-md hover:bg-slate-800 transition-all active:scale-95 w-full"
+                      >
+                        <Pencil className="h-4 w-4" />
+                        Edit Product
+                      </button>
+                      <button
+                        type="button"
+                        disabled={Boolean(busy)}
+                        onClick={() => void toggleActive()}
+                        className={cn(
+                          "inline-flex h-11 items-center justify-center gap-2 rounded-xl border px-4 text-sm font-bold shadow-sm transition-all active:scale-95 w-full disabled:opacity-50",
+                          product.isActive
+                            ? "border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100"
+                            : "border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100",
+                        )}
+                      >
+                        <Power className="h-4 w-4" />
+                        {product.isActive ? "Deactivate" : "Activate"}
+                      </button>
+                    </>
+                  ) : null}
+                  {canDelete ? (
                     <button
                       type="button"
                       disabled={Boolean(busy)}
-                      onClick={() => void toggleActive()}
-                      className={cn(
-                        "inline-flex h-11 items-center justify-center gap-2 rounded-xl border px-4 text-sm font-bold shadow-sm transition-all active:scale-95 w-full disabled:opacity-50",
-                        product.isActive
-                          ? "border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100"
-                          : "border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100"
-                      )}
+                      onClick={() => void deleteProduct()}
+                      className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-rose-600 px-4 text-sm font-bold text-white shadow-md hover:bg-rose-700 transition-all active:scale-95 w-full disabled:opacity-60"
                     >
-                      <Power className="h-4 w-4" />
-                      {product.isActive ? "Deactivate" : "Activate"}
+                      <Trash2 className="h-4 w-4" />
+                      Delete Product
                     </button>
-                  </>
-                ) : null}
-                {canDelete ? (
-                  <button
-                    type="button"
-                    disabled={Boolean(busy)}
-                    onClick={() => void deleteProduct()}
-                    className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-rose-600 px-4 text-sm font-bold text-white shadow-md hover:bg-rose-700 transition-all active:scale-95 w-full disabled:opacity-60"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                    Delete Product
-                  </button>
-                ) : null}
-              </>
-            )}
-          </div>
+                  ) : null}
+                </>
+              )}
+            </div>
           )}
         </div>
       </div>
@@ -870,7 +1213,7 @@ export function AdminProductDetailPanel({
                 "w-full flex items-center gap-3 rounded-xl px-4 py-3 text-left text-sm font-bold transition-all",
                 activeTab === tab.key
                   ? "bg-emerald-800 text-white shadow-md"
-                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
               )}
             >
               {tab.icon}

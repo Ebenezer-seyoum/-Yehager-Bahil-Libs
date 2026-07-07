@@ -3,12 +3,45 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Check, Eye, EyeOff, FileText, Loader2, Shield, User2, MapPin, NotebookPen, Lock, Unlock, RotateCcw, Trash2, Edit, X, RefreshCw, ArrowLeft, Users } from "lucide-react";
-import { dashboardConfirm, dashboardError, dashboardLoading, dashboardSuccess, dashboardAlert } from "@/lib/dashboard-swal";
+import {
+  Check,
+  Eye,
+  EyeOff,
+  FileText,
+  Loader2,
+  Shield,
+  User2,
+  MapPin,
+  NotebookPen,
+  Lock,
+  Unlock,
+  RotateCcw,
+  Trash2,
+  Edit,
+  X,
+  RefreshCw,
+  ArrowLeft,
+  Users,
+} from "lucide-react";
+import {
+  dashboardConfirm,
+  dashboardError,
+  dashboardLoading,
+  dashboardSuccess,
+  dashboardAlert,
+} from "@/lib/dashboard-swal";
 import { uploadFileToS3 } from "@/lib/uploads";
 import { cn } from "@/lib/utils";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { AdminDetailLayout, AdminDetailHeader } from "@/components/admin/admin-detail-layout";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  AdminDetailLayout,
+  AdminDetailHeader,
+} from "@/components/admin/admin-detail-layout";
 
 function formatDateTime(value?: string | null) {
   if (!value) return "Not provided";
@@ -32,21 +65,31 @@ function initials(name?: string | null, email?: string | null) {
       .map((p) => p[0])
       .join("")
       .slice(0, 2)
-      .toUpperCase() || email?.slice(0, 2)?.toUpperCase() || "—"
+      .toUpperCase() ||
+    email?.slice(0, 2)?.toUpperCase() ||
+    "—"
   );
 }
 
-function badgeTone(kind: "account" | "roleStatus" | "invite", value?: string | null) {
+function badgeTone(
+  kind: "account" | "roleStatus" | "invite",
+  value?: string | null,
+) {
   const v = String(value ?? "").toLowerCase();
   if (kind === "account") {
-    if (v === "active") return "bg-emerald-100 text-emerald-800 border-emerald-200";
-    if (v === "invited" || v === "pending") return "bg-blue-100 text-blue-800 border-blue-200";
-    if (v === "inactive" || v === "blocked" || v === "suspended") return "bg-blue-100 text-blue-800 border-blue-200";
+    if (v === "active")
+      return "bg-emerald-100 text-emerald-800 border-emerald-200";
+    if (v === "invited" || v === "pending")
+      return "bg-blue-100 text-blue-800 border-blue-200";
+    if (v === "inactive" || v === "blocked" || v === "suspended")
+      return "bg-blue-100 text-blue-800 border-blue-200";
     return "bg-slate-100 text-slate-800 border-slate-200";
   }
   if (kind === "roleStatus") {
-    if (v === "assigned") return "bg-emerald-100 text-emerald-800 border-emerald-200";
-    if (v === "unassigned") return "bg-amber-100 text-amber-800 border-amber-200";
+    if (v === "assigned")
+      return "bg-emerald-100 text-emerald-800 border-emerald-200";
+    if (v === "unassigned")
+      return "bg-amber-100 text-amber-800 border-amber-200";
     return "bg-slate-100 text-slate-800 border-slate-200";
   }
   if (kind === "invite") {
@@ -80,11 +123,16 @@ function Field({
     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="text-xs font-semibold text-slate-600">{label}</div>
       {href ? (
-        <a href={href} className="mt-1 block text-sm font-semibold text-blue-900 hover:underline">
+        <a
+          href={href}
+          className="mt-1 block text-sm font-semibold text-blue-900 hover:underline"
+        >
           {display}
         </a>
       ) : (
-        <div className="mt-1 text-sm font-semibold text-slate-950">{display}</div>
+        <div className="mt-1 text-sm font-semibold text-slate-950">
+          {display}
+        </div>
       )}
     </div>
   );
@@ -172,7 +220,13 @@ type ApiResponse<T> = {
   data?: T;
 };
 
-type EmployeeSectionId = "personal" | "contact" | "account" | "access" | "activity" | "notes";
+type EmployeeSectionId =
+  | "personal"
+  | "contact"
+  | "account"
+  | "access"
+  | "activity"
+  | "notes";
 
 type EmployeeUser = {
   id: string;
@@ -263,17 +317,30 @@ export function EmployeeDetailClient({
   const [payload, setPayload] = useState<EmployeePayload>(initialPayload);
   const [editMode, setEditMode] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [activeSection, setActiveSection] = useState<EmployeeSectionId>("personal");
-  const [topNotice, setTopNotice] = useState<{ tone: "success" | "error"; title: string; message: string } | null>(null);
+  const [activeSection, setActiveSection] =
+    useState<EmployeeSectionId>("personal");
+  const [topNotice, setTopNotice] = useState<{
+    tone: "success" | "error";
+    title: string;
+    message: string;
+  } | null>(null);
   const noticeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [resetPasswordOpen, setResetPasswordOpen] = useState(false);
-  const [resetMethod, setResetMethod] = useState<"email_link" | "temp_password">("email_link");
-  const [resetFlowNotice, setResetFlowNotice] = useState<{ tone: "success" | "error"; message: string } | null>(null);
+  const [resetMethod, setResetMethod] = useState<
+    "email_link" | "temp_password"
+  >("email_link");
+  const [resetFlowNotice, setResetFlowNotice] = useState<{
+    tone: "success" | "error";
+    message: string;
+  } | null>(null);
   const [newPassword, setNewPassword] = useState("");
   const [confirmNewPassword, setConfirmNewPassword] = useState("");
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmNewPassword, setShowConfirmNewPassword] = useState(false);
-  const [resetPasswordNotice, setResetPasswordNotice] = useState<{ tone: "success" | "error"; message: string } | null>(null);
+  const [resetPasswordNotice, setResetPasswordNotice] = useState<{
+    tone: "success" | "error";
+    message: string;
+  } | null>(null);
 
   const passwordRules = {
     minLength: newPassword.length >= 8,
@@ -283,17 +350,30 @@ export function EmployeeDetailClient({
     special: /[^A-Za-z0-9]/.test(newPassword),
   };
   const isPasswordValid =
-    passwordRules.minLength && passwordRules.uppercase && passwordRules.lowercase && passwordRules.number && passwordRules.special;
-  const doPasswordsMatch = newPassword.length > 0 && confirmNewPassword.length > 0 && newPassword === confirmNewPassword;
+    passwordRules.minLength &&
+    passwordRules.uppercase &&
+    passwordRules.lowercase &&
+    passwordRules.number &&
+    passwordRules.special;
+  const doPasswordsMatch =
+    newPassword.length > 0 &&
+    confirmNewPassword.length > 0 &&
+    newPassword === confirmNewPassword;
   const canSubmitResetPassword = !busy && isPasswordValid && doPasswordsMatch;
 
   const user = payload.user;
   const profile = payload.profile ?? {};
   const assignedRole = payload.assignedRole ?? null;
-  const permissions = Array.isArray(payload.permissions) ? payload.permissions : [];
+  const permissions = Array.isArray(payload.permissions)
+    ? payload.permissions
+    : [];
   const activity = Array.isArray(payload.activity) ? payload.activity : [];
 
-  function showTopNotice(tone: "success" | "error", title: string, message: string) {
+  function showTopNotice(
+    tone: "success" | "error",
+    title: string,
+    message: string,
+  ) {
     if (noticeTimeoutRef.current) {
       clearTimeout(noticeTimeoutRef.current);
       noticeTimeoutRef.current = null;
@@ -314,16 +394,27 @@ export function EmployeeDetailClient({
   }, []);
 
   const computedFullName = String(
-    user?.name || [profile?.firstName, profile?.fatherName, profile?.grandfatherName].filter(Boolean).join(" "),
+    user?.name ||
+      [profile?.firstName, profile?.fatherName, profile?.grandfatherName]
+        .filter(Boolean)
+        .join(" "),
   ).trim();
   const displayName = computedFullName ? computedFullName : "Unnamed Employee";
 
   const [firstName, setFirstName] = useState(String(profile.firstName ?? ""));
-  const [fatherName, setFatherName] = useState(String(profile.fatherName ?? ""));
-  const [grandfatherName, setGrandfatherName] = useState(String(profile.grandfatherName ?? ""));
+  const [fatherName, setFatherName] = useState(
+    String(profile.fatherName ?? ""),
+  );
+  const [grandfatherName, setGrandfatherName] = useState(
+    String(profile.grandfatherName ?? ""),
+  );
   const [gender, setGender] = useState(String(profile.gender ?? ""));
-  const [dateOfBirth, setDateOfBirth] = useState(profile.dateOfBirth ? String(profile.dateOfBirth).slice(0, 10) : "");
-  const [maritalStatus, setMaritalStatus] = useState(String(profile.maritalStatus ?? ""));
+  const [dateOfBirth, setDateOfBirth] = useState(
+    profile.dateOfBirth ? String(profile.dateOfBirth).slice(0, 10) : "",
+  );
+  const [maritalStatus, setMaritalStatus] = useState(
+    String(profile.maritalStatus ?? ""),
+  );
 
   const [email, setEmail] = useState(String(user.email ?? ""));
   const [phone, setPhone] = useState(String(user.phone ?? ""));
@@ -331,8 +422,12 @@ export function EmployeeDetailClient({
   const [city, setCity] = useState(String(profile.city ?? ""));
   const [address, setAddress] = useState(String(profile.address ?? ""));
 
-  const [accountStatus, setAccountStatus] = useState(String(user.accountStatus ?? "active"));
-  const [inviteStatus, setInviteStatus] = useState(String(profile.inviteStatus ?? "none"));
+  const [accountStatus, setAccountStatus] = useState(
+    String(user.accountStatus ?? "active"),
+  );
+  const [inviteStatus, setInviteStatus] = useState(
+    String(profile.inviteStatus ?? "none"),
+  );
   const [notes, setNotes] = useState(String(profile.notes ?? ""));
 
   const [photoFile, setPhotoFile] = useState<File | null>(null);
@@ -359,9 +454,11 @@ export function EmployeeDetailClient({
 
   // `panel` may be provided by the parent via querystring or other prop.
   // Ensure it's always defined to avoid runtime ReferenceError when referenced below.
-  const panel = (typeof window !== "undefined"
-    ? new URLSearchParams(window.location.search).get("panel") || backTab
-    : backTab) as string | null;
+  const panel = (
+    typeof window !== "undefined"
+      ? new URLSearchParams(window.location.search).get("panel") || backTab
+      : backTab
+  ) as string | null;
 
   function isDirty() {
     const original = originalRef.current;
@@ -393,7 +490,11 @@ export function EmployeeDetailClient({
     setFatherName(String(currentProfile.fatherName ?? ""));
     setGrandfatherName(String(currentProfile.grandfatherName ?? ""));
     setGender(String(currentProfile.gender ?? ""));
-    setDateOfBirth(currentProfile.dateOfBirth ? String(currentProfile.dateOfBirth).slice(0, 10) : "");
+    setDateOfBirth(
+      currentProfile.dateOfBirth
+        ? String(currentProfile.dateOfBirth).slice(0, 10)
+        : "",
+    );
     setMaritalStatus(String(currentProfile.maritalStatus ?? ""));
     setEmail(String(current.email ?? ""));
     setPhone(String(current.phone ?? ""));
@@ -412,7 +513,9 @@ export function EmployeeDetailClient({
       fatherName: String(currentProfile.fatherName ?? ""),
       grandfatherName: String(currentProfile.grandfatherName ?? ""),
       gender: String(currentProfile.gender ?? ""),
-      dateOfBirth: currentProfile.dateOfBirth ? String(currentProfile.dateOfBirth).slice(0, 10) : "",
+      dateOfBirth: currentProfile.dateOfBirth
+        ? String(currentProfile.dateOfBirth).slice(0, 10)
+        : "",
       maritalStatus: String(currentProfile.maritalStatus ?? ""),
       email: String(current.email ?? ""),
       phone: String(current.phone ?? ""),
@@ -464,8 +567,13 @@ export function EmployeeDetailClient({
 
   async function reloadDetails() {
     const res = await fetch(`/api/backend/admin/users/${user.id}`);
-    const json = (await res.json().catch(() => null)) as ApiResponse<EmployeePayload> | null;
-    if (!res.ok) throw new Error(String(json?.message ?? "Unable to reload employee details."));
+    const json = (await res
+      .json()
+      .catch(() => null)) as ApiResponse<EmployeePayload> | null;
+    if (!res.ok)
+      throw new Error(
+        String(json?.message ?? "Unable to reload employee details."),
+      );
     if (!json?.data) throw new Error("Unable to reload employee details.");
     setPayload(json.data);
   }
@@ -475,26 +583,66 @@ export function EmployeeDetailClient({
 
     const cleanFirst = firstName.trim();
     const cleanFather = fatherName.trim();
-    if (!cleanFirst) return await dashboardError("Validation Error", "First Name is required.");
-    if (!cleanFather) return await dashboardError("Validation Error", "Father’s Name is required.");
-    if (!validateName(cleanFirst) || !validateName(cleanFather) || (grandfatherName.trim() && !validateName(grandfatherName))) {
-      return await dashboardError("Validation Error", "Please use letters only for name fields.");
+    if (!cleanFirst)
+      return await dashboardError(
+        "Validation Error",
+        "First Name is required.",
+      );
+    if (!cleanFather)
+      return await dashboardError(
+        "Validation Error",
+        "Father’s Name is required.",
+      );
+    if (
+      !validateName(cleanFirst) ||
+      !validateName(cleanFather) ||
+      (grandfatherName.trim() && !validateName(grandfatherName))
+    ) {
+      return await dashboardError(
+        "Validation Error",
+        "Please use letters only for name fields.",
+      );
     }
 
-    if (!email.trim()) return await dashboardError("Validation Error", "Email Address is required.");
-    if (!validateEmail(email)) return await dashboardError("Validation Error", "Please enter a valid email address.");
+    if (!email.trim())
+      return await dashboardError(
+        "Validation Error",
+        "Email Address is required.",
+      );
+    if (!validateEmail(email))
+      return await dashboardError(
+        "Validation Error",
+        "Please enter a valid email address.",
+      );
 
-    if (!phone.trim()) return await dashboardError("Validation Error", "Phone Number is required.");
-    if (!validatePhone(phone)) return await dashboardError("Validation Error", "Please enter a valid phone number.");
+    if (!phone.trim())
+      return await dashboardError(
+        "Validation Error",
+        "Phone Number is required.",
+      );
+    if (!validatePhone(phone))
+      return await dashboardError(
+        "Validation Error",
+        "Please enter a valid phone number.",
+      );
 
-    if (!gender.trim()) return await dashboardError("Validation Error", "Gender is required.");
-    if (!accountStatus) return await dashboardError("Validation Error", "Account Status is required.");
+    if (!gender.trim())
+      return await dashboardError("Validation Error", "Gender is required.");
+    if (!accountStatus)
+      return await dashboardError(
+        "Validation Error",
+        "Account Status is required.",
+      );
 
     if (photoFile) {
       const allowed = ["image/jpeg", "image/png", "image/webp"];
       const maxBytes = 5 * 1024 * 1024;
       if (!allowed.includes(photoFile.type) || photoFile.size > maxBytes) {
-        return showTopNotice("error", "Validation Error", "Please upload a JPG, PNG, or WEBP image within the allowed file size.");
+        return showTopNotice(
+          "error",
+          "Validation Error",
+          "Please upload a JPG, PNG, or WEBP image within the allowed file size.",
+        );
       }
     }
 
@@ -504,7 +652,9 @@ export function EmployeeDetailClient({
       if (photoRemoved) avatarUrl = null;
       else if (photoFile) avatarUrl = await uploadPhoto(photoFile);
 
-      const fullName = [cleanFirst, cleanFather, grandfatherName.trim()].filter(Boolean).join(" ");
+      const fullName = [cleanFirst, cleanFather, grandfatherName.trim()]
+        .filter(Boolean)
+        .join(" ");
 
       const res = await fetch(`/api/backend/admin/users/${user.id}`, {
         method: "PATCH",
@@ -518,7 +668,9 @@ export function EmployeeDetailClient({
           profile: {
             firstName: cleanFirst,
             fatherName: cleanFather,
-            grandfatherName: grandfatherName.trim() ? grandfatherName.trim() : null,
+            grandfatherName: grandfatherName.trim()
+              ? grandfatherName.trim()
+              : null,
             gender: gender.trim(),
             dateOfBirth: dateOfBirth ? dateOfBirth : null,
             maritalStatus: maritalStatus.trim() ? maritalStatus.trim() : null,
@@ -530,23 +682,39 @@ export function EmployeeDetailClient({
           },
         }),
       });
-      const json = (await res.json().catch(() => null)) as ApiResponse<unknown> | null;
+      const json = (await res
+        .json()
+        .catch(() => null)) as ApiResponse<unknown> | null;
       if (!res.ok) {
-        const message = String(json?.message ?? "Unable to update employee information. Please try again.");
+        const message = String(
+          json?.message ??
+            "Unable to update employee information. Please try again.",
+        );
         if (res.status === 409) {
-          await dashboardError("Validation Error", "This email is already registered.");
+          await dashboardError(
+            "Validation Error",
+            "This email is already registered.",
+          );
         } else {
           await dashboardError("Update Failed", message);
         }
         return;
       }
 
-      await dashboardSuccess("Employee Updated", "Employee information has been updated successfully.");
+      await dashboardSuccess(
+        "Employee Updated",
+        "Employee information has been updated successfully.",
+      );
       setEditMode(false);
       await reloadDetails();
       router.refresh();
     } catch (e) {
-      await dashboardError("Update Failed", e instanceof Error ? e.message : "Unable to update employee information. Please try again.");
+      await dashboardError(
+        "Update Failed",
+        e instanceof Error
+          ? e.message
+          : "Unable to update employee information. Please try again.",
+      );
     } finally {
       setBusy(false);
     }
@@ -572,17 +740,25 @@ export function EmployeeDetailClient({
     if (!confirmed) return;
     setBusy(true);
     try {
-      dashboardLoading(isBlocked ? "Activating..." : "Deactivating...", "Please wait a moment.", {
-        target: swalTargetRef.current ?? undefined,
-      });
+      dashboardLoading(
+        isBlocked ? "Activating..." : "Deactivating...",
+        "Please wait a moment.",
+        {
+          target: swalTargetRef.current ?? undefined,
+        },
+      );
       const res = await fetch(`/api/backend/admin/users/${user.id}/status`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: isBlocked ? "active" : "inactive" }),
       });
-      const json = (await res.json().catch(() => null)) as ApiResponse<unknown> | null;
+      const json = (await res
+        .json()
+        .catch(() => null)) as ApiResponse<unknown> | null;
       if (!res.ok) {
-        throw new Error(String(json?.message ?? "Could not update user status."));
+        throw new Error(
+          String(json?.message ?? "Could not update user status."),
+        );
       }
 
       // Close loading state before showing final feedback.
@@ -593,18 +769,27 @@ export function EmployeeDetailClient({
         isBlocked
           ? "Employee account has been activated successfully. Notification emails have been sent."
           : "Employee account has been deactivated successfully. Notification emails have been sent.",
-        { target: swalTargetRef.current ?? undefined, icon: "success", tone: "success", confirmButtonText: "OK" },
+        {
+          target: swalTargetRef.current ?? undefined,
+          icon: "success",
+          tone: "success",
+          confirmButtonText: "OK",
+        },
       );
       await reloadDetails();
       router.refresh();
     } catch (e) {
       dashboardLoading.close();
-      await dashboardAlert("Update Failed", e instanceof Error ? e.message : "Could not update user status.", {
-        target: swalTargetRef.current ?? undefined,
-        icon: "error",
-        tone: "danger",
-        confirmButtonText: "OK",
-      });
+      await dashboardAlert(
+        "Update Failed",
+        e instanceof Error ? e.message : "Could not update user status.",
+        {
+          target: swalTargetRef.current ?? undefined,
+          icon: "error",
+          tone: "danger",
+          confirmButtonText: "OK",
+        },
+      );
     } finally {
       setBusy(false);
     }
@@ -625,23 +810,43 @@ export function EmployeeDetailClient({
     if (busy) return;
     setBusy(true);
     try {
-      const res = await fetch(`/api/backend/admin/users/${user.id}/password-reset-link`, { method: "POST" });
-      const json = (await res.json().catch(() => null)) as ApiResponse<unknown> | null;
-      if (!res.ok) throw new Error(String(json?.message ?? "Unable to send reset link."));
+      const res = await fetch(
+        `/api/backend/admin/users/${user.id}/password-reset-link`,
+        { method: "POST" },
+      );
+      const json = (await res
+        .json()
+        .catch(() => null)) as ApiResponse<unknown> | null;
+      if (!res.ok)
+        throw new Error(String(json?.message ?? "Unable to send reset link."));
       setResetFlowNotice({
         tone: "success",
-        message: "A secure password reset link has been sent to the user’s email address.",
+        message:
+          "A secure password reset link has been sent to the user’s email address.",
       });
-      await dashboardSuccess("Password Reset Link Sent", "A secure password reset link has been sent to the user’s email address.", {
-        target: swalTargetRef.current ?? undefined,
-      });
+      await dashboardSuccess(
+        "Password Reset Link Sent",
+        "A secure password reset link has been sent to the user’s email address.",
+        {
+          target: swalTargetRef.current ?? undefined,
+        },
+      );
       await reloadDetails();
       router.refresh();
     } catch (e) {
-      setResetFlowNotice({ tone: "error", message: e instanceof Error ? e.message : "Unable to send reset link." });
-      await dashboardError("Password Reset Failed", e instanceof Error ? e.message : "Unable to send reset link. Please try again.", {
-        target: swalTargetRef.current ?? undefined,
+      setResetFlowNotice({
+        tone: "error",
+        message: e instanceof Error ? e.message : "Unable to send reset link.",
       });
+      await dashboardError(
+        "Password Reset Failed",
+        e instanceof Error
+          ? e.message
+          : "Unable to send reset link. Please try again.",
+        {
+          target: swalTargetRef.current ?? undefined,
+        },
+      );
     } finally {
       setBusy(false);
     }
@@ -663,21 +868,34 @@ export function EmployeeDetailClient({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ password: newPassword }),
       });
-      const json = (await res.json().catch(() => null)) as ApiResponse<unknown> | null;
-      if (!res.ok) throw new Error(String(json?.message ?? "Could not reset password."));
+      const json = (await res
+        .json()
+        .catch(() => null)) as ApiResponse<unknown> | null;
+      if (!res.ok)
+        throw new Error(String(json?.message ?? "Could not reset password."));
       setResetPasswordOpen(false);
       setNewPassword("");
       setConfirmNewPassword("");
       setResetPasswordNotice(null);
-      await dashboardSuccess("Password Reset Successfully", "Employee password has been updated successfully.", {
-        target: swalTargetRef.current ?? undefined,
-      });
+      await dashboardSuccess(
+        "Password Reset Successfully",
+        "Employee password has been updated successfully.",
+        {
+          target: swalTargetRef.current ?? undefined,
+        },
+      );
       await reloadDetails();
       router.refresh();
     } catch (e) {
-      await dashboardError("Password Reset Failed", e instanceof Error ? e.message : "Unable to reset password. Please try again.", {
-        target: swalTargetRef.current ?? undefined,
-      });
+      await dashboardError(
+        "Password Reset Failed",
+        e instanceof Error
+          ? e.message
+          : "Unable to reset password. Please try again.",
+        {
+          target: swalTargetRef.current ?? undefined,
+        },
+      );
     } finally {
       setBusy(false);
     }
@@ -694,7 +912,11 @@ export function EmployeeDetailClient({
     }
 
     if (currentUserId && user.id === currentUserId) {
-      await dashboardError("Delete Failed", "You cannot delete your own account.", { target: swalTargetRef.current ?? undefined });
+      await dashboardError(
+        "Delete Failed",
+        "You cannot delete your own account.",
+        { target: swalTargetRef.current ?? undefined },
+      );
       return;
     }
 
@@ -710,40 +932,60 @@ export function EmployeeDetailClient({
     if (!confirmed) return;
     setBusy(true);
     try {
-      dashboardLoading("Deleting…", "Please wait a moment.", { target: swalTargetRef.current ?? undefined });
-      const res = await fetch(`/api/backend/admin/users/${user.id}`, { method: "DELETE" });
-      const json = (await res.json().catch(() => null)) as ApiResponse<unknown> | null;
+      dashboardLoading("Deleting…", "Please wait a moment.", {
+        target: swalTargetRef.current ?? undefined,
+      });
+      const res = await fetch(`/api/backend/admin/users/${user.id}`, {
+        method: "DELETE",
+      });
+      const json = (await res
+        .json()
+        .catch(() => null)) as ApiResponse<unknown> | null;
       if (!res.ok) {
         const message = String(json?.message ?? "Could not delete user.");
         if (res.status === 409 || /history|activity|audit/i.test(message)) {
           dashboardLoading.close();
-          await dashboardAlert("Cannot Delete Account", "This account can’t be deleted because it has activity history. Please block the account instead.", {
-            target: swalTargetRef.current ?? undefined,
-            icon: "warning",
-            tone: "warning",
-            confirmButtonText: "OK",
-          });
+          await dashboardAlert(
+            "Cannot Delete Account",
+            "This account can’t be deleted because it has activity history. Please block the account instead.",
+            {
+              target: swalTargetRef.current ?? undefined,
+              icon: "warning",
+              tone: "warning",
+              confirmButtonText: "OK",
+            },
+          );
           return;
         }
         throw new Error(message);
       }
       dashboardLoading.close();
-      await dashboardAlert("Deleted Successfully", "Employee account has been deleted successfully.", {
-        target: swalTargetRef.current ?? undefined,
-        icon: "success",
-        tone: "success",
-        confirmButtonText: "OK",
-      });
+      await dashboardAlert(
+        "Deleted Successfully",
+        "Employee account has been deleted successfully.",
+        {
+          target: swalTargetRef.current ?? undefined,
+          icon: "success",
+          tone: "success",
+          confirmButtonText: "OK",
+        },
+      );
       router.push(`/admin/users?tab=${encodeURIComponent(backTab)}`);
       router.refresh();
     } catch (e) {
       dashboardLoading.close();
-      await dashboardAlert("Delete Failed", e instanceof Error ? e.message : "Unable to delete employee. Please try again.", {
-        target: swalTargetRef.current ?? undefined,
-        icon: "error",
-        tone: "danger",
-        confirmButtonText: "OK",
-      });
+      await dashboardAlert(
+        "Delete Failed",
+        e instanceof Error
+          ? e.message
+          : "Unable to delete employee. Please try again.",
+        {
+          target: swalTargetRef.current ?? undefined,
+          icon: "error",
+          tone: "danger",
+          confirmButtonText: "OK",
+        },
+      );
     } finally {
       setBusy(false);
     }
@@ -753,7 +995,10 @@ export function EmployeeDetailClient({
   const roleStatusValue = user?.roleStatus ?? "unassigned";
   const userStatusValue = String(user.status ?? "").toLowerCase();
   const userAccountStatusValue = String(user.accountStatus ?? "").toLowerCase();
-  const isBlockedForUi = userStatusValue === "inactive" || userAccountStatusValue === "blocked" || userAccountStatusValue === "inactive";
+  const isBlockedForUi =
+    userStatusValue === "inactive" ||
+    userAccountStatusValue === "blocked" ||
+    userAccountStatusValue === "inactive";
   const accessStatusLabel = getAccessStatus(user);
 
   function goToSection(sectionId: EmployeeSectionId) {
@@ -777,9 +1022,14 @@ export function EmployeeDetailClient({
           subtitle="Manage staff accounts, roles, activity, and performance."
           onRefresh={() => {
             router.refresh();
-            dashboardSuccess("Page Refreshed", "The employee details have been reloaded.");
+            dashboardSuccess(
+              "Page Refreshed",
+              "The employee details have been reloaded.",
+            );
           }}
-          onBack={() => router.push(`/admin/users?tab=${encodeURIComponent(backTab)}`)}
+          onBack={() =>
+            router.push(`/admin/users?tab=${encodeURIComponent(backTab)}`)
+          }
           backLabel="Back to Users"
         />
       }
@@ -810,7 +1060,10 @@ export function EmployeeDetailClient({
       activeSection={activeSection}
       onSectionChange={(id) => goToSection(id as EmployeeSectionId)}
       profileCard={
-        <div ref={swalTargetRef} className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div
+          ref={swalTargetRef}
+          className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between"
+        >
           <div className="flex items-start gap-4">
             <div className="relative">
               {user.avatarUrl && !photoRemoved && !photoPreview ? (
@@ -875,19 +1128,26 @@ export function EmployeeDetailClient({
 
             <div className="min-w-0">
               <h1 className="text-xl font-bold text-slate-950 flex items-center gap-2">
-                {String(user.accountStatus ?? "").toLowerCase() === "inactive" ? (
+                {String(user.accountStatus ?? "").toLowerCase() ===
+                "inactive" ? (
                   <Lock className="h-5 w-5 text-blue-600" />
                 ) : (
                   <User2 className="h-5 w-5 text-slate-600" />
                 )}
                 <span>{displayName}</span>
               </h1>
-              <div className="mt-1 text-sm text-slate-600">Employee ID: {user.id}</div>
+              <div className="mt-1 text-sm text-slate-600">
+                Employee ID: {user.id}
+              </div>
               <div className="mt-2 flex flex-wrap gap-2">
-                <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${badgeTone("account", isBlockedForUi ? "inactive" : "active")}`}>
+                <span
+                  className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${badgeTone("account", isBlockedForUi ? "inactive" : "active")}`}
+                >
                   {accessStatusLabel}
                 </span>
-                <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${badgeTone("roleStatus", roleStatusValue)}`}>
+                <span
+                  className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${badgeTone("roleStatus", roleStatusValue)}`}
+                >
                   {String(roleStatusValue ?? "Not provided")}
                 </span>
                 {assignedRole?.name ? (
@@ -896,7 +1156,9 @@ export function EmployeeDetailClient({
                   </span>
                 ) : null}
                 {inviteStatusValue ? (
-                  <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${badgeTone("invite", inviteStatusValue)}`}>
+                  <span
+                    className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${badgeTone("invite", inviteStatusValue)}`}
+                  >
                     Invite: {String(inviteStatusValue)}
                   </span>
                 ) : null}
@@ -905,14 +1167,17 @@ export function EmployeeDetailClient({
                 <a className="hover:underline" href={`mailto:${user.email}`}>
                   {user.email}
                 </a>
-                <a className="hover:underline" href={user.phone ? `tel:${user.phone}` : undefined}>
+                <a
+                  className="hover:underline"
+                  href={user.phone ? `tel:${user.phone}` : undefined}
+                >
                   {user.phone ?? "Not provided"}
                 </a>
               </div>
             </div>
           </div>
 
-          <div className="flex w-full flex-col items-stretch gap-2 md:w-auto"> 
+          <div className="flex w-full flex-col items-stretch gap-2 md:w-auto">
             {!editMode ? (
               <>
                 {canEdit ? (
@@ -932,11 +1197,19 @@ export function EmployeeDetailClient({
                         disabled={busy}
                         className={cn(
                           "inline-flex h-10 items-center gap-2 rounded-xl px-4 text-sm font-semibold text-white shadow-sm disabled:opacity-50",
-                          isBlockedForUi ? "bg-[#16A34A] hover:bg-[#15803D]" : "bg-[#EA580C] hover:bg-[#C2410C]",
+                          isBlockedForUi
+                            ? "bg-[#16A34A] hover:bg-[#15803D]"
+                            : "bg-[#EA580C] hover:bg-[#C2410C]",
                         )}
                       >
-                        {isBlockedForUi ? <Unlock className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
-                        {isBlockedForUi ? "Activate Account" : "Deactivate Account"}
+                        {isBlockedForUi ? (
+                          <Unlock className="h-4 w-4" />
+                        ) : (
+                          <Lock className="h-4 w-4" />
+                        )}
+                        {isBlockedForUi
+                          ? "Activate Account"
+                          : "Deactivate Account"}
                       </button>
                     ) : null}
                     <button
@@ -1002,7 +1275,9 @@ export function EmployeeDetailClient({
           {/* @ts-ignore */}
           <DialogHeader>
             {/* @ts-ignore */}
-            <DialogTitle className="font-extrabold tracking-wide">RESET PASSWORD OPTIONS</DialogTitle>
+            <DialogTitle className="font-extrabold tracking-wide">
+              RESET PASSWORD OPTIONS
+            </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 pt-2">
             {resetFlowNotice ? (
@@ -1020,12 +1295,16 @@ export function EmployeeDetailClient({
             ) : null}
 
             <div className="rounded-2xl border border-slate-200 bg-white p-3">
-              <div className="text-sm font-semibold text-slate-900">Choose reset method</div>
+              <div className="text-sm font-semibold text-slate-900">
+                Choose reset method
+              </div>
               <div className="mt-2 space-y-2">
                 <label
                   className={cn(
                     "flex cursor-pointer items-start gap-3 rounded-xl border p-3",
-                    resetMethod === "email_link" ? "border-blue-200 bg-blue-50" : "border-slate-200 bg-white",
+                    resetMethod === "email_link"
+                      ? "border-blue-200 bg-blue-50"
+                      : "border-slate-200 bg-white",
                   )}
                 >
                   <input
@@ -1043,7 +1322,9 @@ export function EmployeeDetailClient({
                       </span>
                     </div>
                     <div className="mt-0.5 text-xs text-slate-600">
-                      A secure password reset link will be sent to the user’s email address. The user will create their own new password.
+                      A secure password reset link will be sent to the user’s
+                      email address. The user will create their own new
+                      password.
                     </div>
                   </div>
                 </label>
@@ -1051,7 +1332,9 @@ export function EmployeeDetailClient({
                 <label
                   className={cn(
                     "flex cursor-pointer items-start gap-3 rounded-xl border p-3",
-                    resetMethod === "temp_password" ? "border-blue-200 bg-blue-50" : "border-slate-200 bg-white",
+                    resetMethod === "temp_password"
+                      ? "border-blue-200 bg-blue-50"
+                      : "border-slate-200 bg-white",
                   )}
                 >
                   <input
@@ -1063,9 +1346,15 @@ export function EmployeeDetailClient({
                   />
                   <div>
                     <div className="text-sm font-bold text-slate-900">
-                      Set Temporary Password <span className="ml-2 text-xs font-semibold text-slate-500">Admin Only</span>
+                      Set Temporary Password{" "}
+                      <span className="ml-2 text-xs font-semibold text-slate-500">
+                        Admin Only
+                      </span>
                     </div>
-                    <div className="mt-0.5 text-xs text-slate-600">Set a temporary password. The user must change it after signing in.</div>
+                    <div className="mt-0.5 text-xs text-slate-600">
+                      Set a temporary password. The user must change it after
+                      signing in.
+                    </div>
                   </div>
                 </label>
               </div>
@@ -1091,7 +1380,9 @@ export function EmployeeDetailClient({
                   disabled={busy}
                   className="inline-flex h-10 items-center rounded-xl bg-blue-700 px-4 text-sm font-semibold text-white shadow-sm hover:bg-blue-800 disabled:opacity-50"
                 >
-                  {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  {busy ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : null}
                   Send Reset Link
                 </button>
               </div>
@@ -1099,273 +1390,469 @@ export function EmployeeDetailClient({
 
             {resetMethod === "temp_password" ? (
               <>
-            <label className="block text-sm">
-              <span className="mb-1.5 block font-medium text-slate-700">New Password</span>
-              <div className="relative">
-                <input
-                  type={showNewPassword ? "text" : "password"}
-                  value={newPassword}
-                  onChange={(e) => {
-                    setNewPassword(e.target.value);
-                    setResetPasswordNotice(null);
-                  }}
-                  className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 pr-11 text-sm text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowNewPassword((current) => !current)}
-                  className="absolute inset-y-0 right-0 inline-flex w-11 items-center justify-center rounded-r-xl text-slate-500 hover:text-slate-900"
-                  aria-label={showNewPassword ? "Hide new password" : "Show new password"}
-                >
-                  {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
-              </div>
-              <div className="mt-2 space-y-1 text-xs">
-                {[
-                  { key: "minLength", label: "At least 8 characters", ok: passwordRules.minLength },
-                  { key: "uppercase", label: "At least one uppercase letter", ok: passwordRules.uppercase },
-                  { key: "lowercase", label: "At least one lowercase letter", ok: passwordRules.lowercase },
-                  { key: "number", label: "At least one number", ok: passwordRules.number },
-                  { key: "special", label: "At least one special character", ok: passwordRules.special },
-                ].map((rule) => (
-                  <div key={rule.key} className={cn("flex items-center gap-2", rule.ok ? "text-emerald-700" : "text-slate-500")}>
-                    {rule.ok ? <Check className="h-3.5 w-3.5" /> : <X className="h-3.5 w-3.5" />}
-                    <span className={cn(rule.ok ? "font-semibold" : "")}>{rule.label}</span>
+                <label className="block text-sm">
+                  <span className="mb-1.5 block font-medium text-slate-700">
+                    New Password
+                  </span>
+                  <div className="relative">
+                    <input
+                      type={showNewPassword ? "text" : "password"}
+                      value={newPassword}
+                      onChange={(e) => {
+                        setNewPassword(e.target.value);
+                        setResetPasswordNotice(null);
+                      }}
+                      className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 pr-11 text-sm text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowNewPassword((current) => !current)}
+                      className="absolute inset-y-0 right-0 inline-flex w-11 items-center justify-center rounded-r-xl text-slate-500 hover:text-slate-900"
+                      aria-label={
+                        showNewPassword
+                          ? "Hide new password"
+                          : "Show new password"
+                      }
+                    >
+                      {showNewPassword ? (
+                        <EyeOff className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
+                    </button>
                   </div>
-                ))}
-              </div>
-            </label>
-            <label className="block text-sm">
-              <span className="mb-1.5 block font-medium text-slate-700">Confirm Password</span>
-              <div className="relative">
-                <input
-                  type={showConfirmNewPassword ? "text" : "password"}
-                  value={confirmNewPassword}
-                  onChange={(e) => {
-                    setConfirmNewPassword(e.target.value);
-                    setResetPasswordNotice(null);
-                  }}
-                  className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 pr-11 text-sm text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowConfirmNewPassword((current) => !current)}
-                  className="absolute inset-y-0 right-0 inline-flex w-11 items-center justify-center rounded-r-xl text-slate-500 hover:text-slate-900"
-                  aria-label={showConfirmNewPassword ? "Hide confirm password" : "Show confirm password"}
-                >
-                  {showConfirmNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
-              </div>
-              {confirmNewPassword.length > 0 ? (
-                doPasswordsMatch ? (
-                  <span className="mt-1 block text-xs font-semibold text-emerald-700">Passwords match.</span>
-                ) : (
-                  <span className="mt-1 block text-xs font-semibold text-rose-600">Passwords do not match.</span>
-                )
-              ) : null}
-            </label>
-            <div className="flex items-center justify-end gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setResetFlowNotice(null);
-                  setNewPassword("");
-                  setConfirmNewPassword("");
-                  setResetPasswordNotice(null);
-                  setResetPasswordOpen(false);
-                }}
-                className="inline-flex h-10 items-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-900 shadow-sm hover:bg-slate-50"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => void submitResetPassword()}
-                disabled={!canSubmitResetPassword}
-                className="inline-flex h-10 items-center rounded-xl bg-blue-700 px-4 text-sm font-semibold text-white shadow-sm hover:bg-blue-800 disabled:opacity-50"
-              >
-                {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                Save Password
-              </button>
-            </div>
+                  <div className="mt-2 space-y-1 text-xs">
+                    {[
+                      {
+                        key: "minLength",
+                        label: "At least 8 characters",
+                        ok: passwordRules.minLength,
+                      },
+                      {
+                        key: "uppercase",
+                        label: "At least one uppercase letter",
+                        ok: passwordRules.uppercase,
+                      },
+                      {
+                        key: "lowercase",
+                        label: "At least one lowercase letter",
+                        ok: passwordRules.lowercase,
+                      },
+                      {
+                        key: "number",
+                        label: "At least one number",
+                        ok: passwordRules.number,
+                      },
+                      {
+                        key: "special",
+                        label: "At least one special character",
+                        ok: passwordRules.special,
+                      },
+                    ].map((rule) => (
+                      <div
+                        key={rule.key}
+                        className={cn(
+                          "flex items-center gap-2",
+                          rule.ok ? "text-emerald-700" : "text-slate-500",
+                        )}
+                      >
+                        {rule.ok ? (
+                          <Check className="h-3.5 w-3.5" />
+                        ) : (
+                          <X className="h-3.5 w-3.5" />
+                        )}
+                        <span className={cn(rule.ok ? "font-semibold" : "")}>
+                          {rule.label}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </label>
+                <label className="block text-sm">
+                  <span className="mb-1.5 block font-medium text-slate-700">
+                    Confirm Password
+                  </span>
+                  <div className="relative">
+                    <input
+                      type={showConfirmNewPassword ? "text" : "password"}
+                      value={confirmNewPassword}
+                      onChange={(e) => {
+                        setConfirmNewPassword(e.target.value);
+                        setResetPasswordNotice(null);
+                      }}
+                      className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 pr-11 text-sm text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                    />
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setShowConfirmNewPassword((current) => !current)
+                      }
+                      className="absolute inset-y-0 right-0 inline-flex w-11 items-center justify-center rounded-r-xl text-slate-500 hover:text-slate-900"
+                      aria-label={
+                        showConfirmNewPassword
+                          ? "Hide confirm password"
+                          : "Show confirm password"
+                      }
+                    >
+                      {showConfirmNewPassword ? (
+                        <EyeOff className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
+                    </button>
+                  </div>
+                  {confirmNewPassword.length > 0 ? (
+                    doPasswordsMatch ? (
+                      <span className="mt-1 block text-xs font-semibold text-emerald-700">
+                        Passwords match.
+                      </span>
+                    ) : (
+                      <span className="mt-1 block text-xs font-semibold text-rose-600">
+                        Passwords do not match.
+                      </span>
+                    )
+                  ) : null}
+                </label>
+                <div className="flex items-center justify-end gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setResetFlowNotice(null);
+                      setNewPassword("");
+                      setConfirmNewPassword("");
+                      setResetPasswordNotice(null);
+                      setResetPasswordOpen(false);
+                    }}
+                    className="inline-flex h-10 items-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-900 shadow-sm hover:bg-slate-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void submitResetPassword()}
+                    disabled={!canSubmitResetPassword}
+                    className="inline-flex h-10 items-center rounded-xl bg-blue-700 px-4 text-sm font-semibold text-white shadow-sm hover:bg-blue-800 disabled:opacity-50"
+                  >
+                    {busy ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : null}
+                    Save Password
+                  </button>
+                </div>
               </>
             ) : null}
           </div>
         </DialogContent>
       </Dialog>
 
-        {activeSection === "access" ? (
-                  <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                    <h2 className="text-base font-bold text-slate-900">Roles &amp; Permissions</h2>
-                    {String(roleStatusValue).toLowerCase() !== "assigned" || !assignedRole ? (
-                      <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-5">
-                        <h3 className="text-sm font-bold text-amber-900">No Role Assigned Yet</h3>
-                        <p className="mt-1 text-sm text-amber-900/80">
-                          This employee account exists, but no role or permissions have been assigned yet.
-                        </p>
-                        <div className="mt-4">
-                          <Link
-                            href={canAssignRole ? `/admin/roles?tab=access&employeeId=${encodeURIComponent(user.id)}` : "#"}
-                            className={`inline-flex h-10 items-center rounded-xl bg-blue-900 px-4 text-sm font-semibold text-white shadow-sm shadow-blue-900/20 hover:bg-blue-950 ${
-                              canAssignRole ? "" : "pointer-events-none opacity-50"
-                            }`}
-                          >
-                            Assign Role
-                          </Link>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="mt-4 space-y-3">
-                        <div className="grid gap-3 md:grid-cols-3">
-                          <Field label="Assigned Role" value={assignedRole?.name} />
-                          <Field label="Role Description" value={assignedRole?.description} />
-                          <Field label="Permissions Count" value={permissions.length ? String(permissions.length) : "0"} />
-                        </div>
-                        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                          <div className="text-xs font-semibold text-slate-600">Permission Keys</div>
-                          <div className="mt-2 flex flex-wrap gap-2">
-                            {permissions.length ? (
-                              permissions.slice(0, 80).map((p) => (
-                                <span
-                                  key={String(p)}
-                                  className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-800"
-                                >
-                                  {String(p)}
-                                </span>
-                              ))
-                            ) : (
-                              <div className="text-sm font-semibold text-slate-800">Not provided</div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </section>
-                ) : activeSection === "contact" ? (
-                  <section id="contact" className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                    <h2 className="text-base font-bold text-slate-900">Contact Information</h2>
-                    <div className="mt-4 grid gap-3 md:grid-cols-2">
-                      {!editMode ? (
-                        <>
-                          <Field label="Email Address" value={user.email} href={`mailto:${user.email}`} />
-                          <Field label="Phone Number" value={user.phone} href={user.phone ? `tel:${user.phone}` : undefined} />
-                          <Field label="Country" value={profile?.country} />
-                          <Field label="City" value={profile?.city} />
-                          <Field label="Address" value={profile?.address} />
-                        </>
-                      ) : (
-                        <>
-                          <TextInput label="Email Address" required type="email" value={email} onChange={setEmail} />
-                          <TextInput label="Phone Number" required value={phone} onChange={setPhone} placeholder="+251 …" />
-                          <TextInput label="Country" value={country} onChange={setCountry} />
-                          <TextInput label="City" value={city} onChange={setCity} />
-                          <TextInput label="Address" value={address} onChange={setAddress} />
-                        </>
-                      )}
+      {activeSection === "access" ? (
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <h2 className="text-base font-bold text-slate-900">
+            Roles &amp; Permissions
+          </h2>
+          {String(roleStatusValue).toLowerCase() !== "assigned" ||
+          !assignedRole ? (
+            <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-5">
+              <h3 className="text-sm font-bold text-amber-900">
+                No Role Assigned Yet
+              </h3>
+              <p className="mt-1 text-sm text-amber-900/80">
+                This employee account exists, but no role or permissions have
+                been assigned yet.
+              </p>
+              <div className="mt-4">
+                <Link
+                  href={
+                    canAssignRole
+                      ? `/admin/roles?tab=access&employeeId=${encodeURIComponent(user.id)}`
+                      : "#"
+                  }
+                  className={`inline-flex h-10 items-center rounded-xl bg-blue-900 px-4 text-sm font-semibold text-white shadow-sm shadow-blue-900/20 hover:bg-blue-950 ${
+                    canAssignRole ? "" : "pointer-events-none opacity-50"
+                  }`}
+                >
+                  Assign Role
+                </Link>
+              </div>
+            </div>
+          ) : (
+            <div className="mt-4 space-y-3">
+              <div className="grid gap-3 md:grid-cols-3">
+                <Field label="Assigned Role" value={assignedRole?.name} />
+                <Field
+                  label="Role Description"
+                  value={assignedRole?.description}
+                />
+                <Field
+                  label="Permissions Count"
+                  value={permissions.length ? String(permissions.length) : "0"}
+                />
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <div className="text-xs font-semibold text-slate-600">
+                  Permission Keys
+                </div>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {permissions.length ? (
+                    permissions.slice(0, 80).map((p) => (
+                      <span
+                        key={String(p)}
+                        className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-800"
+                      >
+                        {String(p)}
+                      </span>
+                    ))
+                  ) : (
+                    <div className="text-sm font-semibold text-slate-800">
+                      Not provided
                     </div>
-                  </section>
-                ) : activeSection === "account" ? (
-                  <section id="account" className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                    <h2 className="text-base font-bold text-slate-900">Account Information</h2>
-                    <div className="mt-4 grid gap-3 md:grid-cols-2">
-                      {!editMode ? (
-                        <>
-                          <Field label="Account Status" value={user.accountStatus} />
-                          <Field label="Current Access" value={accessStatusLabel} />
-                          <Field label="Password" value="Hidden for security" />
-                          <Field label="Temporary Password" value={user.mustChangePassword ? "Temporary password active" : "Not active"} />
-                          <Field label="Password Status" value={user.passwordStatus ?? "Never reset"} />
-                          <Field
-                            label="Last Password Reset"
-                            value={user.lastPasswordResetAt ? formatDateTime(user.lastPasswordResetAt) : "Never reset"}
-                          />
-                          <Field
-                            label="Last Reset Requested"
-                            value={user.lastPasswordResetRequestedAt ? formatDateTime(user.lastPasswordResetRequestedAt) : "Never reset"}
-                          />
-                          <Field label="Reset Method" value={user.lastPasswordResetMethod ?? "Never reset"} />
-                          <Field label="Role Status" value={roleStatusValue} />
-                          <Field label="Invite Status" value={inviteStatusValue} />
-                          <Field label="Last Login" value={user.lastLoginAt ? formatDateTime(user.lastLoginAt) : "Never logged in"} />
-                          <Field label="Created Date" value={user.createdAt ? formatDateTime(user.createdAt) : ""} />
-                          <Field label="Updated Date" value={user.updatedAt ? formatDateTime(user.updatedAt) : ""} />
-                        </>
-                      ) : (
-                        <>
-                          <SelectInput
-                            label="Account Status"
-                            required
-                            value={accountStatus}
-                            onChange={setAccountStatus}
-                            options={[
-                              { value: "active", label: "Online" },
-                              { value: "invited", label: "Unblocked" },
-                              { value: "pending", label: "Blocked" },
-                            ]}
-                          />
-                          <TextInput label="Invite Status" value={inviteStatus} onChange={setInviteStatus} />
-                        </>
-                      )}
-                    </div>
-                  </section>
-                ) : activeSection === "notes" ? (
-                  <section id="notes" className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                    <h2 className="text-base font-bold text-slate-900">Notes</h2>
-                    {!editMode ? (
-                      <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
-                        {profile?.notes ? profile.notes : "No internal notes added."}
-                      </div>
-                    ) : (
-                      <label className="mt-3 block text-sm">
-                        <span className="mb-1.5 block font-medium text-slate-700">Internal note</span>
-                        <textarea
-                          value={notes}
-                          onChange={(e) => setNotes(e.target.value)}
-                          rows={4}
-                          className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-                        />
-                      </label>
-                    )}
-                  </section>
-                ) : (
-                  <section id="personal" className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                    <h2 className="text-base font-bold text-slate-900">Personal Information</h2>
-                    <div className="mt-4 grid gap-3 md:grid-cols-2">
-                      {!editMode ? (
-                        <>
-                          <Field label="Full Name" value={displayName} />
-                          <Field label="First Name" value={profile?.firstName} />
-                          <Field label="Father’s Name" value={profile?.fatherName} />
-                          <Field label="Grandfather’s Name" value={profile?.grandfatherName} />
-                          <Field label="Gender" value={profile?.gender} />
-                          <Field label="Date of Birth" value={profile?.dateOfBirth ? formatDate(profile.dateOfBirth) : ""} />
-                          <Field label="Marital Status" value={profile?.maritalStatus} />
-                        </>
-                      ) : (
-                        <>
-                          <TextInput label="First Name" required value={firstName} onChange={setFirstName} />
-                          <TextInput label="Father’s Name" required value={fatherName} onChange={setFatherName} />
-                          <TextInput label="Grandfather’s Name" value={grandfatherName} onChange={setGrandfatherName} />
-                          <SelectInput
-                            label="Gender"
-                            required
-                            value={gender}
-                            onChange={setGender}
-                            options={[
-                              { value: "", label: "Select…" },
-                              { value: "male", label: "Male" },
-                              { value: "female", label: "Female" },
-                              { value: "other", label: "Other" },
-                            ]}
-                          />
-                          <TextInput label="Date of Birth" type="date" value={dateOfBirth} onChange={setDateOfBirth} />
-                          <TextInput label="Marital Status" value={maritalStatus} onChange={setMaritalStatus} />
-                        </>
-                      )}
-                    </div>
-                  </section>
-                )}
-
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </section>
+      ) : activeSection === "contact" ? (
+        <section
+          id="contact"
+          className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+        >
+          <h2 className="text-base font-bold text-slate-900">
+            Contact Information
+          </h2>
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            {!editMode ? (
+              <>
+                <Field
+                  label="Email Address"
+                  value={user.email}
+                  href={`mailto:${user.email}`}
+                />
+                <Field
+                  label="Phone Number"
+                  value={user.phone}
+                  href={user.phone ? `tel:${user.phone}` : undefined}
+                />
+                <Field label="Country" value={profile?.country} />
+                <Field label="City" value={profile?.city} />
+                <Field label="Address" value={profile?.address} />
+              </>
+            ) : (
+              <>
+                <TextInput
+                  label="Email Address"
+                  required
+                  type="email"
+                  value={email}
+                  onChange={setEmail}
+                />
+                <TextInput
+                  label="Phone Number"
+                  required
+                  value={phone}
+                  onChange={setPhone}
+                  placeholder="+251 …"
+                />
+                <TextInput
+                  label="Country"
+                  value={country}
+                  onChange={setCountry}
+                />
+                <TextInput label="City" value={city} onChange={setCity} />
+                <TextInput
+                  label="Address"
+                  value={address}
+                  onChange={setAddress}
+                />
+              </>
+            )}
+          </div>
+        </section>
+      ) : activeSection === "account" ? (
+        <section
+          id="account"
+          className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+        >
+          <h2 className="text-base font-bold text-slate-900">
+            Account Information
+          </h2>
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            {!editMode ? (
+              <>
+                <Field label="Account Status" value={user.accountStatus} />
+                <Field label="Current Access" value={accessStatusLabel} />
+                <Field label="Password" value="Hidden for security" />
+                <Field
+                  label="Temporary Password"
+                  value={
+                    user.mustChangePassword
+                      ? "Temporary password active"
+                      : "Not active"
+                  }
+                />
+                <Field
+                  label="Password Status"
+                  value={user.passwordStatus ?? "Never reset"}
+                />
+                <Field
+                  label="Last Password Reset"
+                  value={
+                    user.lastPasswordResetAt
+                      ? formatDateTime(user.lastPasswordResetAt)
+                      : "Never reset"
+                  }
+                />
+                <Field
+                  label="Last Reset Requested"
+                  value={
+                    user.lastPasswordResetRequestedAt
+                      ? formatDateTime(user.lastPasswordResetRequestedAt)
+                      : "Never reset"
+                  }
+                />
+                <Field
+                  label="Reset Method"
+                  value={user.lastPasswordResetMethod ?? "Never reset"}
+                />
+                <Field label="Role Status" value={roleStatusValue} />
+                <Field label="Invite Status" value={inviteStatusValue} />
+                <Field
+                  label="Last Login"
+                  value={
+                    user.lastLoginAt
+                      ? formatDateTime(user.lastLoginAt)
+                      : "Never logged in"
+                  }
+                />
+                <Field
+                  label="Created Date"
+                  value={user.createdAt ? formatDateTime(user.createdAt) : ""}
+                />
+                <Field
+                  label="Updated Date"
+                  value={user.updatedAt ? formatDateTime(user.updatedAt) : ""}
+                />
+              </>
+            ) : (
+              <>
+                <SelectInput
+                  label="Account Status"
+                  required
+                  value={accountStatus}
+                  onChange={setAccountStatus}
+                  options={[
+                    { value: "active", label: "Online" },
+                    { value: "invited", label: "Unblocked" },
+                    { value: "pending", label: "Blocked" },
+                  ]}
+                />
+                <TextInput
+                  label="Invite Status"
+                  value={inviteStatus}
+                  onChange={setInviteStatus}
+                />
+              </>
+            )}
+          </div>
+        </section>
+      ) : activeSection === "notes" ? (
+        <section
+          id="notes"
+          className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+        >
+          <h2 className="text-base font-bold text-slate-900">Notes</h2>
+          {!editMode ? (
+            <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+              {profile?.notes ? profile.notes : "No internal notes added."}
+            </div>
+          ) : (
+            <label className="mt-3 block text-sm">
+              <span className="mb-1.5 block font-medium text-slate-700">
+                Internal note
+              </span>
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                rows={4}
+                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+              />
+            </label>
+          )}
+        </section>
+      ) : (
+        <section
+          id="personal"
+          className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+        >
+          <h2 className="text-base font-bold text-slate-900">
+            Personal Information
+          </h2>
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            {!editMode ? (
+              <>
+                <Field label="Full Name" value={displayName} />
+                <Field label="First Name" value={profile?.firstName} />
+                <Field label="Father’s Name" value={profile?.fatherName} />
+                <Field
+                  label="Grandfather’s Name"
+                  value={profile?.grandfatherName}
+                />
+                <Field label="Gender" value={profile?.gender} />
+                <Field
+                  label="Date of Birth"
+                  value={
+                    profile?.dateOfBirth ? formatDate(profile.dateOfBirth) : ""
+                  }
+                />
+                <Field label="Marital Status" value={profile?.maritalStatus} />
+              </>
+            ) : (
+              <>
+                <TextInput
+                  label="First Name"
+                  required
+                  value={firstName}
+                  onChange={setFirstName}
+                />
+                <TextInput
+                  label="Father’s Name"
+                  required
+                  value={fatherName}
+                  onChange={setFatherName}
+                />
+                <TextInput
+                  label="Grandfather’s Name"
+                  value={grandfatherName}
+                  onChange={setGrandfatherName}
+                />
+                <SelectInput
+                  label="Gender"
+                  required
+                  value={gender}
+                  onChange={setGender}
+                  options={[
+                    { value: "", label: "Select…" },
+                    { value: "male", label: "Male" },
+                    { value: "female", label: "Female" },
+                    { value: "other", label: "Other" },
+                  ]}
+                />
+                <TextInput
+                  label="Date of Birth"
+                  type="date"
+                  value={dateOfBirth}
+                  onChange={setDateOfBirth}
+                />
+                <TextInput
+                  label="Marital Status"
+                  value={maritalStatus}
+                  onChange={setMaritalStatus}
+                />
+              </>
+            )}
+          </div>
+        </section>
+      )}
     </AdminDetailLayout>
   );
 }

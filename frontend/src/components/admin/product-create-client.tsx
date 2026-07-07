@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useRef, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { 
+import {
   Loader2,
   Package,
   Plus,
@@ -16,10 +16,14 @@ import {
   XCircle,
   Upload,
   FolderOpen,
-  X
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { dashboardConfirm, dashboardSuccess, dashboardError } from "@/lib/dashboard-swal";
+import {
+  dashboardConfirm,
+  dashboardSuccess,
+  dashboardError,
+} from "@/lib/dashboard-swal";
 import { REGIONS, TAXONOMY } from "@/lib/taxonomy";
 import { uploadFileToS3 } from "@/lib/uploads";
 
@@ -89,19 +93,30 @@ function fallbackHomepageSections(): HomepageSection[] {
   }));
 }
 
-function normalizeHomepageSections(sections: HomepageSection[] | undefined): HomepageSection[] {
+function normalizeHomepageSections(
+  sections: HomepageSection[] | undefined,
+): HomepageSection[] {
   const mergedByName = new Map<string, HomepageSection>();
 
-  [...fallbackHomepageSections(), ...(Array.isArray(sections) ? sections : [])].forEach((section, index) => {
+  [
+    ...fallbackHomepageSections(),
+    ...(Array.isArray(sections) ? sections : []),
+  ].forEach((section, index) => {
     const name = section.name?.trim();
     if (!name) return;
     const key = name.toLowerCase();
-    const incomingCollections = (section.collections ?? section.subsections ?? []).map((collection, collectionIndex) => ({
-      ...collection,
-      name: collection.name.trim(),
-      isActive: collection.isActive ?? true,
-      sortOrder: collection.sortOrder ?? collectionIndex,
-    })).filter(collection => collection.name);
+    const incomingCollections = (
+      section.collections ??
+      section.subsections ??
+      []
+    )
+      .map((collection, collectionIndex) => ({
+        ...collection,
+        name: collection.name.trim(),
+        isActive: collection.isActive ?? true,
+        sortOrder: collection.sortOrder ?? collectionIndex,
+      }))
+      .filter((collection) => collection.name);
     const existing = mergedByName.get(key);
 
     if (!existing) {
@@ -116,9 +131,12 @@ function normalizeHomepageSections(sections: HomepageSection[] | undefined): Hom
     }
 
     const collectionsByName = new Map(
-      (existing.collections ?? existing.subsections ?? []).map(collection => [collection.name.trim().toLowerCase(), collection]),
+      (existing.collections ?? existing.subsections ?? []).map((collection) => [
+        collection.name.trim().toLowerCase(),
+        collection,
+      ]),
     );
-    incomingCollections.forEach(collection => {
+    incomingCollections.forEach((collection) => {
       if (!collectionsByName.has(collection.name.toLowerCase())) {
         collectionsByName.set(collection.name.toLowerCase(), collection);
       }
@@ -129,25 +147,32 @@ function normalizeHomepageSections(sections: HomepageSection[] | undefined): Hom
       ...section,
       name,
       isActive: existing.isActive || section.isActive,
-      sortOrder: Math.min(existing.sortOrder, section.sortOrder ?? existing.sortOrder),
-      collections: Array.from(collectionsByName.values()).sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name)),
+      sortOrder: Math.min(
+        existing.sortOrder,
+        section.sortOrder ?? existing.sortOrder,
+      ),
+      collections: Array.from(collectionsByName.values()).sort(
+        (a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name),
+      ),
     });
   });
 
-  return Array.from(mergedByName.values()).sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name));
+  return Array.from(mergedByName.values()).sort(
+    (a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name),
+  );
 }
 
 // Tribe & region abbreviation helpers for generated product IDs.
 function getRegionCode(r: string): string {
   const map: Record<string, string> = {
-    "Amhara": "AMH",
-    "Oromo": "ORO",
-    "Tigre": "TIG",
-    "Debub": "DEB",
-    "Islamic": "ISL",
-    "Men": "MEN",
+    Amhara: "AMH",
+    Oromo: "ORO",
+    Tigre: "TIG",
+    Debub: "DEB",
+    Islamic: "ISL",
+    Men: "MEN",
     "Bride & Groom": "BDG",
-    "Mila's Choice": "MIL"
+    "Mila's Choice": "MIL",
   };
   return map[r] || r.slice(0, 3).toUpperCase();
 }
@@ -155,33 +180,33 @@ function getRegionCode(r: string): string {
 function getSubcategoryCode(sub: string): string {
   if (!sub) return "GEN";
   const map: Record<string, string> = {
-    "Gondar": "GND",
-    "Wollega": "WLG",
-    "Shewa": "SHW",
-    "Arsi": "ARS",
-    "Jimma": "JIM",
-    "Borena": "BOR",
-    "Harar": "HAR",
-    "Guji": "GUJ",
-    "Kids": "KID",
-    "Apparels": "APP",
-    "Gojam": "GJM",
-    "Wollo": "WLO",
-    "Minjar": "MNJ",
-    "Raya": "RAY",
-    "Adigrat": "ADG",
-    "Axum": "AXM",
-    "Shire": "SHR",
-    "Chiffon": "CHF",
-    "Gurage": "GRG",
-    "Welaita": "WLT",
-    "Gamo": "GAM",
-    "Sidama": "SID",
-    "Modern": "MOD",
-    "Amhara": "AMH",
-    "Oromo": "ORO",
-    "Tigre": "TIG",
-    "Debub": "DEB"
+    Gondar: "GND",
+    Wollega: "WLG",
+    Shewa: "SHW",
+    Arsi: "ARS",
+    Jimma: "JIM",
+    Borena: "BOR",
+    Harar: "HAR",
+    Guji: "GUJ",
+    Kids: "KID",
+    Apparels: "APP",
+    Gojam: "GJM",
+    Wollo: "WLO",
+    Minjar: "MNJ",
+    Raya: "RAY",
+    Adigrat: "ADG",
+    Axum: "AXM",
+    Shire: "SHR",
+    Chiffon: "CHF",
+    Gurage: "GRG",
+    Welaita: "WLT",
+    Gamo: "GAM",
+    Sidama: "SID",
+    Modern: "MOD",
+    Amhara: "AMH",
+    Oromo: "ORO",
+    Tigre: "TIG",
+    Debub: "DEB",
   };
   return map[sub] || sub.slice(0, 3).toUpperCase();
 }
@@ -191,45 +216,71 @@ export function ProductCreateClient() {
   const folderInputRef = useRef<HTMLInputElement | null>(null);
   const [uploadMode, setUploadMode] = useState<"single" | "multiple">("single");
   const [busy, setBusy] = useState(false);
-  const [formNotice, setFormNotice] = useState<{ tone: "success" | "error"; title: string; message: string } | null>(null);
-  const [previewImage, setPreviewImage] = useState<{ name: string; url: string } | null>(null);
+  const [formNotice, setFormNotice] = useState<{
+    tone: "success" | "error";
+    title: string;
+    message: string;
+  } | null>(null);
+  const [previewImage, setPreviewImage] = useState<{
+    name: string;
+    url: string;
+  } | null>(null);
 
   // Existing products list for increment counts
-  const [existingProducts, setExistingProducts] = useState<ExistingProduct[]>([]);
-  const [homepageSections, setHomepageSections] = useState<HomepageSection[]>(() => normalizeHomepageSections(undefined));
+  const [existingProducts, setExistingProducts] = useState<ExistingProduct[]>(
+    [],
+  );
+  const [homepageSections, setHomepageSections] = useState<HomepageSection[]>(
+    () => normalizeHomepageSections(undefined),
+  );
 
   useEffect(() => {
     fetch("/api/backend/admin/products?limit=200")
-      .then(res => res.json())
-      .then(json => {
+      .then((res) => res.json())
+      .then((json) => {
         if (json.data) {
           setExistingProducts(json.data);
         }
       })
-      .catch(err => console.error("Error fetching existing products for auto-increment number", err));
+      .catch((err) =>
+        console.error(
+          "Error fetching existing products for auto-increment number",
+          err,
+        ),
+      );
 
     fetch("/api/backend/admin/homepage-sections")
-      .then(res => res.json())
-      .then(json => {
+      .then((res) => res.json())
+      .then((json) => {
         if (Array.isArray(json.data)) {
           setHomepageSections(normalizeHomepageSections(json.data));
         }
       })
-      .catch(err => console.error("Error fetching sections for product insert", err));
+      .catch((err) =>
+        console.error("Error fetching sections for product insert", err),
+      );
   }, []);
 
   // Helper to compute increment number (handling local batch offsets)
-  function getNextIncrementNumber(selectedRegion: string, selectedSub: string, offset = 0): string {
-    const count = existingProducts.filter(p => 
-      p.region?.toLowerCase() === selectedRegion.toLowerCase() && 
-      (p.subcategory || "").toLowerCase() === (selectedSub || "").toLowerCase()
+  function getNextIncrementNumber(
+    selectedRegion: string,
+    selectedSub: string,
+    offset = 0,
+  ): string {
+    const count = existingProducts.filter(
+      (p) =>
+        p.region?.toLowerCase() === selectedRegion.toLowerCase() &&
+        (p.subcategory || "").toLowerCase() ===
+          (selectedSub || "").toLowerCase(),
     ).length;
     return String(count + 1 + offset).padStart(3, "0");
   }
 
   // --- Single Product State ---
   const [region, setRegion] = useState(REGIONS[0]);
-  const [subcategory, setSubcategory] = useState(TAXONOMY[REGIONS[0]]?.[0] || "");
+  const [subcategory, setSubcategory] = useState(
+    TAXONOMY[REGIONS[0]]?.[0] || "",
+  );
   const [middleText, setMiddleText] = useState("Traditional Family Outfit");
   const [description, setDescription] = useState("");
   const [priceUsd, setPriceUsd] = useState("");
@@ -243,31 +294,37 @@ export function ProductCreateClient() {
   const [tailoringDays, setTailoringDays] = useState("30");
   const [isActive, setIsActive] = useState(true);
   const [isFeatured, setIsFeatured] = useState(false);
-  
+
   // Single mode flexible image list
   const [singleFiles, setSingleFiles] = useState<File[]>([]);
 
   const sectionOptions = useMemo(
     () =>
-      homepageSections
-        .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name)),
+      homepageSections.sort(
+        (a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name),
+      ),
     [homepageSections],
   );
-  const sectionNames = sectionOptions.map(section => section.name);
+  const sectionNames = sectionOptions.map((section) => section.name);
 
-  const getSubsectionsForSection = useCallback((sectionName: string) => {
-    const section = sectionOptions.find(item => item.name === sectionName);
-    return (section?.collections ?? section?.subsections ?? [])
-      .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name))
-      .map(subsection => subsection.name);
-  }, [sectionOptions]);
+  const getSubsectionsForSection = useCallback(
+    (sectionName: string) => {
+      const section = sectionOptions.find((item) => item.name === sectionName);
+      return (section?.collections ?? section?.subsections ?? [])
+        .sort(
+          (a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name),
+        )
+        .map((subsection) => subsection.name);
+    },
+    [sectionOptions],
+  );
 
   const subsections = getSubsectionsForSection(region);
 
   useEffect(() => {
     const firstSection = sectionOptions[0]?.name;
     if (!firstSection) return;
-    if (!sectionOptions.some(section => section.name === region)) {
+    if (!sectionOptions.some((section) => section.name === region)) {
       const firstSubsection = getSubsectionsForSection(firstSection)[0] ?? "";
       setRegion(firstSection);
       setSubcategory(firstSubsection);
@@ -283,14 +340,17 @@ export function ProductCreateClient() {
 
   // --- Multiple Products State ---
   const [defaultRegion, setDefaultRegion] = useState(REGIONS[0]);
-  const [defaultSubcategory, setDefaultSubcategory] = useState(TAXONOMY[REGIONS[0]]?.[0] || "");
+  const [defaultSubcategory, setDefaultSubcategory] = useState(
+    TAXONOMY[REGIONS[0]]?.[0] || "",
+  );
   const [defaultPrice, setDefaultPrice] = useState("120");
   const [defaultDesignerCost, setDefaultDesignerCost] = useState("0");
   const [defaultTaxPercent, setDefaultTaxPercent] = useState("0");
   const [defaultOtherCost, setDefaultOtherCost] = useState("0");
   const [defaultGender, setDefaultGender] = useState("unisex");
   const [defaultFabric, setDefaultFabric] = useState("Pure Cotton");
-  const [defaultEmbroidery, setDefaultEmbroidery] = useState("Traditional Tilet");
+  const [defaultEmbroidery, setDefaultEmbroidery] =
+    useState("Traditional Tilet");
   const [defaultTailoringDays, setDefaultTailoringDays] = useState("30");
   const [defaultFeatured, setDefaultFeatured] = useState(false);
   const [defaultActive, setDefaultActive] = useState(true);
@@ -298,19 +358,30 @@ export function ProductCreateClient() {
   useEffect(() => {
     const firstSection = sectionOptions[0]?.name;
     if (!firstSection) return;
-    if (!sectionOptions.some(section => section.name === defaultRegion)) {
+    if (!sectionOptions.some((section) => section.name === defaultRegion)) {
       setDefaultRegion(firstSection);
       setDefaultSubcategory(getSubsectionsForSection(firstSection)[0] ?? "");
       return;
     }
     const nextSubsections = getSubsectionsForSection(defaultRegion);
-    if (nextSubsections.length && !nextSubsections.includes(defaultSubcategory)) {
+    if (
+      nextSubsections.length &&
+      !nextSubsections.includes(defaultSubcategory)
+    ) {
       setDefaultSubcategory(nextSubsections[0]);
     }
-  }, [defaultRegion, defaultSubcategory, getSubsectionsForSection, sectionOptions]);
+  }, [
+    defaultRegion,
+    defaultSubcategory,
+    getSubsectionsForSection,
+    sectionOptions,
+  ]);
 
   const [bulkProducts, setBulkProducts] = useState<BulkProduct[]>([]);
-  const [bulkProgress, setBulkProgress] = useState<{ current: number; total: number } | null>(null);
+  const [bulkProgress, setBulkProgress] = useState<{
+    current: number;
+    total: number;
+  } | null>(null);
 
   // S3 image upload helper
   async function uploadOneImage(file: File): Promise<string> {
@@ -328,24 +399,47 @@ export function ProductCreateClient() {
   async function handleSingleCreate() {
     // 1. Validations
     if (!region || !subcategory) {
-      setFormNotice({ tone: "error", title: "Missing Classification", message: "Please select a tribe and region before inserting a product." });
+      setFormNotice({
+        tone: "error",
+        title: "Missing Classification",
+        message: "Please select a tribe and region before inserting a product.",
+      });
       return;
     }
     if (!middleText.trim()) {
-      setFormNotice({ tone: "error", title: "Missing Data", message: "Please enter product name middle text." });
+      setFormNotice({
+        tone: "error",
+        title: "Missing Data",
+        message: "Please enter product name middle text.",
+      });
       return;
     }
     if (!priceUsd) {
-      setFormNotice({ tone: "error", title: "Missing Data", message: "Please enter a base price." });
+      setFormNotice({
+        tone: "error",
+        title: "Missing Data",
+        message: "Please enter a base price.",
+      });
       return;
     }
     if (designerCostUsd === "" || taxPercent === "" || otherCostUsd === "") {
-      setFormNotice({ tone: "error", title: "Missing Production Cost", message: "Designer labor cost, tax rate, and other production costs are mandatory." });
+      setFormNotice({
+        tone: "error",
+        title: "Missing Production Cost",
+        message:
+          "Designer labor cost, tax rate, and other production costs are mandatory.",
+      });
       return;
     }
-    const uploadedFiles = singleFiles.filter(file => file.type.startsWith("image/"));
+    const uploadedFiles = singleFiles.filter((file) =>
+      file.type.startsWith("image/"),
+    );
     if (uploadedFiles.length < 1) {
-      setFormNotice({ tone: "error", title: "Missing Images", message: "Please upload at least one product image." });
+      setFormNotice({
+        tone: "error",
+        title: "Missing Images",
+        message: "Please upload at least one product image.",
+      });
       return;
     }
 
@@ -397,10 +491,18 @@ export function ProductCreateClient() {
         throw new Error(err.error || err.message || "Failed to create product");
       }
 
-      setFormNotice({ tone: "success", title: "Success", message: "Product added to catalog successfully" });
+      setFormNotice({
+        tone: "success",
+        title: "Success",
+        message: "Product added to catalog successfully",
+      });
       setTimeout(() => router.push("/admin/inventory"), 1000);
     } catch (error: unknown) {
-      setFormNotice({ tone: "error", title: "Error", message: errorMessage(error) });
+      setFormNotice({
+        tone: "error",
+        title: "Error",
+        message: errorMessage(error),
+      });
     } finally {
       setBusy(false);
     }
@@ -408,24 +510,28 @@ export function ProductCreateClient() {
 
   // File helpers
   function addSingleFiles(files: FileList | null) {
-    const images = Array.from(files || []).filter(file => file.type.startsWith("image/"));
+    const images = Array.from(files || []).filter((file) =>
+      file.type.startsWith("image/"),
+    );
     if (!images.length) return;
-    setSingleFiles(prev => [...prev, ...images]);
+    setSingleFiles((prev) => [...prev, ...images]);
   }
 
   function removeSingleFile(index: number) {
-    setSingleFiles(prev => prev.filter((_, fileIndex) => fileIndex !== index));
+    setSingleFiles((prev) =>
+      prev.filter((_, fileIndex) => fileIndex !== index),
+    );
   }
 
   // --- Handle Bulk Folder Select ---
   function handleFolderSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const fileList = Array.from(e.target.files || []);
-    const imgFiles = fileList.filter(file => file.type.startsWith("image/"));
+    const imgFiles = fileList.filter((file) => file.type.startsWith("image/"));
     e.currentTarget.value = "";
 
     // Group files by parent folder name
     const groups: Record<string, File[]> = {};
-    imgFiles.forEach(file => {
+    imgFiles.forEach((file) => {
       const parts = file.webkitRelativePath.split("/");
       if (parts.length >= 2) {
         const folderName = parts[parts.length - 2]; // get the direct parent folder name
@@ -435,12 +541,12 @@ export function ProductCreateClient() {
     });
 
     // Map to bulk product format
-    const parsed: BulkProduct[] = Object.keys(groups).map(folderName => {
+    const parsed: BulkProduct[] = Object.keys(groups).map((folderName) => {
       // Beautify folder name for default middle text
       const cleanName = folderName
         .replace(/[-_]+/g, " ")
         .split(" ")
-        .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+        .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
         .join(" ");
 
       return {
@@ -461,7 +567,7 @@ export function ProductCreateClient() {
         isFeatured: defaultFeatured,
         isActive: defaultActive,
         import: true,
-        status: "pending"
+        status: "pending",
       };
     });
 
@@ -472,7 +578,7 @@ export function ProductCreateClient() {
     if (parsed.length > 0) {
       void dashboardSuccess(
         "Folders Discovered",
-        `Found ${parsed.length} product folder${parsed.length === 1 ? "" : "s"} with images ready for import.`
+        `Found ${parsed.length} product folder${parsed.length === 1 ? "" : "s"} with images ready for import.`,
       );
     }
   }
@@ -491,37 +597,60 @@ export function ProductCreateClient() {
   }
 
   // Update a single property for an item in bulk list
-  function updateBulkProduct(id: string, key: keyof BulkProduct, value: BulkProduct[keyof BulkProduct]) {
-    setBulkProducts(prev => prev.map(p => {
-      if (p.id !== id) return p;
-      const updated = { ...p, [key]: value } as BulkProduct;
-      // Keep subcategory in sync with region if region changes
-      if (key === "region") {
-        updated.subcategory = getSubsectionsForSection(String(value))?.[0] || "";
-      }
-      return updated;
-    }));
+  function updateBulkProduct(
+    id: string,
+    key: keyof BulkProduct,
+    value: BulkProduct[keyof BulkProduct],
+  ) {
+    setBulkProducts((prev) =>
+      prev.map((p) => {
+        if (p.id !== id) return p;
+        const updated = { ...p, [key]: value } as BulkProduct;
+        // Keep subcategory in sync with region if region changes
+        if (key === "region") {
+          updated.subcategory =
+            getSubsectionsForSection(String(value))?.[0] || "";
+        }
+        return updated;
+      }),
+    );
   }
 
   // --- Execute Bulk Folder Import ---
   async function handleBulkImport() {
-    const activeProducts = bulkProducts.filter(p => p.import);
+    const activeProducts = bulkProducts.filter((p) => p.import);
     if (activeProducts.length === 0) {
-      void dashboardError("No Items Selected", "Please check at least one product folder to import.");
-      return;
-    }
-
-    const invalid = activeProducts.find(p => !p.middleText.trim() || !p.priceUsd || p.designerCostUsd === "" || p.taxPercent === "" || p.otherCostUsd === "" || p.files.length < 1);
-    if (invalid) {
       void dashboardError(
-        "Invalid Data",
-        `Product "${invalid.folderName}" needs a middle name, a price, production cost values, and at least one image.`
+        "No Items Selected",
+        "Please check at least one product folder to import.",
       );
       return;
     }
-    const missingCollection = activeProducts.find(p => !p.region || !p.subcategory);
+
+    const invalid = activeProducts.find(
+      (p) =>
+        !p.middleText.trim() ||
+        !p.priceUsd ||
+        p.designerCostUsd === "" ||
+        p.taxPercent === "" ||
+        p.otherCostUsd === "" ||
+        p.files.length < 1,
+    );
+    if (invalid) {
+      void dashboardError(
+        "Invalid Data",
+        `Product "${invalid.folderName}" needs a middle name, a price, production cost values, and at least one image.`,
+      );
+      return;
+    }
+    const missingCollection = activeProducts.find(
+      (p) => !p.region || !p.subcategory,
+    );
     if (missingCollection) {
-      void dashboardError("Missing Classification", `Product "${missingCollection.folderName}" needs a tribe and region before import.`);
+      void dashboardError(
+        "Missing Classification",
+        `Product "${missingCollection.folderName}" needs a tribe and region before import.`,
+      );
       return;
     }
 
@@ -547,9 +676,13 @@ export function ProductCreateClient() {
 
     for (let i = 0; i < activeProducts.length; i++) {
       const prod = activeProducts[i];
-      
+
       // Update status to uploading in UI
-      setBulkProducts(prev => prev.map(item => item.id === prod.id ? { ...item, status: "uploading" } : item));
+      setBulkProducts((prev) =>
+        prev.map((item) =>
+          item.id === prod.id ? { ...item, status: "uploading" } : item,
+        ),
+      );
       setBulkProgress({ current: i + 1, total: activeProducts.length });
 
       try {
@@ -563,7 +696,11 @@ export function ProductCreateClient() {
         // 2. Generate name with correct increment offset
         const key = `${prod.region}-${prod.subcategory}`;
         const offset = localCounters[key] || 0;
-        const nextNum = getNextIncrementNumber(prod.region, prod.subcategory, offset);
+        const nextNum = getNextIncrementNumber(
+          prod.region,
+          prod.subcategory,
+          offset,
+        );
         localCounters[key] = offset + 1;
 
         const uniqueId = `${getRegionCode(prod.region)}-${getSubcategoryCode(prod.subcategory)}-${nextNum}`;
@@ -602,10 +739,20 @@ export function ProductCreateClient() {
         }
 
         successCount++;
-        setBulkProducts(prev => prev.map(item => item.id === prod.id ? { ...item, status: "success" } : item));
+        setBulkProducts((prev) =>
+          prev.map((item) =>
+            item.id === prod.id ? { ...item, status: "success" } : item,
+          ),
+        );
       } catch (error: unknown) {
         console.error("Failed to import product", prod.folderName, error);
-        setBulkProducts(prev => prev.map(item => item.id === prod.id ? { ...item, status: "error", errorMsg: errorMessage(error) } : item));
+        setBulkProducts((prev) =>
+          prev.map((item) =>
+            item.id === prod.id
+              ? { ...item, status: "error", errorMsg: errorMessage(error) }
+              : item,
+          ),
+        );
       }
     }
 
@@ -613,36 +760,45 @@ export function ProductCreateClient() {
     setBulkProgress(null);
 
     if (successCount === activeProducts.length) {
-      void dashboardSuccess("Import Complete", `Successfully imported all ${successCount} products!`);
+      void dashboardSuccess(
+        "Import Complete",
+        `Successfully imported all ${successCount} products!`,
+      );
       setTimeout(() => router.push("/admin/inventory"), 1500);
     } else {
       void dashboardError(
         "Import Finished with Warnings",
-        `Imported ${successCount} of ${activeProducts.length} successfully. Please check folders with errors.`
+        `Imported ${successCount} of ${activeProducts.length} successfully. Please check folders with errors.`,
       );
     }
   }
 
   // Sync default values to all pending bulk products
   function applyDefaultsToAll() {
-    setBulkProducts(prev => prev.map(p => {
-      if (p.status !== "pending") return p;
-      return {
-        ...p,
-        region: defaultRegion,
-        subcategory: getSubsectionsForSection(defaultRegion).includes(p.subcategory) ? p.subcategory : (getSubsectionsForSection(defaultRegion)[0] || ""),
-        priceUsd: defaultPrice,
-        designerCostUsd: defaultDesignerCost,
-        taxPercent: defaultTaxPercent,
-        otherCostUsd: defaultOtherCost,
-        gender: defaultGender,
-        fabricType: defaultFabric,
-        embroideryStyle: defaultEmbroidery,
-        tailoringDays: defaultTailoringDays,
-        isFeatured: defaultFeatured,
-        isActive: defaultActive
-      };
-    }));
+    setBulkProducts((prev) =>
+      prev.map((p) => {
+        if (p.status !== "pending") return p;
+        return {
+          ...p,
+          region: defaultRegion,
+          subcategory: getSubsectionsForSection(defaultRegion).includes(
+            p.subcategory,
+          )
+            ? p.subcategory
+            : getSubsectionsForSection(defaultRegion)[0] || "",
+          priceUsd: defaultPrice,
+          designerCostUsd: defaultDesignerCost,
+          taxPercent: defaultTaxPercent,
+          otherCostUsd: defaultOtherCost,
+          gender: defaultGender,
+          fabricType: defaultFabric,
+          embroideryStyle: defaultEmbroidery,
+          tailoringDays: defaultTailoringDays,
+          isFeatured: defaultFeatured,
+          isActive: defaultActive,
+        };
+      }),
+    );
   }
 
   return (
@@ -654,22 +810,49 @@ export function ProductCreateClient() {
               <Package className="h-10 w-10" />
             </div>
             <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-1">Catalog Management</p>
-              <h1 className="text-4xl font-black text-slate-900 uppercase tracking-tight">Add New Outfit</h1>
-              <p className="text-sm font-medium text-slate-500 mt-1">Register products in either Single or Bulk directory mode.</p>
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-1">
+                Catalog Management
+              </p>
+              <h1 className="text-4xl font-black text-slate-900 uppercase tracking-tight">
+                Add New Outfit
+              </h1>
+              <p className="text-sm font-medium text-slate-500 mt-1">
+                Register products in either Single or Bulk directory mode.
+              </p>
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={() => router.back()} className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-sm font-bold text-slate-900 shadow-sm hover:bg-slate-50 transition-all active:scale-95">
+            <button
+              onClick={() => router.back()}
+              className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-sm font-bold text-slate-900 shadow-sm hover:bg-slate-50 transition-all active:scale-95"
+            >
               Discard
             </button>
             {uploadMode === "single" ? (
-              <button onClick={handleSingleCreate} disabled={busy} className="inline-flex h-11 items-center gap-2 rounded-xl bg-emerald-800 px-5 text-sm font-bold text-white shadow-lg hover:bg-emerald-900 transition-all active:scale-95 disabled:opacity-50">
-                {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Create Product
+              <button
+                onClick={handleSingleCreate}
+                disabled={busy}
+                className="inline-flex h-11 items-center gap-2 rounded-xl bg-emerald-800 px-5 text-sm font-bold text-white shadow-lg hover:bg-emerald-900 transition-all active:scale-95 disabled:opacity-50"
+              >
+                {busy ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Plus className="h-4 w-4" />
+                )}{" "}
+                Create Product
               </button>
             ) : (
-              <button onClick={handleBulkImport} disabled={busy || bulkProducts.length === 0} className="inline-flex h-11 items-center gap-2 rounded-xl bg-emerald-800 px-5 text-sm font-bold text-white shadow-lg hover:bg-emerald-900 transition-all active:scale-95 disabled:opacity-50">
-                {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />} Run Bulk Import
+              <button
+                onClick={handleBulkImport}
+                disabled={busy || bulkProducts.length === 0}
+                className="inline-flex h-11 items-center gap-2 rounded-xl bg-emerald-800 px-5 text-sm font-bold text-white shadow-lg hover:bg-emerald-900 transition-all active:scale-95 disabled:opacity-50"
+              >
+                {busy ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Upload className="h-4 w-4" />
+                )}{" "}
+                Run Bulk Import
               </button>
             )}
           </div>
@@ -679,21 +862,29 @@ export function ProductCreateClient() {
       {/* Mode Toggle Tabs */}
       <div className="flex rounded-2xl border border-slate-200 bg-white p-1.5 shadow-sm">
         <button
-          onClick={() => { if (!busy) setUploadMode("single"); }}
+          onClick={() => {
+            if (!busy) setUploadMode("single");
+          }}
           disabled={busy}
           className={cn(
             "flex-1 py-3 text-center text-sm font-bold rounded-xl transition-all",
-            uploadMode === "single" ? "bg-slate-900 text-white shadow-md" : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
+            uploadMode === "single"
+              ? "bg-slate-900 text-white shadow-md"
+              : "text-slate-500 hover:bg-slate-50 hover:text-slate-900",
           )}
         >
           Single Product Mode
         </button>
         <button
-          onClick={() => { if (!busy) setUploadMode("multiple"); }}
+          onClick={() => {
+            if (!busy) setUploadMode("multiple");
+          }}
           disabled={busy}
           className={cn(
             "flex-1 py-3 text-center text-sm font-bold rounded-xl transition-all",
-            uploadMode === "multiple" ? "bg-slate-900 text-white shadow-md" : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
+            uploadMode === "multiple"
+              ? "bg-slate-900 text-white shadow-md"
+              : "text-slate-500 hover:bg-slate-50 hover:text-slate-900",
           )}
         >
           Multiple Products Mode (Bulk Folder)
@@ -701,14 +892,24 @@ export function ProductCreateClient() {
       </div>
 
       {formNotice && (
-        <div className={cn(
-          "flex items-center gap-4 rounded-[2rem] p-6 shadow-lg animate-in fade-in slide-in-from-top-4 duration-300",
-          formNotice.tone === "success" ? "bg-emerald-600 text-white" : "bg-rose-600 text-white"
-        )}>
-          {formNotice.tone === "success" ? <CheckCircle2 className="h-8 w-8" /> : <XCircle className="h-8 w-8" />}
+        <div
+          className={cn(
+            "flex items-center gap-4 rounded-[2rem] p-6 shadow-lg animate-in fade-in slide-in-from-top-4 duration-300",
+            formNotice.tone === "success"
+              ? "bg-emerald-600 text-white"
+              : "bg-rose-600 text-white",
+          )}
+        >
+          {formNotice.tone === "success" ? (
+            <CheckCircle2 className="h-8 w-8" />
+          ) : (
+            <XCircle className="h-8 w-8" />
+          )}
           <div>
-             <p className="font-black uppercase tracking-tight text-xl">{formNotice.title}</p>
-             <p className="font-bold opacity-90">{formNotice.message}</p>
+            <p className="font-black uppercase tracking-tight text-xl">
+              {formNotice.title}
+            </p>
+            <p className="font-bold opacity-90">{formNotice.message}</p>
           </div>
         </div>
       )}
@@ -716,11 +917,20 @@ export function ProductCreateClient() {
       {bulkProgress && (
         <div className="rounded-[2rem] bg-emerald-50 border border-emerald-200 p-6 text-emerald-800 shadow-md">
           <div className="flex items-center justify-between mb-2">
-            <span className="font-bold text-sm uppercase tracking-wider">Bulk Import Progress</span>
-            <span className="font-black">{bulkProgress.current} / {bulkProgress.total}</span>
+            <span className="font-bold text-sm uppercase tracking-wider">
+              Bulk Import Progress
+            </span>
+            <span className="font-black">
+              {bulkProgress.current} / {bulkProgress.total}
+            </span>
           </div>
           <div className="h-3 w-full bg-emerald-200/50 rounded-full overflow-hidden">
-            <div className="h-full bg-emerald-600 transition-all duration-300" style={{ width: `${(bulkProgress.current / bulkProgress.total) * 100}%` }} />
+            <div
+              className="h-full bg-emerald-600 transition-all duration-300"
+              style={{
+                width: `${(bulkProgress.current / bulkProgress.total) * 100}%`,
+              }}
+            />
           </div>
         </div>
       )}
@@ -739,57 +949,83 @@ export function ProductCreateClient() {
               <div className="p-8 space-y-6">
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase text-slate-400">Tribe</label>
+                    <label className="text-[10px] font-black uppercase text-slate-400">
+                      Tribe
+                    </label>
                     <select
                       value={region}
-                      onChange={e => {
+                      onChange={(e) => {
                         setRegion(e.target.value);
-                        setSubcategory(getSubsectionsForSection(e.target.value)?.[0] || "");
+                        setSubcategory(
+                          getSubsectionsForSection(e.target.value)?.[0] || "",
+                        );
                       }}
                       className="w-full rounded-2xl border border-slate-100 bg-slate-50/50 p-4 font-bold outline-none"
                     >
-                      {sectionNames.map(r => <option key={r} value={r}>{r}</option>)}
+                      {sectionNames.map((r) => (
+                        <option key={r} value={r}>
+                          {r}
+                        </option>
+                      ))}
                     </select>
                   </div>
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase text-slate-400">Region</label>
+                    <label className="text-[10px] font-black uppercase text-slate-400">
+                      Region
+                    </label>
                     <select
                       value={subcategory}
-                      onChange={e => setSubcategory(e.target.value)}
+                      onChange={(e) => setSubcategory(e.target.value)}
                       className="w-full rounded-2xl border border-slate-100 bg-slate-50/50 p-4 font-bold outline-none"
                       disabled={!subsections.length}
                     >
-                      {subsections.map(s => <option key={s} value={s}>{s}</option>)}
+                      {subsections.map((s) => (
+                        <option key={s} value={s}>
+                          {s}
+                        </option>
+                      ))}
                     </select>
                   </div>
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase text-slate-400">Customize Middle Title <span className="text-rose-500">*</span></label>
+                  <label className="text-[10px] font-black uppercase text-slate-400">
+                    Customize Middle Title{" "}
+                    <span className="text-rose-500">*</span>
+                  </label>
                   <div className="flex flex-wrap items-center font-bold text-slate-900 border border-slate-200 rounded-2xl bg-white overflow-hidden shadow-sm">
                     <span className="bg-slate-100 px-4 py-3.5 border-r border-slate-200 select-none text-slate-500 text-sm">
                       {region} {subcategory}
                     </span>
                     <input
                       value={middleText}
-                      onChange={e => setMiddleText(e.target.value)}
+                      onChange={(e) => setMiddleText(e.target.value)}
                       placeholder="e.g. Traditional Family Outfit"
                       className="flex-1 px-4 py-3 outline-none text-sm font-bold min-w-[200px]"
                     />
                     <span className="bg-slate-100 px-4 py-3.5 border-l border-slate-200 select-none text-slate-500 text-sm font-mono tracking-wider">
-                      — {getRegionCode(region)}-{getSubcategoryCode(subcategory)}-{getNextIncrementNumber(region, subcategory)}
+                      — {getRegionCode(region)}-
+                      {getSubcategoryCode(subcategory)}-
+                      {getNextIncrementNumber(region, subcategory)}
                     </span>
                   </div>
                   <p className="mt-1 text-[10px] text-slate-400 font-bold uppercase tracking-wide">
-                    Live Catalog Preview: <span className="text-emerald-700 font-mono font-black select-all ml-1">{region} {subcategory} {middleText.trim()} — {getRegionCode(region)}-{getSubcategoryCode(subcategory)}-{getNextIncrementNumber(region, subcategory)}</span>
+                    Live Catalog Preview:{" "}
+                    <span className="text-emerald-700 font-mono font-black select-all ml-1">
+                      {region} {subcategory} {middleText.trim()} —{" "}
+                      {getRegionCode(region)}-{getSubcategoryCode(subcategory)}-
+                      {getNextIncrementNumber(region, subcategory)}
+                    </span>
                   </p>
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase text-slate-400">Detailed Description</label>
+                  <label className="text-[10px] font-black uppercase text-slate-400">
+                    Detailed Description
+                  </label>
                   <textarea
                     value={description}
-                    onChange={e => setDescription(e.target.value)}
+                    onChange={(e) => setDescription(e.target.value)}
                     rows={4}
                     placeholder="Background, cultural significance, and design details..."
                     className="w-full rounded-2xl border border-slate-100 bg-slate-50/50 p-6 font-bold outline-none"
@@ -809,47 +1045,67 @@ export function ProductCreateClient() {
                 <div className="grid gap-4 sm:grid-cols-[260px_1fr]">
                   <label className="group flex min-h-[260px] cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 p-6 text-center transition-all hover:border-emerald-500 hover:bg-emerald-50/40">
                     <Upload className="mb-3 h-9 w-9 text-slate-300 transition-colors group-hover:text-emerald-600" />
-                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Add Product Images</span>
+                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                      Add Product Images
+                    </span>
                     <span className="mt-2 max-w-[190px] text-xs font-bold leading-5 text-slate-400">
-                      Upload one or many product photos. Every selected image will be saved with this item.
+                      Upload one or many product photos. Every selected image
+                      will be saved with this item.
                     </span>
                     <input
                       type="file"
                       accept="image/*"
                       multiple
                       className="hidden"
-                      onChange={e => {
+                      onChange={(e) => {
                         addSingleFiles(e.target.files);
                         e.currentTarget.value = "";
                       }}
                     />
                   </label>
-                  <div className={cn(
-                    "grid min-h-[260px] gap-4 rounded-2xl border border-slate-100 bg-white p-4",
-                    singleFiles.length ? "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4" : "place-items-center"
-                  )}>
-                    {singleFiles.length ? singleFiles.map((file, idx) => {
-                      const fileUrl = URL.createObjectURL(file);
-                      return (
-                        <div key={`${file.name}-${idx}`} className="relative aspect-[3/4] overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 shadow-sm">
-                          <img src={fileUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />
-                          <div className="absolute inset-x-0 bottom-0 bg-black/55 px-2 py-2 text-[9px] font-black uppercase tracking-wider text-white">
-                            Image {idx + 1}
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => removeSingleFile(idx)}
-                            className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-xl bg-rose-600 text-white shadow transition-colors hover:bg-rose-700"
+                  <div
+                    className={cn(
+                      "grid min-h-[260px] gap-4 rounded-2xl border border-slate-100 bg-white p-4",
+                      singleFiles.length
+                        ? "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4"
+                        : "place-items-center",
+                    )}
+                  >
+                    {singleFiles.length ? (
+                      singleFiles.map((file, idx) => {
+                        const fileUrl = URL.createObjectURL(file);
+                        return (
+                          <div
+                            key={`${file.name}-${idx}`}
+                            className="relative aspect-[3/4] overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 shadow-sm"
                           >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
-                      );
-                    }) : (
+                            <img
+                              src={fileUrl}
+                              alt=""
+                              className="absolute inset-0 h-full w-full object-cover"
+                            />
+                            <div className="absolute inset-x-0 bottom-0 bg-black/55 px-2 py-2 text-[9px] font-black uppercase tracking-wider text-white">
+                              Image {idx + 1}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => removeSingleFile(idx)}
+                              className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-xl bg-rose-600 text-white shadow transition-colors hover:bg-rose-700"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        );
+                      })
+                    ) : (
                       <div className="text-center">
                         <ImageIcon className="mx-auto mb-2 h-8 w-8 text-slate-200" />
-                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">No images selected</p>
-                        <p className="mt-1 text-xs font-bold text-slate-300">At least one image is required.</p>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                          No images selected
+                        </p>
+                        <p className="mt-1 text-xs font-bold text-slate-300">
+                          At least one image is required.
+                        </p>
                       </div>
                     )}
                   </div>
@@ -866,10 +1122,12 @@ export function ProductCreateClient() {
               </div>
               <div className="p-8 grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase text-slate-400">Garment Target Gender</label>
+                  <label className="text-[10px] font-black uppercase text-slate-400">
+                    Garment Target Gender
+                  </label>
                   <select
                     value={gender}
-                    onChange={e => setGender(e.target.value)}
+                    onChange={(e) => setGender(e.target.value)}
                     className="w-full rounded-2xl border border-slate-100 bg-slate-50/50 p-4 font-bold outline-none"
                   >
                     <option value="female">Female</option>
@@ -878,28 +1136,35 @@ export function ProductCreateClient() {
                   </select>
                 </div>
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase text-slate-400">Estimated Delivery Days <span className="text-rose-500">*</span></label>
+                  <label className="text-[10px] font-black uppercase text-slate-400">
+                    Estimated Delivery Days{" "}
+                    <span className="text-rose-500">*</span>
+                  </label>
                   <input
                     type="number"
                     value={tailoringDays}
-                    onChange={e => setTailoringDays(e.target.value)}
+                    onChange={(e) => setTailoringDays(e.target.value)}
                     className="w-full rounded-2xl border border-slate-100 bg-slate-50/50 p-4 font-bold outline-none"
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase text-slate-400">Fabric Texture</label>
+                  <label className="text-[10px] font-black uppercase text-slate-400">
+                    Fabric Texture
+                  </label>
                   <input
                     value={fabricType}
-                    onChange={e => setFabricType(e.target.value)}
+                    onChange={(e) => setFabricType(e.target.value)}
                     placeholder="e.g. Pure Cotton, Handwoven Shemma"
                     className="w-full rounded-2xl border border-slate-100 bg-slate-50/50 p-4 font-bold outline-none"
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase text-slate-400">Embroidery Style</label>
+                  <label className="text-[10px] font-black uppercase text-slate-400">
+                    Embroidery Style
+                  </label>
                   <input
                     value={embroideryStyle}
-                    onChange={e => setEmbroideryStyle(e.target.value)}
+                    onChange={(e) => setEmbroideryStyle(e.target.value)}
                     placeholder="e.g. Traditional Tilet, Cross-stitch"
                     className="w-full rounded-2xl border border-slate-100 bg-slate-50/50 p-4 font-bold outline-none"
                   />
@@ -915,41 +1180,77 @@ export function ProductCreateClient() {
               </h3>
               <div className="space-y-4">
                 <div className="rounded-2xl border-2 border-slate-100 bg-slate-50/50 p-4">
-                  <label className="mb-1 block text-[10px] font-black uppercase text-slate-400 tracking-widest">Base Price (USD) *</label>
+                  <label className="mb-1 block text-[10px] font-black uppercase text-slate-400 tracking-widest">
+                    Base Price (USD) *
+                  </label>
                   <input
                     type="number"
                     value={priceUsd}
-                    onChange={e => setPriceUsd(e.target.value)}
+                    onChange={(e) => setPriceUsd(e.target.value)}
                     className="w-full bg-transparent text-xl font-black outline-none"
                     placeholder="0.00"
                   />
                 </div>
                 <div className="rounded-2xl border border-emerald-100 bg-emerald-50/60 p-4">
-                  <p className="mb-3 text-[10px] font-black uppercase tracking-widest text-emerald-700">Production Cost Setup *</p>
+                  <p className="mb-3 text-[10px] font-black uppercase tracking-widest text-emerald-700">
+                    Production Cost Setup *
+                  </p>
                   <div className="grid gap-3">
                     <label>
-                      <span className="mb-1 block text-[10px] font-black uppercase text-slate-500">Designer Labor Cost</span>
-                      <input type="number" value={designerCostUsd} onChange={e => setDesignerCostUsd(e.target.value)} className="h-10 w-full rounded-xl border border-emerald-100 bg-white px-3 text-sm font-black outline-none" placeholder="0.00" />
+                      <span className="mb-1 block text-[10px] font-black uppercase text-slate-500">
+                        Designer Labor Cost
+                      </span>
+                      <input
+                        type="number"
+                        value={designerCostUsd}
+                        onChange={(e) => setDesignerCostUsd(e.target.value)}
+                        className="h-10 w-full rounded-xl border border-emerald-100 bg-white px-3 text-sm font-black outline-none"
+                        placeholder="0.00"
+                      />
                     </label>
                     <label>
-                      <span className="mb-1 block text-[10px] font-black uppercase text-slate-500">Production Tax Rate (%)</span>
-                      <input type="number" value={taxPercent} onChange={e => setTaxPercent(e.target.value)} className="h-10 w-full rounded-xl border border-emerald-100 bg-white px-3 text-sm font-black outline-none" placeholder="0" />
+                      <span className="mb-1 block text-[10px] font-black uppercase text-slate-500">
+                        Production Tax Rate (%)
+                      </span>
+                      <input
+                        type="number"
+                        value={taxPercent}
+                        onChange={(e) => setTaxPercent(e.target.value)}
+                        className="h-10 w-full rounded-xl border border-emerald-100 bg-white px-3 text-sm font-black outline-none"
+                        placeholder="0"
+                      />
                     </label>
                     <label>
-                      <span className="mb-1 block text-[10px] font-black uppercase text-slate-500">Other Production Costs</span>
-                      <input type="number" value={otherCostUsd} onChange={e => setOtherCostUsd(e.target.value)} className="h-10 w-full rounded-xl border border-emerald-100 bg-white px-3 text-sm font-black outline-none" placeholder="0.00" />
+                      <span className="mb-1 block text-[10px] font-black uppercase text-slate-500">
+                        Other Production Costs
+                      </span>
+                      <input
+                        type="number"
+                        value={otherCostUsd}
+                        onChange={(e) => setOtherCostUsd(e.target.value)}
+                        className="h-10 w-full rounded-xl border border-emerald-100 bg-white px-3 text-sm font-black outline-none"
+                        placeholder="0.00"
+                      />
                     </label>
                   </div>
                   <div className="mt-3 rounded-xl bg-white/80 p-3 text-xs font-bold text-emerald-900">
-                    Estimated unit production cost: ${((Number(designerCostUsd) || 0) + ((Number(priceUsd) || 0) * ((Number(taxPercent) || 0) / 100)) + (Number(otherCostUsd) || 0)).toFixed(2)}
+                    Estimated unit production cost: $
+                    {(
+                      (Number(designerCostUsd) || 0) +
+                      (Number(priceUsd) || 0) *
+                        ((Number(taxPercent) || 0) / 100) +
+                      (Number(otherCostUsd) || 0)
+                    ).toFixed(2)}
                   </div>
                 </div>
                 <div className="rounded-2xl border border-slate-100 p-4">
-                  <label className="mb-1 block text-[10px] font-black uppercase text-slate-400 tracking-widest">Groom Price (Optional)</label>
+                  <label className="mb-1 block text-[10px] font-black uppercase text-slate-400 tracking-widest">
+                    Groom Price (Optional)
+                  </label>
                   <input
                     type="number"
                     value={groomPriceUsd}
-                    onChange={e => setGroomPriceUsd(e.target.value)}
+                    onChange={(e) => setGroomPriceUsd(e.target.value)}
                     className="w-full bg-transparent text-lg font-black outline-none"
                     placeholder="0.00"
                   />
@@ -964,26 +1265,50 @@ export function ProductCreateClient() {
               <div className="space-y-4">
                 <div className="flex items-center justify-between p-2">
                   <div className="space-y-1">
-                    <p className="text-xs font-black uppercase text-slate-900 leading-none">Featured Product</p>
-                    <p className="text-[10px] font-bold text-slate-400">Home page hero boost</p>
+                    <p className="text-xs font-black uppercase text-slate-900 leading-none">
+                      Featured Product
+                    </p>
+                    <p className="text-[10px] font-bold text-slate-400">
+                      Home page hero boost
+                    </p>
                   </div>
                   <button
                     onClick={() => setIsFeatured(!isFeatured)}
-                    className={cn("relative inline-flex h-6 w-11 rounded-full p-1 transition-all", isFeatured ? "bg-amber-500" : "bg-slate-200")}
+                    className={cn(
+                      "relative inline-flex h-6 w-11 rounded-full p-1 transition-all",
+                      isFeatured ? "bg-amber-500" : "bg-slate-200",
+                    )}
                   >
-                    <span className={cn("h-4 w-4 rounded-full bg-white transition-all", isFeatured ? "translate-x-5" : "translate-x-0")} />
+                    <span
+                      className={cn(
+                        "h-4 w-4 rounded-full bg-white transition-all",
+                        isFeatured ? "translate-x-5" : "translate-x-0",
+                      )}
+                    />
                   </button>
                 </div>
                 <div className="flex items-center justify-between p-2">
                   <div className="space-y-1">
-                    <p className="text-xs font-black uppercase text-slate-900 leading-none">Publicly Active</p>
-                    <p className="text-[10px] font-bold text-slate-400">Visible for customers</p>
+                    <p className="text-xs font-black uppercase text-slate-900 leading-none">
+                      Publicly Active
+                    </p>
+                    <p className="text-[10px] font-bold text-slate-400">
+                      Visible for customers
+                    </p>
                   </div>
                   <button
                     onClick={() => setIsActive(!isActive)}
-                    className={cn("relative inline-flex h-6 w-11 rounded-full p-1 transition-all", isActive ? "bg-emerald-500" : "bg-slate-200")}
+                    className={cn(
+                      "relative inline-flex h-6 w-11 rounded-full p-1 transition-all",
+                      isActive ? "bg-emerald-500" : "bg-slate-200",
+                    )}
                   >
-                    <span className={cn("h-4 w-4 rounded-full bg-white transition-all", isActive ? "translate-x-5" : "translate-x-0")} />
+                    <span
+                      className={cn(
+                        "h-4 w-4 rounded-full bg-white transition-all",
+                        isActive ? "translate-x-5" : "translate-x-0",
+                      )}
+                    />
                   </button>
                 </div>
               </div>
@@ -996,77 +1321,104 @@ export function ProductCreateClient() {
           {/* Top Config Defaults Panel */}
           <section className="rounded-[2.5rem] border border-slate-200 bg-white p-8 shadow-sm">
             <h3 className="mb-6 flex items-center gap-2 text-sm font-black uppercase tracking-widest text-slate-400">
-              <FolderOpen className="h-4 w-4" /> Step 1: Product Defaults for Bulk Import
+              <FolderOpen className="h-4 w-4" /> Step 1: Product Defaults for
+              Bulk Import
             </h3>
             <p className="mb-6 text-xs font-bold leading-5 text-slate-500">
-              These defaults are applied to every detected folder, matching the single-product fields for classification, selling price, production cost, garment details, and storefront status.
+              These defaults are applied to every detected folder, matching the
+              single-product fields for classification, selling price,
+              production cost, garment details, and storefront status.
             </p>
             <div className="grid gap-4 md:grid-cols-4 xl:grid-cols-7">
               <div className="space-y-1">
-                <label className="text-[10px] font-black uppercase text-slate-400">Tribe</label>
+                <label className="text-[10px] font-black uppercase text-slate-400">
+                  Tribe
+                </label>
                 <select
                   value={defaultRegion}
-                  onChange={e => {
+                  onChange={(e) => {
                     setDefaultRegion(e.target.value);
-                    setDefaultSubcategory(getSubsectionsForSection(e.target.value)?.[0] || "");
+                    setDefaultSubcategory(
+                      getSubsectionsForSection(e.target.value)?.[0] || "",
+                    );
                   }}
                   className="w-full rounded-xl border border-slate-100 bg-slate-50 p-3 text-xs font-bold"
                 >
-                  {sectionNames.map(r => <option key={r} value={r}>{r}</option>)}
+                  {sectionNames.map((r) => (
+                    <option key={r} value={r}>
+                      {r}
+                    </option>
+                  ))}
                 </select>
               </div>
               <div className="space-y-1">
-                <label className="text-[10px] font-black uppercase text-slate-400">Region</label>
+                <label className="text-[10px] font-black uppercase text-slate-400">
+                  Region
+                </label>
                 <select
                   value={defaultSubcategory}
-                  onChange={e => setDefaultSubcategory(e.target.value)}
+                  onChange={(e) => setDefaultSubcategory(e.target.value)}
                   className="w-full rounded-xl border border-slate-100 bg-slate-50 p-3 text-xs font-bold"
                   disabled={!getSubsectionsForSection(defaultRegion).length}
                 >
-                  {getSubsectionsForSection(defaultRegion).map(s => <option key={s} value={s}>{s}</option>)}
+                  {getSubsectionsForSection(defaultRegion).map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
                 </select>
               </div>
               <div className="space-y-1">
-                <label className="text-[10px] font-black uppercase text-slate-400">Price (USD)</label>
+                <label className="text-[10px] font-black uppercase text-slate-400">
+                  Price (USD)
+                </label>
                 <input
                   type="number"
                   value={defaultPrice}
-                  onChange={e => setDefaultPrice(e.target.value)}
+                  onChange={(e) => setDefaultPrice(e.target.value)}
                   className="w-full rounded-xl border border-slate-100 bg-slate-50 p-3 text-xs font-bold"
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-[10px] font-black uppercase text-slate-400">Designer Cost</label>
+                <label className="text-[10px] font-black uppercase text-slate-400">
+                  Designer Cost
+                </label>
                 <input
                   type="number"
                   value={defaultDesignerCost}
-                  onChange={e => setDefaultDesignerCost(e.target.value)}
+                  onChange={(e) => setDefaultDesignerCost(e.target.value)}
                   className="w-full rounded-xl border border-slate-100 bg-slate-50 p-3 text-xs font-bold"
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-[10px] font-black uppercase text-slate-400">Tax Rate (%)</label>
+                <label className="text-[10px] font-black uppercase text-slate-400">
+                  Tax Rate (%)
+                </label>
                 <input
                   type="number"
                   value={defaultTaxPercent}
-                  onChange={e => setDefaultTaxPercent(e.target.value)}
+                  onChange={(e) => setDefaultTaxPercent(e.target.value)}
                   className="w-full rounded-xl border border-slate-100 bg-slate-50 p-3 text-xs font-bold"
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-[10px] font-black uppercase text-slate-400">Other Costs</label>
+                <label className="text-[10px] font-black uppercase text-slate-400">
+                  Other Costs
+                </label>
                 <input
                   type="number"
                   value={defaultOtherCost}
-                  onChange={e => setDefaultOtherCost(e.target.value)}
+                  onChange={(e) => setDefaultOtherCost(e.target.value)}
                   className="w-full rounded-xl border border-slate-100 bg-slate-50 p-3 text-xs font-bold"
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-[10px] font-black uppercase text-slate-400">Gender</label>
+                <label className="text-[10px] font-black uppercase text-slate-400">
+                  Gender
+                </label>
                 <select
                   value={defaultGender}
-                  onChange={e => setDefaultGender(e.target.value)}
+                  onChange={(e) => setDefaultGender(e.target.value)}
                   className="w-full rounded-xl border border-slate-100 bg-slate-50 p-3 text-xs font-bold"
                 >
                   <option value="female">Female</option>
@@ -1078,27 +1430,33 @@ export function ProductCreateClient() {
 
             <div className="grid gap-4 md:grid-cols-3 mt-4">
               <div className="space-y-1">
-                <label className="text-[10px] font-black uppercase text-slate-400">Fabric Type</label>
+                <label className="text-[10px] font-black uppercase text-slate-400">
+                  Fabric Type
+                </label>
                 <input
                   value={defaultFabric}
-                  onChange={e => setDefaultFabric(e.target.value)}
+                  onChange={(e) => setDefaultFabric(e.target.value)}
                   className="w-full rounded-xl border border-slate-100 bg-slate-50 p-3 text-xs font-bold"
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-[10px] font-black uppercase text-slate-400">Embroidery Style</label>
+                <label className="text-[10px] font-black uppercase text-slate-400">
+                  Embroidery Style
+                </label>
                 <input
                   value={defaultEmbroidery}
-                  onChange={e => setDefaultEmbroidery(e.target.value)}
+                  onChange={(e) => setDefaultEmbroidery(e.target.value)}
                   className="w-full rounded-xl border border-slate-100 bg-slate-50 p-3 text-xs font-bold"
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-[10px] font-black uppercase text-slate-400">Estimated Delivery Days</label>
+                <label className="text-[10px] font-black uppercase text-slate-400">
+                  Estimated Delivery Days
+                </label>
                 <input
                   type="number"
                   value={defaultTailoringDays}
-                  onChange={e => setDefaultTailoringDays(e.target.value)}
+                  onChange={(e) => setDefaultTailoringDays(e.target.value)}
                   className="w-full rounded-xl border border-slate-100 bg-slate-50 p-3 text-xs font-bold"
                 />
               </div>
@@ -1106,21 +1464,41 @@ export function ProductCreateClient() {
 
             <div className="flex gap-8 mt-5 border-t border-slate-100 pt-4">
               <div className="flex items-center gap-3">
-                <span className="text-[10px] font-black uppercase text-slate-400">Featured (Hero Boost)</span>
+                <span className="text-[10px] font-black uppercase text-slate-400">
+                  Featured (Hero Boost)
+                </span>
                 <button
                   onClick={() => setDefaultFeatured(!defaultFeatured)}
-                  className={cn("relative inline-flex h-5 w-10 rounded-full p-0.5 transition-all", defaultFeatured ? "bg-amber-500" : "bg-slate-200")}
+                  className={cn(
+                    "relative inline-flex h-5 w-10 rounded-full p-0.5 transition-all",
+                    defaultFeatured ? "bg-amber-500" : "bg-slate-200",
+                  )}
                 >
-                  <span className={cn("h-4 w-4 rounded-full bg-white transition-all", defaultFeatured ? "translate-x-5" : "translate-x-0")} />
+                  <span
+                    className={cn(
+                      "h-4 w-4 rounded-full bg-white transition-all",
+                      defaultFeatured ? "translate-x-5" : "translate-x-0",
+                    )}
+                  />
                 </button>
               </div>
               <div className="flex items-center gap-3">
-                <span className="text-[10px] font-black uppercase text-slate-400">Active (Public View)</span>
+                <span className="text-[10px] font-black uppercase text-slate-400">
+                  Active (Public View)
+                </span>
                 <button
                   onClick={() => setDefaultActive(!defaultActive)}
-                  className={cn("relative inline-flex h-5 w-10 rounded-full p-0.5 transition-all", defaultActive ? "bg-emerald-500" : "bg-slate-200")}
+                  className={cn(
+                    "relative inline-flex h-5 w-10 rounded-full p-0.5 transition-all",
+                    defaultActive ? "bg-emerald-500" : "bg-slate-200",
+                  )}
                 >
-                  <span className={cn("h-4 w-4 rounded-full bg-white transition-all", defaultActive ? "translate-x-5" : "translate-x-0")} />
+                  <span
+                    className={cn(
+                      "h-4 w-4 rounded-full bg-white transition-all",
+                      defaultActive ? "translate-x-5" : "translate-x-0",
+                    )}
+                  />
                 </button>
               </div>
               <button
@@ -1135,9 +1513,12 @@ export function ProductCreateClient() {
           {/* Folder Upload Input Section */}
           <section className="rounded-[2.5rem] border-2 border-dashed border-slate-300 bg-white p-8 flex flex-col items-center justify-center text-center hover:border-emerald-600 transition-all group">
             <Upload className="h-12 w-12 text-slate-300 mb-3 group-hover:text-emerald-600 transition-colors" />
-            <h4 className="text-sm font-bold text-slate-900 mb-1">Upload Root Folder</h4>
+            <h4 className="text-sm font-bold text-slate-900 mb-1">
+              Upload Root Folder
+            </h4>
             <p className="text-xs text-slate-500 max-w-sm mb-4">
-              Select one root folder. Each subfolder becomes a product, and every image inside that subfolder is attached to the catalog item.
+              Select one root folder. Each subfolder becomes a product, and
+              every image inside that subfolder is attached to the catalog item.
             </p>
             <button
               type="button"
@@ -1163,7 +1544,8 @@ export function ProductCreateClient() {
             <section className="rounded-[2.5rem] border border-slate-200 bg-white shadow-sm overflow-hidden">
               <div className="bg-slate-50 px-8 py-4 border-b border-slate-100 flex items-center justify-between">
                 <h3 className="flex items-center gap-2 text-sm font-black uppercase tracking-widest text-slate-400">
-                  <Shirt className="h-4 w-4" /> Step 2: Configure & Verify Detected Product Folders
+                  <Shirt className="h-4 w-4" /> Step 2: Configure & Verify
+                  Detected Product Folders
                 </h3>
                 <span className="text-[10px] font-black uppercase text-slate-400 bg-slate-200 px-3 py-1 rounded-full">
                   Total Items: {bulkProducts.length}
@@ -1173,31 +1555,60 @@ export function ProductCreateClient() {
                 <table className="w-full divide-y divide-slate-200 text-left text-xs text-slate-800 bg-white">
                   <thead>
                     <tr className="bg-slate-50 border-b border-slate-100">
-                      <th className="px-6 py-4 font-bold text-slate-400 uppercase tracking-widest w-12">Import</th>
-                      <th className="px-6 py-4 font-bold text-slate-400 uppercase tracking-widest w-40">Subfolder Name</th>
-                      <th className="px-6 py-4 font-bold text-slate-400 uppercase tracking-widest min-w-[200px]">Images Previews</th>
-                      <th className="px-6 py-4 font-bold text-slate-400 uppercase tracking-widest">Tribe / Region</th>
-                      <th className="px-6 py-4 font-bold text-slate-400 uppercase tracking-widest">Custom Middle Name</th>
-                      <th className="px-6 py-4 font-bold text-slate-400 uppercase tracking-widest w-24">Price (USD)</th>
-                      <th className="px-6 py-4 font-bold text-slate-400 uppercase tracking-widest w-28">Status</th>
+                      <th className="px-6 py-4 font-bold text-slate-400 uppercase tracking-widest w-12">
+                        Import
+                      </th>
+                      <th className="px-6 py-4 font-bold text-slate-400 uppercase tracking-widest w-40">
+                        Subfolder Name
+                      </th>
+                      <th className="px-6 py-4 font-bold text-slate-400 uppercase tracking-widest min-w-[200px]">
+                        Images Previews
+                      </th>
+                      <th className="px-6 py-4 font-bold text-slate-400 uppercase tracking-widest">
+                        Tribe / Region
+                      </th>
+                      <th className="px-6 py-4 font-bold text-slate-400 uppercase tracking-widest">
+                        Custom Middle Name
+                      </th>
+                      <th className="px-6 py-4 font-bold text-slate-400 uppercase tracking-widest w-24">
+                        Price (USD)
+                      </th>
+                      <th className="px-6 py-4 font-bold text-slate-400 uppercase tracking-widest w-28">
+                        Status
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 font-bold">
-                    {bulkProducts.map(prod => {
+                    {bulkProducts.map((prod) => {
                       const subsections = getSubsectionsForSection(prod.region);
                       return (
-                        <tr key={prod.id} className={cn("hover:bg-slate-50 transition-colors", !prod.import && "opacity-50")}>
+                        <tr
+                          key={prod.id}
+                          className={cn(
+                            "hover:bg-slate-50 transition-colors",
+                            !prod.import && "opacity-50",
+                          )}
+                        >
                           <td className="px-6 py-6">
                             <input
                               type="checkbox"
                               checked={prod.import}
                               disabled={busy}
-                              onChange={e => updateBulkProduct(prod.id, "import", e.target.checked)}
+                              onChange={(e) =>
+                                updateBulkProduct(
+                                  prod.id,
+                                  "import",
+                                  e.target.checked,
+                                )
+                              }
                               className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
                             />
                           </td>
                           <td className="px-6 py-6 select-all">
-                            <span className="font-mono text-slate-900 block truncate max-w-[150px]" title={prod.folderName}>
+                            <span
+                              className="font-mono text-slate-900 block truncate max-w-[150px]"
+                              title={prod.folderName}
+                            >
                               {prod.folderName}
                             </span>
                           </td>
@@ -1211,13 +1622,17 @@ export function ProductCreateClient() {
                                     onClick={() => {
                                       setPreviewImage({
                                         name: `${prod.folderName} - Pose ${i + 1} (${file.name})`,
-                                        url: fileUrl
+                                        url: fileUrl,
                                       });
                                     }}
                                     className="relative h-20 w-16 rounded-lg border border-slate-200 overflow-hidden bg-slate-50 shrink-0 cursor-zoom-in hover:scale-105 hover:border-emerald-500 hover:shadow-md transition-all duration-200"
                                     title="Click to cross-check image"
                                   >
-                                    <img src={fileUrl} alt="" className="h-full w-full object-cover" />
+                                    <img
+                                      src={fileUrl}
+                                      alt=""
+                                      className="h-full w-full object-cover"
+                                    />
                                     <div className="absolute bottom-0 inset-x-0 bg-black/40 text-[8px] font-black text-white text-center py-0.5 uppercase tracking-wider opacity-0 hover:opacity-100 transition-opacity">
                                       View
                                     </div>
@@ -1235,18 +1650,38 @@ export function ProductCreateClient() {
                             <select
                               value={prod.region}
                               disabled={busy}
-                              onChange={e => updateBulkProduct(prod.id, "region", e.target.value)}
+                              onChange={(e) =>
+                                updateBulkProduct(
+                                  prod.id,
+                                  "region",
+                                  e.target.value,
+                                )
+                              }
                               className="w-full rounded border border-slate-200 p-1.5 text-[11px] outline-none"
                             >
-                              {sectionNames.map(r => <option key={r} value={r}>{r}</option>)}
+                              {sectionNames.map((r) => (
+                                <option key={r} value={r}>
+                                  {r}
+                                </option>
+                              ))}
                             </select>
                             <select
                               value={prod.subcategory}
                               disabled={busy || !subsections.length}
-                              onChange={e => updateBulkProduct(prod.id, "subcategory", e.target.value)}
+                              onChange={(e) =>
+                                updateBulkProduct(
+                                  prod.id,
+                                  "subcategory",
+                                  e.target.value,
+                                )
+                              }
                               className="w-full rounded border border-slate-200 p-1.5 text-[11px] outline-none"
                             >
-                              {subsections.map(s => <option key={s} value={s}>{s}</option>)}
+                              {subsections.map((s) => (
+                                <option key={s} value={s}>
+                                  {s}
+                                </option>
+                              ))}
                             </select>
                           </td>
                           <td className="px-6 py-6">
@@ -1254,11 +1689,18 @@ export function ProductCreateClient() {
                               <input
                                 value={prod.middleText}
                                 disabled={busy}
-                                onChange={e => updateBulkProduct(prod.id, "middleText", e.target.value)}
+                                onChange={(e) =>
+                                  updateBulkProduct(
+                                    prod.id,
+                                    "middleText",
+                                    e.target.value,
+                                  )
+                                }
                                 className="w-full rounded border border-slate-200 p-1.5 text-[11px] outline-none font-bold"
                               />
                               <p className="text-[9px] text-slate-400 select-all font-mono">
-                                suffix: — {getRegionCode(prod.region)}-{getSubcategoryCode(prod.subcategory)}-...
+                                suffix: — {getRegionCode(prod.region)}-
+                                {getSubcategoryCode(prod.subcategory)}-...
                               </p>
                             </div>
                           </td>
@@ -1267,23 +1709,38 @@ export function ProductCreateClient() {
                               type="number"
                               value={prod.priceUsd}
                               disabled={busy}
-                              onChange={e => updateBulkProduct(prod.id, "priceUsd", e.target.value)}
+                              onChange={(e) =>
+                                updateBulkProduct(
+                                  prod.id,
+                                  "priceUsd",
+                                  e.target.value,
+                                )
+                              }
                               className="w-full rounded border border-slate-200 p-1.5 text-[11px] outline-none font-bold"
                               placeholder="0.00"
                             />
                           </td>
                           <td className="px-6 py-6">
-                            <span className={cn(
-                              "inline-flex items-center rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-wider",
-                              prod.status === "pending" && "bg-slate-100 text-slate-500",
-                              prod.status === "uploading" && "bg-blue-100 text-blue-700 animate-pulse",
-                              prod.status === "success" && "bg-emerald-100 text-emerald-700",
-                              prod.status === "error" && "bg-rose-100 text-rose-700"
-                            )}>
+                            <span
+                              className={cn(
+                                "inline-flex items-center rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-wider",
+                                prod.status === "pending" &&
+                                  "bg-slate-100 text-slate-500",
+                                prod.status === "uploading" &&
+                                  "bg-blue-100 text-blue-700 animate-pulse",
+                                prod.status === "success" &&
+                                  "bg-emerald-100 text-emerald-700",
+                                prod.status === "error" &&
+                                  "bg-rose-100 text-rose-700",
+                              )}
+                            >
                               {prod.status}
                             </span>
                             {prod.errorMsg && (
-                              <span className="block text-[8px] text-rose-500 font-normal leading-tight mt-1 max-w-[120px] truncate" title={prod.errorMsg}>
+                              <span
+                                className="block text-[8px] text-rose-500 font-normal leading-tight mt-1 max-w-[120px] truncate"
+                                title={prod.errorMsg}
+                              >
                                 {prod.errorMsg}
                               </span>
                             )}
@@ -1316,7 +1773,11 @@ export function ProductCreateClient() {
               Cross-Check Image: {previewImage.name}
             </h3>
             <div className="w-full aspect-[3/4] max-h-[60vh] rounded-2xl overflow-hidden border border-slate-200 bg-slate-50 flex items-center justify-center">
-              <img src={previewImage.url} alt="" className="h-full w-full object-contain" />
+              <img
+                src={previewImage.url}
+                alt=""
+                className="h-full w-full object-contain"
+              />
             </div>
             <p className="mt-4 text-[10px] font-black text-slate-500 uppercase tracking-wider">
               Verify pose, quality, and details before importing.
