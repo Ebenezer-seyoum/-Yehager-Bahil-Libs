@@ -104,14 +104,18 @@ function isConfigured() {
   return Boolean(resend || smtpTransporter);
 }
 
+function smtpDefaultFrom(name: string) {
+  return env.SMTP_USER ? `${name} <${env.SMTP_USER}>` : null;
+}
+
 function fromAddress(channel: MailChannel = "notifications") {
   if (channel === "support") {
-    return env.EMAIL_SUPPORT_FROM || env.EMAIL_FROM || "Yehager Bahil Support <support@yehagerbahillibs.com>";
+    return env.EMAIL_SUPPORT_FROM || env.EMAIL_FROM || smtpDefaultFrom("Yehager Bahil Support") || "Yehager Bahil Support <support@yehagerbahillibs.com>";
   }
   if (channel === "team") {
-    return env.EMAIL_TEAM_FROM || env.EMAIL_FROM || "Yehager Bahil Team <team@yehagerbahillibs.com>";
+    return env.EMAIL_TEAM_FROM || env.EMAIL_FROM || smtpDefaultFrom("Yehager Bahil Team") || "Yehager Bahil Team <team@yehagerbahillibs.com>";
   }
-  return env.EMAIL_NOTIFICATIONS_FROM || env.EMAIL_FROM || "Yehager Bahil Notifications <info@yehagerbahillibs.com>";
+  return env.EMAIL_NOTIFICATIONS_FROM || env.EMAIL_FROM || smtpDefaultFrom("Yehager Bahil Notifications") || "Yehager Bahil Notifications <info@yehagerbahillibs.com>";
 }
 
 function defaultReplyTo(channel: MailChannel = "notifications") {
