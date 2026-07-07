@@ -466,7 +466,7 @@ supportRouter.post("/tickets", zValidator("json", createTicketSchema), async (c)
     details: `Ticket ${ticketNum} created by customer ${body.customerName}`,
   });
 
-  await sendSupportTicketCreatedCustomerEmail({
+  const customerEmailResult = await sendSupportTicketCreatedCustomerEmail({
     to: body.customerEmail,
     customerName: body.customerName,
     customerEmail: body.customerEmail,
@@ -474,7 +474,7 @@ supportRouter.post("/tickets", zValidator("json", createTicketSchema), async (c)
     subject: ticket.subject,
     message: body.messageBody,
   });
-  await sendSupportTicketCreatedAdminEmail({
+  const adminEmailResult = await sendSupportTicketCreatedAdminEmail({
     customerName: body.customerName,
     customerEmail: body.customerEmail,
     ticketNumber: ticket.ticketNumber,
@@ -482,7 +482,16 @@ supportRouter.post("/tickets", zValidator("json", createTicketSchema), async (c)
     message: body.messageBody,
   });
 
-  return c.json({ data: ticket }, 201);
+  return c.json(
+    {
+      data: ticket,
+      emailDelivery: {
+        customer: customerEmailResult,
+        admin: adminEmailResult,
+      },
+    },
+    201,
+  );
 });
 
 // 8. Seeds some dummy data for testing (only visible/runnable in dev)
