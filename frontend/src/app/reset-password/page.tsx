@@ -62,6 +62,7 @@ function PasswordRequirements({ password }: { password: string }) {
 function ResetPasswordForm() {
   const searchParams = useSearchParams();
   const token = searchParams?.get("token") ?? "";
+  const isSetup = searchParams?.get("setup") === "true";
   
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -129,7 +130,7 @@ function ResetPasswordForm() {
       const payload = await response.json().catch(() => null);
       if (!response.ok) throw new Error(payload?.error ?? payload?.message ?? "Password reset failed.");
       
-      setFeedback({ type: "success", message: "Your password was changed successfully. You can sign in with your new password." });
+      setFeedback({ type: "success", message: `Your password was ${isSetup ? "created" : "changed"} successfully. You can sign in with your new password.` });
       setPassword("");
       setConfirmPassword("");
     } catch (error) {
@@ -157,10 +158,10 @@ function ResetPasswordForm() {
         
         <div className="text-center mb-8">
           <h1 className="text-[26px] font-bold leading-tight text-[#0f172a] mb-3">
-            Reset password
+            {isSetup ? "Create a password" : "Reset password"}
           </h1>
           <p className="text-[15px] font-medium text-[#64748b] max-w-[320px] mx-auto leading-relaxed">
-            Create a new password for your account.
+            {isSetup ? "Create a password for your account." : "Create a new password for your account."}
           </p>
         </div>
 
@@ -168,7 +169,7 @@ function ResetPasswordForm() {
 
         <form onSubmit={submit} noValidate>
           <div className="mb-5">
-            <label className="block text-center mb-1.5 text-[14px] font-semibold text-[#1e293b]">New password</label>
+            <label className="block text-center mb-1.5 text-[14px] font-semibold text-[#1e293b]">{isSetup ? "Password" : "New password"}</label>
             <div className={`flex items-center gap-3 rounded-xl border ${passwordError ? "border-red-400" : "border-[#cbd5e1]"} bg-white px-4 py-3.5 focus-within:border-[#94a3b8]`}>
               <LockIcon />
               <input
@@ -192,7 +193,7 @@ function ResetPasswordForm() {
           </div>
 
           <div className="mb-8">
-            <label className="block text-center mb-1.5 text-[14px] font-semibold text-[#1e293b]">Confirm new password</label>
+            <label className="block text-center mb-1.5 text-[14px] font-semibold text-[#1e293b]">{isSetup ? "Confirm password" : "Confirm new password"}</label>
             <div className={`flex items-center gap-3 rounded-xl border ${confirmPasswordError ? "border-red-400" : "border-[#cbd5e1]"} bg-white px-4 py-3.5 focus-within:border-[#94a3b8]`}>
               <LockIcon />
               <input
@@ -219,7 +220,7 @@ function ResetPasswordForm() {
             disabled={submitting}
             className="w-full rounded-xl bg-[#0f172a] py-3.5 text-[16px] font-semibold text-white transition hover:bg-[#1e293b] disabled:opacity-60"
           >
-            {submitting ? "Changing password..." : "Change password"}
+            {submitting ? (isSetup ? "Creating password..." : "Changing password...") : (isSetup ? "Create password" : "Change password")}
           </button>
         </form>
       </div>

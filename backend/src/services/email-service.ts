@@ -377,8 +377,9 @@ export async function sendTransactionalEmailSafely(payload: MailPayload) {
   }
 }
 
-export function resetPasswordLink(token: string) {
-  return appLink(`/reset-password?token=${encodeURIComponent(token)}`);
+export function resetPasswordLink(token: string, isSetup = false) {
+  const url = `/reset-password?token=${encodeURIComponent(token)}`;
+  return appLink(isSetup ? `${url}&setup=true` : url);
 }
 
 // ─── Customer auth emails ─────────────────────────────────────────────────────

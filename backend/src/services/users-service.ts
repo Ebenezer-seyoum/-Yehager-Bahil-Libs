@@ -850,7 +850,7 @@ export async function createEmployeeForAdmin(payload: {
     },
   });
 
-  const setup = await createPasswordResetToken(user.id);
+  const setup = await createPasswordResetToken(user.id, true);
   await markPasswordResetLinkSent({ userId: user.id });
   await sendPasswordSetupEmail({
     to: user.email,
@@ -900,7 +900,7 @@ export async function createCustomerForAdmin(payload: {
     details: "Admin created customer account",
     metadata: { email: user.email, role: user.role },
   });
-  const setup = await createPasswordResetToken(user.id);
+  const setup = await createPasswordResetToken(user.id, true);
   await markPasswordResetLinkSent({ userId: user.id });
   await sendPasswordSetupEmail({
     to: user.email,
@@ -1258,12 +1258,12 @@ function sha256Hex(value: string) {
   return crypto.createHash("sha256").update(value).digest("hex");
 }
 
-async function createPasswordResetToken(userId: string) {
+async function createPasswordResetToken(userId: string, isSetup = false) {
   const token = crypto.randomBytes(32).toString("hex");
   const tokenHash = sha256Hex(token);
   const expiresAt = new Date(Date.now() + 1000 * 60 * 60);
   await createPasswordResetRequest({ userId, tokenHash, expiresAt });
-  return { token, expiresAt, link: resetPasswordLink(token) };
+  return { token, expiresAt, link: resetPasswordLink(token, isSetup) };
 }
 
 export async function sendPasswordResetLinkForAdmin(payload: { userId: string; performedBy?: string }) {
