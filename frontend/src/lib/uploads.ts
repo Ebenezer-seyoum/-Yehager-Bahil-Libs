@@ -38,3 +38,28 @@ export async function uploadFileToS3(file: File, folder: string) {
 
   return signed.publicUrl;
 }
+
+/**
+ * Given a stored plain S3 URL (e.g. https://bucket.s3.region.amazonaws.com/uploads/file.jpg),
+ * extract the object key and exchange it for a short-lived pre-signed GET URL via the backend.
+ * Falls back to the original URL on error so images degrade gracefully.
+ */
+export async function getSignedImageUrl(s3Url: string): Promise<string> {
+  try {
+    // Strip the base URL to get the object key
+    const url = new URL(s3Url);
+    // pathname starts with '/', remove leading slash
+    const key = url.pathname.replace(/^\//, "");
+
+    const res = await fetch("/api/backend/uploads/read-url", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key }),
+    });
+    if (!res.ok) return s3Url;
+    const payload = (await res.json()) as { url?: string };
+    return payload.url ?? s3Url;
+  } catch {
+    return s3Url;
+  }
+}

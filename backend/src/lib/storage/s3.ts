@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { extname } from "node:path";
-import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { env } from "../../config/env.js";
 
@@ -57,4 +57,12 @@ export async function getSignedUploadParams(folder: string, fileName?: string, c
     uploadUrl,
     publicUrl: buildPublicUrl(key),
   };
+}
+
+export async function getSignedReadUrl(key: string, expiresIn = 3600) {
+  return getSignedUrl(
+    s3Client,
+    new GetObjectCommand({ Bucket: env.AWS_S3_BUCKET, Key: key }),
+    { expiresIn },
+  );
 }
