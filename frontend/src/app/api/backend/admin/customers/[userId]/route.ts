@@ -33,10 +33,12 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ us
   }
 }
 
-export async function DELETE(_: Request, { params }: { params: Promise<{ userId: string }> }) {
+export async function DELETE(request: Request, { params }: { params: Promise<{ userId: string }> }) {
   const { userId } = await params;
+  const { searchParams } = new URL(request.url);
+  const force = searchParams.get("force") === "true";
   try {
-    const data = await apiRequest(`/api/v1/admin/customers/${userId}`, { method: "DELETE" });
+    const data = await apiRequest(`/api/v1/admin/customers/${userId}${force ? "?force=true" : ""}`, { method: "DELETE" });
     return NextResponse.json(data, { status: 200 });
   } catch (error) {
     return apiError(error, "Customer delete failed");
