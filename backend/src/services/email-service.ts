@@ -121,10 +121,10 @@ function smtpDefaultFrom(name: string) {
 
 function fromAddress(channel: MailChannel = "notifications") {
   if (channel === "support") {
-    return env.EMAIL_SUPPORT_FROM || env.EMAIL_FROM || smtpDefaultFrom("Yehager Bahil Support") || "Yehager Bahil Support <support@yehagerbahillibs.com>";
+    return env.EMAIL_SUPPORT_FROM || env.EMAIL_FROM || smtpDefaultFrom("Yehager Bahil Support") || "Yehager Bahil Support <info@yehagerbahillibs.com>";
   }
   if (channel === "team") {
-    return env.EMAIL_TEAM_FROM || env.EMAIL_FROM || smtpDefaultFrom("Yehager Bahil Team") || "Yehager Bahil Team <team@yehagerbahillibs.com>";
+    return env.EMAIL_TEAM_FROM || env.EMAIL_FROM || smtpDefaultFrom("Yehager Bahil Team") || "Yehager Bahil Team <info@yehagerbahillibs.com>";
   }
   return env.EMAIL_NOTIFICATIONS_FROM || env.EMAIL_FROM || smtpDefaultFrom("Yehager Bahil Libs") || "Yehager Bahil Libs <info@yehagerbahillibs.com>";
 }
