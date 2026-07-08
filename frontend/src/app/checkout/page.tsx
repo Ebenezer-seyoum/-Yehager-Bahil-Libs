@@ -138,7 +138,12 @@ export default async function CheckoutPage({
     } catch (e: unknown) {
       console.error("Checkout error:", e);
       const message = e instanceof Error ? e.message : "Internal Error";
-      const errorKey = message.toLowerCase().includes("coupon") ? "coupon" : "checkout";
+      const msgLow = message.toLowerCase();
+      const errorKey = msgLow.includes("coupon")
+        ? "coupon"
+        : msgLow.includes("exchange rate") || msgLow.includes("etb rate") || msgLow.includes("usd_etb")
+          ? "etb_rate"
+          : "checkout";
       redirect(`/checkout?error=${errorKey}&debug=${encodeURIComponent(message)}`);
     }
 

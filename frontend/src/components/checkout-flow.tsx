@@ -69,6 +69,7 @@ function errorMessage(error?: string) {
   if (error === "address") return "Please complete the required shipping address fields.";
   if (error === "pickup") return "Please provide the pickup person's name and phone number.";
   if (error === "coupon") return "Coupon could not be applied. Please check the code, dates, usage limit, and order type.";
+  if (error === "etb_rate") return "ETB bank transfer is temporarily unavailable — please select USD checkout or contact us for assistance.";
   if (error) return "Checkout failed. Please try again.";
   return "";
 }

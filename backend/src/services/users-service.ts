@@ -48,6 +48,7 @@ import {
   sendAccountStatusChangedEmail,
   sendAdminAccountStatusChangedEmail,
   sendCustomerVerificationCodeEmail,
+  sendEmployeeRoleAssignedEmail,
   sendPasswordResetEmail,
   sendPasswordSetupEmail,
   sendRegistrationEmail,
@@ -965,7 +966,7 @@ export async function assignEmployeeAccessForAdmin(payload: {
     throw new HTTPException(400, { message: "Access assignment is only supported for employee accounts" });
   }
 
-  if (payload.roleId) await getAssignableEmployeeRole(payload.roleId);
+  const assignedRole = payload.roleId ? await getAssignableEmployeeRole(payload.roleId) : null;
 
   const roleIds = payload.roleId ? [payload.roleId] : [];
   await replaceUserAdditionalRolesForAdmin(user.id, roleIds);
@@ -991,6 +992,13 @@ export async function assignEmployeeAccessForAdmin(payload: {
       assignedRoleId: payload.roleId ?? null,
       permissions: permissionKeys,
     },
+  });
+
+  await sendEmployeeRoleAssignedEmail({
+    to: user.email,
+    name: user.name,
+    roleName: assignedRole?.name ?? undefined,
+    permissionKeys,
   });
 
   return toPublicUser(updated);

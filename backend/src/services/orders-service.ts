@@ -22,7 +22,7 @@ import {
   moneyToNumber,
   numberToMoney,
 } from "./checkout-utils.js";
-import { sendAdminOrderCreatedEmail, sendAdminOrderStatusChangedEmail, sendOrderStatusEmail } from "./email-service.js";
+import { sendAdminOrderCreatedEmail, sendAdminOrderStatusChangedEmail, sendAdminPaymentReceivedEmail, sendOrderStatusEmail } from "./email-service.js";
 import { calculateCouponDiscount, markCouponRedeemed } from "./discounts-service.js";
 import { awardCustomerCreditForPaidOrder } from "./customer-credits-service.js";
 import { hasPermission } from "./permissions-service.js";
@@ -934,6 +934,18 @@ export async function submitEtbPaymentProof(payload: {
     status: updated.status,
     paymentStatus: updated.paymentStatus,
     fulfillmentType: updated.fulfillmentType,
+    showCancellationPolicy: true,
+  });
+
+  await sendAdminPaymentReceivedEmail({
+    orderId: updated.id,
+    orderNumber: updated.orderNumber,
+    customerName: updated.customerName,
+    customerEmail: updated.userEmail,
+    status: updated.status,
+    paymentStatus: updated.paymentStatus,
+    totalUsd: updated.totalUsd,
+    paymentMethod: updated.paymentMethod,
   });
 
   if (updated.eventId) {
