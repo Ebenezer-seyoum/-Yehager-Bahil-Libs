@@ -261,7 +261,7 @@ function cancellationPolicyBlock(orderNumber?: string | null, customerName?: str
           ${orderNumber ? `<li>Your Order Number: <strong style="color:#d6a43d">${escapeHtml(orderNumber)}</strong></li>` : ""}
           ${customerName ? `<li>Your Full Name: <strong style="color:#fff7df">${escapeHtml(customerName)}</strong></li>` : ""}
         </ul>
-        <p style="margin:0;color:#c8b98b;font-size:13px">Send to: <a href="mailto:yehagerbahillibs@gmail.com" style="color:#d6a43d;text-decoration:none;font-weight:700">yehagerbahillibs@gmail.com</a></p>
+        <p style="margin:0;color:#c8b98b;font-size:13px">Send to: <a href="mailto:support@yehagerbahillibs.com" style="color:#d6a43d;text-decoration:none;font-weight:700">support@yehagerbahillibs.com</a></p>
       </div>
     `
     : "";
@@ -301,7 +301,7 @@ function htmlShell(title: string, body: string) {
 
           <!-- Header -->
           <div style="text-align:center;margin-bottom:22px">
-            <div style="display:inline-block;width:104px;height:104px;border-radius:999px;background:#241b0c;border:2px solid #d6a43d;padding:8px;box-shadow:0 8px 26px rgba(0,0,0,.28);overflow:hidden">
+            <div style="display:inline-block;width:88px;height:88px;border-radius:999px;background:#120f09;overflow:hidden">
               <img src="${escapeHtml(logoUrl())}" alt="Yehager Bahil Libs" width="88" height="88" style="display:block;width:88px;height:88px;object-fit:cover;border-radius:999px" />
             </div>
           </div>
@@ -319,7 +319,7 @@ function htmlShell(title: string, body: string) {
             <p style="margin:0 0 12px">If you have any questions or need any changes before placing your order, please contact us at the details below before proceeding.</p>
             <p style="margin:0 0 8px;color:#fff7df;font-weight:800">Questions? Contact Us Directly:</p>
             <p style="margin:0 0 4px">📞 +251 92 394 0978 (WhatsApp / Production Manager Ethiopia)</p>
-            <p style="margin:0 0 12px">✉️ <a href="mailto:yehagerbahillibs@gmail.com" style="color:#d6a43d;text-decoration:none">yehagerbahillibs@gmail.com</a></p>
+            <p style="margin:0 0 12px">✉️ <a href="mailto:support@yehagerbahillibs.com" style="color:#d6a43d;text-decoration:none">support@yehagerbahillibs.com</a></p>
             <p style="margin:0 0 4px">Thank you for choosing us.</p>
             <p style="margin:0 0 12px;color:#d6a43d;font-style:italic">Wear your culture with pride.</p>
             <p style="margin:0"><a href="https://www.yehagerbahillibs.com/" style="color:#d6a43d;text-decoration:none;font-weight:800">🌐 YehagerBahilLibs.com</a></p>
