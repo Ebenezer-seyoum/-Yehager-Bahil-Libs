@@ -639,9 +639,11 @@ adminRouter.delete(
   async (c) => {
     const authUser = c.get("authUser");
     const { userId } = c.req.valid("param");
+    const force = c.req.query("force") === "true";
     const data = await deleteCustomerForAdmin({
       userId,
       performedBy: authUser?.email,
+      force,
     });
     return c.json({ data });
   },
@@ -1163,9 +1165,11 @@ adminRouter.delete(
   async (c) => {
     const authUser = c.get("authUser");
     const { userId } = c.req.valid("param");
+    const force = c.req.query("force") === "true";
     const data = await deleteUserForAdmin({
       userId,
       performedBy: authUser?.email,
+      force,
     });
     return c.json({ data });
   },

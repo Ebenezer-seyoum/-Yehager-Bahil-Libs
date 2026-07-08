@@ -1121,14 +1121,28 @@ export function CustomerDetailClient({
         const message = String(json?.message ?? "Delete failed");
         if (res.status === 409 || /history|activity|audit/i.test(message)) {
           dashboardLoading.close();
-          await dashboardAlert("Cannot Delete Account", "This account can't be deleted because it has activity history. Please deactivate the account instead.", {
+          const forceConfirm = await dashboardConfirm({
+            title: "Cannot Delete Account",
+            text: "This account can't be deleted because it has activity history. Would you like to permanently delete the account AND its activity history?",
+            confirmButtonText: "Continue",
+            cancelButtonText: "OK",
+            tone: "danger",
             icon: "warning",
-            tone: "warning",
-            confirmButtonText: "OK",
           });
-          return;
+          
+          if (!forceConfirm) {
+            return;
+          }
+          
+          dashboardLoading("Deleting...", "Please wait a moment.");
+          const forceRes = await fetch(`/api/backend/admin/customers/${customer.id}?force=true`, { method: "DELETE" });
+          const forceJson = await forceRes.json().catch(() => null);
+          if (!forceRes.ok) {
+            throw new Error(String(forceJson?.message ?? "Delete failed"));
+          }
+        } else {
+          throw new Error(message);
         }
-        throw new Error(message);
       }
       dashboardLoading.close();
       await dashboardAlert("Deleted Successfully", "Customer account has been deleted successfully.", {

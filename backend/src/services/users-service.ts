@@ -1353,7 +1353,7 @@ export async function confirmPasswordResetWithToken(payload: { token: string; pa
   return withComputedUserState(updated);
 }
 
-export async function deleteUserForAdmin(payload: { userId: string; performedBy?: string }) {
+export async function deleteUserForAdmin(payload: { userId: string; performedBy?: string; force?: boolean }) {
   const existing = await getUserById(payload.userId);
   if (!existing) {
     throw new HTTPException(404, { message: "User not found" });
@@ -1363,10 +1363,16 @@ export async function deleteUserForAdmin(payload: { userId: string; performedBy?
     where: and(eq(auditLogs.entityType, "user"), eq(auditLogs.entityId, payload.userId)),
     columns: { id: true },
   });
-  if (history) {
+  if (history && !payload.force) {
     throw new HTTPException(409, {
-      message: "This account can’t be deleted because it has activity history. Please block the account instead.",
+      message: "This account can't be deleted because it has activity history. Please block the account instead.",
     });
+  }
+
+  if (history && payload.force) {
+    await db.delete(auditLogs).where(
+      and(eq(auditLogs.entityType, "user"), eq(auditLogs.entityId, payload.userId)),
+    );
   }
 
   const deleted = await deleteUserById(payload.userId);
@@ -1381,14 +1387,14 @@ export async function deleteUserForAdmin(payload: { userId: string; performedBy?
     entityType: "user",
     entityId: deleted.id,
     performedBy: payload.performedBy ?? "admin",
-    details: "Admin deleted user",
+    details: payload.force ? "Admin force-deleted user (activity history removed)" : "Admin deleted user",
     metadata: { email: deleted.email, role: deleted.role },
   });
 
   return toPublicUser(deleted);
 }
 
-export async function deleteCustomerForAdmin(payload: { userId: string; performedBy?: string }) {
+export async function deleteCustomerForAdmin(payload: { userId: string; performedBy?: string; force?: boolean }) {
   await requireCustomerForAdmin(payload.userId);
   const deleted = await deleteUserForAdmin(payload);
   if (!deleted || deleted.role !== "customer") {

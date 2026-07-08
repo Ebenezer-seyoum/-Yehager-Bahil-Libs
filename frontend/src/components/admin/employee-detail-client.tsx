@@ -902,15 +902,6 @@ export function EmployeeDetailClient({
   }
 
   async function deleteEmployee() {
-    if (activity.length > 0) {
-      await dashboardError(
-        "Cannot Delete Account",
-        "This account can’t be deleted because it has activity history. Please block the account instead.",
-        { target: swalTargetRef.current ?? undefined },
-      );
-      return;
-    }
-
     if (currentUserId && user.id === currentUserId) {
       await dashboardError(
         "Delete Failed",
@@ -920,22 +911,38 @@ export function EmployeeDetailClient({
       return;
     }
 
-    const confirmed = await dashboardConfirm({
-      title: "Are you sure?",
-      text: "This employee account will be permanently deleted. This action cannot be undone.",
-      confirmButtonText: "Yes, Delete",
-      cancelButtonText: "Cancel",
-      tone: "danger",
-      icon: "warning",
-      target: swalTargetRef.current ?? undefined,
-    });
-    if (!confirmed) return;
+    let force = false;
+    if (activity.length > 0) {
+      const forceConfirm = await dashboardConfirm({
+        title: "Cannot Delete Account",
+        text: "This account can't be deleted because it has activity history. Would you like to permanently delete the account AND its activity history?",
+        confirmButtonText: "Continue",
+        cancelButtonText: "OK",
+        tone: "danger",
+        icon: "warning",
+        target: swalTargetRef.current ?? undefined,
+      });
+      if (!forceConfirm) return;
+      force = true;
+    } else {
+      const confirmed = await dashboardConfirm({
+        title: "Are you sure?",
+        text: "This employee account will be permanently deleted. This action cannot be undone.",
+        confirmButtonText: "Yes, Delete",
+        cancelButtonText: "Cancel",
+        tone: "danger",
+        icon: "warning",
+        target: swalTargetRef.current ?? undefined,
+      });
+      if (!confirmed) return;
+    }
+
     setBusy(true);
     try {
       dashboardLoading("Deleting…", "Please wait a moment.", {
         target: swalTargetRef.current ?? undefined,
       });
-      const res = await fetch(`/api/backend/admin/users/${user.id}`, {
+      const res = await fetch(`/api/backend/admin/users/${user.id}${force ? '?force=true' : ''}`, {
         method: "DELETE",
       });
       const json = (await res
@@ -945,19 +952,28 @@ export function EmployeeDetailClient({
         const message = String(json?.message ?? "Could not delete user.");
         if (res.status === 409 || /history|activity|audit/i.test(message)) {
           dashboardLoading.close();
-          await dashboardAlert(
-            "Cannot Delete Account",
-            "This account can’t be deleted because it has activity history. Please block the account instead.",
-            {
-              target: swalTargetRef.current ?? undefined,
-              icon: "warning",
-              tone: "warning",
-              confirmButtonText: "OK",
-            },
-          );
-          return;
+          const backendForceConfirm = await dashboardConfirm({
+            title: "Cannot Delete Account",
+            text: "This account can't be deleted because it has activity history. Would you like to permanently delete the account AND its activity history?",
+            confirmButtonText: "Continue",
+            cancelButtonText: "OK",
+            tone: "danger",
+            icon: "warning",
+            target: swalTargetRef.current ?? undefined,
+          });
+          if (!backendForceConfirm) return;
+          
+          dashboardLoading("Deleting…", "Please wait a moment.", {
+            target: swalTargetRef.current ?? undefined,
+          });
+          const forceRes = await fetch(`/api/backend/admin/users/${user.id}?force=true`, { method: "DELETE" });
+          const forceJson = await forceRes.json().catch(() => null);
+          if (!forceRes.ok) {
+            throw new Error(String(forceJson?.message ?? "Delete failed"));
+          }
+        } else {
+          throw new Error(message);
         }
-        throw new Error(message);
       }
       dashboardLoading.close();
       await dashboardAlert(
