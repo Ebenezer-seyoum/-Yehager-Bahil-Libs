@@ -120,13 +120,41 @@ function smtpDefaultFrom(name: string) {
 }
 
 function fromAddress(channel: MailChannel = "notifications") {
+  let configuredFrom = env.EMAIL_NOTIFICATIONS_FROM;
+  let defaultName = "Yehager Bahil Libs";
+
   if (channel === "support") {
-    return env.EMAIL_SUPPORT_FROM || env.EMAIL_FROM || smtpDefaultFrom("Yehager Bahil Support") || "Yehager Bahil Support <info@yehagerbahillibs.com>";
+    configuredFrom = env.EMAIL_SUPPORT_FROM;
+    defaultName = "Yehager Bahil Support";
+  } else if (channel === "team") {
+    configuredFrom = env.EMAIL_TEAM_FROM;
+    defaultName = "Yehager Bahil Team";
   }
-  if (channel === "team") {
-    return env.EMAIL_TEAM_FROM || env.EMAIL_FROM || smtpDefaultFrom("Yehager Bahil Team") || "Yehager Bahil Team <info@yehagerbahillibs.com>";
+
+  const baseFrom = configuredFrom || env.EMAIL_FROM;
+
+  // If using Resend (verified domains allowed), return as-is
+  if (resend) {
+    return baseFrom || `${defaultName} <info@yehagerbahillibs.com>`;
   }
-  return env.EMAIL_NOTIFICATIONS_FROM || env.EMAIL_FROM || smtpDefaultFrom("Yehager Bahil Libs") || "Yehager Bahil Libs <info@yehagerbahillibs.com>";
+
+  // If using SMTP, force the email portion to be env.SMTP_USER to prevent 553 errors
+  if (env.SMTP_USER) {
+    let displayName = defaultName;
+    if (baseFrom) {
+      const match = baseFrom.match(/^(.*?)\s*<.*?>/);
+      if (match && match[1]) {
+        displayName = match[1].trim();
+      } else if (!baseFrom.includes("@")) {
+        displayName = baseFrom.trim();
+      }
+    }
+    // Clean up surrounding quotes
+    displayName = displayName.replace(/^["']|["']$/g, "").trim();
+    return `${displayName} <${env.SMTP_USER}>`;
+  }
+
+  return baseFrom || `${defaultName} <info@yehagerbahillibs.com>`;
 }
 
 function defaultReplyTo(channel: MailChannel = "notifications") {
