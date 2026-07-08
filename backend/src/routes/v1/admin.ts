@@ -43,6 +43,7 @@ import {
 } from "../../services/discounts-service.js";
 import { getCustomerCreditWorkspacePayload, updateCustomerCreditRuleForAdmin } from "../../services/customer-credits-service.js";
 import { getProfitCostsWorkspacePayload, upsertProfitCostSettingForAdmin } from "../../services/profit-costs-service.js";
+import { deleteOrderForAdmin } from "../../services/orders-service.js";
 import type { AppBindings } from "../../types/hono.js";
 
 const listQuerySchema = z.object({
@@ -1536,5 +1537,67 @@ adminRouter.delete(
     });
 
     return c.json({ data: row });
+  },
+);
+
+// ─── Delete Order ─────────────────────────────────────────────────────────────
+
+adminRouter.delete(
+  "/orders/:orderId",
+  requirePermission(PERMISSIONS.ORDERS_DELETE),
+  zValidator("param", orderParamSchema),
+  async (c) => {
+    const authUser = c.get("authUser");
+    const { orderId } = c.req.valid("param");
+    const data = await deleteOrderForAdmin({
+      orderId,
+      performedBy: authUser?.email,
+    });
+    return c.json({ data });
+  },
+);
+
+// ─── Delete Uploaded Design ───────────────────────────────────────────────────
+
+const designParamSchema = z.object({
+  designId: z.string().uuid(),
+});
+
+adminRouter.delete(
+  "/uploaded-designs/:designId",
+  requirePermission(PERMISSIONS.UPLOADED_DESIGNS_REVIEW),
+  zValidator("param", designParamSchema),
+  async (c) => {
+    const authUser = c.get("authUser");
+    const { designId } = c.req.valid("param");
+
+    const design = await db.query.uploadedDesigns.findFirst({
+      where: eq(uploadedDesigns.id, designId),
+    });
+    if (!design) {
+      throw new HTTPException(404, { message: "Uploaded design not found" });
+    }
+
+    // Delete audit logs referencing this design
+    await db.delete(auditLogs).where(
+      and(eq(auditLogs.entityType, "uploaded_design"), eq(auditLogs.entityId, designId)),
+    );
+
+    // Delete the design
+    const [deleted] = await db.delete(uploadedDesigns).where(eq(uploadedDesigns.id, designId)).returning();
+
+    // Log the deletion
+    await db.insert(auditLogs).values({
+      action: "uploaded_design_deleted",
+      category: "admin",
+      severity: "warning",
+      entityType: "uploaded_design",
+      entityId: designId,
+      performedBy: authUser?.email ?? "admin",
+      details: `Admin deleted uploaded design ${design.submissionNumber}`,
+      metadata: { submissionNumber: design.submissionNumber, userEmail: design.userEmail },
+    });
+
+    return c.json({ data: deleted });
   },
 );

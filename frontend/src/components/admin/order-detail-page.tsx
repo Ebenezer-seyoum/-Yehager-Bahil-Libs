@@ -19,11 +19,12 @@ import {
   UserRound,
   Users,
   BadgePercent,
+  Trash2,
 } from "lucide-react";
 import { AdminDetailLayout, AdminDetailHeader } from "@/components/admin/admin-detail-layout";
 import { measurementDisplayGroups, normalizeMeasurementRecord } from "@/lib/measurement-fields";
 import { can } from "@/lib/permissions";
-import { dashboardConfirm } from "@/lib/dashboard-swal";
+import { dashboardConfirm, dashboardSuccess, dashboardError } from "@/lib/dashboard-swal";
 import { cn } from "@/lib/utils";
 
 type OrderItem = {
@@ -675,6 +676,44 @@ export function OrderDetailPage({
   const deliveryStage = isDeliveryStageOrder(order);
   const sessionUser = session?.user as { id?: string | null; role?: string | null; permissions?: string[] | null } | undefined;
   const userPermissions = sessionUser?.permissions ?? [];
+  const canDeleteOrder = can(userPermissions, "orders.delete");
+
+  async function handleDeleteOrder() {
+    const confirmed = await dashboardConfirm({
+      title: "Delete Order?",
+      text: `Are you sure you want to delete order #${order.orderNumber}? This will permanently remove the order, notes, and activity history. This action cannot be undone.`,
+      confirmButtonText: "Yes, Delete Order",
+      cancelButtonText: "Cancel",
+      tone: "danger",
+      icon: "warning",
+    });
+    if (!confirmed) return;
+
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/backend/admin/orders/${order.id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const payload = await res.json().catch(() => null);
+        throw new Error(payload?.error ?? "Could not delete order");
+      }
+      await dashboardSuccess(
+        "Deleted!",
+        `Order #${order.orderNumber} has been successfully deleted.`,
+      );
+      router.push(backUrl);
+      router.refresh();
+    } catch (error) {
+      await dashboardError(
+        "Error",
+        error instanceof Error ? error.message : "Failed to delete order",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const isNoteManager = sessionUser?.role === "admin" || sessionUser?.role === "manager" || can(userPermissions, "order_notes.manage");
   const canAddNote: Record<NoteType, boolean> = {
     customer: false,
@@ -1005,6 +1044,17 @@ export function OrderDetailPage({
                 Delivery-stage orders are view only here. Manage EMS or office pickup progress in Shipping & Delivery.
               </p>
             ) : null}
+            {canDeleteOrder && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={handleDeleteOrder}
+                className="mt-2 flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-red-50 text-xs font-black uppercase tracking-wider text-red-600 border border-red-200 hover:bg-red-100 disabled:opacity-50 transition-all sm:col-span-2"
+              >
+                <Trash2 className="h-4 w-4" />
+                Delete Order
+              </button>
+            )}
           </div>
         </div>
       }

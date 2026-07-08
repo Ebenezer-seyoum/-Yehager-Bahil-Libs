@@ -962,3 +962,47 @@ export async function submitEtbPaymentProof(payload: {
 
   return updated;
 }
+
+export async function deleteOrderForAdmin(payload: { orderId: string; performedBy?: string }) {
+  const order = await getOrderById(payload.orderId);
+  if (!order) {
+    throw new HTTPException(404, { message: "Order not found" });
+  }
+
+  // Clear approved_order_id on any uploaded designs referencing this order
+  await db
+    .update(uploadedDesigns)
+    .set({ approvedOrderId: null, updatedAt: new Date() })
+    .where(eq(uploadedDesigns.approvedOrderId, payload.orderId));
+
+  // Clear order references in event participants
+  await db
+    .update(eventParticipants)
+    .set({ orderId: null, updatedAt: new Date() })
+    .where(eq(eventParticipants.orderId, payload.orderId));
+
+  // Delete audit logs referencing this order
+  await db.delete(auditLogs).where(
+    and(eq(auditLogs.entityType, "order"), eq(auditLogs.entityId, payload.orderId)),
+  );
+
+  // Delete the order (order_notes cascade automatically via DB FK)
+  const [deleted] = await db.delete(orders).where(eq(orders.id, payload.orderId)).returning();
+  if (!deleted) {
+    throw new HTTPException(404, { message: "Order not found" });
+  }
+
+  // Log the deletion
+  await db.insert(auditLogs).values({
+    action: "order_deleted",
+    category: "admin",
+    severity: "warning",
+    entityType: "order",
+    entityId: deleted.id,
+    performedBy: payload.performedBy ?? "admin",
+    details: `Admin deleted order ${deleted.orderNumber}`,
+    metadata: { orderNumber: deleted.orderNumber, userEmail: deleted.userEmail, totalUsd: deleted.totalUsd },
+  });
+
+  return deleted;
+}

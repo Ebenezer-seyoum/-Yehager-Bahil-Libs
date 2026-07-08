@@ -20,9 +20,12 @@ import {
   UserRound,
   X,
   XCircle,
+  Trash2,
 } from "lucide-react";
+import { useSession } from "next-auth/react";
+import { can } from "@/lib/permissions";
 import { AdminDetailHeader } from "@/components/admin/admin-detail-layout";
-import { dashboardError, dashboardSuccess } from "@/lib/dashboard-swal";
+import { dashboardError, dashboardSuccess, dashboardConfirm } from "@/lib/dashboard-swal";
 
 export type UploadedDesignDetailData = {
   id: string;
@@ -293,8 +296,44 @@ export function UploadedDesignDetailPage({
 }) {
   const router = useRouter();
   const design = initialDesign;
+  const { data: session } = useSession();
+  const [busy, setBusy] = useState(false);
   const [modal, setModal] = useState<"approve" | "decline" | null>(null);
   const isGroup = Boolean(design.familyGroupId || design.eventId);
+  const sessionUser = session?.user as { id?: string | null; role?: string | null; permissions?: string[] | null } | undefined;
+  const userPermissions = sessionUser?.permissions ?? [];
+  const canDeleteDesign = can(userPermissions, "uploaded_designs.review");
+
+  async function handleDeleteDesign() {
+    const confirmed = await dashboardConfirm({
+      title: "Delete Design?",
+      text: `Are you sure you want to delete this custom design submission #${design.submissionNumber}? This will permanently remove the submission and its images. This action cannot be undone.`,
+      confirmButtonText: "Yes, Delete Design",
+      cancelButtonText: "Cancel",
+      tone: "danger",
+      icon: "warning",
+    });
+    if (!confirmed) return;
+
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/backend/admin/uploaded-designs/${design.id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const payload = await res.json().catch(() => null);
+        throw new Error(payload?.error ?? "Could not delete custom design");
+      }
+      await dashboardSuccess("Deleted!", `Custom design request #${design.submissionNumber} has been successfully deleted.`);
+      router.push(backUrl);
+      router.refresh();
+    } catch (error) {
+      await dashboardError("Error", error instanceof Error ? error.message : "Failed to delete custom design");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const canReview = ["submitted", "in_review"].includes(String(design.status ?? "submitted").toLowerCase());
   const primaryImage = design.frontImageUrl || design.sideImageUrl || design.backImageUrl || design.detailImageUrl;
   const images = useMemo(
@@ -397,6 +436,17 @@ export function UploadedDesignDetailPage({
                   Added to customer cart.
                 </div>
               ) : null}
+              {canDeleteDesign && (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={handleDeleteDesign}
+                  className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-red-50 text-sm font-black text-red-600 border border-red-200 hover:bg-red-100 disabled:opacity-50 transition-all cursor-pointer"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Delete Request
+                </button>
+              )}
             </div>
           </div>
         </section>

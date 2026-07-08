@@ -11,3 +11,16 @@ export async function GET(_request: Request, { params }: { params: Promise<{ des
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
+
+export async function DELETE(_request: Request, { params }: { params: Promise<{ designId: string }> }) {
+  try {
+    const { designId } = await params;
+    const response = await apiRequest(`/api/v1/admin/uploaded-designs/${designId}`, {
+      method: "DELETE",
+    });
+    return NextResponse.json(response);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to delete uploaded design";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}

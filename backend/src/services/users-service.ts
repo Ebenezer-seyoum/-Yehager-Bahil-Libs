@@ -4,6 +4,7 @@ import { db } from "../lib/db/drizzle.js";
 import {
   auditLogs,
   cartItems,
+  customerCreditLedger,
   employeeProfiles,
   eventParticipants,
   events,
@@ -13,6 +14,7 @@ import {
   orders,
   pendingCustomerRegistrations,
   roles,
+  supportTickets,
   uploadedDesigns,
   users,
 } from "../lib/db/schema.js";
@@ -1261,7 +1263,7 @@ function sha256Hex(value: string) {
 async function createPasswordResetToken(userId: string, isSetup = false) {
   const token = crypto.randomBytes(32).toString("hex");
   const tokenHash = sha256Hex(token);
-  const expiresAt = new Date(Date.now() + 1000 * 60 * 60);
+  const expiresAt = new Date(Date.now() + 1000 * 60 * 30);
   await createPasswordResetRequest({ userId, tokenHash, expiresAt });
   return { token, expiresAt, link: resetPasswordLink(token, isSetup) };
 }
@@ -1359,19 +1361,89 @@ export async function deleteUserForAdmin(payload: { userId: string; performedBy?
     throw new HTTPException(404, { message: "User not found" });
   }
 
+  // Check for any activity history (audit logs, orders, or uploaded designs)
   const history = await db.query.auditLogs.findFirst({
     where: and(eq(auditLogs.entityType, "user"), eq(auditLogs.entityId, payload.userId)),
     columns: { id: true },
   });
-  if (history && !payload.force) {
+  const hasOrders = await db.query.orders.findFirst({
+    where: eq(orders.userId, payload.userId),
+    columns: { id: true },
+  });
+  const hasDesigns = await db.query.uploadedDesigns.findFirst({
+    where: eq(uploadedDesigns.userId, payload.userId),
+    columns: { id: true },
+  });
+
+  const hasActivity = history || hasOrders || hasDesigns;
+
+  if (hasActivity && !payload.force) {
     throw new HTTPException(409, {
       message: "This account can't be deleted because it has activity history. Please block the account instead.",
     });
   }
 
-  if (history && payload.force) {
+  if (hasActivity && payload.force) {
+    const userId = payload.userId;
+
+    // 1. Delete customer credit ledger
+    await db.delete(customerCreditLedger).where(eq(customerCreditLedger.userId, userId));
+
+    // 2. Clear customerId in support tickets
+    await db
+      .update(supportTickets)
+      .set({ customerId: null, updatedAt: new Date() })
+      .where(eq(supportTickets.customerId, userId));
+
+    // 3. Find and clean up uploaded designs
+    const userDesignsList = await db.query.uploadedDesigns.findMany({
+      where: eq(uploadedDesigns.userId, userId),
+      columns: { id: true },
+    });
+    if (userDesignsList.length > 0) {
+      const designIds = userDesignsList.map((d) => d.id);
+      await db.update(events).set({ uploadedDesignId: null, updatedAt: new Date() }).where(inArray(events.uploadedDesignId, designIds));
+      await db.update(familyGroups).set({ uploadedDesignId: null, updatedAt: new Date() }).where(inArray(familyGroups.uploadedDesignId, designIds));
+      await db.update(familyMembers).set({ uploadedDesignId: null, updatedAt: new Date() }).where(inArray(familyMembers.uploadedDesignId, designIds));
+      await db.update(cartItems).set({ uploadedDesignId: null, updatedAt: new Date() }).where(inArray(cartItems.uploadedDesignId, designIds));
+      
+      // Delete audit logs for designs
+      await db.delete(auditLogs).where(
+        and(eq(auditLogs.entityType, "uploaded_design"), inArray(auditLogs.entityId, designIds)),
+      );
+      // Delete designs
+      await db.delete(uploadedDesigns).where(inArray(uploadedDesigns.id, designIds));
+    }
+
+    // 4. Find and clean up orders
+    const userOrdersList = await db.query.orders.findMany({
+      where: eq(orders.userId, userId),
+      columns: { id: true },
+    });
+    if (userOrdersList.length > 0) {
+      const orderIds = userOrdersList.map((o) => o.id);
+      await db.update(uploadedDesigns).set({ approvedOrderId: null, updatedAt: new Date() }).where(inArray(uploadedDesigns.approvedOrderId, orderIds));
+      await db.update(eventParticipants).set({ orderId: null, updatedAt: new Date() }).where(inArray(eventParticipants.orderId, orderIds));
+      await db.update(customerCreditLedger).set({ orderId: null, updatedAt: new Date() }).where(inArray(customerCreditLedger.orderId, orderIds));
+      await db.update(supportTickets).set({ orderId: null, updatedAt: new Date() }).where(inArray(supportTickets.orderId, orderIds));
+
+      // Delete audit logs for orders
+      await db.delete(auditLogs).where(
+        and(eq(auditLogs.entityType, "order"), inArray(auditLogs.entityId, orderIds)),
+      );
+      // Delete orders
+      await db.delete(orders).where(inArray(orders.id, orderIds));
+    }
+
+    // 5. Delete measurements
+    await db.delete(measurements).where(eq(measurements.userId, userId));
+
+    // 6. Delete cart items (just to be safe, cascade also handles it)
+    await db.delete(cartItems).where(eq(cartItems.userId, userId));
+
+    // 7. Delete audit logs for the user
     await db.delete(auditLogs).where(
-      and(eq(auditLogs.entityType, "user"), eq(auditLogs.entityId, payload.userId)),
+      and(eq(auditLogs.entityType, "user"), eq(auditLogs.entityId, userId)),
     );
   }
 
@@ -1387,7 +1459,7 @@ export async function deleteUserForAdmin(payload: { userId: string; performedBy?
     entityType: "user",
     entityId: deleted.id,
     performedBy: payload.performedBy ?? "admin",
-    details: payload.force ? "Admin force-deleted user (activity history removed)" : "Admin deleted user",
+    details: payload.force ? "Admin force-deleted user (all user activity and data removed)" : "Admin deleted user",
     metadata: { email: deleted.email, role: deleted.role },
   });
 
