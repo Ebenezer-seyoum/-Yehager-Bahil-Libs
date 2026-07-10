@@ -3,6 +3,9 @@ import { HomeCatalogSections } from "@/components/home-catalog-sections";
 import { HomeWhyUs } from "@/components/home-why-us";
 import { REGIONS, TAXONOMY } from "@/lib/taxonomy";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 type Product = {
   id: string;
   name: string;
@@ -85,52 +88,16 @@ function buildSectionsFromProducts(products: Product[]): HomepageSection[] {
   }));
 }
 
-function productsFromResponse(response: unknown): Product[] {
-  const data = (response as { data?: unknown } | null)?.data;
-  return Array.isArray(data) ? (data as Product[]) : [];
-}
-
-function activeSectionNames(sections: HomepageSection[]) {
-  const names = sections
-    .filter((section) => section.isActive)
-    .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name))
-    .map((section) => section.name.trim())
-    .filter(Boolean);
-
-  return names.length ? names : REGIONS;
-}
-
-async function fetchHomeFallbackProducts(sections: HomepageSection[]) {
-  const regionNames = activeSectionNames(sections);
-  const settled = await Promise.allSettled(
-    regionNames.map((region) => {
-      const query = new URLSearchParams({ region, limit: "40" });
-      return backendPublicRequest(`/api/v1/products?${query.toString()}`);
-    }),
-  );
-
-  const byId = new Map<string, Product>();
-  settled.forEach((result) => {
-    if (result.status !== "fulfilled") return;
-    productsFromResponse(result.value).forEach((product) => {
-      if (product.id) byId.set(product.id, product);
-    });
-  });
-
-  return Array.from(byId.values());
-}
-
 export default async function HomePage() {
   const [rateRes, productsRes, sectionsRes] = await Promise.all([
     backendPublicRequest("/api/v1/exchange-rate").catch(() => ({ data: null })),
-    backendPublicRequest("/api/v1/products?limit=200").catch((error) => ({ data: [], error })),
+    backendPublicRequest("/api/v1/products/home?limit=120").catch(() => ({ data: [] })),
     backendPublicRequest("/api/v1/products/sections").catch(() => ({ data: [] })),
   ]);
 
   const etbRate = Number(rateRes?.data?.rate ?? 0) || null;
   const apiSections = (Array.isArray(sectionsRes?.data) ? sectionsRes.data : []) as HomepageSection[];
-  const initialProducts = productsFromResponse(productsRes);
-  const products = initialProducts.length ? initialProducts : await fetchHomeFallbackProducts(apiSections);
+  const products = (Array.isArray(productsRes?.data) ? productsRes.data : []) as Product[];
   const sections = apiSections.some((section) => section.isActive) ? apiSections : buildSectionsFromProducts(products);
 
   return (

@@ -24,6 +24,10 @@ const productIdParamSchema = z.object({
   productId: z.string().uuid(),
 });
 
+const homeProductsQuerySchema = z.object({
+  limit: z.coerce.number().int().positive().max(200).optional(),
+});
+
 export const productsRouter = new Hono<AppBindings>();
 
 productsRouter.get("/sections", async (c) => {
@@ -89,6 +93,34 @@ productsRouter.get("/sections", async (c) => {
       })),
     })),
   });
+});
+
+productsRouter.get("/home", zValidator("query", homeProductsQuerySchema), async (c) => {
+  const { limit } = c.req.valid("query");
+  const rows = await db
+    .select({
+      id: products.id,
+      name: products.name,
+      description: products.description,
+      region: products.region,
+      category: products.category,
+      subcategory: products.subcategory,
+      gender: products.gender,
+      uniqueId: products.uniqueId,
+      groomPriceUsd: products.groomPriceUsd,
+      familyRoles: products.familyRoles,
+      isCouple: products.isCouple,
+      priceUsd: products.priceUsd,
+      images: products.images,
+      isFeatured: products.isFeatured,
+    })
+    .from(products)
+    .where(eq(products.isActive, true))
+    .orderBy(desc(products.isFeatured), desc(products.createdAt))
+    .limit(limit ?? 120);
+
+  const data = await enrichProductsWithDiscounts(rows);
+  return c.json({ data });
 });
 
 productsRouter.get("/", zValidator("query", querySchema), async (c) => {
