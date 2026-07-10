@@ -1421,27 +1421,27 @@ adminRouter.delete(
   async (c) => {
     const authUser = c.get("authUser");
     const { productId } = c.req.valid("param");
-    const [row] = await db
-      .update(products)
-      .set({
-        isActive: false,
-        updatedAt: new Date(),
-      })
-      .where(eq(products.id, productId))
-      .returning();
+    const row = await db.transaction(async (tx) => {
+      const [deleted] = await tx.delete(products).where(eq(products.id, productId)).returning();
+      if (!deleted) return null;
 
-    if (!row) {
-      throw new HTTPException(404, { message: "Product not found" });
-    }
+      await tx
+        .delete(profitCostSettings)
+        .where(and(eq(profitCostSettings.entityType, "product"), eq(profitCostSettings.entityId, productId)));
+
+      return deleted ?? null;
+    });
+
+    if (!row) throw new HTTPException(404, { message: "Product not found" });
 
     await db.insert(auditLogs).values({
-      action: "product_archived",
+      action: "product_deleted",
       category: "inventory",
       severity: "warning",
       entityType: "product",
       entityId: productId,
       performedBy: authUser?.email ?? "admin",
-      details: "Admin archived product",
+      details: "Admin deleted product",
       metadata: { name: row.name },
     });
 

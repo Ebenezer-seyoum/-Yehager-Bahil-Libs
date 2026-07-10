@@ -409,7 +409,7 @@ export function AdminProductDetailPanel({
     }
     const confirmed = await confirmAction(
       "Delete product?",
-      "This will hide the product from the storefront. You can manage archived products from the backend records.",
+      "This will permanently delete the product from inventory and remove it from the storefront.",
       "Delete",
     );
     if (!confirmed) return;

@@ -32,7 +32,7 @@ type HomepageSection = {
 };
 
 function sampleSize(total: number) {
-  return Math.max(1, Math.ceil(total * 0.25));
+  return Math.max(1, Math.ceil(total * 0.6));
 }
 
 function randomSample<T>(items: T[], count: number) {
@@ -59,7 +59,7 @@ export function HomeCatalogSections({
     }, 0);
     const intervalId = window.setInterval(() => {
       setDisplayedProducts(randomSample(products, visibleCount));
-    }, 30000);
+    }, 10000);
     return () => {
       window.clearTimeout(startId);
       window.clearInterval(intervalId);

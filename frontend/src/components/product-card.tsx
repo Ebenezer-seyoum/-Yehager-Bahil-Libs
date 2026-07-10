@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Copy, Heart, Share2 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type FamilyRole = { label?: string; price?: number };
 type Product = {
@@ -44,12 +44,14 @@ export function ProductCard({ product, eventId, groupId, selectionMode, etbRate 
   const [wished, setWished] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [imageIndex, setImageIndex] = useState(0);
   const context = new URLSearchParams();
   if (eventId) context.set(selectionMode === "event" ? "eventId" : "event", eventId);
   if (groupId) context.set("groupId", groupId);
   if (selectionMode) context.set("selectionMode", selectionMode);
   const href = `/product/${product.id}${context.size ? `?${context}` : ""}`;
-  const image = product.images?.[0] ?? DEFAULT_IMAGE;
+  const images = useMemo(() => product.images?.filter(Boolean) ?? [], [product.images]);
+  const image = images[imageIndex % Math.max(images.length, 1)] ?? DEFAULT_IMAGE;
   const basePrice = Number(product.effectivePriceUsd ?? product.finalPriceUsd ?? product.priceUsd ?? 0);
   const originalPrice = Number(product.originalPriceUsd ?? product.priceUsd ?? basePrice);
   const hasDiscount = Boolean(product.discount && originalPrice > basePrice);
@@ -58,6 +60,14 @@ export function ProductCard({ product, eventId, groupId, selectionMode, etbRate 
   const shareUrl = typeof window === "undefined" ? "" : `${window.location.origin}/product/${product.id}`;
   const minPrice = rolePrices.length ? Math.min(...rolePrices) : basePrice;
   const maxPrice = rolePrices.length ? Math.max(...rolePrices) : basePrice;
+
+  useEffect(() => {
+    if (images.length < 2) return;
+    const intervalId = window.setInterval(() => {
+      setImageIndex((current) => (current + 1) % images.length);
+    }, 5000);
+    return () => window.clearInterval(intervalId);
+  }, [images.length]);
 
   async function copyLink() {
     await navigator.clipboard.writeText(shareUrl);
@@ -69,7 +79,7 @@ export function ProductCard({ product, eventId, groupId, selectionMode, etbRate 
     <div className="relative">
       <Link href={href} className="group block">
         <div className="relative aspect-[2/3] overflow-hidden rounded-xl border border-border/50 bg-card transition-all duration-500 group-hover:border-primary/40 group-hover:shadow-[0_0_50px_rgba(251,163,20,0.35)]">
-          <img src={image} alt={product.name} className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105" />
+          <img key={image} src={image} alt={product.name} className="h-full w-full object-cover animate-in fade-in duration-700 transition-transform group-hover:scale-105" />
           <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
           <div className="absolute inset-0 bg-gradient-to-t from-amber-900/60 via-transparent to-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
           <div className="absolute inset-0 bg-gradient-to-br from-amber-400/30 via-transparent to-transparent opacity-0 transition-opacity duration-700 group-hover:opacity-100" />
