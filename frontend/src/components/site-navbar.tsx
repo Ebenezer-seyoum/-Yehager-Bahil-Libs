@@ -70,9 +70,9 @@ export function SiteNavbar() {
 
   return (
     <header className="sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur-lg">
-      <div className="w-full px-3 sm:px-4 lg:px-5">
+      <div className="mx-auto w-full max-w-[1720px] px-4 sm:px-6 lg:px-8">
         <div className="flex h-16 items-center justify-between sm:h-[76px]">
-          <Link href="/" className="flex shrink-0 items-center xl:mr-3">
+          <Link href="/" className="flex shrink-0 items-center xl:mr-5">
             <img
               src="https://media.base44.com/images/public/69cc55fa50bba233144fe99d/5050da81c_YeHagerBahilLibs-03.png"
               alt="Yehager Bahil Libs"
@@ -80,9 +80,9 @@ export function SiteNavbar() {
             />
           </Link>
 
-          <nav className="hidden min-w-0 flex-1 items-center gap-1.5 xl:flex">
-            <div className="flex min-w-0 flex-1 items-center justify-end gap-1.5">
-              <div className="flex min-w-0 items-center justify-end gap-1.5 overflow-visible">
+          <nav className="hidden min-w-0 flex-1 items-center justify-center gap-1.5 xl:flex">
+            <div className="flex min-w-0 items-center justify-center gap-1.5">
+              <div className="flex min-w-0 items-center justify-center gap-1.5 overflow-visible">
                 <Link href="/" className="shrink-0 rounded-md px-2 py-2 text-[13px] font-semibold text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground">
                   Home
                 </Link>
