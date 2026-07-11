@@ -80,12 +80,12 @@ export function SiteNavbar() {
             />
           </Link>
 
-          <nav className="hidden min-w-0 flex-1 items-center justify-center gap-1 xl:flex">
-            <div className="flex min-w-0 flex-1 items-center gap-1">
-              <Link href="/" className="shrink-0 rounded-md px-1.5 py-2 text-xs font-semibold text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground">
-                Home
-              </Link>
-              <div className="flex min-w-0 flex-1 items-center justify-center gap-0.5 overflow-visible">
+          <nav className="hidden min-w-0 flex-1 items-center gap-1.5 xl:flex">
+            <div className="flex min-w-0 flex-1 items-center justify-end gap-1.5">
+              <div className="flex min-w-0 items-center justify-end gap-1.5 overflow-visible">
+                <Link href="/" className="shrink-0 rounded-md px-2 py-2 text-[13px] font-semibold text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground">
+                  Home
+                </Link>
                 {desktopRegions.map((region) => {
                   const subs = region.collections?.map((collection) => collection.name) ?? [];
                   const label = region.name === "Mila's Choice" ? "Designer's Choice" : region.name;
@@ -94,7 +94,7 @@ export function SiteNavbar() {
                       <Link
                         href={`/catalog?region=${encodeURIComponent(region.name)}`}
                         onClick={() => setActiveMenu(null)}
-                        className="flex min-h-9 max-w-[82px] items-center gap-0.5 rounded-md px-1.5 py-1.5 text-xs font-semibold leading-tight text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                        className="flex min-h-9 max-w-[92px] items-center gap-1 rounded-md px-2 py-1.5 text-[13px] font-semibold leading-tight text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
                       >
                         <span className="whitespace-normal text-center">{label}</span>
                         {subs.length > 0 ? <ChevronDown className="h-3 w-3 shrink-0" /> : null}

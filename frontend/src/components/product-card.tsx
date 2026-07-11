@@ -71,7 +71,7 @@ export function ProductCard({ product, eventId, groupId, selectionMode, etbRate 
     if (images.length < 2) return;
     const intervalId = window.setInterval(() => {
       setImageIndex((current) => (current + 1) % images.length);
-    }, 5000);
+    }, 30000);
     return () => window.clearInterval(intervalId);
   }, [images.length]);
 
