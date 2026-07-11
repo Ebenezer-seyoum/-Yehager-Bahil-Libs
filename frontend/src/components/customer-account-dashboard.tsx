@@ -28,7 +28,7 @@ import {
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useSearchParams } from "next/navigation";
-import { toast } from "sonner";
+import { customerToast } from "@/lib/customer-toast";
 import {
   HEM_STYLE_OPTIONS,
   PANTS_MEASUREMENT_FIELDS,
@@ -111,18 +111,6 @@ const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
   ready_for_pickup: { label: "Ready for Pickup", color: "bg-orange-100 text-orange-800" },
   picked_up: { label: "Picked Up", color: "bg-green-200 text-green-900" },
 };
-
-function customerToast(message: string, description?: string, type: "error" | "success" = "error") {
-  toast(message, {
-    description,
-    duration: type === "error" ? 4200 : 3200,
-    className:
-      type === "error"
-        ? "!border-red-950 !bg-[#4a0505] !text-red-50"
-        : "!border-emerald-900 !bg-emerald-950 !text-emerald-50",
-    descriptionClassName: type === "error" ? "!text-red-100" : "!text-emerald-100",
-  });
-}
 
 function formatDate(value?: string | null) {
   if (!value) return "";
@@ -219,6 +207,7 @@ export function CustomerAccountDashboard({
       setEditingProfile(false);
       if (checkoutPrompt === "profile_required") {
         window.setTimeout(() => {
+          router.refresh();
           router.replace("/cart");
         }, 800);
       } else {
@@ -756,10 +745,10 @@ function MeasurementEditForm({
               ))}
             </div>
 
-            <div className="mt-6 grid grid-cols-1 gap-5 lg:grid-cols-2">
+            <div className="mt-6 space-y-5">
               <div>
                 <p className="text-sm font-semibold text-zinc-400 mb-3">Hem Style <span className="text-[#f5a623]">*</span></p>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   {HEM_STYLE_OPTIONS.map((option) => (
                     <ChoiceCard key={option.value} title={option.title} description={option.description} selected={hemStyle === option.value} onClick={() => setHemStyle(option.value)} />
                   ))}
@@ -767,7 +756,7 @@ function MeasurementEditForm({
               </div>
               <div>
                 <p className="text-sm font-semibold text-zinc-400 mb-3">Pressing (Iron) Style <span className="text-[#f5a623]">*</span></p>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   {PRESSING_STYLE_OPTIONS.map((option) => (
                     <ChoiceCard key={option.value} title={option.title} description={option.description} selected={pressingStyle === option.value} onClick={() => setPressingStyle(option.value)} />
                   ))}

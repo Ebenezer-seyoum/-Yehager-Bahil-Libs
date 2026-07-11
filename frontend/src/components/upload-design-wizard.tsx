@@ -15,7 +15,9 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { friendlyErrorMessage } from "@/lib/friendly-errors";
 import { uploadFileToS3 } from "@/lib/uploads";
+import { customerToast } from "@/lib/customer-toast";
 import {
   HEM_STYLE_OPTIONS,
   PANTS_MEASUREMENT_FIELDS,
@@ -259,7 +261,6 @@ export function UploadDesignWizard({
     useState(!hasMeasurement);
   const [step, setStep] = useState(0);
   const [busy, setBusy] = useState<null | UploadKey | "submit">(null);
-  const [error, setError] = useState<string | null>(null);
   const [submittedNumber, setSubmittedNumber] = useState<string | null>(null);
 
   const [outfitType, setOutfitType] = useState("");
@@ -310,8 +311,11 @@ export function UploadDesignWizard({
     childAgeNumber >= 0 &&
     childAgeNumber <= 17;
 
+  function showError(message: string) {
+    customerToast(message);
+  }
+
   async function handleUpload(which: UploadKey, file: File) {
-    setError(null);
     setBusy(which);
     try {
       const url = await uploadToS3(file, "upload-designs/references");
@@ -321,7 +325,7 @@ export function UploadDesignWizard({
       if (which === "back") setBackImage(next);
       if (which === "detail") setDetailImage(next);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Upload failed");
+      showError(friendlyErrorMessage(err, { context: "upload" }));
     } finally {
       setBusy(null);
     }
@@ -343,7 +347,7 @@ export function UploadDesignWizard({
 
   async function submitAll() {
     if (!canProceed() || !frontImage || !backImage) {
-      setError(
+      showError(
         isKidsOutfit && !isValidChildAge
           ? "Please enter a valid child age from 0 to 17."
           : "Please complete all required fields before submitting.",
@@ -352,7 +356,6 @@ export function UploadDesignWizard({
     }
 
     setBusy("submit");
-    setError(null);
     try {
       const res = await fetch("/api/backend/uploaded-designs", {
         method: "POST",
@@ -402,7 +405,7 @@ export function UploadDesignWizard({
       }
       setSubmittedNumber(payload?.data?.submissionNumber ?? "YBL-CD");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Submission failed");
+      showError(friendlyErrorMessage(err, { fallback: "We could not submit your design. Please try again." }));
     } finally {
       setBusy(null);
     }
@@ -831,12 +834,12 @@ export function UploadDesignWizard({
                         </span>
                       </label>
                     ))}
-                    <div className="grid gap-4 sm:col-span-2 sm:grid-cols-2">
+                    <div className="space-y-4 sm:col-span-2">
                       <div>
                         <p className="text-xs font-black text-muted-foreground">
                           Hem Style <span className="text-primary">*</span>
                         </p>
-                        <div className="mt-2 grid gap-2">
+                        <div className="mt-2 grid gap-2 sm:grid-cols-2">
                           {HEM_STYLE_OPTIONS.map((option) => (
                             <ChoiceButton
                               key={option.value}
@@ -855,7 +858,7 @@ export function UploadDesignWizard({
                           Pressing (Iron) Style{" "}
                           <span className="text-primary">*</span>
                         </p>
-                        <div className="mt-2 grid gap-2">
+                        <div className="mt-2 grid gap-2 sm:grid-cols-2">
                           {PRESSING_STYLE_OPTIONS.map((option) => (
                             <ChoiceButton
                               key={option.value}
@@ -924,12 +927,12 @@ export function UploadDesignWizard({
                     (key) => Number(measurements[key] ?? 0) > 0,
                   );
                   if (!complete) {
-                    setError(
+                    showError(
                       "Please enter all required top-body measurements before saving.",
                     );
                     return;
                   }
-                  setError(null);
+                  customerToast("Measurements saved successfully.", undefined, "success");
                   setMeasurementsSaved(true);
                 }}
                 className="mt-5 h-11 w-full rounded-lg bg-primary/60 text-sm font-bold text-black hover:bg-primary"
@@ -1032,12 +1035,6 @@ export function UploadDesignWizard({
             </div>
           </section>
         </>
-      ) : null}
-
-      {error ? (
-        <div className="rounded-xl border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
-          {error}
-        </div>
       ) : null}
 
       <div className="grid gap-3 sm:grid-cols-2">

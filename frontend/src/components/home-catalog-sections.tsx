@@ -59,7 +59,7 @@ export function HomeCatalogSections({
     }, 0);
     const intervalId = window.setInterval(() => {
       setDisplayedProducts(randomSample(products, visibleCount));
-    }, 10000);
+    }, 30000);
     return () => {
       window.clearTimeout(startId);
       window.clearInterval(intervalId);

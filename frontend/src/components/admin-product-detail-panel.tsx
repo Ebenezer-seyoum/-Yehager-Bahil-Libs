@@ -42,6 +42,18 @@ type Product = {
     taxPercent?: string | number | null;
     otherCostUsd?: string | number | null;
   } | null;
+  familyRoles?: Array<{
+    label: string;
+    icon?: string;
+    price: string | number;
+    gender: "male" | "female" | "unisex";
+    customerType?: "woman" | "man" | "girl" | "boy";
+    outfitOption?: "standard" | "full_set" | "top_only" | "pants_only";
+    description?: string;
+    designerCostUsd?: string | number | null;
+    taxPercent?: string | number | null;
+    otherCostUsd?: string | number | null;
+  }> | null;
   gender: "male" | "female" | "unisex";
   images?: string[];
   fabricType?: string | null;
@@ -55,6 +67,19 @@ type ProductPatch = Partial<Product> & {
   designerCostUsd?: number;
   taxPercent?: number;
   otherCostUsd?: number;
+};
+
+type DraftRole = {
+  label: string;
+  icon?: string;
+  price: string;
+  gender: "male" | "female" | "unisex";
+  customerType?: "woman" | "man" | "girl" | "boy";
+  outfitOption?: "standard" | "full_set" | "top_only" | "pants_only";
+  description?: string;
+  designerCostUsd: string;
+  taxPercent: string;
+  otherCostUsd: string;
 };
 
 type TabKey = "info" | "pricing" | "garment" | "storefront" | "images";
@@ -123,6 +148,29 @@ function parseRequiredNumber(value: string, label: string) {
   return parsed;
 }
 
+function roleProductionCost(role: {
+  price?: string | number | null;
+  designerCostUsd?: string | number | null;
+  taxPercent?: string | number | null;
+  otherCostUsd?: string | number | null;
+}) {
+  const price = Number(role.price ?? 0) || 0;
+  const designerCost = Number(role.designerCostUsd ?? 0) || 0;
+  const taxPercent = Number(role.taxPercent ?? 0) || 0;
+  const otherCost = Number(role.otherCostUsd ?? 0) || 0;
+  const taxCost = price * (taxPercent / 100);
+  const totalCost = designerCost + taxCost + otherCost;
+  return {
+    price,
+    designerCost,
+    taxPercent,
+    otherCost,
+    taxCost,
+    totalCost,
+    profit: price - totalCost,
+  };
+}
+
 function nearlyEqual(left: number, right: number) {
   return Math.abs(left - right) < 0.00001;
 }
@@ -141,6 +189,24 @@ async function responseErrorMessage(response: Response, fallback: string) {
 }
 
 function draftFromProduct(product: Product) {
+  const existingRoles = product.familyRoles?.length
+    ? product.familyRoles
+    : product.groomPriceUsd
+      ? [
+          {
+            label: "Women",
+            icon: "",
+            price: product.priceUsd,
+            gender: "female" as const,
+          },
+          {
+            label: "Men",
+            icon: "",
+            price: product.groomPriceUsd,
+            gender: "male" as const,
+          },
+        ]
+      : [];
   return {
     name: product.name ?? "",
     description: product.description ?? "",
@@ -154,6 +220,18 @@ function draftFromProduct(product: Product) {
     embroideryStyle: product.embroideryStyle ?? "",
     tailoringDays: String(product.tailoringDays ?? 30),
     imagesText: (product.images ?? []).join("\n"),
+    familyRoles: existingRoles.map((role) => ({
+      label: role.label,
+      icon: role.icon ?? "",
+      price: String(role.price ?? ""),
+      gender: role.gender ?? "unisex",
+      customerType: role.customerType,
+      outfitOption: role.outfitOption,
+      description: role.description,
+      designerCostUsd: String(role.designerCostUsd ?? product.profitCostSetting?.designerCostUsd ?? ""),
+      taxPercent: String(role.taxPercent ?? product.profitCostSetting?.taxPercent ?? ""),
+      otherCostUsd: String(role.otherCostUsd ?? product.profitCostSetting?.otherCostUsd ?? ""),
+    })) satisfies DraftRole[],
   };
 }
 
@@ -255,7 +333,8 @@ export function AdminProductDetailPanel({
       original.fabricType !== draft.fabricType ||
       original.embroideryStyle !== draft.embroideryStyle ||
       original.tailoringDays !== draft.tailoringDays ||
-      original.imagesText !== draft.imagesText
+      original.imagesText !== draft.imagesText ||
+      JSON.stringify(original.familyRoles) !== JSON.stringify(draft.familyRoles)
     );
   }
 
@@ -452,6 +531,12 @@ export function AdminProductDetailPanel({
         draft.otherCostUsd,
         "Other production costs",
       );
+      for (const role of draft.familyRoles) {
+        parseRequiredNumber(role.price, `${role.label} selling price`);
+        parseRequiredNumber(role.designerCostUsd, `${role.label} designer labor cost`);
+        parseRequiredNumber(role.taxPercent, `${role.label} production tax rate`);
+        parseRequiredNumber(role.otherCostUsd, `${role.label} other production costs`);
+      }
     } catch (error) {
       showResult(
         "error",
@@ -477,6 +562,20 @@ export function AdminProductDetailPanel({
         designerCostUsd,
         taxPercent,
         otherCostUsd,
+        familyRoles: draft.familyRoles.length
+          ? draft.familyRoles.map((role) => ({
+              label: role.label,
+              icon: role.icon || undefined,
+              price: Number(role.price),
+              gender: role.gender,
+              customerType: role.customerType,
+              outfitOption: role.outfitOption,
+              description: role.description,
+              designerCostUsd: Number(role.designerCostUsd),
+              taxPercent: Number(role.taxPercent),
+              otherCostUsd: Number(role.otherCostUsd),
+            }))
+          : undefined,
         gender: draft.gender as Product["gender"],
         fabricType: draft.fabricType,
         embroideryStyle: draft.embroideryStyle,
@@ -511,11 +610,11 @@ export function AdminProductDetailPanel({
       }
       setDraft((current) => ({
         ...current,
-        imagesText: uploadedUrls.join("\n"),
+        imagesText: [...parseImages(current.imagesText), ...uploadedUrls].join("\n"),
       }));
       showResult(
         "success",
-        `${uploadedUrls.length} image${uploadedUrls.length === 1 ? "" : "s"} uploaded. Previous images replaced. Click Save changes to update.`,
+        `${uploadedUrls.length} image${uploadedUrls.length === 1 ? "" : "s"} added. Click Save changes to update.`,
       );
     } catch (error) {
       showResult(
@@ -524,6 +623,19 @@ export function AdminProductDetailPanel({
       );
     } finally {
       setUploading(false);
+    }
+  }
+
+  function removeDraftImage(indexToRemove: number) {
+    const currentImages = parseImages(draft.imagesText);
+    const removedImage = currentImages[indexToRemove];
+    const nextImages = currentImages.filter((_, index) => index !== indexToRemove);
+    setDraft((current) => ({
+      ...current,
+      imagesText: nextImages.join("\n"),
+    }));
+    if (removedImage && removedImage === selectedImage) {
+      setSelectedImage(nextImages[0] ?? "");
     }
   }
 
@@ -583,6 +695,18 @@ export function AdminProductDetailPanel({
   }
 
   function renderPricing() {
+    const displayRoles = product.familyRoles?.length
+      ? product.familyRoles
+      : draftFromProduct(product).familyRoles;
+    function updateDraftRole(index: number, patch: Partial<DraftRole>) {
+      setDraft((current) => ({
+        ...current,
+        familyRoles: current.familyRoles.map((role, roleIndex) =>
+          roleIndex === index ? { ...role, ...patch } : role,
+        ),
+      }));
+    }
+
     return (
       <div className="space-y-5">
         <h3 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-slate-500">
@@ -672,6 +796,48 @@ export function AdminProductDetailPanel({
                 />
               </div>
             </div>
+            {draft.familyRoles.length ? (
+              <div className="rounded-2xl border border-amber-200 bg-amber-50/40 p-5">
+                <p className="mb-4 text-[10px] font-black uppercase tracking-widest text-amber-700">
+                  Role-Based Production Cost
+                </p>
+                <div className="space-y-3">
+                  {draft.familyRoles.map((role, index) => {
+                    const cost = roleProductionCost(role);
+                    return (
+                      <div key={`${role.label}-${index}`} className="grid gap-3 rounded-xl border border-amber-100 bg-white p-4 lg:grid-cols-6">
+                        <ReadOnlyField label="Role" value={role.label} />
+                        <EditableField
+                          label="Selling Price"
+                          value={role.price}
+                          onChange={(v) => updateDraftRole(index, { price: v })}
+                          type="number"
+                        />
+                        <EditableField
+                          label="Designer Cost"
+                          value={role.designerCostUsd}
+                          onChange={(v) => updateDraftRole(index, { designerCostUsd: v })}
+                          type="number"
+                        />
+                        <EditableField
+                          label="Tax %"
+                          value={role.taxPercent}
+                          onChange={(v) => updateDraftRole(index, { taxPercent: v })}
+                          type="number"
+                        />
+                        <EditableField
+                          label="Other Cost"
+                          value={role.otherCostUsd}
+                          onChange={(v) => updateDraftRole(index, { otherCostUsd: v })}
+                          type="number"
+                        />
+                        <ReadOnlyField label="Role Profit" value={formatCurrency(cost.profit)} />
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
           </div>
         ) : (
           <div className="space-y-4">
@@ -739,6 +905,41 @@ export function AdminProductDetailPanel({
                 />
               </div>
             </div>
+            {displayRoles.length ? (
+              <div className="rounded-2xl border border-amber-100 bg-amber-50/70 p-5">
+                <p className="mb-4 text-[10px] font-black uppercase tracking-widest text-amber-700">
+                  Role-Based Production Cost
+                </p>
+                <div className="grid gap-3 lg:grid-cols-2">
+                  {displayRoles.map((role, index) => {
+                    const cost = roleProductionCost({
+                      price: role.price,
+                      designerCostUsd: role.designerCostUsd ?? designerCost,
+                      taxPercent: role.taxPercent ?? taxPercent,
+                      otherCostUsd: role.otherCostUsd ?? otherCost,
+                    });
+                    return (
+                      <div key={`${role.label}-${index}`} className="rounded-xl border border-amber-100 bg-white p-4">
+                        <div className="mb-3 flex items-center justify-between">
+                          <p className="font-black text-slate-900">{role.label}</p>
+                          <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-black uppercase text-emerald-700">
+                            Profit {formatCurrency(cost.profit)}
+                          </span>
+                        </div>
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          <ReadOnlyField label="Selling Price" value={formatCurrency(role.price)} />
+                          <ReadOnlyField label="Designer Cost" value={formatCurrency(cost.designerCost)} />
+                          <ReadOnlyField label="Tax Rate" value={formatPercent(cost.taxPercent)} />
+                          <ReadOnlyField label="Other Cost" value={formatCurrency(cost.otherCost)} />
+                          <ReadOnlyField label="Total Cost" value={formatCurrency(cost.totalCost)} />
+                          <ReadOnlyField label="Net Profit" value={formatCurrency(cost.profit)} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
           </div>
         )}
       </div>
@@ -908,6 +1109,9 @@ export function AdminProductDetailPanel({
 
   function renderImagesManager() {
     const displayImages = editing ? parseImages(draft.imagesText) : images;
+    const activeDisplayImage = displayImages.includes(selectedImage)
+      ? selectedImage
+      : (displayImages[0] ?? "");
     return (
       <div className="space-y-5">
         <h3 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-slate-500">
@@ -917,25 +1121,39 @@ export function AdminProductDetailPanel({
         {/* Gallery */}
         <div className="grid grid-cols-4 gap-3">
           {displayImages.map((image, index) => (
-            <button
-              key={`${image}-${index}`}
-              type="button"
-              onClick={() => image && setSelectedImage(image)}
-              className={cn(
-                "overflow-hidden rounded-xl border-2 bg-slate-100 aspect-square transition-all hover:scale-[1.03]",
-                image && image === activeImage
-                  ? "border-emerald-500 ring-2 ring-emerald-200 shadow-lg"
-                  : "border-slate-200",
-              )}
-            >
-              {image ? (
-                <img
-                  src={image}
-                  alt=""
-                  className="h-full w-full object-cover"
-                />
+            <div key={`${image}-${index}`} className="relative aspect-square">
+              <button
+                type="button"
+                onClick={() => image && setSelectedImage(image)}
+                className={cn(
+                  "h-full w-full overflow-hidden rounded-xl border-2 bg-slate-100 transition-all hover:scale-[1.03]",
+                  image && image === activeDisplayImage
+                    ? "border-emerald-500 ring-2 ring-emerald-200 shadow-lg"
+                    : "border-slate-200",
+                )}
+              >
+                {image ? (
+                  <img
+                    src={image}
+                    alt=""
+                    className="h-full w-full object-cover"
+                  />
+                ) : null}
+              </button>
+              {editing && image ? (
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    removeDraftImage(index);
+                  }}
+                  className="absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-rose-600 text-white shadow-lg transition-colors hover:bg-rose-700"
+                  aria-label="Remove image"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
               ) : null}
-            </button>
+            </div>
           ))}
           {displayImages.length === 0 && (
             <div className="col-span-4 py-10 text-center text-xs font-bold uppercase text-slate-400 tracking-widest">
@@ -945,10 +1163,10 @@ export function AdminProductDetailPanel({
         </div>
 
         {/* Active image large preview */}
-        {activeImage && (
+        {activeDisplayImage && (
           <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-100 shadow-sm">
             <img
-              src={activeImage}
+              src={activeDisplayImage}
               alt=""
               className="aspect-[4/5] w-full object-cover"
             />

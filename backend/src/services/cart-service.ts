@@ -8,9 +8,23 @@ import {
 import { getMeasurementForUser } from "../repositories/measurements-repository.js";
 import { getActiveProductById } from "../repositories/products-repository.js";
 import { getUserByEmail } from "../repositories/users-repository.js";
+import { db } from "../lib/db/drizzle.js";
+import { profitCostSettings } from "../lib/db/schema.js";
+import { and, eq } from "drizzle-orm";
 import { getEffectiveProductPrice } from "./discounts-service.js";
 
-type CartProductRole = { label: string; icon?: string; price: number; gender: "male" | "female" | "unisex" };
+type CartProductRole = {
+  label: string;
+  icon?: string;
+  price: number;
+  gender: "male" | "female" | "unisex";
+  customerType?: "woman" | "man" | "girl" | "boy";
+  outfitOption?: "standard" | "full_set" | "top_only" | "pants_only";
+  description?: string;
+  designerCostUsd?: number;
+  taxPercent?: number;
+  otherCostUsd?: number;
+};
 
 function getProductRoles(product: Awaited<ReturnType<typeof getActiveProductById>>): CartProductRole[] {
   if (!product) return [];
@@ -28,6 +42,17 @@ function getProductRoles(product: Awaited<ReturnType<typeof getActiveProductById
     { label: "Men", icon: "👨", price: menPrice, gender: "male" },
     { label: "Kids", icon: "👧", price: kidsPrice, gender: "unisex" },
   ];
+}
+
+async function getProductCostFallback(productId: string) {
+  const setting = await db.query.profitCostSettings.findFirst({
+    where: and(eq(profitCostSettings.entityType, "product"), eq(profitCostSettings.entityId, productId)),
+  });
+  return {
+    designerCostUsd: Number(setting?.designerCostUsd ?? 0),
+    taxPercent: Number(setting?.taxPercent ?? 0),
+    otherCostUsd: Number(setting?.otherCostUsd ?? 0),
+  };
 }
 
 export async function getCartForUser(userEmail?: string) {
@@ -85,6 +110,26 @@ export async function addItemToCart(payload: {
     }
   }
 
+  const fallbackCost = await getProductCostFallback(product.id);
+  const roleCostSnapshot = selectedRole
+    ? {
+        role_label: selectedRole.label,
+        role_gender: selectedRole.gender,
+        customer_type: selectedRole.customerType,
+        outfit_option: selectedRole.outfitOption,
+        option_description: selectedRole.description,
+        selling_price_usd: selectedRole.price.toFixed(2),
+        designer_cost_usd: Number(selectedRole.designerCostUsd ?? fallbackCost.designerCostUsd).toFixed(2),
+        tax_percent: Number(selectedRole.taxPercent ?? fallbackCost.taxPercent).toFixed(4),
+        other_cost_usd: Number(selectedRole.otherCostUsd ?? fallbackCost.otherCostUsd).toFixed(2),
+      }
+    : {
+        selling_price_usd: Number(pricedProduct.effectivePriceUsd ?? product.priceUsd).toFixed(2),
+        designer_cost_usd: fallbackCost.designerCostUsd.toFixed(2),
+        tax_percent: fallbackCost.taxPercent.toFixed(4),
+        other_cost_usd: fallbackCost.otherCostUsd.toFixed(2),
+      };
+
   const item = await createCartItem({
     userId: user?.id,
     userEmail: payload.userEmail,
@@ -111,6 +156,9 @@ export async function addItemToCart(payload: {
       : undefined,
     eventId: payload.eventId,
     eventName: payload.eventName,
+    itemMetadata: {
+      pricing_snapshot: roleCostSnapshot,
+    },
   });
 
   return item;

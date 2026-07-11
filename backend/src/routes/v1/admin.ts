@@ -66,6 +66,12 @@ const productFamilyRoleSchema = z.object({
   icon: z.string().trim().max(16).optional(),
   price: z.coerce.number().positive(),
   gender: z.enum(["male", "female", "unisex"]),
+  customerType: z.enum(["woman", "man", "girl", "boy"]).optional(),
+  outfitOption: z.enum(["standard", "full_set", "top_only", "pants_only"]).optional(),
+  description: z.string().trim().max(160).optional(),
+  designerCostUsd: z.coerce.number().nonnegative().optional(),
+  taxPercent: z.coerce.number().nonnegative().optional(),
+  otherCostUsd: z.coerce.number().nonnegative().optional(),
 });
 const productPatchSchema = z.object({
   name: z.string().trim().min(1).optional(),

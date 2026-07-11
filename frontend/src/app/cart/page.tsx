@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { apiRequest } from "@/lib/api-client";
 import { ensureBackendUserSynced } from "@/lib/backend-user-sync";
 import { CartItemCard } from "@/components/cart-item-card";
@@ -38,8 +39,11 @@ export default async function CartPage({
     await ensureBackendUserSynced();
     const itemId = String(formData.get("itemId") ?? "");
     if (!itemId) return;
-    await apiRequest(`/api/v1/cart/${itemId}`, { method: "DELETE" });
+    try {
+      await apiRequest(`/api/v1/cart/${itemId}`, { method: "DELETE" });
+    } catch {}
     revalidatePath("/cart");
+    redirect("/cart");
   }
 
   let items: CartItem[] = [];
@@ -86,6 +90,10 @@ export default async function CartPage({
         </Link>
       </div>
     );
+  }
+
+  if (!profileComplete) {
+    redirect("/my-account?completeProfile=1&checkout=profile_required");
   }
 
   const renderItem = (item: CartItem) => <CartItemCard key={item.id} item={item} removeItem={removeItem} />;

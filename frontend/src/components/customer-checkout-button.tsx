@@ -2,19 +2,17 @@
 
 import { ArrowRight } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { toast } from "sonner";
+import { customerToast } from "@/lib/customer-toast";
 
 export function CustomerCheckoutButton({ profileComplete }: { profileComplete: boolean }) {
   const router = useRouter();
 
   function proceedToCheckout() {
     if (!profileComplete) {
-      toast("Please complete your account details before checkout.", {
-        description: "Add your full name, phone / WhatsApp, and residential address.",
-        duration: 3600,
-        className: "!border-red-950 !bg-[#4a0505] !text-red-50",
-        descriptionClassName: "!text-red-100",
-      });
+      customerToast(
+        "Please complete your account details before checkout.",
+        "Add your full name, phone / WhatsApp, and residential address.",
+      );
       window.setTimeout(() => {
         router.push("/my-account?completeProfile=1&checkout=profile_required");
       }, 1800);

@@ -2,6 +2,7 @@
 
 // Inspired by react-hot-toast library
 import { useState, useEffect } from "react";
+import { friendlyErrorMessage } from "@/lib/friendly-errors";
 
 const TOAST_LIMIT = 20;
 const TOAST_REMOVE_DELAY = 300;
@@ -115,6 +116,14 @@ function dispatch(action) {
 
 function toast({ ...props }) {
   const id = genId();
+  const safeProps =
+    props.variant === "destructive"
+      ? {
+          ...props,
+          title: typeof props.description === "string" ? props.title : friendlyErrorMessage(props.title),
+          description: typeof props.description === "string" ? friendlyErrorMessage(props.description) : props.description,
+        }
+      : props;
 
   const update = (props) =>
     dispatch({
@@ -128,7 +137,7 @@ function toast({ ...props }) {
   dispatch({
     type: actionTypes.ADD_TOAST,
     toast: {
-      ...props,
+      ...safeProps,
       id,
       open: true,
       onOpenChange: (open) => {

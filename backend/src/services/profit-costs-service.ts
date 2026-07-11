@@ -113,6 +113,16 @@ function sellingPriceFromItem(item: Record<string, unknown>, fallback: string | 
   );
 }
 
+function itemPricingSnapshot(item: Record<string, unknown>) {
+  const direct = item.pricing_snapshot ?? item.pricingSnapshot;
+  const metadata = item.item_metadata ?? item.itemMetadata;
+  const nested = metadata && typeof metadata === "object"
+    ? (metadata as Record<string, unknown>).pricing_snapshot ?? (metadata as Record<string, unknown>).pricingSnapshot
+    : undefined;
+  const snapshot = direct ?? nested;
+  return snapshot && typeof snapshot === "object" ? snapshot as Record<string, unknown> : null;
+}
+
 function productionCostForUnit(setting: CostSetting, sellingPrice: number) {
   const designerCost = moneyToNumber(setting.designerCostUsd);
   const taxPercent = moneyToNumber(setting.taxPercent);
@@ -120,6 +130,68 @@ function productionCostForUnit(setting: CostSetting, sellingPrice: number) {
   const otherCost = moneyToNumber(setting.otherCostUsd);
   const totalCost = designerCost + taxAmount + otherCost;
   return { designerCost, taxPercent, taxAmount, otherCost, totalCost };
+}
+
+function productionCostForOrderItem(item: Record<string, unknown>, setting: CostSetting, sellingPrice: number) {
+  const snapshot = itemPricingSnapshot(item);
+  if (!snapshot) return productionCostForUnit(setting, sellingPrice);
+  const designerCost = moneyToNumber(moneyLike(snapshot.designer_cost_usd ?? snapshot.designerCostUsd));
+  const taxPercent = moneyToNumber(moneyLike(snapshot.tax_percent ?? snapshot.taxPercent));
+  const taxAmount = sellingPrice * (taxPercent / 100);
+  const otherCost = moneyToNumber(moneyLike(snapshot.other_cost_usd ?? snapshot.otherCostUsd));
+  const totalCost = designerCost + taxAmount + otherCost;
+  return { designerCost, taxPercent, taxAmount, otherCost, totalCost };
+}
+
+function memberPricingFromItem(item: Record<string, unknown>) {
+  const metadata = item.item_metadata ?? item.itemMetadata;
+  const rows = metadata && typeof metadata === "object"
+    ? (metadata as Record<string, unknown>).member_pricing ?? (metadata as Record<string, unknown>).memberPricing
+    : undefined;
+  return Array.isArray(rows) ? rows.filter((row): row is Record<string, unknown> => Boolean(row) && typeof row === "object") : [];
+}
+
+function snapshotUnitCost(snapshot: Record<string, unknown>, sellingPrice: number) {
+  const designerCost = moneyToNumber(moneyLike(snapshot.designer_cost_usd ?? snapshot.designerCostUsd));
+  const taxPercent = moneyToNumber(moneyLike(snapshot.tax_percent ?? snapshot.taxPercent));
+  const otherCost = moneyToNumber(moneyLike(snapshot.other_cost_usd ?? snapshot.otherCostUsd));
+  return designerCost + sellingPrice * (taxPercent / 100) + otherCost;
+}
+
+function customOrderSnapshotTotals(order: typeof orders.$inferSelect) {
+  const items = Array.isArray(order.items) ? order.items : [];
+  let revenue = 0;
+  let productionCost = 0;
+  let hasSnapshot = false;
+
+  for (const rawItem of items) {
+    if (!rawItem || typeof rawItem !== "object") continue;
+    const item = rawItem as Record<string, unknown>;
+    const memberRows = memberPricingFromItem(item);
+    if (memberRows.length) {
+      hasSnapshot = true;
+      for (const member of memberRows) {
+        const snapshot = member.pricing_snapshot && typeof member.pricing_snapshot === "object"
+          ? member.pricing_snapshot as Record<string, unknown>
+          : {};
+        const price = moneyToNumber(moneyLike(member.price_usd ?? member.priceUsd ?? snapshot.selling_price_usd ?? snapshot.sellingPriceUsd));
+        revenue += price;
+        productionCost += snapshotUnitCost(snapshot, price);
+      }
+      continue;
+    }
+
+    const snapshot = itemPricingSnapshot(item);
+    if (snapshot) {
+      hasSnapshot = true;
+      const quantity = quantityFromItem(item);
+      const price = sellingPriceFromItem(item, undefined);
+      revenue += price * quantity;
+      productionCost += snapshotUnitCost(snapshot, price) * quantity;
+    }
+  }
+
+  return hasSnapshot ? { revenue, productionCost, netProfit: revenue - productionCost } : null;
 }
 
 function marginPercent(revenue: number, profit: number) {
@@ -194,7 +266,7 @@ export async function getProfitCostsWorkspacePayload() {
       const quantity = quantityFromItem(item);
       const unitSellingPrice = sellingPriceFromItem(item, summary.sellingPriceUsd);
       const setting = settingsByKey.get(key("product", productId)) ?? defaults;
-      const unitCost = productionCostForUnit(setting, unitSellingPrice);
+      const unitCost = productionCostForOrderItem(item, setting, unitSellingPrice);
       const revenue = unitSellingPrice * quantity;
       const productionCost = unitCost.totalCost * quantity;
       const netProfit = revenue - productionCost;
@@ -212,6 +284,13 @@ export async function getProfitCostsWorkspacePayload() {
         customerEmail: order.userEmail,
         quantity,
         sellingPriceUsd: numberToMoney(unitSellingPrice),
+        roleLabel: itemPricingSnapshot(item)?.role_label ?? itemPricingSnapshot(item)?.roleLabel ?? null,
+        customerType: itemPricingSnapshot(item)?.customer_type ?? itemPricingSnapshot(item)?.customerType ?? null,
+        outfitOption: itemPricingSnapshot(item)?.outfit_option ?? itemPricingSnapshot(item)?.outfitOption ?? null,
+        optionDescription: itemPricingSnapshot(item)?.option_description ?? itemPricingSnapshot(item)?.optionDescription ?? null,
+        designerCostUsd: numberToMoney(unitCost.designerCost),
+        taxPercent: numberToPercent(unitCost.taxPercent),
+        otherCostUsd: numberToMoney(unitCost.otherCost),
         productionCostUsd: numberToMoney(unitCost.totalCost),
         revenueUsd: numberToMoney(revenue),
         netProfitUsd: numberToMoney(netProfit),
@@ -250,8 +329,9 @@ export async function getProfitCostsWorkspacePayload() {
 
   const customOrders = orderRows
     .filter(isCustomOrder)
-    .map((order) =>
-      calculateProfit({
+    .map((order) => {
+      const snapshotTotals = customOrderSnapshotTotals(order);
+      const calculated = calculateProfit({
         entityType: "custom_order",
         entityId: order.id,
         title: order.orderNumber,
@@ -261,8 +341,17 @@ export async function getProfitCostsWorkspacePayload() {
         revenueUsd: order.totalUsd,
         setting: settingsByKey.get(key("custom_order", order.id)) ?? defaults,
         status: order.status,
-      }),
-    );
+      });
+      if (!snapshotTotals) return calculated;
+      return {
+        ...calculated,
+        revenueUsd: numberToMoney(snapshotTotals.revenue || moneyToNumber(order.totalUsd)),
+        totalCostUsd: numberToMoney(snapshotTotals.productionCost),
+        netProfitUsd: numberToMoney(snapshotTotals.netProfit),
+        marginPercent: numberToMoney(marginPercent(snapshotTotals.revenue, snapshotTotals.netProfit)),
+        hasCustomCost: true,
+      };
+    });
 
   const designerPayments = customOrders
     .filter((row) => moneyToNumber(row.designerCostUsd) > 0 || row.designerPaymentPolicy !== "none")

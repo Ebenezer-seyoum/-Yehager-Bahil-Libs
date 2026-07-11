@@ -21,6 +21,7 @@ import {
   X,
   XCircle,
   Trash2,
+  type LucideIcon,
 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { can } from "@/lib/permissions";
@@ -61,7 +62,23 @@ export type UploadedDesignDetailData = {
   familyGroupId?: string | null;
   eventId?: string | null;
   paymentStatus?: string | null;
-  members?: any[] | null;
+  members?: Array<{
+    id?: string | null;
+    name?: string | null;
+    gender?: string | null;
+    relation?: string | null;
+    age?: number | string | null;
+  }> | null;
+};
+
+type MemberPriceDraft = {
+  memberId?: string;
+  memberName: string;
+  roleLabel: string;
+  priceUsd: string;
+  designerCostUsd: string;
+  taxPercent: string;
+  otherCostUsd: string;
 };
 
 const DELIVERY_OPTIONS = [
@@ -104,7 +121,7 @@ function statusClass(status?: string | null) {
   return "border-amber-200 bg-amber-50 text-amber-700";
 }
 
-function DetailTile({ label, value, icon: Icon }: { label: string; value: unknown; icon: any }) {
+function DetailTile({ label, value, icon: Icon }: { label: string; value: unknown; icon: LucideIcon }) {
   const display = value == null || String(value).trim() === "" ? "Not provided" : String(value);
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -137,15 +154,56 @@ function ReviewModal({
   const [customEstimate, setCustomEstimate] = useState(false);
   const [customMin, setCustomMin] = useState("");
   const [customMax, setCustomMax] = useState("");
+  const [memberPrices, setMemberPrices] = useState<MemberPriceDraft[]>(
+    () =>
+      (design.members ?? []).map((member) => ({
+        memberId: member.id ?? undefined,
+        memberName: member.name ?? "Member",
+        roleLabel: member.relation || member.gender || "Member",
+        priceUsd: "",
+        designerCostUsd: "",
+        taxPercent: "",
+        otherCostUsd: "",
+      })),
+  );
+  const hasMemberPricing = isApprove && memberPrices.length > 0;
+
+  function updateMemberPrice(index: number, patch: Partial<MemberPriceDraft>) {
+    setMemberPrices((current) =>
+      current.map((member, memberIndex) =>
+        memberIndex === index ? { ...member, ...patch } : member,
+      ),
+    );
+  }
+
+  function applyQuoteToMembers() {
+    if (!quotedPrice.trim()) return;
+    setMemberPrices((current) =>
+      current.map((member) => ({
+        ...member,
+        priceUsd: member.priceUsd || quotedPrice,
+      })),
+    );
+  }
 
   async function submit() {
     const price = Number(quotedPrice);
     const min = customEstimate ? Number(customMin) : delivery.min;
     const max = customEstimate ? Number(customMax) : delivery.max;
 
-    if (isApprove && (!Number.isFinite(price) || price <= 0)) {
+    if (isApprove && !hasMemberPricing && (!Number.isFinite(price) || price <= 0)) {
       await dashboardError("Price Required", "Enter a valid quoted price before approving.");
       return;
+    }
+    if (hasMemberPricing) {
+      const invalidMember = memberPrices.find((member) => {
+        const memberPrice = Number(member.priceUsd);
+        return !Number.isFinite(memberPrice) || memberPrice <= 0;
+      });
+      if (invalidMember) {
+        await dashboardError("Member Price Required", `Enter a valid price for ${invalidMember.memberName}.`);
+        return;
+      }
     }
     if (isApprove && (!Number.isFinite(min) || !Number.isFinite(max) || min <= 0 || max < min)) {
       await dashboardError("Delivery Estimate Required", "Enter a valid completion and delivery estimate.");
@@ -164,7 +222,18 @@ function ReviewModal({
         body: JSON.stringify({
           decision: isApprove ? "approve" : "reject",
           reason: reason.trim() || undefined,
-          quotedPriceUsd: isApprove ? price : undefined,
+          quotedPriceUsd: isApprove && Number.isFinite(price) && price > 0 ? price : undefined,
+          memberPrices: hasMemberPricing
+            ? memberPrices.map((member) => ({
+                memberId: member.memberId,
+                memberName: member.memberName,
+                roleLabel: member.roleLabel || undefined,
+                priceUsd: Number(member.priceUsd),
+                designerCostUsd: member.designerCostUsd ? Number(member.designerCostUsd) : undefined,
+                taxPercent: member.taxPercent ? Number(member.taxPercent) : undefined,
+                otherCostUsd: member.otherCostUsd ? Number(member.otherCostUsd) : undefined,
+              }))
+            : undefined,
           estimatedDeliveryLabel: isApprove ? (customEstimate ? `${min}-${max} days` : delivery.label) : undefined,
           estimatedDeliveryDaysMin: isApprove ? min : undefined,
           estimatedDeliveryDaysMax: isApprove ? max : undefined,
@@ -202,7 +271,7 @@ function ReviewModal({
           {isApprove ? (
             <div className="space-y-5">
               <label className="block">
-                <span className="text-sm font-black text-slate-800">Quoted price in USD</span>
+                <span className="text-sm font-black text-slate-800">{hasMemberPricing ? "Default member price in USD" : "Quoted price in USD"}</span>
                 <div className="mt-2 flex h-12 items-center rounded-xl border border-slate-300 px-4 focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-100">
                   <DollarSign className="mr-2 h-4 w-4 text-slate-400" />
                   <input
@@ -212,10 +281,62 @@ function ReviewModal({
                     min="0"
                     step="0.01"
                     className="h-full flex-1 bg-transparent text-sm font-bold outline-none"
-                    placeholder="Example: 180"
+                    placeholder={hasMemberPricing ? "Optional: apply to members" : "Example: 180"}
                   />
                 </div>
               </label>
+              {hasMemberPricing ? (
+                <div className="rounded-2xl border border-emerald-100 bg-emerald-50/60 p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-black text-emerald-950">Per-member quote</p>
+                      <p className="mt-1 text-xs font-semibold text-emerald-800">Set separate prices for women, men, and children.</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={applyQuoteToMembers}
+                      className="h-9 rounded-xl border border-emerald-300 bg-white px-3 text-xs font-black text-emerald-800 hover:bg-emerald-50"
+                    >
+                      Apply Default Price
+                    </button>
+                  </div>
+                  <div className="mt-4 space-y-3">
+                    {memberPrices.map((member, index) => (
+                      <div key={member.memberId ?? `${member.memberName}-${index}`} className="grid gap-3 rounded-xl border border-emerald-100 bg-white p-3 lg:grid-cols-6">
+                        <div className="lg:col-span-2">
+                          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Member</p>
+                          <p className="mt-1 font-black text-slate-950">{member.memberName}</p>
+                          <input
+                            value={member.roleLabel}
+                            onChange={(event) => updateMemberPrice(index, { roleLabel: event.target.value })}
+                            className="mt-2 h-9 w-full rounded-lg border border-slate-200 px-2 text-xs font-bold outline-none focus:border-emerald-500"
+                            placeholder="Role"
+                          />
+                        </div>
+                        {[
+                          ["Price", "priceUsd"],
+                          ["Designer Cost", "designerCostUsd"],
+                          ["Tax %", "taxPercent"],
+                          ["Other Cost", "otherCostUsd"],
+                        ].map(([label, key]) => (
+                          <label key={key} className="block">
+                            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">{label}</span>
+                            <input
+                              value={member[key as keyof MemberPriceDraft] ?? ""}
+                              onChange={(event) => updateMemberPrice(index, { [key]: event.target.value } as Partial<MemberPriceDraft>)}
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              className="mt-1 h-10 w-full rounded-lg border border-slate-200 px-2 text-sm font-bold outline-none focus:border-emerald-500"
+                              placeholder="0.00"
+                            />
+                          </label>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
 
               <div>
                 <p className="text-sm font-black text-slate-800">Estimated completion and delivery</p>

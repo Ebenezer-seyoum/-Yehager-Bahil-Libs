@@ -26,6 +26,7 @@ import {
 } from "@/lib/dashboard-swal";
 import { REGIONS, TAXONOMY } from "@/lib/taxonomy";
 import { uploadFileToS3 } from "@/lib/uploads";
+import { friendlyErrorMessage } from "@/lib/friendly-errors";
 
 type BulkProduct = {
   id: string;
@@ -74,8 +75,40 @@ type ExistingProduct = {
   subcategory?: string | null;
 };
 
+type OutfitOptionDraft = {
+  label: string;
+  customerType: "man" | "girl" | "boy";
+  outfitOption: "standard" | "full_set" | "top_only" | "pants_only";
+  gender: "male" | "female" | "unisex";
+  description: string;
+  price: string;
+  designerCostUsd: string;
+  taxPercent: string;
+  otherCostUsd: string;
+};
+
+const OPTION_PRICING_TEMPLATE: Array<Omit<OutfitOptionDraft, "price" | "designerCostUsd" | "taxPercent" | "otherCostUsd">> = [
+  { label: "Man - Full Set", customerType: "man", outfitOption: "full_set", gender: "male", description: "Top + pants" },
+  { label: "Man - Top Only", customerType: "man", outfitOption: "top_only", gender: "male", description: "Shirt / top clothes" },
+  { label: "Man - Pants Only", customerType: "man", outfitOption: "pants_only", gender: "male", description: "Bottom / suri" },
+  { label: "Girl Outfit", customerType: "girl", outfitOption: "standard", gender: "female", description: "Child traditional outfit" },
+  { label: "Boy - Full Set", customerType: "boy", outfitOption: "full_set", gender: "male", description: "Top + pants" },
+  { label: "Boy - Top Only", customerType: "boy", outfitOption: "top_only", gender: "male", description: "Shirt / top clothes" },
+  { label: "Boy - Pants Only", customerType: "boy", outfitOption: "pants_only", gender: "male", description: "Bottom / suri" },
+];
+
+function initialOptionPricing(): OutfitOptionDraft[] {
+  return OPTION_PRICING_TEMPLATE.map((option) => ({
+    ...option,
+    price: "",
+    designerCostUsd: "",
+    taxPercent: "0",
+    otherCostUsd: "0",
+  }));
+}
+
 function errorMessage(error: unknown) {
-  return error instanceof Error ? error.message : "Something went wrong";
+  return friendlyErrorMessage(error);
 }
 
 function fallbackHomepageSections(): HomepageSection[] {
@@ -211,6 +244,16 @@ function getSubcategoryCode(sub: string): string {
   return map[sub] || sub.slice(0, 3).toUpperCase();
 }
 
+function buildProductUniqueId(region: string, subcategory: string, nextNum: string) {
+  return subcategory
+    ? `${getRegionCode(region)}-${getSubcategoryCode(subcategory)}-${nextNum}`
+    : `${getRegionCode(region)}-${nextNum}`;
+}
+
+function buildProductName(region: string, subcategory: string, middleText: string, uniqueId: string) {
+  return [region, subcategory, middleText.trim()].filter(Boolean).join(" ") + ` - ${uniqueId}`;
+}
+
 export function ProductCreateClient() {
   const router = useRouter();
   const folderInputRef = useRef<HTMLInputElement | null>(null);
@@ -288,6 +331,7 @@ export function ProductCreateClient() {
   const [designerCostUsd, setDesignerCostUsd] = useState("");
   const [taxPercent, setTaxPercent] = useState("");
   const [otherCostUsd, setOtherCostUsd] = useState("");
+  const [outfitOptions, setOutfitOptions] = useState<OutfitOptionDraft[]>(() => initialOptionPricing());
   const [gender, setGender] = useState("female");
   const [fabricType, setFabricType] = useState("");
   const [embroideryStyle, setEmbroideryStyle] = useState("");
@@ -297,6 +341,10 @@ export function ProductCreateClient() {
 
   // Single mode flexible image list
   const [singleFiles, setSingleFiles] = useState<File[]>([]);
+
+  function updateOutfitOption(index: number, patch: Partial<OutfitOptionDraft>) {
+    setOutfitOptions((current) => current.map((option, optionIndex) => (optionIndex === index ? { ...option, ...patch } : option)));
+  }
 
   const sectionOptions = useMemo(
     () =>
@@ -319,6 +367,11 @@ export function ProductCreateClient() {
     [sectionOptions],
   );
 
+  const sectionRequiresSubcategory = useCallback(
+    (sectionName: string) => getSubsectionsForSection(sectionName).length > 0,
+    [getSubsectionsForSection],
+  );
+
   const subsections = getSubsectionsForSection(region);
 
   useEffect(() => {
@@ -335,6 +388,8 @@ export function ProductCreateClient() {
     const nextSubsections = getSubsectionsForSection(region);
     if (nextSubsections.length && !nextSubsections.includes(subcategory)) {
       setSubcategory(nextSubsections[0]);
+    } else if (!nextSubsections.length && subcategory) {
+      setSubcategory("");
     }
   }, [getSubsectionsForSection, region, subcategory, sectionOptions]);
 
@@ -344,6 +399,7 @@ export function ProductCreateClient() {
     TAXONOMY[REGIONS[0]]?.[0] || "",
   );
   const [defaultPrice, setDefaultPrice] = useState("120");
+  const [defaultMiddleText, setDefaultMiddleText] = useState("");
   const [defaultDesignerCost, setDefaultDesignerCost] = useState("0");
   const [defaultTaxPercent, setDefaultTaxPercent] = useState("0");
   const [defaultOtherCost, setDefaultOtherCost] = useState("0");
@@ -369,6 +425,8 @@ export function ProductCreateClient() {
       !nextSubsections.includes(defaultSubcategory)
     ) {
       setDefaultSubcategory(nextSubsections[0]);
+    } else if (!nextSubsections.length && defaultSubcategory) {
+      setDefaultSubcategory("");
     }
   }, [
     defaultRegion,
@@ -398,11 +456,11 @@ export function ProductCreateClient() {
   // --- Handle Single Product Create ---
   async function handleSingleCreate() {
     // 1. Validations
-    if (!region || !subcategory) {
+    if (!region || (sectionRequiresSubcategory(region) && !subcategory)) {
       setFormNotice({
         tone: "error",
         title: "Missing Classification",
-        message: "Please select a tribe and region before inserting a product.",
+        message: "Please select the required catalog section before inserting a product.",
       });
       return;
     }
@@ -431,6 +489,21 @@ export function ProductCreateClient() {
       });
       return;
     }
+    const incompleteOption = outfitOptions.find(
+      (option) =>
+        !option.price ||
+        option.designerCostUsd === "" ||
+        option.taxPercent === "" ||
+        option.otherCostUsd === "",
+    );
+    if (incompleteOption) {
+      setFormNotice({
+        tone: "error",
+        title: "Missing Option Pricing",
+        message: `${incompleteOption.label} needs selling price, production cost, tax, and other cost.`,
+      });
+      return;
+    }
     const uploadedFiles = singleFiles.filter((file) =>
       file.type.startsWith("image/"),
     );
@@ -456,8 +529,8 @@ export function ProductCreateClient() {
 
       // 3. Generate Name
       const nextNum = getNextIncrementNumber(region, subcategory);
-      const uniqueId = `${getRegionCode(region)}-${getSubcategoryCode(subcategory)}-${nextNum}`;
-      const generatedName = `${region} ${subcategory} ${middleText.trim()} — ${uniqueId}`;
+      const uniqueId = buildProductUniqueId(region, subcategory, nextNum);
+      const generatedName = buildProductName(region, subcategory, middleText, uniqueId);
 
       // 4. Create Product
       const payload = {
@@ -467,6 +540,30 @@ export function ProductCreateClient() {
         subcategory: subcategory || undefined,
         priceUsd: Number(priceUsd),
         groomPriceUsd: groomPriceUsd ? Number(groomPriceUsd) : null,
+        familyRoles: [
+          {
+            label: "Woman Outfit",
+            price: Number(priceUsd),
+            gender: "female",
+            customerType: "woman",
+            outfitOption: "standard",
+            description: "Complete traditional outfit",
+            designerCostUsd: Number(designerCostUsd),
+            taxPercent: Number(taxPercent),
+            otherCostUsd: Number(otherCostUsd),
+          },
+          ...outfitOptions.map((option) => ({
+            label: option.label,
+            price: Number(option.price),
+            gender: option.gender,
+            customerType: option.customerType,
+            outfitOption: option.outfitOption,
+            description: option.description,
+            designerCostUsd: Number(option.designerCostUsd),
+            taxPercent: Number(option.taxPercent),
+            otherCostUsd: Number(option.otherCostUsd),
+          })),
+        ],
         designerCostUsd: Number(designerCostUsd),
         taxPercent: Number(taxPercent),
         otherCostUsd: Number(otherCostUsd),
@@ -552,7 +649,7 @@ export function ProductCreateClient() {
       return {
         id: Math.random().toString(36).substring(2, 9),
         folderName,
-        middleText: cleanName || "Traditional Dress",
+        middleText: defaultMiddleText.trim() || cleanName || "Traditional Dress",
         files: groups[folderName],
         priceUsd: defaultPrice,
         designerCostUsd: defaultDesignerCost,
@@ -644,12 +741,12 @@ export function ProductCreateClient() {
       return;
     }
     const missingCollection = activeProducts.find(
-      (p) => !p.region || !p.subcategory,
+      (p) => !p.region || (sectionRequiresSubcategory(p.region) && !p.subcategory),
     );
     if (missingCollection) {
       void dashboardError(
         "Missing Classification",
-        `Product "${missingCollection.folderName}" needs a tribe and region before import.`,
+        `Product "${missingCollection.folderName}" needs the required catalog section before import.`,
       );
       return;
     }
@@ -694,7 +791,7 @@ export function ProductCreateClient() {
         }
 
         // 2. Generate name with correct increment offset
-        const key = `${prod.region}-${prod.subcategory}`;
+        const key = `${prod.region}-${prod.subcategory || "none"}`;
         const offset = localCounters[key] || 0;
         const nextNum = getNextIncrementNumber(
           prod.region,
@@ -703,8 +800,8 @@ export function ProductCreateClient() {
         );
         localCounters[key] = offset + 1;
 
-        const uniqueId = `${getRegionCode(prod.region)}-${getSubcategoryCode(prod.subcategory)}-${nextNum}`;
-        const generatedName = `${prod.region} ${prod.subcategory} ${prod.middleText.trim()} — ${uniqueId}`;
+        const uniqueId = buildProductUniqueId(prod.region, prod.subcategory, nextNum);
+        const generatedName = buildProductName(prod.region, prod.subcategory, prod.middleText, uniqueId);
 
         // 3. Post to backend
         const payload = {
@@ -787,6 +884,7 @@ export function ProductCreateClient() {
             ? p.subcategory
             : getSubsectionsForSection(defaultRegion)[0] || "",
           priceUsd: defaultPrice,
+          middleText: defaultMiddleText.trim() || p.middleText,
           designerCostUsd: defaultDesignerCost,
           taxPercent: defaultTaxPercent,
           otherCostUsd: defaultOtherCost,
@@ -979,6 +1077,9 @@ export function ProductCreateClient() {
                       className="w-full rounded-2xl border border-slate-100 bg-slate-50/50 p-4 font-bold outline-none"
                       disabled={!subsections.length}
                     >
+                      {!subsections.length ? (
+                        <option value="">No region required</option>
+                      ) : null}
                       {subsections.map((s) => (
                         <option key={s} value={s}>
                           {s}
@@ -995,7 +1096,7 @@ export function ProductCreateClient() {
                   </label>
                   <div className="flex flex-wrap items-center font-bold text-slate-900 border border-slate-200 rounded-2xl bg-white overflow-hidden shadow-sm">
                     <span className="bg-slate-100 px-4 py-3.5 border-r border-slate-200 select-none text-slate-500 text-sm">
-                      {region} {subcategory}
+                      {[region, subcategory].filter(Boolean).join(" ")}
                     </span>
                     <input
                       value={middleText}
@@ -1004,17 +1105,18 @@ export function ProductCreateClient() {
                       className="flex-1 px-4 py-3 outline-none text-sm font-bold min-w-[200px]"
                     />
                     <span className="bg-slate-100 px-4 py-3.5 border-l border-slate-200 select-none text-slate-500 text-sm font-mono tracking-wider">
-                      — {getRegionCode(region)}-
-                      {getSubcategoryCode(subcategory)}-
-                      {getNextIncrementNumber(region, subcategory)}
+                      - {buildProductUniqueId(region, subcategory, getNextIncrementNumber(region, subcategory))}
                     </span>
                   </div>
                   <p className="mt-1 text-[10px] text-slate-400 font-bold uppercase tracking-wide">
                     Live Catalog Preview:{" "}
                     <span className="text-emerald-700 font-mono font-black select-all ml-1">
-                      {region} {subcategory} {middleText.trim()} —{" "}
-                      {getRegionCode(region)}-{getSubcategoryCode(subcategory)}-
-                      {getNextIncrementNumber(region, subcategory)}
+                      {buildProductName(
+                        region,
+                        subcategory,
+                        middleText,
+                        buildProductUniqueId(region, subcategory, getNextIncrementNumber(region, subcategory)),
+                      )}
                     </span>
                   </p>
                 </div>
@@ -1243,6 +1345,78 @@ export function ProductCreateClient() {
                     ).toFixed(2)}
                   </div>
                 </div>
+                <div className="rounded-2xl border border-amber-100 bg-amber-50/50 p-4">
+                  <p className="mb-1 text-[10px] font-black uppercase tracking-widest text-amber-700">
+                    Men, Girls & Boys Option Pricing *
+                  </p>
+                  <p className="mb-4 text-[11px] font-bold leading-5 text-amber-900/70">
+                    Each option has its own selling price and production cost. Profit reports use the selected row, not the base product cost.
+                  </p>
+                  <div className="space-y-3">
+                    {outfitOptions.map((option, index) => {
+                      const price = Number(option.price || 0) || 0;
+                      const cost =
+                        (Number(option.designerCostUsd || 0) || 0) +
+                        price * ((Number(option.taxPercent || 0) || 0) / 100) +
+                        (Number(option.otherCostUsd || 0) || 0);
+                      return (
+                        <div key={`${option.customerType}-${option.outfitOption}`} className="rounded-xl border border-amber-100 bg-white p-3">
+                          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                            <div>
+                              <p className="text-xs font-black text-slate-900">{option.label}</p>
+                              <p className="text-[10px] font-semibold text-slate-500">{option.description}</p>
+                            </div>
+                            <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[10px] font-black uppercase text-amber-800">
+                              Est. cost ${cost.toFixed(2)}
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+                            <label>
+                              <span className="mb-1 block text-[9px] font-black uppercase text-slate-400">Selling Price</span>
+                              <input
+                                type="number"
+                                value={option.price}
+                                onChange={(e) => updateOutfitOption(index, { price: e.target.value })}
+                                className="h-9 w-full rounded-lg border border-amber-100 bg-amber-50/40 px-2 text-xs font-black outline-none focus:border-amber-400"
+                                placeholder="0.00"
+                              />
+                            </label>
+                            <label>
+                              <span className="mb-1 block text-[9px] font-black uppercase text-slate-400">Production Cost</span>
+                              <input
+                                type="number"
+                                value={option.designerCostUsd}
+                                onChange={(e) => updateOutfitOption(index, { designerCostUsd: e.target.value })}
+                                className="h-9 w-full rounded-lg border border-amber-100 bg-amber-50/40 px-2 text-xs font-black outline-none focus:border-amber-400"
+                                placeholder="0.00"
+                              />
+                            </label>
+                            <label>
+                              <span className="mb-1 block text-[9px] font-black uppercase text-slate-400">Tax %</span>
+                              <input
+                                type="number"
+                                value={option.taxPercent}
+                                onChange={(e) => updateOutfitOption(index, { taxPercent: e.target.value })}
+                                className="h-9 w-full rounded-lg border border-amber-100 bg-amber-50/40 px-2 text-xs font-black outline-none focus:border-amber-400"
+                                placeholder="0"
+                              />
+                            </label>
+                            <label>
+                              <span className="mb-1 block text-[9px] font-black uppercase text-slate-400">Other Cost</span>
+                              <input
+                                type="number"
+                                value={option.otherCostUsd}
+                                onChange={(e) => updateOutfitOption(index, { otherCostUsd: e.target.value })}
+                                className="h-9 w-full rounded-lg border border-amber-100 bg-amber-50/40 px-2 text-xs font-black outline-none focus:border-amber-400"
+                                placeholder="0.00"
+                              />
+                            </label>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
                 <div className="rounded-2xl border border-slate-100 p-4">
                   <label className="mb-1 block text-[10px] font-black uppercase text-slate-400 tracking-widest">
                     Groom Price (Optional)
@@ -1329,7 +1503,7 @@ export function ProductCreateClient() {
               single-product fields for classification, selling price,
               production cost, garment details, and storefront status.
             </p>
-            <div className="grid gap-4 md:grid-cols-4 xl:grid-cols-7">
+            <div className="grid gap-4 md:grid-cols-4 xl:grid-cols-8">
               <div className="space-y-1">
                 <label className="text-[10px] font-black uppercase text-slate-400">
                   Tribe
@@ -1361,12 +1535,26 @@ export function ProductCreateClient() {
                   className="w-full rounded-xl border border-slate-100 bg-slate-50 p-3 text-xs font-bold"
                   disabled={!getSubsectionsForSection(defaultRegion).length}
                 >
+                  {!getSubsectionsForSection(defaultRegion).length ? (
+                    <option value="">No region required</option>
+                  ) : null}
                   {getSubsectionsForSection(defaultRegion).map((s) => (
                     <option key={s} value={s}>
                       {s}
                     </option>
                   ))}
                 </select>
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-black uppercase text-slate-400">
+                  Common Suffix
+                </label>
+                <input
+                  value={defaultMiddleText}
+                  onChange={(e) => setDefaultMiddleText(e.target.value)}
+                  placeholder="Use folder name if blank"
+                  className="w-full rounded-xl border border-slate-100 bg-slate-50 p-3 text-xs font-bold"
+                />
               </div>
               <div className="space-y-1">
                 <label className="text-[10px] font-black uppercase text-slate-400">
@@ -1677,6 +1865,9 @@ export function ProductCreateClient() {
                               }
                               className="w-full rounded border border-slate-200 p-1.5 text-[11px] outline-none"
                             >
+                              {!subsections.length ? (
+                                <option value="">No region required</option>
+                              ) : null}
                               {subsections.map((s) => (
                                 <option key={s} value={s}>
                                   {s}
@@ -1699,8 +1890,7 @@ export function ProductCreateClient() {
                                 className="w-full rounded border border-slate-200 p-1.5 text-[11px] outline-none font-bold"
                               />
                               <p className="text-[9px] text-slate-400 select-all font-mono">
-                                suffix: — {getRegionCode(prod.region)}-
-                                {getSubcategoryCode(prod.subcategory)}-...
+                                suffix: - {buildProductUniqueId(prod.region, prod.subcategory, "...")}
                               </p>
                             </div>
                           </td>

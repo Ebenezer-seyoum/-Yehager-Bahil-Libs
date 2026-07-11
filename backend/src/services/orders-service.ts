@@ -1,7 +1,7 @@
 import { HTTPException } from "hono/http-exception";
 import { and, eq, inArray, isNull, or } from "drizzle-orm";
 import { db } from "../lib/db/drizzle.js";
-import { auditLogs, eventParticipants, events, familyMembers, measurements, orderNotes, orders, products, systemAlerts, uploadedDesigns } from "../lib/db/schema.js";
+import { auditLogs, cartItems, eventParticipants, events, familyMembers, measurements, orderNotes, orders, products, systemAlerts, uploadedDesigns } from "../lib/db/schema.js";
 import { PERMISSIONS } from "../lib/auth/permissions.js";
 import { deleteCartItemsByIdsForUser, listCartItemsByIdsForUser } from "../repositories/cart-repository.js";
 import {
@@ -711,6 +711,10 @@ export async function createCheckoutIntent(payload: {
           item_type: line.itemType ?? "product",
           uploaded_design_id: line.uploadedDesignId,
           item_metadata: line.itemMetadata,
+          pricing_snapshot:
+            line.itemMetadata && typeof line.itemMetadata === "object"
+              ? (line.itemMetadata as Record<string, unknown>).pricing_snapshot
+              : undefined,
         })),
         subtotalUsd: numberToMoney(baseTotals.subtotalUsd),
         discountAmountUsd: numberToMoney(discountAmountUsd),
@@ -754,6 +758,10 @@ export async function createCheckoutIntent(payload: {
     if (couponResult.coupon?.id) {
       await markCouponRedeemed(couponResult.coupon.id);
     }
+
+    await tx
+      .delete(cartItems)
+      .where(and(inArray(cartItems.id, payload.cartItemIds), eq(cartItems.userEmail, userEmail)));
 
     await tx.insert(auditLogs).values({
       action: "checkout_intent_created",

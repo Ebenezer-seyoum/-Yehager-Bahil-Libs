@@ -1,3 +1,5 @@
+import { friendlyUploadErrorMessage } from "@/lib/friendly-errors";
+
 type ApiResponse<T> = {
   data?: T;
   error?: string;
@@ -16,24 +18,34 @@ type SignedUpload = {
 export async function uploadFileToS3(file: File, folder: string) {
   const contentType = file.type?.trim() || "application/octet-stream";
 
-  const signRes = await fetch("/api/backend/uploads/sign", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ folder, fileName: file.name, contentType }),
-  });
+  let signRes: Response;
+  try {
+    signRes = await fetch("/api/backend/uploads/sign", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ folder, fileName: file.name, contentType }),
+    });
+  } catch (error) {
+    throw new Error(friendlyUploadErrorMessage(error));
+  }
   const signedPayload = (await signRes.json().catch(() => null)) as ApiResponse<SignedUpload> | null;
   if (!signRes.ok || !signedPayload?.data) {
-    throw new Error(signedPayload?.error ?? signedPayload?.message ?? "Could not start upload.");
+    throw new Error(friendlyUploadErrorMessage(signedPayload?.error ?? signedPayload?.message ?? "Could not start upload."));
   }
 
   const signed = signedPayload.data;
-  const uploadRes = await fetch(signed.uploadUrl, {
-    method: "PUT",
-    headers: { "Content-Type": signed.contentType },
-    body: file,
-  });
+  let uploadRes: Response;
+  try {
+    uploadRes = await fetch(signed.uploadUrl, {
+      method: "PUT",
+      headers: { "Content-Type": signed.contentType },
+      body: file,
+    });
+  } catch (error) {
+    throw new Error(friendlyUploadErrorMessage(error));
+  }
   if (!uploadRes.ok) {
-    throw new Error("Upload failed.");
+    throw new Error(friendlyUploadErrorMessage(`Upload failed with status ${uploadRes.status}.`));
   }
 
   return signed.publicUrl;

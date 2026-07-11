@@ -207,7 +207,46 @@ export async function getUploadedDesignForAdmin(designId: string) {
         eq(systemAlerts.entityId, designId)
       )
     );
-  return row;
+  const members = row.familyGroupId
+    ? await db.query.familyMembers.findMany({
+        where: eq(familyMembers.familyGroupId, row.familyGroupId),
+        orderBy: [desc(familyMembers.createdAt)],
+      })
+    : [];
+  return { ...row, members };
+}
+
+type MemberPriceInput = {
+  memberId?: string;
+  memberName: string;
+  roleLabel?: string;
+  priceUsd: number;
+  designerCostUsd?: number;
+  taxPercent?: number;
+  otherCostUsd?: number;
+};
+
+function numberOrZero(value: unknown) {
+  const amount = Number(value ?? 0);
+  return Number.isFinite(amount) && amount >= 0 ? amount : 0;
+}
+
+function buildPricingSnapshot(input: {
+  roleLabel?: string | null;
+  roleGender?: string | null;
+  sellingPriceUsd: number;
+  designerCostUsd?: number;
+  taxPercent?: number;
+  otherCostUsd?: number;
+}) {
+  return {
+    role_label: input.roleLabel ?? undefined,
+    role_gender: input.roleGender ?? undefined,
+    selling_price_usd: numberToMoney(input.sellingPriceUsd),
+    designer_cost_usd: numberToMoney(numberOrZero(input.designerCostUsd)),
+    tax_percent: numberOrZero(input.taxPercent).toFixed(4),
+    other_cost_usd: numberToMoney(numberOrZero(input.otherCostUsd)),
+  };
 }
 
 export async function reviewUploadedDesign(payload: {
@@ -216,6 +255,7 @@ export async function reviewUploadedDesign(payload: {
   performedBy?: string;
   reason?: string;
   quotedPriceUsd?: number;
+  memberPrices?: MemberPriceInput[];
   estimatedDeliveryLabel?: string;
   estimatedDeliveryDaysMin?: number;
   estimatedDeliveryDaysMax?: number;
@@ -228,25 +268,62 @@ export async function reviewUploadedDesign(payload: {
   if (payload.decision === "approve") {
     const result = await db.transaction(async (tx) => {
       const quotedPrice = Number.isFinite(payload.quotedPriceUsd) ? Math.max(payload.quotedPriceUsd ?? 0, 0) : 0;
-      if (quotedPrice <= 0) {
-        throw new HTTPException(400, { message: "Quoted price is required before approving a custom design" });
-      }
       const deliveryMin = payload.estimatedDeliveryDaysMin;
       const deliveryMax = payload.estimatedDeliveryDaysMax;
       if (!payload.estimatedDeliveryLabel || !deliveryMin || !deliveryMax || deliveryMax < deliveryMin) {
         throw new HTTPException(400, { message: "A valid estimated completion and delivery time is required" });
       }
 
+      let members: Array<typeof familyMembers.$inferSelect> = [];
       let memberCount = 1;
       if (submission.familyGroupId) {
-        const [res] = await tx.select({ value: count() }).from(familyMembers).where(eq(familyMembers.familyGroupId, submission.familyGroupId));
-        memberCount = Number(res?.value || 1);
+        members = await tx.query.familyMembers.findMany({
+          where: eq(familyMembers.familyGroupId, submission.familyGroupId),
+          orderBy: [desc(familyMembers.createdAt)],
+        });
+        memberCount = members.length || 1;
       } else if (submission.eventId) {
         const [res] = await tx.select({ value: count() }).from(eventParticipants).where(eq(eventParticipants.eventId, submission.eventId));
         memberCount = Number(res?.value || 1);
       }
 
-      const totalPrice = quotedPrice * memberCount;
+      const memberPriceById = new Map((payload.memberPrices ?? []).filter((item) => item.memberId).map((item) => [item.memberId, item]));
+      const memberPricing = members.length
+        ? members.map((member) => {
+            const override = memberPriceById.get(member.id);
+            const price = numberOrZero(override?.priceUsd ?? quotedPrice);
+            const snapshot = buildPricingSnapshot({
+              roleLabel: override?.roleLabel ?? member.relation ?? member.gender,
+              roleGender: member.gender,
+              sellingPriceUsd: price,
+              designerCostUsd: override?.designerCostUsd,
+              taxPercent: override?.taxPercent,
+              otherCostUsd: override?.otherCostUsd,
+            });
+            return {
+              member_id: member.id,
+              member_name: member.name,
+              member_gender: member.gender,
+              member_age: member.age,
+              role_label: snapshot.role_label,
+              price_usd: snapshot.selling_price_usd,
+              pricing_snapshot: snapshot,
+            };
+          })
+        : [];
+
+      const totalPrice = memberPricing.length
+        ? memberPricing.reduce((sum, item) => sum + numberOrZero(item.price_usd), 0)
+        : quotedPrice * memberCount;
+      if (totalPrice <= 0) {
+        throw new HTTPException(400, { message: "A valid quote or member pricing is required before approving a custom design" });
+      }
+      const cartSnapshot = buildPricingSnapshot({
+        sellingPriceUsd: totalPrice,
+        designerCostUsd: memberPricing.reduce((sum, item) => sum + numberOrZero(item.pricing_snapshot.designer_cost_usd), 0),
+        taxPercent: 0,
+        otherCostUsd: memberPricing.reduce((sum, item) => sum + numberOrZero(item.pricing_snapshot.other_cost_usd), 0),
+      });
 
       const [cartItem] = await tx
         .insert(cartItems)
@@ -278,6 +355,9 @@ export async function reviewUploadedDesign(payload: {
             estimated_delivery_label: payload.estimatedDeliveryLabel,
             estimated_delivery_days_min: deliveryMin,
             estimated_delivery_days_max: deliveryMax,
+            quoted_price_usd: numberToMoney(quotedPrice),
+            member_pricing: memberPricing,
+            pricing_snapshot: cartSnapshot,
             ...(submission.familyGroupId ? { group_id: submission.familyGroupId } : {}),
             ...(submission.eventId ? { event_id: submission.eventId } : {}),
           },
@@ -292,7 +372,7 @@ export async function reviewUploadedDesign(payload: {
           reviewedAt: new Date(),
           reviewReason: payload.reason,
           approvedCartItemId: cartItem?.id,
-          quotedPriceUsd: numberToMoney(quotedPrice),
+          quotedPriceUsd: numberToMoney(memberPricing.length ? (quotedPrice > 0 ? quotedPrice : totalPrice / memberPricing.length) : quotedPrice),
           estimatedDeliveryLabel: payload.estimatedDeliveryLabel,
           estimatedDeliveryDaysMin: deliveryMin,
           estimatedDeliveryDaysMax: deliveryMax,
@@ -315,6 +395,8 @@ export async function reviewUploadedDesign(payload: {
         metadata: {
           cart_item_id: cartItem?.id ?? null,
           quoted_price_usd: quotedPrice,
+          total_price_usd: totalPrice,
+          member_pricing: memberPricing,
           estimated_delivery_label: payload.estimatedDeliveryLabel,
           estimated_delivery_days_min: deliveryMin,
           estimated_delivery_days_max: deliveryMax,

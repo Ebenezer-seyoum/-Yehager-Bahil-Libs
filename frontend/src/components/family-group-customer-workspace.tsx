@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { ChevronRight, Pencil, Plus, ShoppingCart, Trash2, UserRound, Users, X } from "lucide-react";
-import { type FormEvent, useRef, useState, useTransition } from "react";
+import { type FormEvent, useEffect, useRef, useState, useTransition } from "react";
 import { HEM_STYLE_OPTIONS, PANTS_MEASUREMENT_FIELDS, PRESSING_STYLE_OPTIONS, TOP_MEASUREMENT_FIELDS, TOP_MEASUREMENT_TITLE, PANTS_MEASUREMENT_TITLE } from "@/lib/measurement-fields";
+import { customerToast } from "@/lib/customer-toast";
 
 type Member = {
   id: string;
@@ -65,12 +66,28 @@ export function FamilyGroupCustomerWorkspace({
   const [selectedMeasurementId, setSelectedMeasurementId] = useState<string>("");
   const [hemStyle, setHemStyle] = useState("Straight");
   const [pressingStyle, setPressingStyle] = useState("Creased");
-  const [memberError, setMemberError] = useState("");
-  const [memberSuccess, setMemberSuccess] = useState("");
   const [isAddingMember, startAddMemberTransition] = useTransition();
   const memberFormRef = useRef<HTMLFormElement | null>(null);
   const hasSource = Boolean(group.productName);
   const customReady = group.selectionType !== "custom_design" || selectedDesign?.status === "awaiting_payment";
+
+  useEffect(() => {
+    if (selectionResult) {
+      customerToast(
+        selectionResult === "custom-design" ? "Custom design submitted successfully." : "Catalog product selected successfully.",
+        undefined,
+        "success",
+      );
+    }
+  }, [selectionResult]);
+
+  function showMemberError(message: string) {
+    customerToast(message);
+  }
+
+  function showMemberSuccess(message: string) {
+    customerToast(message, undefined, "success");
+  }
 
   function resetMemberFlow(keepOpen = true) {
     memberFormRef.current?.reset();
@@ -81,18 +98,15 @@ export function FamilyGroupCustomerWorkspace({
     setSelectedMeasurementId("");
     setHemStyle("Straight");
     setPressingStyle("Creased");
-    setMemberError("");
     if (!keepOpen) setMemberOpen(false);
   }
 
   function closeMember() {
     resetMemberFlow(false);
-    setMemberSuccess("");
   }
 
   function openMember() {
     resetMemberFlow(true);
-    setMemberSuccess("");
     setMemberOpen(true);
   }
 
@@ -139,19 +153,16 @@ export function FamilyGroupCustomerWorkspace({
     const formData = new FormData(form);
     const error = validateMemberForm(formData);
     if (error) {
-      setMemberError(error);
-      setMemberSuccess("");
+      showMemberError(error);
       return;
     }
-    setMemberError("");
     startAddMemberTransition(async () => {
       try {
         await addMember(formData);
         resetMemberFlow(true);
-        setMemberSuccess("Family member added successfully. Add another member or continue to cart.");
+        showMemberSuccess("Family member added successfully. Add another member or continue to cart.");
       } catch {
-        setMemberError("We could not add this family member. Please review the details and try again.");
-        setMemberSuccess("");
+        showMemberError("We could not add this family member. Please review the details and try again.");
       }
     });
   }
@@ -181,11 +192,6 @@ export function FamilyGroupCustomerWorkspace({
       </section>
 
       <section id="shared-outfit" className="scroll-mt-24 rounded-3xl border border-border bg-card p-6">
-        {selectionResult ? (
-          <div className="mb-5 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-emerald-400">
-            {selectionResult === "custom-design" ? "Custom design submitted successfully." : "Catalog product selected successfully."}
-          </div>
-        ) : null}
         <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.25em] text-primary">Shared Outfit</p>
@@ -288,16 +294,6 @@ export function FamilyGroupCustomerWorkspace({
               <button type="button" onClick={closeMember} className="rounded-lg p-2 hover:bg-secondary"><X className="h-5 w-5" /></button>
             </div>
             <div className="px-7 pt-6">
-              {memberError ? (
-                <div className="mb-4 rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-sm font-semibold text-rose-300" role="alert">
-                  {memberError}
-                </div>
-              ) : null}
-              {memberSuccess ? (
-                <div className="mb-4 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-emerald-300" role="status">
-                  {memberSuccess}
-                </div>
-              ) : null}
               <div className="grid grid-cols-2 gap-3">
                 <div className={`h-1 rounded-full ${step >= 1 ? "bg-primary" : "bg-secondary"}`} />
                 <div className={`h-1 rounded-full ${step >= 2 ? "bg-primary" : "bg-secondary"}`} />
@@ -346,16 +342,13 @@ export function FamilyGroupCustomerWorkspace({
                 const formData = new FormData(memberFormRef.current ?? undefined);
                 const name = String(formData.get("name") ?? "").trim();
                 if (!name) {
-                  setMemberError("Please enter the family member's full name before continuing.");
-                  setMemberSuccess("");
+                  showMemberError("Please enter the family member's full name before continuing.");
                   return;
                 }
                 if (isChildMemberRelation() && !isValidChildAge()) {
-                  setMemberError("Please enter a valid child age from 0 to 17.");
-                  setMemberSuccess("");
+                  showMemberError("Please enter a valid child age from 0 to 17.");
                   return;
                 }
-                setMemberError("");
                 if (relation === "Myself" && savedMeasurements.length > 0) {
                   setSelectedMeasurementId(savedMeasurements[0].id);
                 } else {
@@ -408,10 +401,10 @@ export function FamilyGroupCustomerWorkspace({
                     </div>
                     <input type="hidden" name="hemStyle" value={hemStyle} />
                     <input type="hidden" name="pressingStyle" value={pressingStyle} />
-                    <div className="mt-6 grid gap-4 sm:grid-cols-2">
+                    <div className="mt-6 space-y-5">
                       <div>
                         <p className="text-sm font-semibold">Hem Style <span className="text-primary">*</span></p>
-                        <div className="mt-3 grid gap-3">
+                        <div className="mt-3 grid gap-3 sm:grid-cols-2">
                           {HEM_STYLE_OPTIONS.map((option) => (
                             <button key={option.value} type="button" onClick={() => setHemStyle(option.value)} className={`rounded-xl border-2 p-4 text-left ${hemStyle === option.value ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground"}`}>
                               <span className="block font-bold">{option.title}</span>
@@ -422,7 +415,7 @@ export function FamilyGroupCustomerWorkspace({
                       </div>
                       <div>
                         <p className="text-sm font-semibold">Pressing (Iron) Style <span className="text-primary">*</span></p>
-                        <div className="mt-3 grid gap-3">
+                        <div className="mt-3 grid gap-3 sm:grid-cols-2">
                           {PRESSING_STYLE_OPTIONS.map((option) => (
                             <button key={option.value} type="button" onClick={() => setPressingStyle(option.value)} className={`rounded-xl border-2 p-4 text-left ${pressingStyle === option.value ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground"}`}>
                               <span className="block font-bold">{option.title}</span>

@@ -145,8 +145,9 @@ export function SiteNavbar() {
 
           <div className="flex shrink-0 items-center gap-1 xl:ml-1">
             <LanguageSwitcher navbar />
-            <Link href="/cart" className="relative rounded-full p-1.5 transition-colors hover:bg-secondary" aria-label="Cart">
+            <Link href="/cart" className="relative inline-flex min-h-10 items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-semibold transition-colors hover:bg-secondary" aria-label="Your Cart">
               <ShoppingBag className="h-5 w-5" />
+              <span className="hidden sm:inline">Your Cart</span>
               {cartCount > 0 ? (
                 <span className="absolute -right-0.5 -top-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">
                   {cartCount}
@@ -237,6 +238,11 @@ export function SiteNavbar() {
               );
             })}
             <div className="my-2 border-t border-border" />
+            <Link href="/cart" onClick={() => setOpen(false)} className="mb-2 flex h-11 items-center gap-2 rounded-lg px-3 text-sm font-semibold hover:bg-secondary">
+              <ShoppingBag className="h-4 w-4" />
+              Your Cart
+              {cartCount > 0 ? <span className="ml-auto rounded-full bg-primary px-2 py-0.5 text-xs font-bold text-primary-foreground">{cartCount}</span> : null}
+            </Link>
             <Link
               href={uploadDesignHref}
               onClick={() => setOpen(false)}

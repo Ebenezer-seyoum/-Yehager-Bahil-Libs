@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import { BookOpen, ChevronDown, Clock, Mail, Pencil, Play, Ruler, ShoppingBag, Users, X, PlusCircle } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ShareLinks } from "@/components/share-links";
 import { MeasurementVideoModal } from "@/components/measurement-help";
-import { useToast } from "@/components/ui/use-toast";
+import { customerToast } from "@/lib/customer-toast";
 import {
   HEM_STYLE_OPTIONS,
   PANTS_MEASUREMENT_FIELDS,
@@ -21,6 +21,9 @@ type Role = {
   icon?: string;
   price: number;
   gender: "male" | "female" | "unisex";
+  customerType?: "woman" | "man" | "girl" | "boy";
+  outfitOption?: "standard" | "full_set" | "top_only" | "pants_only";
+  description?: string;
 };
 
 type ProductPurchasePanelProps = {
@@ -80,6 +83,30 @@ function formatGender(value?: string | null) {
   if (value === "male") return "Male";
   if (value === "female") return "Female";
   return "Unisex";
+}
+
+const CUSTOMER_TYPES: Array<{ value: "woman" | "man" | "girl" | "boy"; label: string; description: string }> = [
+  { value: "woman", label: "Woman", description: "Adult woman outfit" },
+  { value: "man", label: "Man", description: "Adult man outfit" },
+  { value: "girl", label: "Girl", description: "Child girl outfit" },
+  { value: "boy", label: "Boy", description: "Child boy outfit" },
+];
+
+function customerTypeForRole(role: Role) {
+  if (role.customerType) return role.customerType;
+  const label = role.label.toLowerCase();
+  if (label.includes("boy")) return "boy";
+  if (label.includes("girl")) return "girl";
+  if (label.includes("men") || label.includes("man")) return "man";
+  return "woman";
+}
+
+function optionDescription(role: Role) {
+  if (role.description) return role.description;
+  if (role.outfitOption === "full_set") return "Top + pants";
+  if (role.outfitOption === "top_only") return "Shirt / top clothes";
+  if (role.outfitOption === "pants_only") return "Bottom / suri";
+  return role.customerType === "girl" ? "Child traditional outfit" : "Complete traditional outfit";
 }
 
 function inchesToCm(inches?: number | null) {
@@ -206,7 +233,6 @@ export function ProductPurchasePanel({
   createEventAction,
   createGroupAction,
 }: ProductPurchasePanelProps) {
-  const { toast } = useToast();
   const [selectedRoleIndex, setSelectedRoleIndex] = useState(0);
   const [eventOpen, setEventOpen] = useState(false);
   const [showVideo, setShowVideo] = useState(false);
@@ -217,16 +243,28 @@ export function ProductPurchasePanel({
   const [tailorNote, setTailorNote] = useState("");
   const [isPantsOpen, setIsPantsOpen] = useState(false);
 
-  const selectedRole = roles[selectedRoleIndex] ?? null;
+  const roleOptions = roles.length > 0
+    ? roles
+    : [{ label: "Woman Outfit", price, gender: "female" as const, customerType: "woman" as const, outfitOption: "standard" as const, description: "Complete traditional outfit" }];
+  const selectedRole = roleOptions[selectedRoleIndex] ?? roleOptions[0] ?? null;
+  const selectedCustomerType = selectedRole ? customerTypeForRole(selectedRole) : "woman";
+  const availableCustomerTypes = CUSTOMER_TYPES.filter((type) => roleOptions.some((role) => customerTypeForRole(role) === type.value));
+  const visibleRoleOptions = roleOptions.filter((role) => customerTypeForRole(role) === selectedCustomerType);
   const displayPrice = Number(selectedRole?.price ?? price);
   const originalPrice = Number(product.originalPriceUsd ?? product.priceUsd ?? displayPrice);
-  const hasDiscount = !selectedRole && Boolean(product.discount && originalPrice > displayPrice);
+  const hasDiscount = Boolean(product.discount && originalPrice > displayPrice);
   const measurementGender = selectedRole?.gender ?? product.gender ?? "female";
   const etb = etbRate ? Math.round(displayPrice * etbRate).toLocaleString() : null;
   const signinHref = `/signin?callbackUrl=${encodeURIComponent(`/product/${product.id}`)}`;
   const hasMeasurement = Boolean(savedMeasurement?.id);
 
   const measurementSummary = useMemo(() => measurementDisplayGroups(savedMeasurement ?? {}).filter((group) => group.title !== "Profile"), [savedMeasurement]);
+
+  useEffect(() => {
+    if (authRequired && !isAuthenticated) {
+      customerToast("Account required to save measurements and continue with your order.");
+    }
+  }, [authRequired, isAuthenticated]);
 
   const detailItems = useMemo(
     () =>
@@ -257,27 +295,58 @@ export function ProductPurchasePanel({
         {etb ? <p className="mt-1 text-sm text-muted-foreground">≈ {etb} ETB</p> : null}
       </div>
 
-      {roles.length > 0 ? (
+      {roleOptions.length > 0 ? (
         <div>
-          <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Select Outfit</h3>
-          <div className={`grid gap-3 ${roles.length === 3 ? "grid-cols-1 sm:grid-cols-3" : "grid-cols-1 sm:grid-cols-2"}`}>
-            {roles.map((role, index) => (
-              <button
-                key={`${role.label}-${index}`}
-                type="button"
-                onClick={() => setSelectedRoleIndex(index)}
-                className={`min-h-24 rounded-xl border-2 p-5 text-left transition-all ${
-                  selectedRoleIndex === index ? "border-primary bg-primary/10" : "border-border bg-secondary hover:border-primary/50"
-                }`}
-              >
-                <span className="block text-sm font-semibold">
-                  {role.icon ? `${role.icon} ` : "👤 "}
-                  {role.label}
-                </span>
-                <span className="mt-1 block text-xs text-muted-foreground">${Number(role.price).toFixed(2)}</span>
-              </button>
-            ))}
+          <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Who is this for?</h3>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {availableCustomerTypes.map((type) => {
+              const firstRoleIndex = roleOptions.findIndex((role) => customerTypeForRole(role) === type.value);
+              const selected = selectedCustomerType === type.value;
+              return (
+                <button
+                  key={type.value}
+                  type="button"
+                  onClick={() => setSelectedRoleIndex(firstRoleIndex >= 0 ? firstRoleIndex : 0)}
+                  className={`min-h-20 rounded-xl border-2 p-3 text-left transition-all ${
+                    selected ? "border-primary bg-primary/10" : "border-border bg-secondary hover:border-primary/50"
+                  }`}
+                >
+                  <span className="block text-sm font-black">{type.label}</span>
+                  <span className="mt-1 block text-[11px] leading-snug text-muted-foreground">{type.description}</span>
+                </button>
+              );
+            })}
           </div>
+
+          <h3 className="mb-3 mt-5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Select outfit option</h3>
+          <div className={`grid gap-3 ${visibleRoleOptions.length === 3 ? "grid-cols-1 sm:grid-cols-3" : "grid-cols-1 sm:grid-cols-2"}`}>
+            {visibleRoleOptions.map((role) => {
+              const index = roleOptions.indexOf(role);
+              return (
+                <button
+                  key={`${role.label}-${index}`}
+                  type="button"
+                  onClick={() => setSelectedRoleIndex(index)}
+                  className={`min-h-28 rounded-xl border-2 p-5 text-left transition-all ${
+                    selectedRoleIndex === index ? "border-primary bg-primary/10" : "border-border bg-secondary hover:border-primary/50"
+                  }`}
+                >
+                  <span className="block text-sm font-semibold">{role.label}</span>
+                  <span className="mt-2 block text-xs text-muted-foreground">{optionDescription(role)}</span>
+                  <span className="mt-3 block text-xl font-black text-primary">${Number(role.price).toFixed(2)}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {selectedRole ? (
+            <div className="mt-4 rounded-xl border border-primary/30 bg-primary/10 p-4">
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-primary">Selected</p>
+              <p className="mt-1 text-sm font-bold">{selectedRole.label}</p>
+              <p className="mt-1 text-xs text-muted-foreground">Includes: {optionDescription(selectedRole)}</p>
+              <p className="mt-2 text-2xl font-black text-primary">${Number(selectedRole.price).toFixed(2)}</p>
+            </div>
+          ) : null}
         </div>
       ) : null}
 
@@ -307,12 +376,6 @@ export function ProductPurchasePanel({
           </p>
         </div>
       </div>
-
-      {authRequired && !isAuthenticated ? (
-        <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive font-bold">
-          Account required to save measurements and continue with your order.
-        </div>
-      ) : null}
 
       {/* Unified Measurement Block */}
       {(hasMeasurement || isMeasurementEditorOpen) ? (
@@ -384,7 +447,7 @@ export function ProductPurchasePanel({
                 id="measurement-form"
                 action={async (formData) => {
                   if (!isAuthenticated) {
-                    toast({ title: "Auth Required", description: "Please sign in to save measurements.", variant: "destructive" });
+                    customerToast("Please sign in to save measurements.");
                     return;
                   }
                   try {
@@ -394,10 +457,10 @@ export function ProductPurchasePanel({
                     if (result && typeof result === "object" && "id" in result) {
                       setSavedMeasurement(result as SavedMeasurement);
                       setIsMeasurementEditorOpen(false);
-                      toast({ title: "Success", description: "Measurements saved for your order." });
+                      customerToast("Measurements saved for your order.", undefined, "success");
                     }
                   } catch (error) {
-                    toast({ title: "Error", description: "Failed to save measurements. Please check all required fields.", variant: "destructive" });
+                    customerToast("Failed to save measurements. Please check all required fields.");
                   }
                 }}
                 className="space-y-10"
@@ -467,10 +530,10 @@ export function ProductPurchasePanel({
                          ))}
                       </div>
 
-                      <div className="grid grid-cols-1 gap-10 md:grid-cols-2 pt-4">
+                      <div className="space-y-8 pt-4">
                          <div className="space-y-4">
                            <label className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 block text-left">Hem Style <span className="text-[#f5a623]">*</span></label>
-                           <div className="grid grid-cols-1 gap-3">
+                           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                              {HEM_STYLE_OPTIONS.map((option) => (
                                <ChoiceCard key={option.value} title={option.title} description={option.description} selected={hemStyle === option.value} onClick={() => setHemStyle(option.value)} />
                              ))}
@@ -478,7 +541,7 @@ export function ProductPurchasePanel({
                          </div>
                          <div className="space-y-4">
                            <label className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 block text-left">Iron / Pressing <span className="text-[#f5a623]">*</span></label>
-                           <div className="grid grid-cols-1 gap-3">
+                           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                              {PRESSING_STYLE_OPTIONS.map((option) => (
                                <ChoiceCard key={option.value} title={option.title} description={option.description} selected={pressingStyle === option.value} onClick={() => setPressingStyle(option.value)} />
                              ))}

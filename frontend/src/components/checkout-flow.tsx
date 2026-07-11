@@ -1,8 +1,9 @@
 "use client";
 
-import { AlertTriangle, Banknote, CreditCard, DollarSign, Info, Mail, MapPin, ShieldCheck, Truck } from "lucide-react";
+import { AlertTriangle, CreditCard, DollarSign, Info, Mail, MapPin, ShieldCheck, Truck } from "lucide-react";
 import type { FormEvent } from "react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { customerToast } from "@/lib/customer-toast";
 
 type CartItem = {
   id: string;
@@ -93,8 +94,6 @@ export function CheckoutFlow({ items, event, error, etbRate, startCheckoutAction
   const [tailorNote, setTailorNote] = useState("");
   const [couponCode, setCouponCode] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState<AppliedCoupon | null>(null);
-  const [couponError, setCouponError] = useState("");
-  const [clientError, setClientError] = useState("");
   const [isApplyingCoupon, setIsApplyingCoupon] = useState(false);
 
   const totalItems = items.reduce((sum, item) => sum + Number(item.quantity ?? 1), 0);
@@ -107,6 +106,12 @@ export function CheckoutFlow({ items, event, error, etbRate, startCheckoutAction
   const totalEtb = etbRate ? Math.round(payableTotal * etbRate) : null;
   const message = errorMessage(error);
   const hasEventAddress = Boolean(event?.shippingAddress);
+
+  useEffect(() => {
+    if (message) {
+      customerToast(message);
+    }
+  }, [message]);
 
   const eventAddressLabel = useMemo(() => {
     const address = event?.shippingAddress;
@@ -125,18 +130,16 @@ export function CheckoutFlow({ items, event, error, etbRate, startCheckoutAction
 
   function clearAppliedCoupon() {
     setAppliedCoupon(null);
-    setCouponError("");
   }
 
   async function applyCoupon() {
     const code = couponCode.trim().toUpperCase();
     if (!code) {
-      setCouponError("Enter a coupon code first.");
+      customerToast("Enter a coupon code first.");
       return;
     }
 
     setIsApplyingCoupon(true);
-    setCouponError("");
     try {
       const response = await fetch("/api/backend/orders/coupon-preview", {
         method: "POST",
@@ -161,9 +164,10 @@ export function CheckoutFlow({ items, event, error, etbRate, startCheckoutAction
         totalUsd: Number(data?.totalUsd ?? total),
       });
       setCouponCode(String(data?.code ?? code));
+      customerToast(`${String(data?.code ?? code)} applied successfully.`, undefined, "success");
     } catch (error) {
       setAppliedCoupon(null);
-      setCouponError(error instanceof Error ? error.message : "Coupon could not be applied.");
+      customerToast(error instanceof Error ? error.message : "Coupon could not be applied.");
     } finally {
       setIsApplyingCoupon(false);
     }
@@ -175,7 +179,7 @@ export function CheckoutFlow({ items, event, error, etbRate, startCheckoutAction
     const agreed = data.get("agreeTerms") === "on";
     if (!agreed) {
       event.preventDefault();
-      setClientError("Please agree to the custom tailoring terms before placing your order.");
+      customerToast("Please agree to the custom tailoring terms before placing your order.");
       return;
     }
 
@@ -183,7 +187,7 @@ export function CheckoutFlow({ items, event, error, etbRate, startCheckoutAction
       const missing = ["street", "city", "country", "phone"].some((field) => !String(data.get(field) ?? "").trim());
       if (missing) {
         event.preventDefault();
-        setClientError("Please complete the required shipping address fields.");
+        customerToast("Please complete the required shipping address fields.");
         return;
       }
     }
@@ -191,12 +195,10 @@ export function CheckoutFlow({ items, event, error, etbRate, startCheckoutAction
     if (fulfillmentType === "pickup") {
       if (!String(data.get("pickupPersonName") ?? "").trim() || !String(data.get("pickupPersonPhone") ?? "").trim()) {
         event.preventDefault();
-        setClientError("Please provide the pickup person's name and phone number.");
+        customerToast("Please provide the pickup person's name and phone number.");
         return;
       }
     }
-
-    setClientError("");
   }
 
   return (
@@ -207,8 +209,6 @@ export function CheckoutFlow({ items, event, error, etbRate, startCheckoutAction
       <input type="hidden" name="selectedCurrency" value={selectedCurrency} />
       <input type="hidden" name="tailorNote" value={tailorNote} />
       <input type="hidden" name="couponCode" value={appliedCoupon?.code ?? ""} />
-
-      {clientError || message ? <div className="rounded-xl border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">{clientError || message}</div> : null}
 
       <div className="rounded-xl border border-amber-100 bg-amber-50 p-4 text-orange-700">
         <div className="flex items-start gap-4">
@@ -325,9 +325,7 @@ export function CheckoutFlow({ items, event, error, etbRate, startCheckoutAction
               </button>
             )}
           </div>
-          {appliedCoupon ? <p className="mt-2 text-[11px] font-semibold text-green-500">{appliedCoupon.code} applied successfully.</p> : null}
-          {couponError ? <p className="mt-2 text-[11px] font-semibold text-destructive">{couponError}</p> : null}
-          {!appliedCoupon && !couponError ? <p className="mt-2 text-[11px] text-muted-foreground">Apply a coupon to preview the discount before checkout.</p> : null}
+          {!appliedCoupon ? <p className="mt-2 text-[11px] text-muted-foreground">Apply a coupon to preview the discount before checkout.</p> : null}
         </div>
         {appliedCoupon ? (
           <div className="border-t border-border pt-3 mt-3">

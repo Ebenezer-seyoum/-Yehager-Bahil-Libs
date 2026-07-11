@@ -2,6 +2,7 @@
 
 import Swal, { type SweetAlertIcon, type SweetAlertOptions } from "sweetalert2";
 import "sweetalert2/dist/sweetalert2.min.css";
+import { friendlyErrorMessage } from "@/lib/friendly-errors";
 
 type ConfirmTone = "danger" | "success" | "warning" | "primary";
 type NoticeTone = "success" | "error" | "warning" | "info";
@@ -122,11 +123,13 @@ export function dashboardSuccess(
 }
 
 export function dashboardError(title: string, text?: string, options?: { target?: HTMLElement | string }) {
+  const safeTitle = text ? title : friendlyErrorMessage(title);
+  const safeText = text ? friendlyErrorMessage(text) : undefined;
   return Swal.fire(
     dashboardSwalOptions({
       toast: true,
       position: "top-end",
-      title: noticeTitle(title, text),
+      title: noticeTitle(safeTitle, safeText),
       timer: 30000,
       timerProgressBar: true,
       showConfirmButton: false,

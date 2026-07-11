@@ -5,7 +5,7 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
 import { requireAuth } from "../../middleware/auth.js";
 import { db } from "../../lib/db/drizzle.js";
-import { cartItems, events, familyGroups, familyMembers, measurements, orders, products, uploadedDesigns } from "../../lib/db/schema.js";
+import { cartItems, events, familyGroups, familyMembers, measurements, orders, products, profitCostSettings, uploadedDesigns } from "../../lib/db/schema.js";
 import type { AppBindings } from "../../types/hono.js";
 
 const createGroupSchema = z.object({
@@ -19,6 +19,30 @@ const createGroupSchema = z.object({
 function isChildRelation(relation?: string | null) {
   const normalized = String(relation ?? "").toLowerCase();
   return ["son", "daughter", "child", "children", "kid", "kids"].some((token) => normalized.includes(token));
+}
+
+function roleForMember(product: typeof products.$inferSelect, member: typeof familyMembers.$inferSelect) {
+  const roles = product.familyRoles ?? [];
+  if (!roles.length) return null;
+  const gender = String(member.gender ?? "").toLowerCase();
+  const relation = String(member.relation ?? "").toLowerCase();
+  if (isChildRelation(relation) || Number(member.age ?? 99) < 13) {
+    return roles.find((role) => /kid|child/i.test(role.label) || role.gender === "unisex") ?? null;
+  }
+  if (gender === "male") return roles.find((role) => role.gender === "male" || /men|man|groom/i.test(role.label)) ?? null;
+  if (gender === "female") return roles.find((role) => role.gender === "female" || /women|woman|bride/i.test(role.label)) ?? null;
+  return null;
+}
+
+async function productCostFallback(productId: string) {
+  const setting = await db.query.profitCostSettings.findFirst({
+    where: and(eq(profitCostSettings.entityType, "product"), eq(profitCostSettings.entityId, productId)),
+  });
+  return {
+    designerCostUsd: Number(setting?.designerCostUsd ?? 0),
+    taxPercent: Number(setting?.taxPercent ?? 0),
+    otherCostUsd: Number(setting?.otherCostUsd ?? 0),
+  };
 }
 
 const groupIdParam = z.object({
@@ -379,13 +403,16 @@ familyGroupsRouter.post("/:groupId/add-to-cart", requireAuth, zValidator("param"
     }) : null;
     const design = designId ? await db.query.uploadedDesigns.findFirst({ where: eq(uploadedDesigns.id, designId) }) : null;
     if (!product && (!design || design.status !== "awaiting_payment" || !design.quotedPriceUsd)) continue;
+    const selectedRole = product ? roleForMember(product, member) : null;
+    const fallbackCost = product ? await productCostFallback(product.id) : { designerCostUsd: 0, taxPercent: 0, otherCostUsd: 0 };
+    const sellingPriceUsd = selectedRole?.price ?? Number(member.priceUsd ?? product?.priceUsd ?? design?.quotedPriceUsd ?? 0);
 
     rowsToInsert.push({
       userEmail: authUser.email,
       productId: product?.id,
       productName: `${product?.name ?? design?.designTitle ?? "Custom Design"} — ${member.name}`,
       productImage: member.productImage ?? product?.images?.[0] ?? design?.frontImageUrl,
-      priceUsd: product ? product.priceUsd : design!.quotedPriceUsd!,
+      priceUsd: product ? sellingPriceUsd.toFixed(2) : design!.quotedPriceUsd!,
       quantity: 1,
       itemType: "group_order",
       uploadedDesignId: design?.id,
@@ -397,8 +424,17 @@ familyGroupsRouter.post("/:groupId/add-to-cart", requireAuth, zValidator("param"
         member_name: member.name,
         member_gender: member.gender,
         member_age: member.age,
+        role_label: selectedRole?.label,
         selection_type: design ? "custom_design" : "catalog_product",
         uploaded_design_id: design?.id,
+        pricing_snapshot: {
+          role_label: selectedRole?.label,
+          role_gender: selectedRole?.gender ?? member.gender,
+          selling_price_usd: sellingPriceUsd.toFixed(2),
+          designer_cost_usd: Number(selectedRole?.designerCostUsd ?? fallbackCost.designerCostUsd).toFixed(2),
+          tax_percent: Number(selectedRole?.taxPercent ?? fallbackCost.taxPercent).toFixed(4),
+          other_cost_usd: Number(selectedRole?.otherCostUsd ?? fallbackCost.otherCostUsd).toFixed(2),
+        },
       },
       measurementSnapshot: member.measurements ?? {},
       eventId: group.eventId,

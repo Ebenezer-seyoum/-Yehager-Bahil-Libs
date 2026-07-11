@@ -220,7 +220,18 @@ export const products = pgTable(
     groomPriceUsd: numeric("groom_price_usd", { precision: 12, scale: 2 }),
     isCouple: boolean("is_couple").default(false).notNull(),
     familyRoles: jsonb("family_roles").$type<
-      Array<{ label: string; icon?: string; price: number; gender: "male" | "female" | "unisex" }>
+      Array<{
+        label: string;
+        icon?: string;
+        price: number;
+        gender: "male" | "female" | "unisex";
+        customerType?: "woman" | "man" | "girl" | "boy";
+        outfitOption?: "standard" | "full_set" | "top_only" | "pants_only";
+        description?: string;
+        designerCostUsd?: number;
+        taxPercent?: number;
+        otherCostUsd?: number;
+      }>
     >(),
     images: jsonb("images").$type<string[]>().default([]).notNull(),
     fabricType: text("fabric_type"),

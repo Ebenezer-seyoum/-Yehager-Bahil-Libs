@@ -35,6 +35,11 @@ type CartItemCardProps = {
 
 const DEFAULT_IMAGE = "https://images.unsplash.com/photo-1594938298603-c8148c4dae35?w=200&h=200&fit=crop";
 
+function money(value: unknown) {
+  const amount = Number(value ?? 0);
+  return Number.isFinite(amount) ? `$${amount.toFixed(2)}` : "$0.00";
+}
+
 export function CartItemCard({ item, removeItem }: CartItemCardProps) {
   const [showDesign, setShowDesign] = useState(false);
   const quantity = Number(item.quantity ?? 1);
@@ -42,6 +47,16 @@ export function CartItemCard({ item, removeItem }: CartItemCardProps) {
   const isCustomDesign = item.itemType === "custom_design" || productName.toLowerCase().includes("custom design");
   const isLockedDirectCustomDesign = item.itemType === "custom_design";
   const metadata = item.itemMetadata ?? {};
+  const pricingSnapshot = (metadata.pricing_snapshot && typeof metadata.pricing_snapshot === "object"
+    ? metadata.pricing_snapshot
+    : metadata.pricingSnapshot && typeof metadata.pricingSnapshot === "object"
+      ? metadata.pricingSnapshot
+      : {}) as Record<string, unknown>;
+  const optionLabel = String(pricingSnapshot.role_label ?? pricingSnapshot.roleLabel ?? "");
+  const optionDescription = String(pricingSnapshot.option_description ?? pricingSnapshot.optionDescription ?? "");
+  const memberPricing = Array.isArray(metadata.member_pricing)
+    ? metadata.member_pricing as Array<Record<string, unknown>>
+    : [];
   const measurements = [
     ["Neck", item.measurementSnapshot?.neck],
     ["Shoulder", item.measurementSnapshot?.shoulderWidth],
@@ -75,11 +90,43 @@ export function CartItemCard({ item, removeItem }: CartItemCardProps) {
             </span>
           ) : null}
         </div>
+        {optionLabel ? (
+          <div className="mt-2 rounded-lg border border-primary/20 bg-primary/10 px-3 py-2 text-xs">
+            <p className="font-black text-primary">{optionLabel}</p>
+            {optionDescription ? <p className="mt-0.5 text-muted-foreground">{optionDescription}</p> : null}
+          </div>
+        ) : null}
         <p className="mt-2 text-2xl font-bold text-primary">${Number(item.priceUsd ?? 0).toFixed(2)}</p>
         {isCustomDesign ? (
           <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
             <span>Request: <strong className="text-foreground">#{String(metadata.submission_number ?? "Custom")}</strong></span>
             <span>Estimate: <strong className="text-foreground">{String(metadata.estimated_delivery_label ?? "To be confirmed")}</strong></span>
+          </div>
+        ) : null}
+
+        {memberPricing.length ? (
+          <div className="mt-4 rounded-xl border border-border bg-secondary/30 p-3">
+            <p className="text-xs font-black uppercase tracking-wide text-muted-foreground">Member Pricing</p>
+            <div className="mt-2 space-y-2">
+              {memberPricing.map((member, index) => {
+                const snapshot = (member.pricing_snapshot && typeof member.pricing_snapshot === "object" ? member.pricing_snapshot : {}) as Record<string, unknown>;
+                return (
+                  <div key={`${String(member.member_id ?? member.member_name ?? index)}`} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-background/70 px-3 py-2 text-xs">
+                    <div>
+                      <p className="font-black text-foreground">{String(member.member_name ?? `Member ${index + 1}`)}</p>
+                      <p className="text-muted-foreground">{String(member.role_label ?? member.member_gender ?? "Member")}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-black text-primary">{money(member.price_usd ?? snapshot.selling_price_usd)}</p>
+                      <p className="text-[10px] text-muted-foreground">
+                        Cost: {money(snapshot.designer_cost_usd)} + tax {String(snapshot.tax_percent ?? "0")}%
+                        {Number(snapshot.other_cost_usd ?? 0) > 0 ? ` + ${money(snapshot.other_cost_usd)}` : ""}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         ) : null}
 

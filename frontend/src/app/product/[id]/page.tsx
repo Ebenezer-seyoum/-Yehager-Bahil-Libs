@@ -25,7 +25,18 @@ type Product = {
   originalPriceUsd?: number | string | null;
   discount?: { label?: string | null } | null;
   images?: string[] | null;
-  familyRoles?: Array<{ label: string; icon?: string; price: number; gender: "male" | "female" | "unisex" }> | null;
+  familyRoles?: Array<{
+    label: string;
+    icon?: string;
+    price: number;
+    gender: "male" | "female" | "unisex";
+    customerType?: "woman" | "man" | "girl" | "boy";
+    outfitOption?: "standard" | "full_set" | "top_only" | "pants_only";
+    description?: string;
+    designerCostUsd?: number;
+    taxPercent?: number;
+    otherCostUsd?: number;
+  }> | null;
   isCouple?: boolean | null;
   groomPriceUsd?: number | null;
 };
@@ -52,14 +63,18 @@ function buildStorefrontRoles(product: Product, price: number) {
 
   const name = `${product.name} ${product.category ?? ""}`.toLowerCase();
   const isFamilyOutfit = name.includes("family") || Boolean(product.groomPriceUsd) || product.isCouple;
-  if (!isFamilyOutfit) return [];
+  if (!isFamilyOutfit) {
+    return [
+      { label: "Woman Outfit", price, gender: "female" as const, customerType: "woman" as const, outfitOption: "standard" as const, description: "Complete traditional outfit" },
+    ];
+  }
 
   const menPrice = Number(product.groomPriceUsd ?? 0) > 0 ? Number(product.groomPriceUsd) : Math.max(1, Math.round(price * 0.57));
   const kidsPrice = Math.max(1, Math.round(price * 0.43));
   return [
-    { label: "Women", icon: "👩", price, gender: "female" as const },
-    { label: "Men", icon: "👨", price: menPrice, gender: "male" as const },
-    { label: "Kids", icon: "👧", price: kidsPrice, gender: "unisex" as const },
+    { label: "Woman Outfit", price, gender: "female" as const, customerType: "woman" as const, outfitOption: "standard" as const, description: "Complete traditional outfit" },
+    { label: "Man - Full Set", price: menPrice, gender: "male" as const, customerType: "man" as const, outfitOption: "full_set" as const, description: "Top + pants" },
+    { label: "Girl Outfit", price: kidsPrice, gender: "female" as const, customerType: "girl" as const, outfitOption: "standard" as const, description: "Child traditional outfit" },
   ];
 }
 

@@ -60,6 +60,12 @@ export function ProductCard({ product, eventId, groupId, selectionMode, etbRate 
   const shareUrl = typeof window === "undefined" ? "" : `${window.location.origin}/product/${product.id}`;
   const minPrice = rolePrices.length ? Math.min(...rolePrices) : basePrice;
   const maxPrice = rolePrices.length ? Math.max(...rolePrices) : basePrice;
+  const usdPriceText = minPrice === maxPrice ? `$${minPrice.toFixed(2)}` : `$${minPrice.toFixed(2)} - $${maxPrice.toFixed(2)}`;
+  const etbPriceText = etbRate
+    ? minPrice === maxPrice
+      ? `≈ ${Math.round(minPrice * etbRate).toLocaleString()} ETB`
+      : `≈ ${Math.round(minPrice * etbRate).toLocaleString()} - ${Math.round(maxPrice * etbRate).toLocaleString()} ETB`
+    : null;
 
   useEffect(() => {
     if (images.length < 2) return;
@@ -121,13 +127,12 @@ export function ProductCard({ product, eventId, groupId, selectionMode, etbRate 
             <div className="mt-1.5 flex items-center justify-between">
               <div>
                 <p className="text-lg font-bold text-primary transition-colors duration-300 group-hover:text-amber-300">
-                  {minPrice === maxPrice ? `$${minPrice.toFixed(2)}` : `$${minPrice.toFixed(2)} – $${maxPrice.toFixed(2)}`}
+                  {usdPriceText}
                 </p>
+                {etbPriceText ? <p className="text-[11px] text-white/55">{etbPriceText}</p> : null}
                 {hasDiscount ? <p className="text-xs font-bold text-white/60 line-through">${originalPrice.toFixed(2)}</p> : null}
                 {rolePrices.length > 1 ? (
                   <p className="text-[10px] text-white/50">{product.familyRoles?.map((role) => role.label).filter(Boolean).join(" / ") || "Couple"}</p>
-                ) : etbRate ? (
-                  <p className="text-[11px] text-white/50">≈ {Math.round(basePrice * etbRate).toLocaleString()} ETB</p>
                 ) : null}
               </div>
               <span className="text-[11px] capitalize text-white/60 sm:text-xs">{rolePrices.length > 1 ? "Set" : product.gender ?? ""}</span>

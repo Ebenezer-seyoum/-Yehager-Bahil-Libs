@@ -17,6 +17,10 @@ export type OrderProfit = {
   netProfitUsd?: string | number | null;
   marginPercent?: string | number | null;
   orderDate?: string | Date | null;
+  roleLabel?: string | null;
+  designerCostUsd?: string | number | null;
+  taxPercent?: string | number | null;
+  otherCostUsd?: string | number | null;
 };
 
 export type ProductProfitRow = {
@@ -86,8 +90,10 @@ function OrderProfitTable({ rows }: { rows: OrderProfit[] }) {
           <tr>
             <th className="px-4 py-3">Order</th>
             <th className="px-4 py-3">Customer</th>
+            <th className="px-4 py-3">Role</th>
             <th className="px-4 py-3">Qty</th>
             <th className="px-4 py-3">Revenue</th>
+            <th className="px-4 py-3">Cost Basis</th>
             <th className="px-4 py-3">Production Cost</th>
             <th className="px-4 py-3">Net Profit</th>
             <th className="px-4 py-3">Margin</th>
@@ -102,8 +108,14 @@ function OrderProfitTable({ rows }: { rows: OrderProfit[] }) {
                 <p className="font-bold text-slate-900">{order.customerName ?? "Customer"}</p>
                 <p className="text-xs font-semibold text-slate-500">{order.customerEmail}</p>
               </td>
+              <td className="px-4 py-4 font-bold">{order.roleLabel ?? "-"}</td>
               <td className="px-4 py-4 font-bold">{numberLabel(order.quantity)}</td>
               <td className="px-4 py-4 font-black">{money(order.revenueUsd)}</td>
+              <td className="px-4 py-4 text-xs font-semibold text-slate-600">
+                <p>Designer {money(order.designerCostUsd)}</p>
+                <p>Tax {percent(order.taxPercent)}</p>
+                <p>Other {money(order.otherCostUsd)}</p>
+              </td>
               <td className="px-4 py-4 font-bold">{money(order.productionCostUsd)}</td>
               <td className={`px-4 py-4 font-black ${Number(order.netProfitUsd ?? 0) >= 0 ? "text-emerald-700" : "text-rose-700"}`}>{money(order.netProfitUsd)}</td>
               <td className="px-4 py-4 font-bold">{percent(order.marginPercent)}</td>
@@ -112,7 +124,7 @@ function OrderProfitTable({ rows }: { rows: OrderProfit[] }) {
           ))}
           {!rows.length ? (
             <tr>
-              <td colSpan={8} className="px-4 py-12 text-center text-sm font-bold text-slate-400">No paid orders for this product yet.</td>
+              <td colSpan={10} className="px-4 py-12 text-center text-sm font-bold text-slate-400">No paid orders for this product yet.</td>
             </tr>
           ) : null}
         </tbody>
