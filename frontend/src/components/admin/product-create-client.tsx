@@ -126,6 +126,12 @@ function errorMessage(error: unknown) {
   return friendlyErrorMessage(error);
 }
 
+function optionalNumber(value: string | number | null | undefined) {
+  const normalized = String(value ?? "").trim();
+  if (!normalized) return 0;
+  return Number(normalized) || 0;
+}
+
 function fallbackHomepageSections(): HomepageSection[] {
   return REGIONS.map((name, index) => ({
     id: `fallback-${name}`,
@@ -381,9 +387,9 @@ export function ProductCreateClient() {
         customerType: "woman",
         outfitOption: "standard",
         description: "Complete traditional outfit",
-        designerCostUsd: Number(base.designerCostUsd),
-        taxPercent: Number(base.taxPercent),
-        otherCostUsd: Number(base.otherCostUsd),
+        designerCostUsd: optionalNumber(base.designerCostUsd),
+        taxPercent: optionalNumber(base.taxPercent),
+        otherCostUsd: optionalNumber(base.otherCostUsd),
       },
       ...base.options.map((option) => ({
         label: option.label,
@@ -392,9 +398,9 @@ export function ProductCreateClient() {
         customerType: option.customerType,
         outfitOption: option.outfitOption,
         description: option.description,
-        designerCostUsd: Number(option.designerCostUsd),
-        taxPercent: Number(option.taxPercent),
-        otherCostUsd: Number(option.otherCostUsd),
+        designerCostUsd: optionalNumber(option.designerCostUsd),
+        taxPercent: optionalNumber(option.taxPercent),
+        otherCostUsd: optionalNumber(option.otherCostUsd),
       })),
     ];
   }
@@ -573,27 +579,14 @@ export function ProductCreateClient() {
       });
       return;
     }
-    if (designerCostUsd === "" || taxPercent === "" || otherCostUsd === "") {
-      setFormNotice({
-        tone: "error",
-        title: "Missing Production Cost",
-        message:
-          "Designer labor cost, tax rate, and other production costs are mandatory.",
-      });
-      return;
-    }
     const incompleteOption = outfitOptions.find(
-      (option) =>
-        !option.price ||
-        option.designerCostUsd === "" ||
-        option.taxPercent === "" ||
-        option.otherCostUsd === "",
+      (option) => !option.price,
     );
     if (incompleteOption) {
       setFormNotice({
         tone: "error",
         title: "Missing Option Pricing",
-        message: `${incompleteOption.label} needs selling price, production cost, tax, and other cost.`,
+        message: `${incompleteOption.label} needs a selling price.`,
       });
       return;
     }
@@ -640,9 +633,9 @@ export function ProductCreateClient() {
           otherCostUsd,
           options: outfitOptions,
         }),
-        designerCostUsd: Number(designerCostUsd),
-        taxPercent: Number(taxPercent),
-        otherCostUsd: Number(otherCostUsd),
+        designerCostUsd: optionalNumber(designerCostUsd),
+        taxPercent: optionalNumber(taxPercent),
+        otherCostUsd: optionalNumber(otherCostUsd),
         gender,
         fabricType: fabricType || undefined,
         embroideryStyle: embroideryStyle || undefined,
@@ -827,22 +820,13 @@ export function ProductCreateClient() {
       (p) =>
         !p.middleText.trim() ||
         !p.priceUsd ||
-        p.designerCostUsd === "" ||
-        p.taxPercent === "" ||
-        p.otherCostUsd === "" ||
-        p.outfitOptions.some(
-          (option) =>
-            !option.price ||
-            option.designerCostUsd === "" ||
-            option.taxPercent === "" ||
-            option.otherCostUsd === "",
-        ) ||
+        p.outfitOptions.some((option) => !option.price) ||
         p.files.length < 1,
     );
     if (invalid) {
       void dashboardError(
         "Invalid Data",
-        `Product "${invalid.folderName}" needs a middle name, a price, production cost values, and at least one image.`,
+        `Product "${invalid.folderName}" needs a middle name, a price, outfit option prices, and at least one image.`,
       );
       return;
     }
@@ -924,9 +908,9 @@ export function ProductCreateClient() {
             otherCostUsd: prod.otherCostUsd,
             options: prod.outfitOptions,
           }),
-          designerCostUsd: Number(prod.designerCostUsd),
-          taxPercent: Number(prod.taxPercent),
-          otherCostUsd: Number(prod.otherCostUsd),
+          designerCostUsd: optionalNumber(prod.designerCostUsd),
+          taxPercent: optionalNumber(prod.taxPercent),
+          otherCostUsd: optionalNumber(prod.otherCostUsd),
           gender: prod.gender,
           fabricType: prod.fabricType || undefined,
           embroideryStyle: prod.embroideryStyle || undefined,
@@ -1415,7 +1399,10 @@ export function ProductCreateClient() {
                 </div>
                 <div className="rounded-2xl border border-emerald-100 bg-emerald-50/60 p-4">
                   <p className="mb-3 text-[10px] font-black uppercase tracking-widest text-emerald-700">
-                    Production Cost Setup *
+                    Production Cost Setup
+                  </p>
+                  <p className="mb-3 text-xs font-semibold text-emerald-900">
+                    Optional. Blank cost fields are saved as 0 and can be updated later.
                   </p>
                   <div className="grid gap-3">
                     <label>
