@@ -73,16 +73,6 @@ const productFamilyRoleSchema = z.object({
   taxPercent: z.coerce.number().nonnegative().optional(),
   otherCostUsd: z.coerce.number().nonnegative().optional(),
 });
-const productProductionMaterialSchema = z.object({
-  id: z.string().trim().optional(),
-  name: z.string().trim().min(1).max(120),
-  optionKey: z.string().trim().max(80).optional(),
-  unit: z.enum(["meter", "piece", "roll", "pack", "gram", "kg"]),
-  requiredQty: z.coerce.number().nonnegative(),
-  availableQty: z.coerce.number().nonnegative(),
-  lowStockLevel: z.coerce.number().nonnegative(),
-  note: z.string().trim().max(200).optional(),
-});
 const productPatchSchema = z.object({
   name: z.string().trim().min(1).optional(),
   description: z.string().trim().optional(),
@@ -92,7 +82,6 @@ const productPatchSchema = z.object({
   priceUsd: z.coerce.number().positive().optional(),
   groomPriceUsd: z.coerce.number().positive().nullable().optional(),
   familyRoles: z.array(productFamilyRoleSchema).nullable().optional(),
-  productionMaterials: z.array(productProductionMaterialSchema).optional(),
   uniqueId: z.string().trim().min(1).optional(),
   gender: z.enum(["male", "female", "unisex"]).optional(),
   fabricType: z.string().trim().optional(),
@@ -114,7 +103,6 @@ const createProductSchema = z.object({
   priceUsd: z.coerce.number().positive(),
   groomPriceUsd: z.coerce.number().positive().nullable().optional(),
   familyRoles: z.array(productFamilyRoleSchema).nullable().optional(),
-  productionMaterials: z.array(productProductionMaterialSchema).optional(),
   uniqueId: z.string().trim().min(1).optional(),
   gender: z.enum(["male", "female", "unisex"]),
   fabricType: z.string().trim().optional(),
@@ -1311,7 +1299,6 @@ adminRouter.post(
         priceUsd: body.priceUsd.toFixed(2),
         groomPriceUsd: body.groomPriceUsd == null ? null : body.groomPriceUsd.toFixed(2),
         familyRoles: body.familyRoles ?? undefined,
-        productionMaterials: body.productionMaterials ?? [],
         uniqueId: body.uniqueId,
         images: body.images,
         fabricType: body.fabricType,
@@ -1381,7 +1368,6 @@ adminRouter.patch(
               ? null
               : body.groomPriceUsd.toFixed(2),
         familyRoles: body.familyRoles === undefined ? undefined : body.familyRoles,
-        productionMaterials: body.productionMaterials,
         uniqueId: body.uniqueId,
         gender: body.gender,
         fabricType: body.fabricType,

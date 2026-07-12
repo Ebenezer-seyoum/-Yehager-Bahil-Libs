@@ -22,7 +22,6 @@ type Product = {
   tailoringDays?: number | null;
   isActive?: boolean;
   isFeatured?: boolean;
-  productionMaterials?: Array<{ requiredQty?: string | number; availableQty?: string | number; lowStockLevel?: string | number }>;
 };
 
 function formatCurrency(value: string | number | null | undefined) {
@@ -35,18 +34,6 @@ function formatEtb(value: string | number | null | undefined) {
   const amount = Number(value) * 156.16;
   if (!Number.isFinite(amount)) return "0 ETB";
   return `${Math.round(amount).toLocaleString()} ETB`;
-}
-
-function productionStatus(product: Product) {
-  const materials = product.productionMaterials ?? [];
-  if (!materials.length) return { label: "Material Not Assigned", className: "bg-blue-50 text-blue-800 border-blue-200" };
-  if (materials.some((material) => Number(material.availableQty ?? 0) < Number(material.requiredQty ?? 0))) {
-    return { label: "Material Shortage", className: "bg-rose-50 text-rose-800 border-rose-200" };
-  }
-  if (materials.some((material) => Number(material.availableQty ?? 0) <= Number(material.lowStockLevel ?? 0))) {
-    return { label: "Low Material", className: "bg-amber-50 text-amber-800 border-amber-200" };
-  }
-  return { label: "Ready to Produce", className: "bg-emerald-50 text-emerald-800 border-emerald-200" };
 }
 
 export function AdminProductManager({
@@ -96,7 +83,6 @@ export function AdminProductManager({
           <tbody className="divide-y divide-slate-100">
             {filteredProducts.map((product, index) => {
               const image = product.images?.[0];
-              const status = productionStatus(product);
               return (
                 <tr 
                   key={product.id} 
@@ -133,17 +119,12 @@ export function AdminProductManager({
                     </div>
                   </td>
                   <td className="px-6 py-5">
-                    <div className="flex flex-col gap-2">
-                      <span className={cn(
-                        "inline-flex w-fit items-center rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-widest border",
-                        product.isActive ? "bg-emerald-50 text-emerald-700 border-emerald-100" : "bg-slate-50 text-slate-500 border-slate-100"
-                      )}>
-                        {product.isActive ? "Active" : "Hidden"}
-                      </span>
-                      <span className={cn("inline-flex w-fit items-center rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-widest", status.className)}>
-                        {status.label}
-                      </span>
-                    </div>
+                    <span className={cn(
+                      "inline-flex items-center rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-widest border",
+                      product.isActive ? "bg-emerald-50 text-emerald-700 border-emerald-100" : "bg-slate-50 text-slate-500 border-slate-100"
+                    )}>
+                      {product.isActive ? "Active" : "Hidden"}
+                    </span>
                   </td>
                   <td className="px-6 py-5">
                     <DashboardTableActions>

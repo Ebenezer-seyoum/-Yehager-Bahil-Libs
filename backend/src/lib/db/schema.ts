@@ -233,18 +233,6 @@ export const products = pgTable(
         otherCostUsd?: number;
       }>
     >(),
-    productionMaterials: jsonb("production_materials").$type<
-      Array<{
-        id?: string;
-        name: string;
-        optionKey?: string;
-        unit: "meter" | "piece" | "roll" | "pack" | "gram" | "kg";
-        requiredQty: number;
-        availableQty: number;
-        lowStockLevel: number;
-        note?: string;
-      }>
-    >().default([]).notNull(),
     images: jsonb("images").$type<string[]>().default([]).notNull(),
     fabricType: text("fabric_type"),
     embroideryStyle: text("embroidery_style"),

@@ -39,7 +39,6 @@ type BulkProduct = {
   taxPercent: string;
   otherCostUsd: string;
   outfitOptions: OutfitOptionDraft[];
-  productionMaterials: ProductionMaterialDraft[];
   pricingOpen: boolean;
   region: string;
   subcategory: string;
@@ -91,17 +90,6 @@ type OutfitOptionDraft = {
   otherCostUsd: string;
 };
 
-type ProductionMaterialDraft = {
-  id: string;
-  name: string;
-  optionKey: string;
-  unit: "meter" | "piece" | "roll" | "pack" | "gram" | "kg";
-  requiredQty: string;
-  availableQty: string;
-  lowStockLevel: string;
-  note: string;
-};
-
 const OPTION_PRICING_TEMPLATE: Array<Omit<OutfitOptionDraft, "price" | "designerCostUsd" | "taxPercent" | "otherCostUsd">> = [
   { label: "Men - Full Set", customerType: "man", outfitOption: "full_set", gender: "male", description: "Top + pants" },
   { label: "Men - Tishri / Top", customerType: "man", outfitOption: "top_only", gender: "male", description: "Top garment only" },
@@ -119,8 +107,6 @@ const CUSTOMER_GROUPS = [
   { key: "girl", label: "Girl" },
 ] as const;
 
-const MATERIAL_UNITS: ProductionMaterialDraft["unit"][] = ["meter", "piece", "roll", "pack", "gram", "kg"];
-
 function optionKey(role: Pick<OutfitOptionDraft, "customerType" | "outfitOption">) {
   return `${role.customerType}:${role.outfitOption}`;
 }
@@ -135,20 +121,6 @@ function initialOptionPricing(): OutfitOptionDraft[] {
   }));
 }
 
-function initialProductionMaterials(): ProductionMaterialDraft[] {
-  return [
-    {
-      id: Math.random().toString(36).slice(2, 9),
-      name: "",
-      optionKey: "all",
-      unit: "meter",
-      requiredQty: "",
-      availableQty: "",
-      lowStockLevel: "",
-      note: "",
-    },
-  ];
-}
 
 function errorMessage(error: unknown) {
   return friendlyErrorMessage(error);
@@ -374,14 +346,12 @@ export function ProductCreateClient() {
   const [taxPercent, setTaxPercent] = useState("");
   const [otherCostUsd, setOtherCostUsd] = useState("");
   const [outfitOptions, setOutfitOptions] = useState<OutfitOptionDraft[]>(() => initialOptionPricing());
-  const [productionMaterials, setProductionMaterials] = useState<ProductionMaterialDraft[]>(() => initialProductionMaterials());
   const [openPricingGroups, setOpenPricingGroups] = useState<Record<string, boolean>>({
     man: true,
     woman: true,
     boy: false,
     girl: false,
   });
-  const [openMaterials, setOpenMaterials] = useState(true);
   const [gender, setGender] = useState("female");
   const [fabricType, setFabricType] = useState("");
   const [embroideryStyle, setEmbroideryStyle] = useState("");
@@ -394,43 +364,6 @@ export function ProductCreateClient() {
 
   function updateOutfitOption(index: number, patch: Partial<OutfitOptionDraft>) {
     setOutfitOptions((current) => current.map((option, optionIndex) => (optionIndex === index ? { ...option, ...patch } : option)));
-  }
-
-  function updateProductionMaterial(id: string, patch: Partial<ProductionMaterialDraft>) {
-    setProductionMaterials((current) =>
-      current.map((material) => (material.id === id ? { ...material, ...patch } : material)),
-    );
-  }
-
-  function addProductionMaterial() {
-    setProductionMaterials((current) => [
-      ...current,
-      {
-        ...initialProductionMaterials()[0],
-        id: Math.random().toString(36).slice(2, 9),
-      },
-    ]);
-  }
-
-  function removeProductionMaterial(id: string) {
-    setProductionMaterials((current) =>
-      current.length === 1 ? current : current.filter((material) => material.id !== id),
-    );
-  }
-
-  function serializeProductionMaterials(materials: ProductionMaterialDraft[]) {
-    return materials
-      .filter((material) => material.name.trim())
-      .map((material) => ({
-        id: material.id,
-        name: material.name.trim(),
-        optionKey: material.optionKey === "all" ? undefined : material.optionKey,
-        unit: material.unit,
-        requiredQty: Number(material.requiredQty || 0),
-        availableQty: Number(material.availableQty || 0),
-        lowStockLevel: Number(material.lowStockLevel || 0),
-        note: material.note.trim() || undefined,
-      }));
   }
 
   function buildFamilyRoles(base: {
@@ -707,7 +640,6 @@ export function ProductCreateClient() {
           otherCostUsd,
           options: outfitOptions,
         }),
-        productionMaterials: serializeProductionMaterials(productionMaterials),
         designerCostUsd: Number(designerCostUsd),
         taxPercent: Number(taxPercent),
         otherCostUsd: Number(otherCostUsd),
@@ -806,7 +738,6 @@ export function ProductCreateClient() {
           taxPercent: defaultTaxPercent,
           otherCostUsd: defaultOtherCost,
         })),
-        productionMaterials: initialProductionMaterials(),
         pricingOpen: false,
         region: defaultRegion,
         subcategory: defaultSubcategory,
@@ -993,7 +924,6 @@ export function ProductCreateClient() {
             otherCostUsd: prod.otherCostUsd,
             options: prod.outfitOptions,
           }),
-          productionMaterials: serializeProductionMaterials(prod.productionMaterials),
           designerCostUsd: Number(prod.designerCostUsd),
           taxPercent: Number(prod.taxPercent),
           otherCostUsd: Number(prod.otherCostUsd),
@@ -1535,92 +1465,6 @@ export function ProductCreateClient() {
                     ).toFixed(2)}
                   </div>
                 </div>
-                <div className="rounded-2xl border border-blue-100 bg-blue-50/40 p-4">
-                  <p className="mb-1 text-[10px] font-black uppercase tracking-widest text-blue-800">
-                    Customer Option Pricing *
-                  </p>
-                  <p className="mb-4 text-[11px] font-bold leading-5 text-blue-900/70">
-                    Men and Boy use three sub-options. Women and Girl use the standard outfit price.
-                  </p>
-                  <div className="space-y-3">
-                    {CUSTOMER_GROUPS.map((group) => {
-                      const groupOptions =
-                        group.key === "woman"
-                          ? []
-                          : outfitOptions
-                              .map((option, index) => ({ option, index }))
-                              .filter(({ option }) => option.customerType === group.key);
-                      const isOpen = openPricingGroups[group.key] ?? false;
-                      return (
-                        <div key={group.key} className="overflow-hidden rounded-xl border border-blue-100 bg-white">
-                          <button
-                            type="button"
-                            onClick={() => setOpenPricingGroups((current) => ({ ...current, [group.key]: !isOpen }))}
-                            className="flex w-full items-center justify-between px-4 py-3 text-left"
-                          >
-                            <span className="text-xs font-black uppercase tracking-widest text-slate-800">{group.label}</span>
-                            <ChevronDown className={cn("h-4 w-4 text-slate-500 transition-transform", isOpen && "rotate-180")} />
-                          </button>
-                          {isOpen ? (
-                            <div className="space-y-3 border-t border-blue-50 bg-slate-50/60 p-3">
-                              {group.key === "woman" ? (
-                                <div className="rounded-xl border border-slate-200 bg-white p-3">
-                                  <p className="text-xs font-black text-slate-900">Women Outfit</p>
-                                  <p className="mt-1 text-[10px] font-semibold text-slate-500">
-                                    Uses the base price and production cost fields above.
-                                  </p>
-                                </div>
-                              ) : (
-                                groupOptions.map(({ option, index }) => renderOptionInputs(option, index))
-                              )}
-                            </div>
-                          ) : null}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-                <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                  <button
-                    type="button"
-                    onClick={() => setOpenMaterials((current) => !current)}
-                    className="flex w-full items-center justify-between text-left"
-                  >
-                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Production Materials</span>
-                    <ChevronDown className={cn("h-4 w-4 text-slate-500 transition-transform", openMaterials && "rotate-180")} />
-                  </button>
-                  {openMaterials ? (
-                    <div className="mt-4 space-y-3">
-                      {productionMaterials.map((material) => (
-                        <div key={material.id} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                          <div className="grid gap-2 sm:grid-cols-2">
-                            <input value={material.name} onChange={(e) => updateProductionMaterial(material.id, { name: e.target.value })} placeholder="Material name" className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-xs font-bold outline-none" />
-                            <select value={material.optionKey} onChange={(e) => updateProductionMaterial(material.id, { optionKey: e.target.value })} className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-xs font-bold outline-none">
-                              <option value="all">Shared for product</option>
-                              <option value="woman:standard">Women</option>
-                              {outfitOptions.map((option) => <option key={optionKey(option)} value={optionKey(option)}>{option.label}</option>)}
-                            </select>
-                          </div>
-                          <div className="mt-2 grid grid-cols-2 gap-2 lg:grid-cols-4">
-                            <input type="number" value={material.requiredQty} onChange={(e) => updateProductionMaterial(material.id, { requiredQty: e.target.value })} placeholder="Required" className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-xs font-bold outline-none" />
-                            <input type="number" value={material.availableQty} onChange={(e) => updateProductionMaterial(material.id, { availableQty: e.target.value })} placeholder="Available" className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-xs font-bold outline-none" />
-                            <input type="number" value={material.lowStockLevel} onChange={(e) => updateProductionMaterial(material.id, { lowStockLevel: e.target.value })} placeholder="Low stock level" className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-xs font-bold outline-none" />
-                            <select value={material.unit} onChange={(e) => updateProductionMaterial(material.id, { unit: e.target.value as ProductionMaterialDraft["unit"] })} className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-xs font-bold outline-none">
-                              {MATERIAL_UNITS.map((unit) => <option key={unit} value={unit}>{unit}</option>)}
-                            </select>
-                          </div>
-                          <div className="mt-2 flex gap-2">
-                            <input value={material.note} onChange={(e) => updateProductionMaterial(material.id, { note: e.target.value })} placeholder="Designer note" className="h-10 min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 text-xs font-bold outline-none" />
-                            <button type="button" onClick={() => removeProductionMaterial(material.id)} className="h-10 rounded-lg border border-rose-200 bg-white px-3 text-xs font-black text-rose-700">Remove</button>
-                          </div>
-                        </div>
-                      ))}
-                      <button type="button" onClick={addProductionMaterial} className="inline-flex h-10 items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3 text-xs font-black text-blue-800">
-                        <Plus className="h-4 w-4" /> Add Material
-                      </button>
-                    </div>
-                  ) : null}
-                </div>
               </div>
             </section>
 
@@ -1680,6 +1524,55 @@ export function ProductCreateClient() {
               </div>
             </section>
           </aside>
+          <section className="lg:col-span-12 rounded-[2.5rem] border border-slate-200 bg-white p-8 shadow-sm">
+            <div className="mb-6 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+              <div>
+                <h3 className="flex items-center gap-2 text-sm font-black uppercase tracking-widest text-slate-500">
+                  <DollarSign className="h-4 w-4" /> Customer Option Pricing
+                </h3>
+                <p className="mt-2 text-xs font-bold text-slate-500">
+                  Men and Boy use three sub-options. Women and Girl use the standard outfit price.
+                </p>
+              </div>
+            </div>
+            <div className="grid gap-4 lg:grid-cols-2">
+              {CUSTOMER_GROUPS.map((group) => {
+                const groupOptions =
+                  group.key === "woman"
+                    ? []
+                    : outfitOptions
+                        .map((option, index) => ({ option, index }))
+                        .filter(({ option }) => option.customerType === group.key);
+                const isOpen = openPricingGroups[group.key] ?? false;
+                return (
+                  <div key={group.key} className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
+                    <button
+                      type="button"
+                      onClick={() => setOpenPricingGroups((current) => ({ ...current, [group.key]: !isOpen }))}
+                      className="flex w-full items-center justify-between bg-white px-5 py-4 text-left"
+                    >
+                      <span className="text-sm font-black uppercase tracking-widest text-slate-900">{group.label}</span>
+                      <ChevronDown className={cn("h-4 w-4 text-slate-500 transition-transform", isOpen && "rotate-180")} />
+                    </button>
+                    {isOpen ? (
+                      <div className="space-y-4 border-t border-slate-200 p-4">
+                        {group.key === "woman" ? (
+                          <div className="rounded-xl border border-slate-200 bg-white p-4">
+                            <p className="text-sm font-black text-slate-900">Women Outfit</p>
+                            <p className="mt-1 text-xs font-semibold text-slate-500">
+                              Uses the base price and production cost fields above.
+                            </p>
+                          </div>
+                        ) : (
+                          groupOptions.map(({ option, index }) => renderOptionInputs(option, index))
+                        )}
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+          </section>
         </div>
       ) : (
         // ================= MULTIPLE PRODUCTS BULK MODE =================
@@ -1891,22 +1784,59 @@ export function ProductCreateClient() {
           </section>
 
           {/* Folder Upload Input Section */}
-          <section className="rounded-[2.5rem] border-2 border-dashed border-slate-300 bg-white p-8 flex flex-col items-center justify-center text-center hover:border-emerald-600 transition-all group">
-            <Upload className="h-12 w-12 text-slate-300 mb-3 group-hover:text-emerald-600 transition-colors" />
-            <h4 className="text-sm font-bold text-slate-900 mb-1">
-              Upload Root Folder
-            </h4>
-            <p className="text-xs text-slate-500 max-w-sm mb-4">
-              Select one root folder. Each subfolder becomes a product, and
-              every image inside that subfolder is attached to the catalog item.
-            </p>
-            <button
-              type="button"
-              onClick={() => void handleRootDirectoryClick()}
-              className="inline-flex h-11 items-center gap-2 rounded-xl bg-slate-950 px-5 text-sm font-bold text-white shadow-md transition-all hover:bg-slate-800"
-            >
-              <FolderOpen className="h-4 w-4" /> Select Root Directory
-            </button>
+          <section
+            className={cn(
+              "rounded-[2.5rem] p-8 text-center transition-all",
+              bulkProducts.length > 0
+                ? "border border-emerald-200 bg-emerald-50 shadow-sm"
+                : "border-2 border-dashed border-slate-300 bg-white hover:border-emerald-600",
+            )}
+          >
+            {bulkProducts.length > 0 ? (
+              <div className="flex flex-col items-center justify-center">
+                <CheckCircle2 className="mb-3 h-12 w-12 text-emerald-600" />
+                <h4 className="text-base font-black text-emerald-950">Uploaded Successfully</h4>
+                <p className="mt-2 max-w-xl text-xs font-bold leading-5 text-emerald-800">
+                  {bulkProducts.length} product folder{bulkProducts.length === 1 ? "" : "s"} detected with{" "}
+                  {bulkProducts.reduce((total, product) => total + product.files.length, 0)} image
+                  {bulkProducts.reduce((total, product) => total + product.files.length, 0) === 1 ? "" : "s"} ready for insertion.
+                </p>
+                <div className="mt-5 flex flex-wrap justify-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => void handleRootDirectoryClick()}
+                    className="inline-flex h-11 items-center gap-2 rounded-xl bg-emerald-700 px-5 text-sm font-bold text-white shadow-sm transition-all hover:bg-emerald-800"
+                  >
+                    <FolderOpen className="h-4 w-4" /> Add New Folder
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBulkProducts([])}
+                    className="inline-flex h-11 items-center gap-2 rounded-xl border border-emerald-200 bg-white px-5 text-sm font-bold text-emerald-800 transition-all hover:bg-emerald-100"
+                  >
+                    <X className="h-4 w-4" /> Cancel Previous Upload
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="group flex flex-col items-center justify-center">
+                <Upload className="h-12 w-12 text-slate-300 mb-3 group-hover:text-emerald-600 transition-colors" />
+                <h4 className="text-sm font-bold text-slate-900 mb-1">
+                  Upload Root Folder
+                </h4>
+                <p className="text-xs text-slate-500 max-w-sm mb-4">
+                  Select one root folder. Each subfolder becomes a product, and
+                  every image inside that subfolder is attached to the catalog item.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => void handleRootDirectoryClick()}
+                  className="inline-flex h-11 items-center gap-2 rounded-xl bg-slate-950 px-5 text-sm font-bold text-white shadow-md transition-all hover:bg-slate-800"
+                >
+                  <FolderOpen className="h-4 w-4" /> Select Root Directory
+                </button>
+              </div>
+            )}
             <input
               ref={folderInputRef}
               type="file"

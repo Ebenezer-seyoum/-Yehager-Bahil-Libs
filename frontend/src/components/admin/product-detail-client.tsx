@@ -12,14 +12,11 @@ import {
   Clock,
   Shirt,
   Info,
-  ShieldCheck,
   ImageIcon,
   MapPin,
   Hash,
   Save,
-  X,
-  ChevronDown,
-  AlertTriangle
+  X
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { dashboardConfirm, dashboardSuccess, dashboardError } from "@/lib/dashboard-swal";
@@ -42,7 +39,6 @@ type Product = Record<string, unknown> & {
   embroideryStyle?: string | null;
   gender?: string | null;
   familyRoles?: Array<{ icon?: string; label?: string; price?: string | number | null; customerType?: "woman" | "man" | "girl" | "boy"; outfitOption?: "standard" | "full_set" | "top_only" | "pants_only"; designerCostUsd?: string | number | null; taxPercent?: string | number | null; otherCostUsd?: string | number | null; description?: string | null }> | null;
-  productionMaterials?: Array<{ id?: string; name: string; optionKey?: string; unit?: string; requiredQty?: string | number; availableQty?: string | number; lowStockLevel?: string | number; note?: string | null }> | null;
   profitCostSetting?: {
     designerCostUsd?: string | number | null;
     taxPercent?: string | number | null;
@@ -72,25 +68,14 @@ function formatPercent(value: string | number | null | undefined) {
 function Field({ label, value, icon: Icon }: { label: string; value?: string | number | null; icon?: IconComponent }) {
   const display = value && String(value).trim() ? value : "Not provided";
   return (
-    <div className="rounded-2xl border border-slate-100 bg-slate-50/50 p-5 shadow-[inset_0_1px_2px_rgba(0,0,0,0.02)]">
+    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex items-center gap-2 mb-1">
         {Icon && <Icon className="h-3 w-3 text-slate-400" />}
-        <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">{label}</div>
+        <div className="text-xs font-semibold text-slate-600">{label}</div>
       </div>
-      <div className="text-sm font-bold text-slate-900">{display}</div>
+      <div className="text-sm font-semibold text-slate-950">{display}</div>
     </div>
   );
-}
-
-function productionStatus(materials: Product["productionMaterials"]) {
-  if (!materials?.length) return { label: "Material Not Assigned", tone: "bg-blue-50 text-blue-800 border-blue-200" };
-  if (materials.some((m) => Number(m.availableQty ?? 0) < Number(m.requiredQty ?? 0))) {
-    return { label: "Material Shortage", tone: "bg-rose-50 text-rose-800 border-rose-200" };
-  }
-  if (materials.some((m) => Number(m.availableQty ?? 0) <= Number(m.lowStockLevel ?? 0))) {
-    return { label: "Low Material", tone: "bg-amber-50 text-amber-800 border-amber-200" };
-  }
-  return { label: "Ready to Produce", tone: "bg-emerald-50 text-emerald-800 border-emerald-200" };
 }
 
 export function ProductDetailClient({ initialProduct }: { initialProduct: Product }) {
@@ -99,7 +84,6 @@ export function ProductDetailClient({ initialProduct }: { initialProduct: Produc
   const [, setBusy] = useState(false);
   const [activeImage, setActiveImage] = useState(product.images?.[0] || "");
   const [activeSection, setActiveSection] = useState<"general" | "pricing" | "garment" | "inventory">("general");
-  const [openPriceGroups, setOpenPriceGroups] = useState<Record<string, boolean>>({ man: true, woman: true, boy: false, girl: false });
   const [editingCost, setEditingCost] = useState(false);
   const [costForm, setCostForm] = useState({
     designerCostUsd: String(product.profitCostSetting?.designerCostUsd ?? ""),
@@ -111,14 +95,6 @@ export function ProductDetailClient({ initialProduct }: { initialProduct: Produc
     (Number(product.profitCostSetting?.designerCostUsd ?? 0) || 0) +
     ((Number(product.priceUsd ?? 0) || 0) * ((Number(product.profitCostSetting?.taxPercent ?? 0) || 0) / 100)) +
     (Number(product.profitCostSetting?.otherCostUsd ?? 0) || 0);
-  const readiness = productionStatus(product.productionMaterials);
-  const priceGroups = [
-    { key: "man", label: "Men" },
-    { key: "woman", label: "Women" },
-    { key: "boy", label: "Boy" },
-    { key: "girl", label: "Girl" },
-  ] as const;
-
   async function refresh() {
     setBusy(true);
     try {
@@ -254,10 +230,10 @@ export function ProductDetailClient({ initialProduct }: { initialProduct: Produc
                </div>
             </div>
             <div className="flex flex-wrap gap-2">
-               <button className="inline-flex h-11 items-center gap-2 rounded-xl bg-blue-700 px-5 text-sm font-bold text-white shadow-sm hover:bg-blue-800 transition-all active:scale-95"><Pencil className="h-4 w-4" /> Edit Item</button>
+               <button className="inline-flex h-10 items-center gap-2 rounded-xl bg-[#2563EB] px-4 text-sm font-semibold text-white shadow-sm hover:bg-[#1D4ED8] transition-all active:scale-95"><Pencil className="h-4 w-4" /> Edit Item</button>
                <div className="h-8 w-px bg-slate-200 mx-1" />
-               <button onClick={() => toggleStatus()} className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-sm font-bold text-slate-900 hover:bg-slate-50 transition-all"><Power className={cn("h-4 w-4", product.isActive ? "text-emerald-500" : "text-slate-400")} /> {product.isActive ? "Deactivate" : "Activate"}</button>
-               <button onClick={() => remove()} className="inline-flex h-11 items-center gap-2 rounded-xl border border-rose-200 bg-white px-5 text-sm font-bold text-rose-700 hover:bg-rose-50 transition-all active:scale-95"><Trash2 className="h-4 w-4" /> Delete</button>
+               <button onClick={() => toggleStatus()} className={cn("inline-flex h-10 items-center gap-2 rounded-xl px-4 text-sm font-semibold text-white shadow-sm transition-all active:scale-95", product.isActive ? "bg-[#EA580C] hover:bg-[#C2410C]" : "bg-[#16A34A] hover:bg-[#15803D]")}><Power className="h-4 w-4" /> {product.isActive ? "Deactivate" : "Activate"}</button>
+               <button onClick={() => remove()} className="inline-flex h-10 items-center gap-2 rounded-xl bg-rose-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-rose-700 transition-all active:scale-95"><Trash2 className="h-4 w-4" /> Delete</button>
             </div>
           </div>
         </div>
@@ -273,8 +249,9 @@ export function ProductDetailClient({ initialProduct }: { initialProduct: Produc
     >
           {activeSection === "general" && (
             <div className="space-y-6">
-              <section className="rounded-[2.5rem] border border-slate-200 bg-white p-8 shadow-sm">
-                <h2 className="mb-8 flex items-center gap-2 text-sm font-black uppercase tracking-widest text-slate-400"><Info className="h-4 w-4" /> Identity Profile</h2>
+              <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <h2 className="text-base font-bold text-slate-900">Identity Profile</h2>
+                <div className="mt-4">
                 <div className="grid gap-4 md:grid-cols-2">
                    <Field label="Catalog Name" value={product.name} icon={Shirt} />
                    <Field label="Product ID" value={product.uniqueId} icon={Hash} />
@@ -300,26 +277,28 @@ export function ProductDetailClient({ initialProduct }: { initialProduct: Produc
                      </div>
                    </div>
                 </div>
+                </div>
               </section>
             </div>
           )}
 
           {activeSection === "pricing" && (
-            <section className="rounded-[2.5rem] border border-slate-200 bg-white p-8 shadow-sm">
-               <h2 className="mb-8 flex items-center gap-2 text-sm font-black uppercase tracking-widest text-slate-400"><DollarSign className="h-4 w-4" /> Financial Configuration</h2>
+            <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+               <h2 className="text-base font-bold text-slate-900">Financial Configuration</h2>
+               <div className="mt-4">
                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="rounded-2xl border-2 border-primary/20 bg-primary/5 p-6 shadow-sm">
-                     <div className="text-[10px] font-black uppercase tracking-widest text-primary mb-1">Base Price (USD)</div>
+                  <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                     <div className="text-xs font-semibold text-slate-600 mb-1">Base Price (USD)</div>
                      <div className="text-3xl font-black text-slate-900">{formatCurrency(product.priceUsd)}</div>
                      <div className="mt-1 text-xs font-bold text-slate-400">≈ {formatEtb(product.priceUsd)}</div>
                   </div>
-                  <div className={cn("rounded-2xl border p-6 shadow-sm", readiness.tone)}>
-                     <div className="text-[10px] font-black uppercase tracking-widest mb-1">Production Status</div>
-                     <div className="text-2xl font-black">{readiness.label}</div>
-                     <div className="mt-1 text-xs font-bold opacity-75">Calculated from Production Materials</div>
+                  <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                     <div className="text-xs font-semibold text-slate-600 mb-1">Delivery Window</div>
+                     <div className="text-3xl font-black text-slate-900">{product.tailoringDays || 30} Days</div>
+                     <div className="mt-1 text-xs font-bold text-slate-400">Estimated tailoring time</div>
                   </div>
                </div>
-               <div className="mt-6 rounded-2xl border border-emerald-100 bg-emerald-50/60 p-6">
+               <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
                   <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                     <h4 className="text-[10px] font-black uppercase tracking-widest text-emerald-700">Production Cost Setup</h4>
                     {editingCost ? (
@@ -402,51 +381,14 @@ export function ProductDetailClient({ initialProduct }: { initialProduct: Produc
                     </div>
                   )}
                </div>
-               <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-6">
-                  <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-4">Customer Option Pricing</h4>
-                  <div className="space-y-3">
-                     {priceGroups.map((group) => {
-                       const roles = (product.familyRoles ?? []).filter((role) => (role.customerType ?? "").toLowerCase() === group.key);
-                       if (!roles.length) return null;
-                       const isOpen = openPriceGroups[group.key] ?? false;
-                       return (
-                         <div key={group.key} className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
-                           <button
-                             type="button"
-                             onClick={() => setOpenPriceGroups((current) => ({ ...current, [group.key]: !isOpen }))}
-                             className="flex w-full items-center justify-between bg-white px-4 py-3 text-left"
-                           >
-                             <span className="text-xs font-black uppercase tracking-widest text-slate-900">{group.label}</span>
-                             <ChevronDown className={cn("h-4 w-4 text-slate-500 transition-transform", isOpen && "rotate-180")} />
-                           </button>
-                           {isOpen ? (
-                             <div className="grid gap-3 p-3 md:grid-cols-3">
-                               {roles.map((role, i) => (
-                                 <div key={`${group.key}-${i}`} className="rounded-xl border border-slate-200 bg-white p-4">
-                                   <p className="text-sm font-black text-slate-900">{role.label?.replace("Men - ", "").replace("Boy - ", "")}</p>
-                                   <p className="mt-1 text-[11px] font-semibold text-slate-500">{role.description || "Standard outfit option"}</p>
-                                   <p className="mt-3 text-xl font-black text-blue-900">{formatCurrency(role.price)}</p>
-                                   <div className="mt-3 grid grid-cols-3 gap-2 text-[10px] font-black uppercase text-slate-400">
-                                     <span>Cost {formatCurrency(role.designerCostUsd)}</span>
-                                     <span>Tax {formatPercent(role.taxPercent)}</span>
-                                     <span>Other {formatCurrency(role.otherCostUsd)}</span>
-                                   </div>
-                                 </div>
-                               ))}
-                             </div>
-                           ) : null}
-                         </div>
-                       );
-                     })}
-                  </div>
                </div>
             </section>
           )}
 
           {activeSection === "garment" && (
-            <section className="rounded-[2.5rem] border border-slate-200 bg-white p-8 shadow-sm">
-               <h2 className="mb-8 flex items-center gap-2 text-sm font-black uppercase tracking-widest text-slate-400"><Shirt className="h-4 w-4" /> Garment Specifications</h2>
-               <div className="grid gap-4 md:grid-cols-2">
+            <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+               <h2 className="text-base font-bold text-slate-900">Garment Specifications</h2>
+               <div className="mt-4 grid gap-4 md:grid-cols-2">
                   <Field label="Product ID" value={product.uniqueId} icon={Hash} />
                   <Field label="Fabric Texture" value={product.fabricType} />
                   <Field label="Artisan Style" value={product.embroideryStyle} />
@@ -457,49 +399,9 @@ export function ProductDetailClient({ initialProduct }: { initialProduct: Produc
           )}
 
           {activeSection === "inventory" && (
-             <section className="rounded-[2.5rem] border border-slate-200 bg-white p-8 shadow-sm">
-                <h2 className="mb-8 flex items-center gap-2 text-sm font-black uppercase tracking-widest text-slate-500"><ShieldCheck className="h-4 w-4" /> Production Readiness</h2>
-                <div className="space-y-4">
-                   <div className="rounded-2xl border border-slate-200 bg-slate-50 p-6">
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div>
-                          <p className="text-sm font-black uppercase text-slate-900">Production Status</p>
-                          <p className="mt-1 text-xs font-bold text-slate-500">Made after order, based on assigned material availability.</p>
-                        </div>
-                        <span className={cn("inline-flex items-center gap-2 rounded-full border px-4 py-1 text-[10px] font-black uppercase tracking-widest", readiness.tone)}>
-                          <AlertTriangle className="h-3.5 w-3.5" /> {readiness.label}
-                        </span>
-                      </div>
-                   </div>
-                   <div className="rounded-2xl border border-slate-200 bg-white p-6">
-                      <h3 className="text-sm font-black uppercase text-slate-900">Production Materials</h3>
-                      <p className="mt-1 text-xs font-bold text-slate-500">Default recipe used to estimate if this product can be produced before a customer orders.</p>
-                      <div className="mt-4 space-y-3">
-                        {product.productionMaterials?.length ? product.productionMaterials.map((material, index) => {
-                          const required = Number(material.requiredQty ?? 0);
-                          const available = Number(material.availableQty ?? 0);
-                          const low = Number(material.lowStockLevel ?? 0);
-                          const shortage = available < required;
-                          const lowMaterial = !shortage && available <= low;
-                          return (
-                            <div key={material.id ?? index} className="grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 md:grid-cols-[1fr_auto] md:items-center">
-                              <div>
-                                <p className="text-sm font-black text-slate-900">{material.name}</p>
-                                <p className="mt-1 text-xs font-semibold text-slate-500">
-                                  Required {required} {material.unit} / Available {available} {material.unit} / Low stock level {low} {material.unit}
-                                </p>
-                                {material.note ? <p className="mt-1 text-xs font-semibold text-slate-400">{material.note}</p> : null}
-                              </div>
-                              <span className={cn("w-fit rounded-full border px-3 py-1 text-[10px] font-black uppercase", shortage ? "border-rose-200 bg-rose-50 text-rose-800" : lowMaterial ? "border-amber-200 bg-amber-50 text-amber-800" : "border-emerald-200 bg-emerald-50 text-emerald-800")}>
-                                {shortage ? "Shortage" : lowMaterial ? "Low Material" : "Enough"}
-                              </span>
-                            </div>
-                          );
-                        }) : (
-                          <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-5 text-sm font-bold text-slate-500">No production materials assigned yet.</div>
-                        )}
-                      </div>
-                   </div>
+             <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <h2 className="text-base font-bold text-slate-900">Management Controls</h2>
+                <div className="mt-4 space-y-4">
                    <div className="flex items-center justify-between rounded-2xl border border-slate-100 p-6">
                       <div className="space-y-1"><p className="text-sm font-black uppercase text-slate-900">Featured Placement</p><p className="text-xs font-bold text-slate-400">Highlight this item on the dashboard hero sections.</p></div>
                       <span className={cn("inline-flex items-center rounded-full border px-4 py-1 text-[10px] font-black uppercase tracking-widest", product.isFeatured ? "bg-amber-50 text-amber-700 border-amber-100" : "bg-slate-50 text-slate-400 border-slate-100")}>{product.isFeatured ? "Enabled" : "Disabled"}</span>

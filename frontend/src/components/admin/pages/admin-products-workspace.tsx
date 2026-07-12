@@ -29,7 +29,6 @@ export function AdminProductsWorkspace({ data, canCreate = false }: { data: Admi
         { id: "all", label: "All Items", icon: Package },
         { id: "active", label: "Active", icon: Package },
         { id: "draft", label: "Drafts", icon: Package },
-        { id: "low-stock", label: "Low Stock", icon: Package },
       ]}
       actions={
         canCreate ? (
