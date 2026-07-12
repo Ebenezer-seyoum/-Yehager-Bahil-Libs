@@ -106,7 +106,7 @@ function optionDescription(role: Role) {
   if (role.outfitOption === "full_set") return "Top + pants";
   if (role.outfitOption === "top_only") return "Shirt / top clothes";
   if (role.outfitOption === "pants_only") return "Bottom / suri";
-  return role.customerType === "girl" ? "Child traditional outfit" : "Complete traditional outfit";
+  return role.customerType === "girl" ? "Child girl outfit" : "Complete traditional outfit";
 }
 
 function inchesToCm(inches?: number | null) {
@@ -245,7 +245,7 @@ export function ProductPurchasePanel({
 
   const roleOptions = roles.length > 0
     ? roles
-    : [{ label: "Woman Outfit", price, gender: "female" as const, customerType: "woman" as const, outfitOption: "standard" as const, description: "Complete traditional outfit" }];
+    : [{ label: "Women Outfit", price, gender: "female" as const, customerType: "woman" as const, outfitOption: "standard" as const, description: "Complete traditional outfit" }];
   const selectedRole = roleOptions[selectedRoleIndex] ?? roleOptions[0] ?? null;
   const selectedCustomerType = selectedRole ? customerTypeForRole(selectedRole) : "woman";
   const availableCustomerTypes = CUSTOMER_TYPES.filter((type) => roleOptions.some((role) => customerTypeForRole(role) === type.value));

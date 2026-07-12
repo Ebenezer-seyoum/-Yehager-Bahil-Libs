@@ -44,6 +44,28 @@ function productStock(product: Row) {
   return Number.isFinite(stock) ? stock : 999;
 }
 
+function materialStatus(product: Row) {
+  const materials = product.productionMaterials;
+  if (!Array.isArray(materials) || materials.length === 0) return "material_not_assigned";
+  if (
+    materials.some((row) => {
+      const material = row as Record<string, unknown>;
+      return Number(material.availableQty ?? 0) < Number(material.requiredQty ?? 0);
+    })
+  ) {
+    return "material_shortage";
+  }
+  if (
+    materials.some((row) => {
+      const material = row as Record<string, unknown>;
+      return Number(material.availableQty ?? 0) <= Number(material.lowStockLevel ?? 0);
+    })
+  ) {
+    return "low_material";
+  }
+  return "ready_to_produce";
+}
+
 function filterOrders(orders: Row[], tabId: string): Row[] {
   switch (tabId) {
     case "new":
@@ -76,7 +98,7 @@ function filterProducts(products: Row[], tabId: string): Row[] {
     case "draft":
       return products.filter((p) => p.isActive === false);
     case "low-stock":
-      return products.filter((p) => productStock(p) > 0 && productStock(p) <= 5);
+      return products.filter((p) => ["low_material", "material_shortage", "material_not_assigned"].includes(materialStatus(p)) || (productStock(p) > 0 && productStock(p) <= 5));
     case "out-of-stock":
       return products.filter((p) => productStock(p) <= 0);
     case "featured":
