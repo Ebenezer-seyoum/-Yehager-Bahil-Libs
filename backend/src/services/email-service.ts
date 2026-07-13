@@ -329,8 +329,8 @@ function htmlShell(title: string, body: string) {
 
           <!-- Header -->
           <div style="text-align:center;margin-bottom:22px">
-            <div style="display:inline-block;width:88px;height:88px;border-radius:999px;background:#120f09;overflow:hidden">
-              <img src="${escapeHtml(logoUrl())}" alt="Yehager Bahil Libs" width="88" height="88" style="display:block;width:88px;height:88px;object-fit:cover;border-radius:999px" />
+            <div style="text-align:center">
+              <img src="${escapeHtml(logoUrl())}" alt="Yehager Bahil Libs" width="120" style="display:block;width:120px;max-width:120px;height:auto;margin:0 auto;border:0;outline:none;text-decoration:none" />
             </div>
           </div>
           <p style="margin:0 0 4px;text-align:center;color:#d6a43d;font-size:22px;font-weight:900;letter-spacing:.01em">Yehager Bahil Libs</p>
