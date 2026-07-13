@@ -61,6 +61,7 @@ type ProductPurchasePanelProps = {
   event: { id: string; name: string; ownerName?: string | null } | null;
   isAuthenticated: boolean;
   authRequired: boolean;
+  cartError?: string | null;
   shareUrl: string;
   addToCartAction: (formData: FormData) => void | Promise<void>;
   createMeasurementAction: (formData: FormData) => Promise<{
@@ -242,6 +243,7 @@ export function ProductPurchasePanel({
   event,
   isAuthenticated,
   authRequired,
+  cartError,
   shareUrl,
   addToCartAction,
   createMeasurementAction,
@@ -309,6 +311,12 @@ export function ProductPurchasePanel({
       customerToast("Account required to save measurements and continue with your order.");
     }
   }, [authRequired, isAuthenticated]);
+
+  useEffect(() => {
+    if (cartError) {
+      customerToast(cartError);
+    }
+  }, [cartError]);
 
   const detailItems = useMemo(
     () =>

@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/auth-options";
 import { apiRequest } from "@/lib/api-client";
 import { backendPublicRequest } from "@/lib/backend-public";
 import { ensureBackendUserSynced } from "@/lib/backend-user-sync";
@@ -102,7 +104,7 @@ function parseMeasurementSnapshot(value: FormDataEntryValue | null) {
 }
 
 function isAuthApiError(error: unknown) {
-  return error instanceof Error && /API error (401|403):/i.test(error.message);
+  return error instanceof Error && (/API error (401|403):/i.test(error.message) || /No authenticated user found/i.test(error.message));
 }
 
 export default async function ProductDetailPage({
@@ -120,7 +122,6 @@ export default async function ProductDetailPage({
     "use server";
     const productId = String(formData.get("productId") ?? "");
     const callbackPath = `/product/${productId}`;
-    await ensureBackendUserSynced();
     const measurementIdRaw = String(formData.get("measurementId") ?? "");
     const measurementSnapshot = parseMeasurementSnapshot(formData.get("measurementSnapshotJson"));
     const measurementId = measurementSnapshot ? undefined : measurementIdRaw.length > 0 ? measurementIdRaw : undefined;
@@ -129,16 +130,16 @@ export default async function ProductDetailPage({
     const roleLabelRaw = String(formData.get("roleLabel") ?? "");
     const roleLabel = roleLabelRaw.length > 0 ? roleLabelRaw : undefined;
 
-    let ok = false;
     try {
+      await ensureBackendUserSynced();
       await apiRequest("/api/v1/cart", {
         method: "POST",
         body: { productId, quantity: 1, measurementId, measurementSnapshot, eventId, roleLabel },
       });
-      ok = true;
-    } catch {}
-
-    if (!ok) signinRedirect(`${callbackPath}?auth=required`);
+    } catch (error) {
+      if (isAuthApiError(error)) signinRedirect(`${callbackPath}?auth=required`);
+      redirect(`${callbackPath}?cartError=add_failed`);
+    }
     revalidatePath("/cart");
     redirect("/cart");
   }
@@ -245,7 +246,8 @@ export default async function ProductDetailPage({
   let measurements: Measurement[] = [];
   let etbRate: number | null = null;
   let event: Event | null = null;
-  let isAuthenticated = false;
+  const session = await getServerSession(authOptions);
+  const isAuthenticated = Boolean(session?.user?.id);
 
   try {
     const response = await backendPublicRequest(`/api/v1/products/${id}`);
@@ -261,14 +263,14 @@ export default async function ProductDetailPage({
     etbRate = null;
   }
 
-  try {
-    await ensureBackendUserSynced();
-    const response = await apiRequest<{ data: Measurement[] }>("/api/v1/measurements");
-    measurements = Array.isArray(response?.data) ? response.data : [];
-    isAuthenticated = true;
-  } catch {
-    measurements = [];
-    isAuthenticated = false;
+  if (isAuthenticated) {
+    try {
+      await ensureBackendUserSynced();
+      const response = await apiRequest<{ data: Measurement[] }>("/api/v1/measurements");
+      measurements = Array.isArray(response?.data) ? response.data : [];
+    } catch {
+      measurements = [];
+    }
   }
 
   const eventId = typeof query?.event === "string" ? query.event : "";
@@ -364,6 +366,7 @@ export default async function ProductDetailPage({
           event={event}
           isAuthenticated={isAuthenticated}
           authRequired={authRequired}
+          cartError={query?.cartError === "add_failed" ? "We could not add this item to cart. Please check the selected outfit and measurements, then try again." : null}
           shareUrl={`${process.env.NEXTAUTH_URL ?? ""}/product/${product.id}`}
           addToCartAction={addToCart}
           createMeasurementAction={createMeasurement}

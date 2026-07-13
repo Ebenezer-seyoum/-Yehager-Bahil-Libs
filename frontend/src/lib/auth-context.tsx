@@ -111,7 +111,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       body: JSON.stringify({ online: false }),
       keepalive: true,
     }).catch(() => undefined);
-    window.location.href = "/api/auth/logout";
+    window.location.href = "/api/logout";
   }, []);
 
   return (

@@ -19,7 +19,7 @@ export function EmployeeAccessActions() {
       <button
         type="button"
         onClick={() => {
-          window.location.href = "/api/auth/logout";
+          window.location.href = "/api/logout";
         }}
         className="inline-flex h-12 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-sm font-bold text-slate-700 transition hover:bg-slate-50"
       >

@@ -164,7 +164,7 @@ export function SiteNavbar() {
                   <Link href={accountHref} className="inline-flex items-center justify-center whitespace-nowrap rounded-lg px-2 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground">
                     Account
                   </Link>
-                  <Link href="/api/auth/logout" className="inline-flex h-11 w-[96px] items-center justify-center rounded-lg bg-primary px-2 text-center text-xs font-bold leading-tight text-primary-foreground transition-colors hover:bg-primary/90">
+                  <Link href="/api/logout" className="inline-flex h-11 w-[96px] items-center justify-center rounded-lg bg-primary px-2 text-center text-xs font-bold leading-tight text-primary-foreground transition-colors hover:bg-primary/90">
                     Sign Out
                   </Link>
                 </>
@@ -266,7 +266,7 @@ export function SiteNavbar() {
                 <Link href={accountHref} onClick={() => setOpen(false)} className="flex h-11 items-center rounded-lg px-3 text-sm font-semibold hover:bg-secondary">
                   Account
                 </Link>
-                <Link href="/api/auth/logout" onClick={() => setOpen(false)} className="flex h-11 items-center rounded-lg px-3 text-sm font-semibold hover:bg-secondary">
+                <Link href="/api/logout" onClick={() => setOpen(false)} className="flex h-11 items-center rounded-lg px-3 text-sm font-semibold hover:bg-secondary">
                   Sign Out
                 </Link>
               </>
