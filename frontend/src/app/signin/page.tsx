@@ -133,6 +133,41 @@ function SignInForm() {
   }, []);
 
   useEffect(() => {
+    let mounted = true;
+    async function redirectExistingSession() {
+      const session = await getSession();
+      if (!mounted || !session?.user?.id) return;
+
+      const accountStatus = String(session.user.accountStatus ?? "active").toLowerCase();
+      if (accountStatus === "inactive" || accountStatus === "blocked" || accountStatus === "pending") {
+        await signOut({ redirect: false });
+        if (mounted) {
+          setFeedback({
+            type: "error",
+            message: "Please contact admin. Account has been deactivated.",
+          });
+        }
+        return;
+      }
+
+      const redirectTo = session.user.mustChangePassword
+        ? "/change-password-required"
+        : session.user.role === "employee" &&
+            (session.user.roleStatus === "unassigned" ||
+              session.user.assignedRoleActive === false ||
+              (session.user.permissions ?? []).length === 0)
+          ? "/employee/access-pending"
+          : getPostLoginRedirect(session.user.role, callbackUrl, session.user.permissions ?? []);
+
+      window.location.href = redirectTo;
+    }
+    void redirectExistingSession();
+    return () => {
+      mounted = false;
+    };
+  }, [callbackUrl]);
+
+  useEffect(() => {
     if (feedback) {
       const timer = setTimeout(() => setFeedback(null), 5000);
       return () => clearTimeout(timer);
