@@ -8,44 +8,39 @@ import {
   AlertCircle,
   CheckCircle2,
   Clock,
-  User,
-  Filter,
   Search,
-  LayoutGrid,
-  List,
   Send,
   Paperclip,
-  CreditCard,
   AlertTriangle,
   RefreshCw,
-  Archive,
   Check,
-  Database,
   Calendar,
   X,
-  ChevronRight,
-  Shield,
   MessageSquare
 } from "lucide-react";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { DashboardModalBody, DashboardModalFrame, DashboardModalHeader } from "@/components/admin/dashboard-modal";
 import { AccessRestricted } from "@/components/admin/access-restricted";
 import { can } from "@/lib/permissions";
+import { uploadFileToS3 } from "@/lib/uploads";
 
 const SUPPORT_TABS = [
   { id: "all", label: "All Messages", icon: Mail },
-  { id: "new", label: "New Messages", icon: Inbox, query: { status: "new" } },
-  { id: "unread", label: "Unread", icon: AlertCircle, query: { unreadOnly: "true" } },
-  { id: "open", label: "Open Tickets", icon: Clock, query: { status: "open" } },
-  { id: "pending_reply", label: "Pending Reply", icon: MessageSquare, query: { status: "pending_reply" } },
-  { id: "payment_issue", label: "Payment Issues", icon: CreditCard, query: { category: "payment_issue" } },
-  { id: "order_question", label: "Order Questions", icon: Mail, query: { category: "order_question" } },
-  { id: "delivery_issue", label: "Delivery Issues", icon: Mail, query: { category: "delivery_issue" } },
-  { id: "measurement_question", label: "Measurement Questions", icon: Mail, query: { category: "measurement_question" } },
-  { id: "product_question", label: "Product Questions", icon: Mail, query: { category: "product_question" } },
-  { id: "complaint", label: "Complaints", icon: AlertTriangle, query: { category: "complaint" } },
-  { id: "resolved", label: "Resolved", icon: CheckCircle2, query: { status: "resolved" } },
-  { id: "archived", label: "Archived / Spam", icon: Archive, query: { status: "archived" } },
+  { id: "unread", label: "Unread", icon: AlertCircle, query: { readState: "unread" } },
+  { id: "read", label: "Read", icon: CheckCircle2, query: { readState: "read" } },
+];
+
+const MESSAGE_TYPES = [
+  { id: "all", label: "All Message Types" },
+  { id: "payment_issue", label: "Payment Issue" },
+  { id: "order_question", label: "Order Question" },
+  { id: "delivery_issue", label: "Delivery Issue" },
+  { id: "measurement_question", label: "Measurement Question" },
+  { id: "product_question", label: "Product Question" },
+  { id: "complaint", label: "Complaint" },
+  { id: "return_refund", label: "Return / Refund" },
+  { id: "technical_issue", label: "Technical Issue" },
+  { id: "general_question", label: "General Question" },
 ];
 
 const AUTO_EMAIL_SYNC_INTERVAL_MS = 60 * 1000;
@@ -76,6 +71,21 @@ const getInitials = (name) => {
     .toUpperCase();
 };
 
+const titleCase = (value) =>
+  String(value ?? "")
+    .replaceAll("_", " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+
+const categoryLabel = (value) => MESSAGE_TYPES.find((type) => type.id === value)?.label ?? titleCase(value);
+
+const attachmentName = (url) => {
+  const clean = String(url ?? "").split("?")[0];
+  return decodeURIComponent(clean.slice(clean.lastIndexOf("/") + 1) || "Attachment");
+};
+
+const isImageAttachment = (url, type = "") =>
+  String(type).startsWith("image/") || /\.(png|jpe?g|gif|webp|avif)$/i.test(String(url ?? "").split("?")[0]);
+
 export default function SupportInboxPage() {
   const { data: session } = useSession();
   const permissions = session?.user?.permissions ?? [];
@@ -86,7 +96,6 @@ export default function SupportInboxPage() {
   const [tickets, setTickets] = useState([]);
   const [admins, setAdmins] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [seeding, setSeeding] = useState(false);
   const [syncingEmail, setSyncingEmail] = useState(false);
   const [lastEmailSyncAt, setLastEmailSyncAt] = useState(null);
 
@@ -97,7 +106,6 @@ export default function SupportInboxPage() {
   const [filterCategory, setFilterCategory] = useState("all");
   const [filterAssignee, setFilterAssignee] = useState("all");
   const [dateRange, setDateRange] = useState("all"); // all, today, week, month
-  const [viewMode, setViewMode] = useState("card"); // card, table
 
   // Active Ticket Modal
   const [selectedTicketId, setSelectedTicketId] = useState(null);
@@ -109,8 +117,8 @@ export default function SupportInboxPage() {
   const [replyPriority, setReplyPriority] = useState("medium");
   const [replyAssignee, setReplyAssignee] = useState("");
   const [replyAttachments, setReplyAttachments] = useState([]);
-  const [newAttachmentUrl, setNewAttachmentUrl] = useState("");
   const [replySubmitting, setReplySubmitting] = useState(false);
+  const [sendState, setSendState] = useState("idle");
   
   // Success / Error Banner States
   const [errorBanner, setErrorBanner] = useState(null);
@@ -128,16 +136,11 @@ export default function SupportInboxPage() {
     try {
       const tab = SUPPORT_TABS.find((item) => item.id === activeTab);
       const tabQuery = tab?.query ?? {};
-      const statusParam = tabQuery.status ?? "all";
-      const tabCategory = tabQuery.category ?? "all";
-      const tabUnreadOnly = tabQuery.unreadOnly ?? "false";
-
-      const categoryParam = tabCategory !== "all" ? tabCategory : filterCategory;
+      const readStateParam = tabQuery.readState ?? "all";
 
       const queryParams = new URLSearchParams();
-      if (statusParam !== "all") queryParams.append("status", statusParam);
-      if (tabUnreadOnly === "true") queryParams.append("unreadOnly", "true");
-      if (categoryParam !== "all") queryParams.append("category", categoryParam);
+      if (readStateParam !== "all") queryParams.append("readState", readStateParam);
+      if (filterCategory !== "all") queryParams.append("category", filterCategory);
       if (filterPriority !== "all") queryParams.append("priority", filterPriority);
       if (searchQuery) queryParams.append("search", searchQuery);
 
@@ -203,22 +206,6 @@ export default function SupportInboxPage() {
     fetchAdmins();
   }, []);
 
-  // 3. Seed demo data
-  const handleSeedDemo = async () => {
-    setSeeding(true);
-    try {
-      const res = await fetch("/api/backend/admin/support/seed-demo", { method: "POST" });
-      const data = await res.json();
-      showToast("Demo support tickets loaded successfully!", "success");
-      fetchData();
-    } catch (err) {
-      console.error(err);
-      showToast("Failed to seed demo data.", "error");
-    } finally {
-      setSeeding(false);
-    }
-  };
-
   const handleSyncEmail = async ({ silent = false } = {}) => {
     setSyncingEmail(true);
     try {
@@ -269,9 +256,11 @@ export default function SupportInboxPage() {
 
   // 4. Load single ticket details
   const handleOpenTicket = async (ticketId) => {
+    const wasUnread = tickets.some((ticket) => ticket.id === ticketId && ticket.unreadByAdmin);
     setSelectedTicketId(ticketId);
     setTicketLoading(true);
     setErrorBanner(null);
+    setSendState("idle");
     try {
       const res = await fetch(`/api/backend/admin/support/tickets/${ticketId}`);
       const data = await res.json();
@@ -281,7 +270,9 @@ export default function SupportInboxPage() {
         setReplyPriority(data.data.priority);
         setReplyAssignee(data.data.assignedAdminId || "");
         setReplyAttachments([]);
-        setNewAttachmentUrl("");
+        if (wasUnread) {
+          window.dispatchEvent(new CustomEvent("admin-support-read", { detail: ticketId }));
+        }
       }
       // Re-trigger global fetch to update read/unread badge
       fetchData();
@@ -297,8 +288,13 @@ export default function SupportInboxPage() {
     e.preventDefault();
     if (!canReplySupport) return;
     if (!replyBody.trim()) return;
+    if (replyAttachments.some((attachment) => attachment.status === "uploading")) {
+      showToast("Please wait for attachments to finish uploading.", "error");
+      return;
+    }
 
     setReplySubmitting(true);
+    setSendState("sending");
     setErrorBanner(null);
 
     const payload = {
@@ -307,7 +303,9 @@ export default function SupportInboxPage() {
       priority: replyPriority,
       assignedAdminId: replyAssignee || null,
       internalNote: internalNote.trim() || undefined,
-      attachments: replyAttachments,
+      attachments: replyAttachments
+        .filter((attachment) => attachment.status === "ready" && attachment.url)
+        .map((attachment) => attachment.url),
     };
 
     try {
@@ -324,6 +322,7 @@ export default function SupportInboxPage() {
       }
 
       showToast("Reply sent successfully and customer notified!", "success");
+      setSendState("sent");
       setReplyBody("");
       setInternalNote("");
       setReplyAttachments([]);
@@ -332,6 +331,7 @@ export default function SupportInboxPage() {
       handleOpenTicket(selectedTicketId);
     } catch (err) {
       console.error(err);
+      setSendState("failed");
       setErrorBanner({
         message: err.message || "Connection timed out. Failed to deliver email to customer.",
         draftPayload: payload
@@ -358,21 +358,42 @@ export default function SupportInboxPage() {
     }
   };
 
-  const handleAddMockAttachment = () => {
-    if (newAttachmentUrl.trim()) {
-      setReplyAttachments([...replyAttachments, newAttachmentUrl.trim()]);
-      setNewAttachmentUrl("");
-    } else {
-      // Simulate file upload
-      const mockUrls = [
-        "https://images.unsplash.com/photo-1583391733956-3750e0ff4e8b?w=500&q=80",
-        "https://images.unsplash.com/photo-1544816155-12df9643f363?w=500&q=80",
-        "https://images.unsplash.com/photo-1617627143750-d86bc21e42bb?w=500&q=80"
-      ];
-      const randomUrl = mockUrls[Math.floor(Math.random() * mockUrls.length)];
-      setReplyAttachments([...replyAttachments, randomUrl]);
-      showToast("Mock file uploaded successfully", "success");
+  const handleFileSelection = async (event) => {
+    const files = Array.from(event.target.files || []);
+    event.target.value = "";
+    if (!files.length) return;
+
+    for (const file of files) {
+      const id = `${file.name}-${file.size}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      const previewUrl = file.type.startsWith("image/") ? URL.createObjectURL(file) : null;
+      setReplyAttachments((current) => [
+        ...current,
+        { id, name: file.name, type: file.type, url: previewUrl, status: "uploading" },
+      ]);
+
+      try {
+        const uploadedUrl = await uploadFileToS3(file, "support/replies");
+        setReplyAttachments((current) =>
+          current.map((attachment) =>
+            attachment.id === id
+              ? { ...attachment, url: uploadedUrl, previewUrl, status: "ready" }
+              : attachment,
+          ),
+        );
+      } catch (err) {
+        console.error(err);
+        setReplyAttachments((current) =>
+          current.map((attachment) =>
+            attachment.id === id ? { ...attachment, status: "failed" } : attachment,
+          ),
+        );
+        showToast(`Could not upload ${file.name}.`, "error");
+      }
     }
+  };
+
+  const handleRemoveAttachment = (id) => {
+    setReplyAttachments((current) => current.filter((attachment) => attachment.id !== id));
   };
 
   const showToast = (msg, type = "success") => {
@@ -422,15 +443,6 @@ export default function SupportInboxPage() {
               <RefreshCw className={`h-4 w-4 ${syncingEmail ? "animate-spin" : ""}`} />
               {syncingEmail ? "Checking..." : "Check Now"}
             </button>
-            <button
-              type="button"
-              onClick={handleSeedDemo}
-              disabled={seeding}
-              className="inline-flex h-9 items-center gap-2 rounded-lg border border-border bg-white px-3 text-sm font-medium shadow-sm transition hover:bg-secondary disabled:opacity-60"
-            >
-              <Database className="h-4 w-4" />
-              {seeding ? "Loading..." : "Seed Demo Tickets"}
-            </button>
           </div>
         }
       />
@@ -462,7 +474,7 @@ export default function SupportInboxPage() {
       </div>
 
       {/* SEARCH AND FILTERS BAR */}
-      <div className="flex flex-col gap-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-sm md:flex-row md:items-center">
+      <div className="flex flex-col gap-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm md:flex-row md:items-center">
         {/* Search */}
         <div className="relative flex-1">
           <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
@@ -471,7 +483,7 @@ export default function SupportInboxPage() {
             placeholder="Search by ticket #, customer, email, subject..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 py-2 pl-10 pr-4 text-xs text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:border-blue-500 focus:bg-white focus:outline-none"
+            className="w-full rounded-lg border border-slate-200 bg-slate-50 py-2 pl-10 pr-4 text-xs text-slate-800 placeholder-slate-400 focus:border-blue-500 focus:bg-white focus:outline-none"
           />
           {searchQuery && (
             <button onClick={() => setSearchQuery("")} className="absolute right-3 top-3 text-slate-400 hover:text-slate-600">
@@ -482,13 +494,25 @@ export default function SupportInboxPage() {
 
         {/* Dynamic Filters */}
         <div className="flex flex-wrap items-center gap-3">
-          {/* Priority */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Message type:</span>
+            <select
+              value={filterCategory}
+              onChange={(e) => setFilterCategory(e.target.value)}
+              className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs focus:outline-none"
+            >
+              {MESSAGE_TYPES.map((type) => (
+                <option key={type.id} value={type.id}>{type.label}</option>
+              ))}
+            </select>
+          </div>
+
           <div className="flex items-center gap-1.5">
             <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Priority:</span>
             <select
               value={filterPriority}
               onChange={(e) => setFilterPriority(e.target.value)}
-              className="rounded-lg border border-slate-200 dark:border-slate-850 bg-slate-50 dark:bg-slate-950 px-2 py-1.5 text-xs focus:outline-none"
+              className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs focus:outline-none"
             >
               <option value="all">All Priorities</option>
               <option value="low">Low</option>
@@ -498,34 +522,13 @@ export default function SupportInboxPage() {
             </select>
           </div>
 
-          {/* Category */}
-          <div className="flex items-center gap-1.5">
-            <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Category:</span>
-            <select
-              value={filterCategory}
-              onChange={(e) => setFilterCategory(e.target.value)}
-              className="rounded-lg border border-slate-200 dark:border-slate-850 bg-slate-50 dark:bg-slate-950 px-2 py-1.5 text-xs focus:outline-none"
-            >
-              <option value="all">All Categories</option>
-              <option value="general_question">General Question</option>
-              <option value="order_question">Order Question</option>
-              <option value="payment_issue">Payment Issue</option>
-              <option value="delivery_issue">Delivery Issue</option>
-              <option value="measurement_question">Measurement & Tailoring</option>
-              <option value="product_question">Product Detail</option>
-              <option value="return_refund">Return & Refund</option>
-              <option value="complaint">Complaint</option>
-              <option value="technical_issue">Technical Issue</option>
-            </select>
-          </div>
-
           {/* Assignee */}
           <div className="flex items-center gap-1.5">
             <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Assignee:</span>
             <select
               value={filterAssignee}
               onChange={(e) => setFilterAssignee(e.target.value)}
-              className="rounded-lg border border-slate-200 dark:border-slate-850 bg-slate-50 dark:bg-slate-950 px-2 py-1.5 text-xs focus:outline-none max-w-[150px]"
+              className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs focus:outline-none max-w-[150px]"
             >
               <option value="all">Anyone</option>
               {admins.map(admin => (
@@ -540,7 +543,7 @@ export default function SupportInboxPage() {
             <select
               value={dateRange}
               onChange={(e) => setDateRange(e.target.value)}
-              className="rounded-lg border border-slate-200 dark:border-slate-850 bg-slate-50 dark:bg-slate-950 px-2 py-1.5 text-xs focus:outline-none"
+              className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs focus:outline-none"
             >
               <option value="all">All Time</option>
               <option value="today">Today</option>
@@ -549,49 +552,26 @@ export default function SupportInboxPage() {
             </select>
           </div>
 
-          {/* View Mode Toggle */}
-          <div className="flex items-center gap-1 border-l border-slate-200 dark:border-slate-855 pl-3">
-            <button
-              onClick={() => setViewMode("card")}
-              className={`p-1.5 rounded ${viewMode === "card" ? "bg-slate-100 dark:bg-slate-800 text-blue-600" : "text-slate-400 hover:bg-slate-50"}`}
-              title="Card View"
-            >
-              <LayoutGrid className="h-4 w-4" />
-            </button>
-            <button
-              onClick={() => setViewMode("table")}
-              className={`p-1.5 rounded ${viewMode === "table" ? "bg-slate-100 dark:bg-slate-800 text-blue-600" : "text-slate-400 hover:bg-slate-50"}`}
-              title="Table View"
-            >
-              <List className="h-4 w-4" />
-            </button>
-          </div>
         </div>
       </div>
 
       {/* TICKETS LISTING AREA */}
       {loading ? (
-        <div className="flex h-60 items-center justify-center rounded-xl border border-dashed border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+        <div className="flex h-60 items-center justify-center rounded-xl border border-dashed border-slate-200 bg-white">
           <div className="flex flex-col items-center gap-2">
             <RefreshCw className="h-8 w-8 animate-spin text-blue-500" />
             <span className="text-sm font-medium text-slate-500">Loading support inbox...</span>
           </div>
         </div>
       ) : tickets.length === 0 ? (
-        <div className="flex flex-col h-72 items-center justify-center rounded-xl border border-dashed border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-center p-6">
-          <Inbox className="h-12 w-12 text-slate-300 dark:text-slate-600 mb-3" />
-          <h3 className="text-base font-bold text-slate-700 dark:text-slate-200">No support tickets found</h3>
+        <div className="flex flex-col h-72 items-center justify-center rounded-xl border border-dashed border-slate-200 bg-white text-center p-6">
+          <Inbox className="h-12 w-12 text-slate-300 mb-3" />
+          <h3 className="text-base font-bold text-slate-700">No support messages found</h3>
           <p className="text-xs text-slate-400 max-w-sm mt-1">
-            There are no messages matching your selected filters. Try adjusting your search query, selecting different tabs, or seeding demo tickets.
+            There are no messages matching your selected filters. Try adjusting your search, read state, or message type.
           </p>
-          <button
-            onClick={handleSeedDemo}
-            className="mt-4 rounded-lg bg-blue-600 text-white px-4 py-2 text-xs font-semibold hover:bg-blue-700 shadow shadow-blue-500/10"
-          >
-            Seed Demo Tickets
-          </button>
         </div>
-      ) : viewMode === "card" ? (
+      ) : (
         /* CARD VIEW */
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {tickets.map((t) => {
@@ -600,124 +580,63 @@ export default function SupportInboxPage() {
               <div
                 key={t.id}
                 onClick={() => handleOpenTicket(t.id)}
-                className={`relative flex flex-col justify-between rounded-xl border p-4 shadow-sm hover:shadow-md transition-all cursor-pointer bg-white dark:bg-slate-900 hover:border-blue-400 dark:hover:border-blue-500 ${
+                className={`relative flex flex-col justify-between rounded-xl border bg-white p-4 shadow-sm hover:shadow-md transition-all cursor-pointer hover:border-blue-400 ${
                   t.unreadByAdmin 
-                    ? "border-l-4 border-l-blue-600 border-slate-200 dark:border-slate-800 font-semibold" 
-                    : "border-slate-200 dark:border-slate-800"
+                    ? "border-l-4 border-l-blue-600 border-slate-200 font-semibold" 
+                    : "border-slate-200"
                 }`}
               >
                 <div>
                   <div className="flex items-center justify-between gap-2">
-                    <span className="font-mono text-[10px] text-slate-400 dark:text-slate-500">
+                    <span className="font-mono text-[10px] text-slate-400">
                       {t.ticketNumber}
                     </span>
                     <div className="flex items-center gap-1.5">
                       {t.priority === "urgent" && (
-                        <span className="rounded bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400 px-1.5 py-0.5 text-[9px] uppercase font-extrabold animate-pulse">
+                        <span className="rounded bg-rose-100 text-rose-700 px-1.5 py-0.5 text-[9px] uppercase font-extrabold animate-pulse">
                           Urgent
                         </span>
                       )}
                       {t.priority === "high" && (
-                        <span className="rounded bg-orange-100 text-orange-700 dark:bg-orange-950/40 dark:text-orange-400 px-1.5 py-0.5 text-[9px] uppercase font-bold">
+                        <span className="rounded bg-orange-100 text-orange-700 px-1.5 py-0.5 text-[9px] uppercase font-bold">
                           High
                         </span>
                       )}
                       <span className={`rounded-full px-2 py-0.5 text-[9px] font-bold ${
-                        t.status === "new" ? "bg-sky-100 text-sky-700 dark:bg-sky-950/40 dark:text-sky-400" :
-                        t.status === "open" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400" :
-                        t.status === "pending_reply" ? "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400" :
-                        "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-400"
+                        t.status === "new" ? "bg-sky-100 text-sky-700" :
+                        t.status === "open" ? "bg-emerald-100 text-emerald-700" :
+                        t.status === "pending_reply" ? "bg-amber-100 text-amber-700" :
+                        "bg-slate-100 text-slate-700"
                       }`}>
                         {t.status.replace("_", " ")}
                       </span>
                     </div>
                   </div>
 
-                  <h3 className="mt-2 text-sm font-bold text-slate-800 dark:text-slate-100 line-clamp-1">
+                  <h3 className="mt-2 text-sm font-bold text-slate-800 line-clamp-1">
                     {t.subject}
                   </h3>
 
                   <div className="mt-2 flex items-center gap-2">
-                    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 text-[10px] font-bold text-slate-600 dark:text-slate-300">
+                    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-100 text-[10px] font-bold text-slate-600">
                       {getInitials(t.customerName)}
                     </div>
                     <div className="text-xs">
-                      <p className="font-semibold text-slate-700 dark:text-slate-300 truncate max-w-[140px]">{t.customerName}</p>
+                      <p className="font-semibold text-slate-700 truncate max-w-[140px]">{t.customerName}</p>
                       <p className="text-[10px] text-slate-400 truncate max-w-[140px]">{t.customerEmail}</p>
                     </div>
                   </div>
                 </div>
 
-                <div className="mt-4 flex items-center justify-between border-t border-slate-100 dark:border-slate-800/60 pt-3 text-[10px] text-slate-400">
-                  <span className="capitalize bg-slate-50 dark:bg-slate-950 rounded px-1.5 py-0.5 border border-slate-100 dark:border-slate-800 text-slate-500 font-medium">
-                    {t.category.replace("_", " ")}
+                <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3 text-[10px] text-slate-400">
+                  <span className="bg-slate-50 rounded px-1.5 py-0.5 border border-slate-100 text-slate-500 font-medium">
+                    {categoryLabel(t.category)}
                   </span>
                   <span>{formatTimeAgo(t.lastMessageAt || t.updatedAt)}</span>
                 </div>
               </div>
             );
           })}
-        </div>
-      ) : (
-        /* TABLE VIEW */
-        <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
-          <table className="w-full border-collapse text-left text-xs">
-            <thead>
-              <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-500 uppercase tracking-wider font-semibold">
-                <th className="px-4 py-3">No</th>
-                <th className="px-4 py-3">Ticket</th>
-                <th className="px-4 py-3">Customer</th>
-                <th className="px-4 py-3">Subject</th>
-                <th className="px-4 py-3">Category</th>
-                <th className="px-4 py-3">Priority</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3 text-right">Last Updated</th>
-              </tr>
-            </thead>
-            <tbody>
-              {tickets.map((t, index) => (
-                <tr
-                  key={t.id}
-                  onClick={() => handleOpenTicket(t.id)}
-                  className={`border-b border-slate-100 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800/30 cursor-pointer ${
-                    t.unreadByAdmin ? "font-bold text-slate-900 dark:text-white bg-blue-50/20" : "text-slate-600 dark:text-slate-300"
-                  }`}
-                >
-                  <td className="px-4 py-3.5 text-xs font-semibold text-slate-500">{index + 1}</td>
-                  <td className="px-4 py-3.5 font-mono text-[10px] text-slate-400">{t.ticketNumber}</td>
-                  <td className="px-4 py-3.5">
-                    <div>
-                      <p className="font-semibold">{t.customerName}</p>
-                      <p className="text-[10px] text-slate-400">{t.customerEmail}</p>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3.5 max-w-[200px] truncate">{t.subject}</td>
-                  <td className="px-4 py-3.5 capitalize">{t.category.replace("_", " ")}</td>
-                  <td className="px-4 py-3.5">
-                    <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold ${
-                      t.priority === "urgent" ? "bg-rose-100 text-rose-700 dark:bg-rose-950/40" :
-                      t.priority === "high" ? "bg-orange-100 text-orange-700 dark:bg-orange-950/40" :
-                      t.priority === "medium" ? "bg-blue-100 text-blue-700 dark:bg-blue-950/40" :
-                      "bg-slate-100 text-slate-500"
-                    }`}>
-                      {t.priority}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3.5">
-                    <span className={`rounded-full px-2 py-0.5 text-[9px] font-bold ${
-                      t.status === "new" ? "bg-sky-100 text-sky-700" :
-                      t.status === "open" ? "bg-emerald-100 text-emerald-700" :
-                      t.status === "pending_reply" ? "bg-amber-100 text-amber-700" :
-                      "bg-slate-100 text-slate-600"
-                    }`}>
-                      {t.status.replace("_", " ")}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3.5 text-right text-slate-400">{formatTimeAgo(t.lastMessageAt)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
         </div>
       )}
 
@@ -729,7 +648,7 @@ export default function SupportInboxPage() {
             setSelectedTicket(null);
             setErrorBanner(null);
           }}
-          maxWidth="max-w-4xl"
+          maxWidth="max-w-6xl"
         >
           <DashboardModalHeader
             title={selectedTicket?.subject || "Support ticket"}
@@ -751,15 +670,15 @@ export default function SupportInboxPage() {
               <div className="flex flex-1 flex-col md:flex-row overflow-hidden">
                 
                 {/* Left side: Chat History & Reply Editor */}
-                <div className="flex flex-1 flex-col overflow-hidden border-r border-slate-200 dark:border-slate-800">
+                  <div className="flex flex-1 flex-col overflow-hidden border-r border-slate-200">
                   
                   {/* ERROR BANNER FOR FAILED SMTP EMAIL */}
                   {errorBanner && (
-                    <div className="m-4 border border-rose-200 bg-rose-50 dark:bg-rose-950/20 dark:border-rose-900/50 p-4 rounded-xl flex items-start gap-3">
+                    <div className="m-4 border border-rose-200 bg-rose-50 p-4 rounded-xl flex items-start gap-3">
                       <AlertTriangle className="h-5 w-5 text-rose-600 mt-0.5 flex-shrink-0" />
                       <div className="flex-1 text-xs">
-                        <h4 className="font-bold text-rose-800 dark:text-rose-400">Email Dispatch Failure</h4>
-                        <p className="text-rose-700 dark:text-rose-300 mt-0.5">{errorBanner.message}</p>
+                        <h4 className="font-bold text-rose-800">Email Dispatch Failure</h4>
+                        <p className="text-rose-700 mt-0.5">{errorBanner.message}</p>
                         <div className="mt-2 flex items-center gap-2">
                           <button
                             onClick={handleSendReply}
@@ -769,7 +688,7 @@ export default function SupportInboxPage() {
                           </button>
                           <button
                             onClick={() => setErrorBanner(null)}
-                            className="text-rose-600 dark:text-rose-400 hover:underline"
+                            className="text-rose-600 hover:underline"
                           >
                             Dismiss
                           </button>
@@ -779,7 +698,7 @@ export default function SupportInboxPage() {
                   )}
 
                   {/* Conversation History Area */}
-                  <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-slate-50/50 dark:bg-slate-950/20">
+                  <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-slate-50/80">
                     {selectedTicket?.messages?.map((msg) => {
                       const isCustomer = msg.senderType === "customer";
                       const isSystem = msg.senderType === "system";
@@ -787,7 +706,7 @@ export default function SupportInboxPage() {
                       if (isSystem) {
                         return (
                           <div key={msg.id} className="flex justify-center my-2">
-                            <span className="rounded bg-amber-50 dark:bg-amber-950/40 text-[10px] text-amber-700 dark:text-amber-400 px-3 py-1 border border-amber-200 dark:border-amber-900/40 max-w-md font-mono text-center">
+                            <span className="rounded bg-amber-50 text-[10px] text-amber-700 px-3 py-1 border border-amber-200 max-w-md font-mono text-center">
                               {msg.messageBody}
                             </span>
                           </div>
@@ -804,7 +723,7 @@ export default function SupportInboxPage() {
                             </div>
                             <div className={`rounded-2xl px-4 py-3 text-xs shadow-sm ${
                               isCustomer
-                                ? "bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 rounded-tl-none border border-slate-200 dark:border-slate-800"
+                                ? "bg-white text-slate-800 rounded-tl-none border border-slate-200"
                                 : "bg-blue-600 text-white rounded-tr-none"
                             }`}>
                               <p className="whitespace-pre-wrap leading-relaxed">{msg.messageBody}</p>
@@ -818,7 +737,7 @@ export default function SupportInboxPage() {
                                       href={url}
                                       target="_blank"
                                       rel="noreferrer"
-                                      className="flex items-center gap-1.5 bg-slate-900/10 dark:bg-white/10 px-2.5 py-1 rounded text-[10px] hover:underline"
+                                      className="flex items-center gap-1.5 bg-slate-900/10 px-2.5 py-1 rounded text-[10px] hover:underline"
                                     >
                                       <Paperclip className="h-3 w-3" />
                                       <span>Attachment {index + 1}</span>
@@ -835,7 +754,7 @@ export default function SupportInboxPage() {
 
                   {/* Reply Form */}
                   {canReplySupport ? (
-                    <form onSubmit={handleSendReply} className="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
+                    <form onSubmit={handleSendReply} className="border-t border-slate-200 bg-white p-4">
                       <div className="flex flex-col gap-2">
                         {/* Text area */}
                         <textarea
@@ -843,7 +762,7 @@ export default function SupportInboxPage() {
                           placeholder="Write your email reply to the customer..."
                           value={replyBody}
                           onChange={(e) => setReplyBody(e.target.value)}
-                          className="w-full rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 p-3 text-xs text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:border-blue-500 focus:bg-white focus:outline-none"
+                          className="w-full rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-800 placeholder-slate-400 focus:border-blue-500 focus:bg-white focus:outline-none"
                           required
                         />
 
@@ -853,19 +772,26 @@ export default function SupportInboxPage() {
                         placeholder="Add an internal system note (optional, customer will not see this)..."
                         value={internalNote}
                         onChange={(e) => setInternalNote(e.target.value)}
-                        className="w-full rounded-lg border border-dashed border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 px-3 py-1.5 text-[11px] text-slate-800 focus:outline-none"
+                        className="w-full rounded-lg border border-dashed border-slate-200 bg-white px-3 py-2 text-[11px] text-slate-800 focus:outline-none"
                       />
 
-                      {/* Mock Attachment Upload Bar */}
+                      {/* Attachment Upload Bar */}
                       {replyAttachments.length > 0 && (
-                        <div className="flex flex-wrap gap-1.5 py-2">
-                          {replyAttachments.map((url, idx) => (
-                            <div key={idx} className="flex items-center gap-1 bg-slate-100 dark:bg-slate-850 px-2 py-1 rounded text-[9px] text-slate-600 dark:text-slate-300">
-                              <Paperclip className="h-3 w-3" />
-                              <span className="truncate max-w-[120px]">{url}</span>
+                        <div className="flex flex-wrap gap-2 py-2">
+                          {replyAttachments.map((attachment) => (
+                            <div key={attachment.id} className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-xs text-slate-600">
+                              {isImageAttachment(attachment.url, attachment.type) ? (
+                                <img src={attachment.url} alt={attachment.name} className="h-8 w-8 rounded-md object-cover" />
+                              ) : (
+                                <Paperclip className="h-4 w-4" />
+                              )}
+                              <span className="truncate max-w-[150px]">{attachment.name}</span>
+                              <span className={`text-[10px] font-bold ${attachment.status === "ready" ? "text-emerald-600" : attachment.status === "failed" ? "text-rose-600" : "text-amber-600"}`}>
+                                {attachment.status === "ready" ? "Ready" : attachment.status === "failed" ? "Failed" : "Uploading"}
+                              </span>
                               <button
                                 type="button"
-                                onClick={() => setReplyAttachments(replyAttachments.filter((_, i) => i !== idx))}
+                                onClick={() => handleRemoveAttachment(attachment.id)}
                                 className="text-slate-400 hover:text-slate-600"
                               >
                                 <X className="h-3 w-3" />
@@ -879,25 +805,31 @@ export default function SupportInboxPage() {
                       <div className="flex justify-between items-center mt-1">
                         <div className="flex items-center gap-2">
                           <input
-                            type="text"
-                            placeholder="File URL..."
-                            value={newAttachmentUrl}
-                            onChange={(e) => setNewAttachmentUrl(e.target.value)}
-                            className="rounded border border-slate-200 dark:border-slate-800 bg-slate-50 px-2 py-1 text-[10px] w-36 focus:outline-none"
+                            ref={fileInputRef}
+                            type="file"
+                            multiple
+                            onChange={handleFileSelection}
+                            className="hidden"
                           />
                           <button
                             type="button"
-                            onClick={handleAddMockAttachment}
-                            className="inline-flex items-center gap-1 text-[11px] text-slate-500 hover:text-slate-800"
+                            onClick={() => fileInputRef.current?.click()}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50"
                           >
                             <Paperclip className="h-3.5 w-3.5" />
-                            Add Attachment
+                            Add file/image
                           </button>
+                          {sendState !== "idle" ? (
+                            <span className={`inline-flex items-center gap-1 text-xs font-bold ${sendState === "sent" ? "text-emerald-700" : sendState === "failed" ? "text-rose-700" : "text-blue-700"}`}>
+                              {sendState === "sent" ? <Check className="h-3.5 w-3.5" /> : sendState === "failed" ? <AlertTriangle className="h-3.5 w-3.5" /> : <RefreshCw className="h-3.5 w-3.5 animate-spin" />}
+                              {sendState === "sent" ? "Sent" : sendState === "failed" ? "Not sent" : "Sending..."}
+                            </span>
+                          ) : null}
                         </div>
 
                         <button
                           type="submit"
-                          disabled={replySubmitting || !replyBody.trim()}
+                          disabled={replySubmitting || !replyBody.trim() || replyAttachments.some((attachment) => attachment.status === "uploading")}
                           className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 text-white px-4 py-2 text-xs font-semibold hover:bg-blue-700 shadow shadow-blue-500/20 disabled:opacity-50"
                         >
                           <Send className="h-3 w-3" />
@@ -911,7 +843,7 @@ export default function SupportInboxPage() {
                 </div>
 
                 {/* Right side: Ticket Metadata & Admin Actions */}
-                <div className="w-full md:w-72 bg-slate-50 dark:bg-slate-900/60 p-6 space-y-6">
+                <div className="w-full md:w-72 bg-slate-50 p-6 space-y-6">
                   
                   {/* Customer Info Card */}
                   <div>
@@ -921,13 +853,13 @@ export default function SupportInboxPage() {
                         {getInitials(selectedTicket?.customerName)}
                       </div>
                       <div className="overflow-hidden">
-                        <p className="text-xs font-bold text-slate-800 dark:text-slate-100 truncate">{selectedTicket?.customerName}</p>
+                        <p className="text-xs font-bold text-slate-800 truncate">{selectedTicket?.customerName}</p>
                         <p className="text-[10px] text-slate-400 truncate">{selectedTicket?.customerEmail}</p>
                       </div>
                     </div>
                   </div>
 
-                  <hr className="border-slate-200 dark:border-slate-800" />
+                  <hr className="border-slate-200" />
 
                   {/* Admin Metadata & Properties */}
                   <div className="space-y-4">
@@ -943,7 +875,7 @@ export default function SupportInboxPage() {
                             setReplyStatus(e.target.value);
                             handleUpdateTicketStatus(e.target.value);
                           }}
-                          className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-1.5 text-xs text-slate-800 focus:outline-none"
+                          className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-800 focus:outline-none"
                         >
                           <option value="new">New</option>
                           <option value="open">Open / Active</option>
@@ -960,7 +892,7 @@ export default function SupportInboxPage() {
                       <select
                         value={replyPriority}
                         onChange={(e) => setReplyPriority(e.target.value)}
-                        className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-1.5 text-xs text-slate-800 focus:outline-none"
+                        className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-800 focus:outline-none"
                       >
                         <option value="low">Low</option>
                         <option value="medium">Medium</option>
@@ -976,7 +908,7 @@ export default function SupportInboxPage() {
                         <select
                           value={replyAssignee}
                           onChange={(e) => setReplyAssignee(e.target.value)}
-                          className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-1.5 text-xs text-slate-800 focus:outline-none"
+                          className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-800 focus:outline-none"
                         >
                           <option value="">Unassigned</option>
                           {admins.map(admin => (
@@ -987,13 +919,13 @@ export default function SupportInboxPage() {
                     ) : null}
                   </div>
 
-                  <hr className="border-slate-200 dark:border-slate-800" />
+                  <hr className="border-slate-200" />
 
                   {/* Context Info */}
                   <div className="text-[10px] text-slate-400 space-y-2">
                     <p>
                       <span className="font-semibold">Category: </span>
-                      <span className="capitalize">{selectedTicket?.category.replace("_", " ")}</span>
+                      <span>{categoryLabel(selectedTicket?.category)}</span>
                     </p>
                     {selectedTicket?.orderId && (
                       <p className="truncate">

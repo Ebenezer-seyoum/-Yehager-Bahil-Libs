@@ -188,6 +188,7 @@ export function DashboardShell({
   const [viewedPaymentIds, setViewedPaymentIds] = useState<string[]>([]);
   const [viewedCustomDesignIds, setViewedCustomDesignIds] = useState<string[]>([]);
   const [viewedShippingDeliveryIds, setViewedShippingDeliveryIds] = useState<string[]>([]);
+  const [visibleSupportCount, setVisibleSupportCount] = useState(counts.support ?? 0);
   const activeOrderIds = (counts.orderIds ?? []).filter(Boolean).map(String);
   const activePaymentIds = (counts.paymentIds ?? []).filter(Boolean).map(String);
   const activeCustomDesignIds = (counts.customDesignIds ?? []).filter(Boolean).map(String);
@@ -222,7 +223,7 @@ export function DashboardShell({
     if (href === "/admin/orders/shipping-delivery") return visibleShippingDeliveryCount;
     if (href === "/admin/orders/returns-refunds") return visibleRefundIssueCount;
     if (href === "/admin/alerts") return totalNotifications;
-    if (href === "/admin/support-inbox") return counts.support ?? 0;
+    if (href === "/admin/support-inbox") return visibleSupportCount;
     return 0;
   };
   const displayAccountName = refreshedName ?? session?.user?.name ?? "Account";
@@ -296,6 +297,20 @@ export function DashboardShell({
     window.addEventListener("dashboard-profile-updated", onProfileUpdated);
     return () => window.removeEventListener("dashboard-profile-updated", onProfileUpdated);
   }, []);
+
+  useEffect(() => {
+    if (variant !== "admin") return;
+    setVisibleSupportCount(counts.support ?? 0);
+  }, [counts.support, variant]);
+
+  useEffect(() => {
+    if (variant !== "admin") return;
+    const onSupportRead = () => {
+      setVisibleSupportCount((current) => Math.max(current - 1, 0));
+    };
+    window.addEventListener("admin-support-read", onSupportRead);
+    return () => window.removeEventListener("admin-support-read", onSupportRead);
+  }, [variant]);
 
   useEffect(() => {
     if (variant !== "admin") return;

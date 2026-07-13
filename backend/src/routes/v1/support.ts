@@ -16,6 +16,7 @@ import {
 } from "../../lib/db/schema.js";
 import { PERMISSIONS } from "../../lib/auth/permissions.js";
 import type { AppBindings } from "../../types/hono.js";
+import { env } from "../../config/env.js";
 import {
   sendSupportReplyEmail,
   sendSupportTicketCreatedAdminEmail,
@@ -29,6 +30,7 @@ const listQuerySchema = z.object({
   priority: z.string().optional(),
   category: z.string().optional(),
   search: z.string().optional(),
+  readState: z.enum(["all", "read", "unread"]).optional(),
   unreadOnly: z.string().optional(), // "true" or "false"
   limit: z.coerce.number().int().positive().max(100).optional(),
   offset: z.coerce.number().int().nonnegative().optional(),
@@ -149,7 +151,7 @@ supportRouter.post("/sync-email", requirePermission(PERMISSIONS.SUPPORT_VIEW), a
 
 // 4. List Support Tickets (with filtering & search)
 supportRouter.get("/tickets", requirePermission(PERMISSIONS.SUPPORT_VIEW), zValidator("query", listQuerySchema), async (c) => {
-  const { status, priority, category, search, unreadOnly, limit, offset } = c.req.valid("query");
+  const { status, priority, category, search, readState, unreadOnly, limit, offset } = c.req.valid("query");
   
   const conditions = [];
 
@@ -173,6 +175,12 @@ supportRouter.get("/tickets", requirePermission(PERMISSIONS.SUPPORT_VIEW), zVali
 
   if (unreadOnly === "true") {
     conditions.push(eq(supportTickets.unreadByAdmin, true));
+  }
+
+  if (readState === "unread") {
+    conditions.push(eq(supportTickets.unreadByAdmin, true));
+  } else if (readState === "read") {
+    conditions.push(eq(supportTickets.unreadByAdmin, false));
   }
 
   if (priority && priority !== "all") {
@@ -522,6 +530,10 @@ supportRouter.post("/tickets", zValidator("json", createTicketSchema), async (c)
 
 // 9. Seeds some dummy data for testing (only visible/runnable in dev)
 supportRouter.post("/seed-demo", async (c) => {
+  if (env.NODE_ENV === "production") {
+    throw new HTTPException(404, { message: "Demo ticket seeding is disabled in production" });
+  }
+
   const authUser = c.get("authUser");
   
   const existingCount = await db.select({ count: count() }).from(supportTickets);

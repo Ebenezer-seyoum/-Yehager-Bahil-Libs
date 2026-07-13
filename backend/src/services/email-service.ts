@@ -185,9 +185,7 @@ function fromAddress(channel: MailChannel = "notifications", smtpUser?: string |
 }
 
 function defaultReplyTo(channel: MailChannel = "notifications") {
-  if (channel === "support") return env.EMAIL_SUPPORT_FROM || env.SUPPORT_NOTIFICATION_EMAIL || env.ADMIN_NOTIFICATION_EMAIL;
-  if (channel === "team") return env.ADMIN_NOTIFICATION_EMAIL;
-  return env.SUPPORT_NOTIFICATION_EMAIL || env.ADMIN_NOTIFICATION_EMAIL;
+  return env.EMAIL_SUPPORT_FROM || "Yehager Bahil Support <support@yehagerbahillibs.com>";
 }
 
 // ─── HTML helpers ─────────────────────────────────────────────────────────────
@@ -348,6 +346,7 @@ function htmlShell(title: string, body: string) {
             <p style="margin:0 0 8px;color:#fff7df;font-weight:800">Questions? Contact Us Directly:</p>
             <p style="margin:0 0 4px">📞 +251 92 394 0978 (WhatsApp / Production Manager Ethiopia)</p>
             <p style="margin:0 0 12px">✉️ <a href="mailto:support@yehagerbahillibs.com" style="color:#d6a43d;text-decoration:none">support@yehagerbahillibs.com</a></p>
+            <p style="margin:0 0 12px">Email: <a href="mailto:naomiinvestments2100@gmail.com" style="color:#d6a43d;text-decoration:none">naomiinvestments2100@gmail.com</a></p>
             <p style="margin:0 0 4px">Thank you for choosing us.</p>
             <p style="margin:0 0 12px;color:#d6a43d;font-style:italic">Wear your culture with pride.</p>
             <p style="margin:0"><a href="https://www.yehagerbahillibs.com/" style="color:#d6a43d;text-decoration:none;font-weight:800">🌐 YehagerBahilLibs.com</a></p>

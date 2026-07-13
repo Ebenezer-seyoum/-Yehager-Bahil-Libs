@@ -13,7 +13,8 @@ type AdminProfilePayload = {
 
 async function getAdminNotificationCounts() {
   try {
-    const response = await apiRequest<{
+    const [response, supportResponse] = await Promise.all([
+      apiRequest<{
       data?: {
         payment: number;
         custom_request: number;
@@ -29,7 +30,9 @@ async function getAdminNotificationCounts() {
         refundIssueIds?: string[];
         shippingDeliveryIds?: string[];
       };
-    }>("/api/v1/admin/summary-counts");
+      }>("/api/v1/admin/summary-counts"),
+      apiRequest<{ count?: number }>("/api/v1/admin/support/unread-count").catch(() => ({ count: 0 })),
+    ]);
     const counts = response?.data;
     
     return {
@@ -46,9 +49,8 @@ async function getAdminNotificationCounts() {
       shippingDelivery: counts?.shipping_delivery ?? 0,
       shippingDeliveryIds: counts?.shippingDeliveryIds ?? [],
       total: counts?.total ?? 0,
-      // Keep other placeholders for now if needed by DashboardShell
       alerts: 0,
-      support: 0,
+      support: supportResponse?.count ?? 0,
     };
   } catch {
     return { orders: 0, orderIds: [], payments: 0, paymentIds: [], customDesigns: 0, customDesignIds: [], customOrders: 0, customOrderIds: [], refundIssues: 0, refundIssueIds: [], shippingDelivery: 0, shippingDeliveryIds: [], total: 0, alerts: 0, support: 0 };

@@ -228,6 +228,7 @@ async function createEmailSupportTicket(
   input: {
     fromName: string;
     subject: string;
+    text: string;
   },
   fromEmail: string,
 ) {
@@ -239,7 +240,7 @@ async function createEmailSupportTicket(
       customerName: input.fromName,
       customerEmail: fromEmail,
       subject: input.subject,
-      category: autoDetectCategory(input.subject),
+      category: autoDetectCategory(input.subject, input.text),
       priority: "medium",
       status: "new",
       source: "email",
@@ -309,8 +310,8 @@ function emailThreadKey(email: string, subject: string) {
   return `${email.toLowerCase()}::${normalizedSubject || "(no subject)"}`;
 }
 
-function autoDetectCategory(subject: string) {
-  const text = subject.toLowerCase();
+function autoDetectCategory(subject: string, message = "") {
+  const text = `${subject} ${message}`.toLowerCase();
   if (text.includes("payment") || text.includes("checkout") || text.includes("bank")) return "payment_issue";
   if (text.includes("order") || text.includes("track") || text.includes("receipt")) return "order_question";
   if (text.includes("delivery") || text.includes("shipping")) return "delivery_issue";
