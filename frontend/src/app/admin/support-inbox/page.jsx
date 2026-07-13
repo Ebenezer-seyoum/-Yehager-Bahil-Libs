@@ -48,6 +48,8 @@ const SUPPORT_TABS = [
   { id: "archived", label: "Archived / Spam", icon: Archive, query: { status: "archived" } },
 ];
 
+const AUTO_EMAIL_SYNC_INTERVAL_MS = 60 * 1000;
+
 // Formatter helper
 const formatTimeAgo = (dateStr) => {
   if (!dateStr) return "";
@@ -86,6 +88,7 @@ export default function SupportInboxPage() {
   const [loading, setLoading] = useState(true);
   const [seeding, setSeeding] = useState(false);
   const [syncingEmail, setSyncingEmail] = useState(false);
+  const [lastEmailSyncAt, setLastEmailSyncAt] = useState(null);
 
   // Filters & Tabs state
   const [activeTab, setActiveTab] = useState("all"); // SUPPORT_TABS ids
@@ -120,8 +123,8 @@ export default function SupportInboxPage() {
   }
 
   // 1. Fetch tickets and KPIs
-  const fetchData = async () => {
-    setLoading(true);
+  const fetchData = async ({ quiet = false } = {}) => {
+    if (!quiet) setLoading(true);
     try {
       const tab = SUPPORT_TABS.find((item) => item.id === activeTab);
       const tabQuery = tab?.query ?? {};
@@ -173,7 +176,7 @@ export default function SupportInboxPage() {
     } catch (err) {
       console.error("Failed to load support inbox data:", err);
     } finally {
-      setLoading(false);
+      if (!quiet) setLoading(false);
     }
   };
 
@@ -216,7 +219,7 @@ export default function SupportInboxPage() {
     }
   };
 
-  const handleSyncEmail = async () => {
+  const handleSyncEmail = async ({ silent = false } = {}) => {
     setSyncingEmail(true);
     try {
       const res = await fetch("/api/backend/admin/support/sync-email", { method: "POST" });
@@ -225,15 +228,44 @@ export default function SupportInboxPage() {
         throw new Error(data.message || data.error || "Failed to sync support email.");
       }
       const result = data.data || {};
-      showToast(`Email sync complete: ${result.imported || 0} imported, ${result.skipped || 0} skipped.`, "success");
-      fetchData();
+      setLastEmailSyncAt(new Date());
+      if (!silent) {
+        showToast(`Email sync complete: ${result.imported || 0} imported, ${result.skipped || 0} skipped.`, "success");
+      } else if ((result.imported || 0) > 0) {
+        showToast(`New support email imported: ${result.imported}.`, "success");
+      }
+      fetchData({ quiet: silent });
     } catch (err) {
       console.error(err);
-      showToast(err.message || "Failed to sync support email.", "error");
+      if (!silent) showToast(err.message || "Failed to sync support email.", "error");
     } finally {
       setSyncingEmail(false);
     }
   };
+
+  useEffect(() => {
+    if (!canViewSupport) return;
+    let isActive = true;
+    let isSyncing = false;
+
+    const syncAndRefresh = async () => {
+      if (!isActive || isSyncing) return;
+      isSyncing = true;
+      try {
+        await handleSyncEmail({ silent: true });
+      } finally {
+        isSyncing = false;
+      }
+    };
+
+    syncAndRefresh();
+    const intervalId = window.setInterval(syncAndRefresh, AUTO_EMAIL_SYNC_INTERVAL_MS);
+
+    return () => {
+      isActive = false;
+      window.clearInterval(intervalId);
+    };
+  }, [canViewSupport, activeTab, searchQuery, filterPriority, filterCategory, filterAssignee, dateRange]);
 
   // 4. Load single ticket details
   const handleOpenTicket = async (ticketId) => {
@@ -378,14 +410,17 @@ export default function SupportInboxPage() {
         isRefreshing={loading}
         primaryAction={
           <div className="flex items-center gap-2">
+            <span className="hidden text-xs font-semibold text-slate-500 lg:inline">
+              Auto sync on{lastEmailSyncAt ? ` · checked ${lastEmailSyncAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : ""}
+            </span>
             <button
               type="button"
               onClick={handleSyncEmail}
               disabled={syncingEmail}
-              className="inline-flex h-9 items-center gap-2 rounded-lg bg-blue-600 px-3 text-sm font-medium text-white shadow-sm transition hover:bg-blue-700 disabled:opacity-60"
+              className="inline-flex h-9 items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 text-sm font-medium text-blue-700 shadow-sm transition hover:bg-blue-100 disabled:opacity-60"
             >
               <RefreshCw className={`h-4 w-4 ${syncingEmail ? "animate-spin" : ""}`} />
-              {syncingEmail ? "Syncing..." : "Sync Email"}
+              {syncingEmail ? "Checking..." : "Check Now"}
             </button>
             <button
               type="button"

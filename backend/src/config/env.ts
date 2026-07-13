@@ -52,7 +52,7 @@ const envSchema = z.object({
   SUPPORT_IMAP_USER: z.string().min(1).optional(),
   SUPPORT_IMAP_PASS: z.string().min(1).optional(),
   SUPPORT_IMAP_MAILBOX: z.string().min(1).default("INBOX"),
-  SUPPORT_IMAP_SYNC_INTERVAL_SECONDS: z.coerce.number().int().positive().default(300),
+  SUPPORT_IMAP_SYNC_INTERVAL_SECONDS: z.coerce.number().int().positive().default(60),
   ADMIN_NOTIFICATION_EMAIL: z.string().email().optional(),
   SUPPORT_NOTIFICATION_EMAIL: z.string().email().optional(),
 });
