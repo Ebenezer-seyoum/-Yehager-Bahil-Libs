@@ -44,6 +44,7 @@ import {
 import { getCustomerCreditWorkspacePayload, updateCustomerCreditRuleForAdmin } from "../../services/customer-credits-service.js";
 import { getProfitCostsWorkspacePayload, upsertProfitCostSettingForAdmin } from "../../services/profit-costs-service.js";
 import { deleteOrderForAdmin } from "../../services/orders-service.js";
+import { refreshStripeReceiptForOrder } from "../../services/payments-service.js";
 import type { AppBindings } from "../../types/hono.js";
 
 const listQuerySchema = z.object({
@@ -919,6 +920,17 @@ adminRouter.patch(
       ...body,
       performedBy: authUser?.email,
     });
+    return c.json({ data });
+  },
+);
+
+adminRouter.post(
+  "/orders/:orderId/stripe-receipt",
+  requirePermission(PERMISSIONS.PAYMENTS_VIEW),
+  zValidator("param", orderParamSchema),
+  async (c) => {
+    const { orderId } = c.req.valid("param");
+    const data = await refreshStripeReceiptForOrder({ orderId });
     return c.json({ data });
   },
 );

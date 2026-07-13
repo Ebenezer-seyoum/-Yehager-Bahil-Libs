@@ -35,7 +35,7 @@ export default async function EtbCheckoutPage({
       <EtbPaymentProof
         orderId={order.id}
         orderNumber={order.orderNumber}
-        totalEtb={Number(order.totalEtb ?? 0)}
+        totalEtb={order.totalEtb == null ? null : Number(order.totalEtb)}
         etbExchangeRate={order.etbExchangeRate ? Number(order.etbExchangeRate) : null}
       />
     </div>

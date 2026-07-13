@@ -39,7 +39,7 @@ const ORDER_STATUS_VALUES = [
   "picked_up",
   "cancelled",
 ] as const;
-const PAYMENT_STATUS_VALUES = ["pending", "paid", "failed", "refunded", "unpaid"] as const;
+const PAYMENT_STATUS_VALUES = ["pending", "awaiting_verification", "paid", "failed", "refunded", "unpaid"] as const;
 const NOTE_TYPE_VALUES = ["customer", "admin", "tailor", "delivery"] as const;
 const NOTE_MIN_LENGTH = 3;
 const NOTE_MAX_LENGTH = 1000;
@@ -674,15 +674,13 @@ export async function createCheckoutIntent(payload: {
     let etbExchangeRate: string | undefined;
     if (paymentCurrency === "ETB") {
       const rateRow = await getUsdEtbRate(tx);
-      if (!rateRow) {
-        throw new HTTPException(503, { message: "USD→ETB exchange rate is not configured" });
+      if (rateRow) {
+        const rateNum = moneyToNumber(rateRow.rate);
+        const etb = computeEtbTotals(totals.totalUsd, rateNum);
+        totalEtb = etb.totalEtb;
+        etbExchangeRate = etb.etbExchangeRate;
       }
-      const rateNum = moneyToNumber(rateRow.rate);
-      const etb = computeEtbTotals(totals.totalUsd, rateNum);
-      totalEtb = etb.totalEtb;
-      etbExchangeRate = etb.etbExchangeRate;
     }
-
     const user = await getUserByEmail(userEmail);
     const customerName = user?.name ?? userEmail.split("@")[0];
     const orderNumber = generateOrderNumber();
@@ -708,6 +706,26 @@ export async function createCheckoutIntent(payload: {
           line_total_usd: line.lineTotalUsd,
           measurement_id: line.measurementId,
           measurement_snapshot: line.measurementSnapshot,
+          role_label:
+            line.itemMetadata && typeof line.itemMetadata === "object"
+              ? (line.itemMetadata as Record<string, unknown>).role_label
+              : undefined,
+          customer_type:
+            line.itemMetadata && typeof line.itemMetadata === "object"
+              ? (line.itemMetadata as Record<string, unknown>).customer_type
+              : undefined,
+          outfit_option:
+            line.itemMetadata && typeof line.itemMetadata === "object"
+              ? (line.itemMetadata as Record<string, unknown>).outfit_option
+              : undefined,
+          gender:
+            line.itemMetadata && typeof line.itemMetadata === "object"
+              ? (line.itemMetadata as Record<string, unknown>).gender ?? (line.itemMetadata as Record<string, unknown>).role_gender
+              : undefined,
+          child_age:
+            line.itemMetadata && typeof line.itemMetadata === "object"
+              ? (line.itemMetadata as Record<string, unknown>).child_age
+              : undefined,
           item_type: line.itemType ?? "product",
           uploaded_design_id: line.uploadedDesignId,
           item_metadata: line.itemMetadata,

@@ -89,6 +89,18 @@ function toOptionalNumber(value: FormDataEntryValue | null) {
   return Number.isFinite(n) ? n : undefined;
 }
 
+function parseMeasurementSnapshot(value: FormDataEntryValue | null) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return undefined;
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return undefined;
+    return parsed as Record<string, unknown>;
+  } catch {
+    return undefined;
+  }
+}
+
 function isAuthApiError(error: unknown) {
   return error instanceof Error && /API error (401|403):/i.test(error.message);
 }
@@ -110,7 +122,8 @@ export default async function ProductDetailPage({
     const callbackPath = `/product/${productId}`;
     await ensureBackendUserSynced();
     const measurementIdRaw = String(formData.get("measurementId") ?? "");
-    const measurementId = measurementIdRaw.length > 0 ? measurementIdRaw : undefined;
+    const measurementSnapshot = parseMeasurementSnapshot(formData.get("measurementSnapshotJson"));
+    const measurementId = measurementSnapshot ? undefined : measurementIdRaw.length > 0 ? measurementIdRaw : undefined;
     const eventIdRaw = String(formData.get("eventId") ?? "");
     const eventId = eventIdRaw.length > 0 ? eventIdRaw : undefined;
     const roleLabelRaw = String(formData.get("roleLabel") ?? "");
@@ -120,7 +133,7 @@ export default async function ProductDetailPage({
     try {
       await apiRequest("/api/v1/cart", {
         method: "POST",
-        body: { productId, quantity: 1, measurementId, eventId, roleLabel },
+        body: { productId, quantity: 1, measurementId, measurementSnapshot, eventId, roleLabel },
       });
       ok = true;
     } catch {}

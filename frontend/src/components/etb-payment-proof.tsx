@@ -24,7 +24,7 @@ export function EtbPaymentProof({
 }: {
   orderId: string;
   orderNumber: string;
-  totalEtb: number;
+  totalEtb: number | null;
   etbExchangeRate?: number | null;
 }) {
   const router = useRouter();
@@ -33,6 +33,8 @@ export function EtbPaymentProof({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const hasConfirmedAmount = Number.isFinite(totalEtb) && Number(totalEtb) > 0;
+  const amountLabel = hasConfirmedAmount ? `${Number(totalEtb).toLocaleString()} ETB` : "Pending team confirmation";
 
   async function copyOrderNumber() {
     await navigator.clipboard.writeText(orderNumber);
@@ -80,16 +82,28 @@ export function EtbPaymentProof({
           Amount To Transfer
         </p>
         <div className="flex flex-wrap items-baseline gap-3">
-          <span className="font-heading text-4xl font-bold text-foreground sm:text-5xl">
-            {totalEtb.toLocaleString()}
-          </span>
-          <span className="text-xl font-semibold text-primary">ETB</span>
+          {hasConfirmedAmount ? (
+            <>
+              <span className="font-heading text-4xl font-bold text-foreground sm:text-5xl">
+                {Number(totalEtb).toLocaleString()}
+              </span>
+              <span className="text-xl font-semibold text-primary">ETB</span>
+            </>
+          ) : (
+            <span className="font-heading text-2xl font-bold text-foreground sm:text-3xl">
+              Pending team confirmation
+            </span>
+          )}
         </div>
         {etbExchangeRate ? (
           <p className="mt-2 text-xs text-muted-foreground">
             Rate: 1 USD = {etbExchangeRate.toLocaleString()} ETB
           </p>
-        ) : null}
+        ) : (
+          <p className="mt-2 text-xs text-muted-foreground">
+            Our team will confirm the exact ETB amount before verifying payment.
+          </p>
+        )}
       </div>
 
       <div className="grid gap-5 md:grid-cols-2">
@@ -130,7 +144,7 @@ export function EtbPaymentProof({
           <ol className="space-y-3 text-sm">
             {[
               `Open your mobile banking app and choose Scan QR, or transfer manually to ${BANK_ACCOUNT_NAME}.`,
-              `Transfer exactly ${totalEtb.toLocaleString()} ETB.`,
+              hasConfirmedAmount ? `Transfer exactly ${amountLabel}.` : "Contact support or wait for our team to confirm the exact ETB amount for this order.",
               "Use your order number below as the payment reference / remark.",
               "Take a screenshot of the successful transfer confirmation.",
               "Upload the screenshot below and confirm payment.",

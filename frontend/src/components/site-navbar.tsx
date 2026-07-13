@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { CreateGroupOrderModal } from "@/components/create-group-order-modal";
+import { getPostLoginRedirect } from "@/lib/auth-redirect";
 import { defaultPublicRegions, normalizePublicRegionsForTopBar, type PublicRegion } from "@/lib/public-collections";
 
 export function SiteNavbar() {
@@ -20,6 +21,9 @@ export function SiteNavbar() {
   const { data: session } = useSession();
   const isAuthed = Boolean(session?.user?.id);
   const uploadDesignHref = isAuthed ? "/upload-your-design" : "/signin?callbackUrl=/upload-your-design";
+  const accountHref = isAuthed
+    ? getPostLoginRedirect(session?.user?.role, undefined, session?.user?.permissions ?? [])
+    : "/signin";
 
   useEffect(() => {
     if (!isAuthed) return;
@@ -155,12 +159,25 @@ export function SiteNavbar() {
               ) : null}
             </Link>
             <div className="hidden items-center gap-1.5 sm:flex">
-              <Link href="/signin" className="inline-flex items-center justify-center whitespace-nowrap rounded-lg px-2 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground">
-                Sign In
-              </Link>
-              <Link href="/register" className="inline-flex h-11 w-[96px] items-center justify-center rounded-lg bg-primary px-2 text-center text-xs font-bold leading-tight text-primary-foreground transition-colors hover:bg-primary/90">
-                Create Account
-              </Link>
+              {isAuthed ? (
+                <>
+                  <Link href={accountHref} className="inline-flex items-center justify-center whitespace-nowrap rounded-lg px-2 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground">
+                    Account
+                  </Link>
+                  <Link href="/api/auth/logout" className="inline-flex h-11 w-[96px] items-center justify-center rounded-lg bg-primary px-2 text-center text-xs font-bold leading-tight text-primary-foreground transition-colors hover:bg-primary/90">
+                    Sign Out
+                  </Link>
+                </>
+              ) : (
+                <>
+                  <Link href="/signin" className="inline-flex items-center justify-center whitespace-nowrap rounded-lg px-2 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground">
+                    Sign In
+                  </Link>
+                  <Link href="/register" className="inline-flex h-11 w-[96px] items-center justify-center rounded-lg bg-primary px-2 text-center text-xs font-bold leading-tight text-primary-foreground transition-colors hover:bg-primary/90">
+                    Create Account
+                  </Link>
+                </>
+              )}
             </div>
             <button type="button" onClick={() => setOpen((value) => !value)} className="rounded-md p-2 hover:bg-secondary xl:hidden">
               {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
@@ -244,12 +261,25 @@ export function SiteNavbar() {
             >
               Create Group Order
             </button>
-            <Link href="/signin" onClick={() => setOpen(false)} className="flex h-11 items-center rounded-lg px-3 text-sm font-semibold hover:bg-secondary">
-              Sign In
-            </Link>
-            <Link href="/register" onClick={() => setOpen(false)} className="flex h-11 items-center rounded-lg px-3 text-sm font-semibold hover:bg-secondary">
-              Create Account
-            </Link>
+            {isAuthed ? (
+              <>
+                <Link href={accountHref} onClick={() => setOpen(false)} className="flex h-11 items-center rounded-lg px-3 text-sm font-semibold hover:bg-secondary">
+                  Account
+                </Link>
+                <Link href="/api/auth/logout" onClick={() => setOpen(false)} className="flex h-11 items-center rounded-lg px-3 text-sm font-semibold hover:bg-secondary">
+                  Sign Out
+                </Link>
+              </>
+            ) : (
+              <>
+                <Link href="/signin" onClick={() => setOpen(false)} className="flex h-11 items-center rounded-lg px-3 text-sm font-semibold hover:bg-secondary">
+                  Sign In
+                </Link>
+                <Link href="/register" onClick={() => setOpen(false)} className="flex h-11 items-center rounded-lg px-3 text-sm font-semibold hover:bg-secondary">
+                  Create Account
+                </Link>
+              </>
+            )}
           </nav>
         </div>
       ) : null}

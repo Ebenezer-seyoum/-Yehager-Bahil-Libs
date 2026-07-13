@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { signOut, useSession } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import {
   ArrowLeftRight,
   BarChart3,
@@ -768,7 +768,9 @@ export function DashboardShell({
                   </Link>
                   <button
                     type="button"
-                    onClick={() => signOut({ callbackUrl: "/" })}
+                    onClick={() => {
+                      window.location.href = "/api/auth/logout";
+                    }}
                     className={
                       adminTopBar
                         ? "block w-full rounded-xl bg-red-800 px-3 py-2 text-left text-sm font-bold text-white transition hover:bg-red-900"

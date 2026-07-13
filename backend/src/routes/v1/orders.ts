@@ -64,7 +64,7 @@ const adminUpdateSchema = z.object({
       "cancelled",
     ])
     .optional(),
-  paymentStatus: z.enum(["pending", "paid", "failed", "refunded", "unpaid"]).optional(),
+  paymentStatus: z.enum(["pending", "awaiting_verification", "paid", "failed", "refunded", "unpaid"]).optional(),
   fulfillmentType: z.enum(["mail", "pickup"]).optional(),
   carrier: z.string().trim().max(120).optional(),
   deliveryStatus: z.string().trim().max(80).optional(),

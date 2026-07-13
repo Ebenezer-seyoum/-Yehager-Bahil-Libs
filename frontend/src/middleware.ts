@@ -34,17 +34,14 @@ export async function middleware(req: NextRequest) {
 
   if (pathname.startsWith("/admin")) {
     const role = typeof token.role === "string" ? token.role : "customer";
-    if (role !== "admin" && role !== "employee") {
+    if (role !== "admin") {
       return NextResponse.redirect(new URL("/", req.url));
-    }
-    if (employeeAccessPending(token)) {
-      return NextResponse.redirect(new URL("/employee/access-pending", req.url));
     }
   }
 
   if (pathname.startsWith("/employee")) {
     const role = typeof token.role === "string" ? token.role : "customer";
-    if (role !== "employee" && role !== "admin") {
+    if (role !== "employee") {
       return NextResponse.redirect(new URL("/", req.url));
     }
     if (pathname !== "/employee/access-pending" && employeeAccessPending(token)) {

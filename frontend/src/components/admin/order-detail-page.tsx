@@ -67,6 +67,14 @@ type OrderItem = {
   age?: string | number | null;
   childAge?: string | number | null;
   child_age?: string | number | null;
+  roleLabel?: string | null;
+  role_label?: string | null;
+  customerType?: string | null;
+  customer_type?: string | null;
+  outfitOption?: string | null;
+  outfit_option?: string | null;
+  measurementId?: string | null;
+  measurement_id?: string | null;
 };
 
 type ShippingAddress = {
@@ -123,6 +131,24 @@ export type OrderDetailData = {
   paymentCurrency?: string | null;
   paymentProofUrl?: string | null;
   paymentProofUploadedAt?: string | null;
+  stripeSessionId?: string | null;
+  stripe_session_id?: string | null;
+  stripePaymentIntentId?: string | null;
+  stripe_payment_intent_id?: string | null;
+  stripeChargeId?: string | null;
+  stripe_charge_id?: string | null;
+  stripeReceiptUrl?: string | null;
+  stripe_receipt_url?: string | null;
+  stripePaymentStatus?: string | null;
+  stripe_payment_status?: string | null;
+  stripeAmountReceived?: number | string | null;
+  stripe_amount_received?: number | string | null;
+  stripeCurrency?: string | null;
+  stripe_currency?: string | null;
+  stripePaymentMethodBrand?: string | null;
+  stripe_payment_method_brand?: string | null;
+  stripePaymentMethodLast4?: string | null;
+  stripe_payment_method_last4?: string | null;
   fulfillmentType?: string | null;
   carrier?: string | null;
   deliveryStatus?: string | null;
@@ -410,6 +436,29 @@ function itemDiscountLabel(item: OrderItem) {
   return item.discount_label ?? metadata.discount_label ?? metadata.discountLabel ?? null;
 }
 
+function itemMetadataValue(item: OrderItem, ...keys: string[]) {
+  const metadata = item.itemMetadata ?? item.item_metadata ?? {};
+  for (const key of keys) {
+    const value = (item as Record<string, unknown>)[key] ?? metadata[key];
+    if (hasMeasurementValue(value)) return String(value);
+  }
+  return null;
+}
+
+function itemSelectionRows(item: OrderItem, index: number) {
+  const measurementId = itemMetadataValue(item, "measurementId", "measurement_id");
+  const measurements = itemMeasurements(item);
+  const childAge = itemMetadataValue(item, "childAge", "child_age") ?? measurementText(measurements.childAge) ?? measurementText(measurements.child_age) ?? measurementText(measurements.age);
+  return [
+    ["Product / Outfit", itemName(item, index)],
+    ["Customer Type", itemMetadataValue(item, "customerType", "customer_type")],
+    ["Outfit Option", itemMetadataValue(item, "outfitOption", "outfit_option")],
+    ["Gender", itemMetadataValue(item, "gender") ?? measurementGender(measurements)],
+    ["Child Age", childAge],
+    ["Measurement Reference", measurementId ? `Saved measurement ${measurementId}` : measurementEntries(measurements).length ? "Measurement captured at checkout" : "No measurement linked"],
+  ] as const;
+}
+
 function itemMeasurements(item: OrderItem) {
   const metadata = item.itemMetadata ?? item.item_metadata ?? {};
   return item.measurements
@@ -667,6 +716,7 @@ export function OrderDetailPage({
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [editingNoteText, setEditingNoteText] = useState("");
   const [notesError, setNotesError] = useState<string | null>(null);
+  const [receiptBusy, setReceiptBusy] = useState(false);
   const [timelineNow] = useState(() => new Date());
 
   const isGroup = order.orderMode === "group" || order.orderType === "group_order" || Boolean(order.members?.length);
@@ -677,6 +727,30 @@ export function OrderDetailPage({
   const sessionUser = session?.user as { id?: string | null; role?: string | null; permissions?: string[] | null } | undefined;
   const userPermissions = sessionUser?.permissions ?? [];
   const canDeleteOrder = can(userPermissions, "orders.delete");
+  const stripeReceiptUrl = order.stripeReceiptUrl ?? order.stripe_receipt_url ?? null;
+  const stripePaymentIntentId = order.stripePaymentIntentId ?? order.stripe_payment_intent_id ?? null;
+  const stripeChargeId = order.stripeChargeId ?? order.stripe_charge_id ?? null;
+  const stripeSessionId = order.stripeSessionId ?? order.stripe_session_id ?? null;
+  const stripeTransactionId = stripeChargeId ?? stripePaymentIntentId ?? stripeSessionId;
+  const stripeCardLabel =
+    order.stripePaymentMethodBrand || order.stripe_payment_method_brand || order.stripePaymentMethodLast4 || order.stripe_payment_method_last4
+      ? `${String(order.stripePaymentMethodBrand ?? order.stripe_payment_method_brand ?? "Card").toUpperCase()} ending ${order.stripePaymentMethodLast4 ?? order.stripe_payment_method_last4 ?? "----"}`
+      : null;
+
+  async function refreshStripeReceipt() {
+    setReceiptBusy(true);
+    try {
+      const res = await fetch(`/api/backend/admin/orders/${order.id}/stripe-receipt`, { method: "POST" });
+      const payload = await res.json().catch(() => null) as { data?: Partial<OrderDetailData>; error?: string } | null;
+      if (!res.ok) throw new Error(payload?.error ?? "Could not refresh Stripe receipt");
+      setOrder((current) => ({ ...current, ...(payload?.data ?? {}) }));
+      await dashboardSuccess("Receipt refreshed", "Stripe receipt details were updated for this order.");
+    } catch (error) {
+      await dashboardError("Receipt unavailable", error instanceof Error ? error.message : "Could not refresh Stripe receipt");
+    } finally {
+      setReceiptBusy(false);
+    }
+  }
 
   async function handleDeleteOrder() {
     const confirmed = await dashboardConfirm({
@@ -946,6 +1020,7 @@ export function OrderDetailPage({
     { label: "Measurement Sheet", required: true, url: null, type: "Measurements" },
     { label: "Invoice", required: true, url: order.shippingDocumentUrl ?? null, type: "Finance" },
     { label: "Payment Proof", required: false, url: order.paymentProofUrl ?? null, type: "Payment" },
+    { label: "Stripe Receipt", required: false, url: stripeReceiptUrl, type: "Payment" },
     { label: "Pickup ID", required: false, url: order.pickupIdUrl ?? null, type: "Pickup" },
     { label: "Pickup Proof", required: false, url: order.pickupProofUrl ?? null, type: "Pickup" },
     ...(order.shippingDocuments ?? []).map((doc, idx) => ({
@@ -958,7 +1033,7 @@ export function OrderDetailPage({
 
   const timelineRows = [
     { event: "Order Created", time: order.createdAt, by: "System", status: "Completed", notes: `Order #${order.orderNumber} was created.` },
-    { event: "Payment Status", time: order.updatedAt, by: "Payment System", status: prettyLabel(order.paymentStatus), notes: order.paymentReference ?? order.payment_reference ?? "No payment reference recorded." },
+    { event: "Payment Status", time: order.updatedAt, by: "Payment System", status: prettyLabel(order.paymentStatus), notes: stripeTransactionId ?? order.paymentReference ?? order.payment_reference ?? "No payment reference recorded." },
     { event: "Order Status", time: order.updatedAt, by: "Admin", status: prettyLabel(order.status), notes: "Production is managed with the simplified main order status." },
     { event: "Delivery Deadline", time: deadline.dueDate, by: "System", status: deadline.label, notes: deadline.note },
     { event: "Fulfillment Status", time: order.updatedAt, by: isPickup ? "Pickup Team" : "Shipping Team", status: prettyLabel(fulfillmentStatus), notes: isPickup ? "Pickup flow selected." : `${order.carrier || "EMS/DHL"} delivery flow selected.` },
@@ -1071,8 +1146,31 @@ export function OrderDetailPage({
           <DetailField label="Main Status" value={prettyLabel(order.status)} />
           <DetailField label="Fulfillment Status" value={prettyLabel(fulfillmentStatus)} />
           <DetailField label="Payment Status" value={prettyLabel(order.paymentStatus)} />
+          <DetailField label="Payment Method" value={prettyLabel(order.paymentMethod)} />
+          <DetailField label="Payment Currency" value={order.paymentCurrency ?? order.stripeCurrency ?? order.stripe_currency ?? "USD"} />
+          <DetailField label="Transaction ID" value={stripeTransactionId ?? "Not provided"} />
+          <DetailField label="Payment Method Details" value={stripeCardLabel ?? "Not provided"} />
           <DetailField label="Total Amount" value={money(order.totalUsd ?? order.totalAmount)} />
           <DetailField label="Shipping Cost" value={money(order.shippingCostUsd)} />
+          {order.paymentMethod === "stripe_usd" ? (
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Stripe Receipt</p>
+              {stripeReceiptUrl ? (
+                <a href={stripeReceiptUrl} target="_blank" rel="noreferrer" className="mt-2 inline-flex h-10 items-center justify-center rounded-xl bg-slate-950 px-4 text-sm font-black text-white hover:bg-black">
+                  Open Receipt
+                </a>
+              ) : (
+                <button
+                  type="button"
+                  disabled={receiptBusy || !stripeTransactionId}
+                  onClick={() => void refreshStripeReceipt()}
+                  className="mt-2 inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-800 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {receiptBusy ? "Fetching..." : "Fetch From Stripe"}
+                </button>
+              )}
+            </div>
+          ) : null}
           <DetailField label="Created" value={dateTime(order.createdAt)} />
           <DetailField label="Updated" value={dateTime(order.updatedAt)} />
         </div>
@@ -1082,6 +1180,7 @@ export function OrderDetailPage({
         <div className="space-y-5">
           {(order.items ?? []).map((item, index) => {
             const images = itemImages(item);
+            const selectionRows = itemSelectionRows(item, index);
             return (
               <div key={`${item.id ?? index}`} className="rounded-2xl border border-slate-200 bg-slate-50 p-4 shadow-sm">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
@@ -1099,6 +1198,11 @@ export function OrderDetailPage({
                         <span className="rounded-lg bg-white px-2 py-1 ring-1 ring-slate-200">{money(itemPrice(item))}</span>
                         <span className="rounded-lg bg-white px-2 py-1 ring-1 ring-slate-200">{isGroup ? "Group" : "Individual"}</span>
                       </div>
+                    </div>
+                    <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                      {selectionRows.map(([label, value]) => (
+                        <CompactInfoField key={`${item.id ?? index}-${label}`} label={label} value={value ?? "Not provided"} />
+                      ))}
                     </div>
                     <div className="mt-4">
                       <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-slate-500">Images</p>

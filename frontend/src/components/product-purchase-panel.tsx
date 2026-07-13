@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { BookOpen, ChevronDown, Clock, Mail, Pencil, Play, Ruler, ShoppingBag, Users, X, PlusCircle } from "lucide-react";
+import type { FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { ShareLinks } from "@/components/share-links";
 import { MeasurementVideoModal } from "@/components/measurement-help";
@@ -78,6 +79,20 @@ type ProductPurchasePanelProps = {
 };
 
 type SavedMeasurement = NonNullable<ProductPurchasePanelProps["latestMeasurement"]>;
+
+const REQUIRED_DRAFT_MEASUREMENT_KEYS = [
+  "gender",
+  ...TOP_MEASUREMENT_FIELDS.filter((field) => field.required !== false).map((field) => field.key),
+];
+
+const DRAFT_MEASUREMENT_KEYS = [
+  "gender",
+  ...TOP_MEASUREMENT_FIELDS.map((field) => field.key),
+  ...PANTS_MEASUREMENT_FIELDS.map((field) => field.key),
+  "hemStyle",
+  "pressingStyle",
+  "tailorNote",
+];
 
 function formatGender(value?: string | null) {
   if (value === "male") return "Male";
@@ -259,6 +274,35 @@ export function ProductPurchasePanel({
   const hasMeasurement = Boolean(savedMeasurement?.id);
 
   const measurementSummary = useMemo(() => measurementDisplayGroups(savedMeasurement ?? {}).filter((group) => group.title !== "Profile"), [savedMeasurement]);
+
+  function captureMeasurementDraft(event: FormEvent<HTMLFormElement>) {
+    const cartForm = event.currentTarget;
+    const snapshotInput = cartForm.elements.namedItem("measurementSnapshotJson") as HTMLInputElement | null;
+    if (snapshotInput) snapshotInput.value = "";
+
+    if (!isMeasurementEditorOpen) return;
+
+    const measurementForm = document.getElementById("measurement-form") as HTMLFormElement | null;
+    if (!measurementForm) return;
+
+    const formData = new FormData(measurementForm);
+    const missing = REQUIRED_DRAFT_MEASUREMENT_KEYS.filter((key) => !String(formData.get(key) ?? "").trim());
+    if (missing.length) {
+      event.preventDefault();
+      customerToast("Please complete the required measurement fields before adding this item to cart.");
+      return;
+    }
+
+    const snapshot = DRAFT_MEASUREMENT_KEYS.reduce<Record<string, unknown>>((acc, key) => {
+      const raw = String(formData.get(key) ?? "").trim();
+      if (!raw) return acc;
+      const numeric = Number(raw);
+      acc[key] = Number.isFinite(numeric) && key !== "gender" && key !== "hemStyle" && key !== "pressingStyle" && key !== "tailorNote" ? numeric : raw;
+      return acc;
+    }, {});
+
+    if (snapshotInput) snapshotInput.value = JSON.stringify(snapshot);
+  }
 
   useEffect(() => {
     if (authRequired && !isAuthenticated) {
@@ -468,6 +512,8 @@ export function ProductPurchasePanel({
                 <input type="hidden" name="productId" value={product.id} />
                 <input type="hidden" name="measurementId" value={savedMeasurement?.id ?? ""} />
                 <input type="hidden" name="label" value={savedMeasurement?.label ?? "My Measurements"} />
+                <input type="hidden" name="hemStyle" value={hemStyle} />
+                <input type="hidden" name="pressingStyle" value={pressingStyle} />
 
                 <div className="space-y-4">
                   <label className="text-xs font-black uppercase tracking-[0.2em] text-zinc-500 block text-left">
@@ -600,11 +646,12 @@ export function ProductPurchasePanel({
 
       <div className="space-y-3">
         {isAuthenticated ? (
-          <form action={addToCartAction}>
+          <form action={addToCartAction} onSubmit={captureMeasurementDraft}>
             <input type="hidden" name="productId" value={product.id} />
             <input type="hidden" name="eventId" value={eventId} />
             <input type="hidden" name="roleLabel" value={selectedRole?.label ?? ""} />
             <input type="hidden" name="measurementId" value={savedMeasurement?.id ?? ""} />
+            <input type="hidden" name="measurementSnapshotJson" defaultValue="" />
             <button type="submit" className="inline-flex h-14 w-full items-center justify-center gap-3 rounded-xl bg-[#f5a623] px-5 text-lg font-bold text-black transition-transform hover:scale-[1.01] active:scale-95">
               <ShoppingBag className="h-5 w-5" />
               Add to Cart

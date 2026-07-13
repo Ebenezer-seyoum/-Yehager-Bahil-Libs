@@ -81,6 +81,83 @@ async function resolveStripeReceipt(session: Stripe.Checkout.Session) {
   };
 }
 
+function receiptFromStripeObjects(params: {
+  paymentIntent?: Stripe.PaymentIntent;
+  charge?: Stripe.Charge;
+  fallbackCurrency?: string | null;
+}) {
+  const card = params.charge?.payment_method_details?.card;
+  return {
+    stripePaymentIntentId: params.paymentIntent?.id,
+    stripeChargeId: params.charge?.id,
+    stripeReceiptUrl: params.charge?.receipt_url ?? undefined,
+    stripePaymentStatus: params.paymentIntent?.status,
+    stripeAmountReceived: centsToAmount(params.paymentIntent?.amount_received ?? params.charge?.amount_captured ?? params.charge?.amount),
+    stripeCurrency: (params.paymentIntent?.currency ?? params.charge?.currency ?? params.fallbackCurrency ?? "usd").toUpperCase(),
+    stripeCustomerEmail: params.charge?.billing_details?.email ?? undefined,
+    stripeCustomerName: params.charge?.billing_details?.name ?? undefined,
+    stripePaymentMethodBrand: card?.brand ?? undefined,
+    stripePaymentMethodLast4: card?.last4 ?? undefined,
+    stripePaymentMethodFunding: card?.funding ?? undefined,
+    stripePaymentMethodCountry: card?.country ?? undefined,
+    stripePaidAt: params.charge?.created ? new Date(params.charge.created * 1000) : undefined,
+    stripeFailureReason: params.paymentIntent?.last_payment_error?.message ?? params.charge?.failure_message ?? undefined,
+    stripeRefundStatus: params.charge?.refunded ? "refunded" : params.charge?.amount_refunded ? "partially_refunded" : undefined,
+    stripeRefundAmount: centsToAmount(params.charge?.amount_refunded),
+    stripeReceiptMetadata: {
+      payment_intent_id: params.paymentIntent?.id,
+      charge_id: params.charge?.id,
+      receipt_number: params.charge?.receipt_number,
+      payment_method_type: params.charge?.payment_method_details?.type,
+    },
+  };
+}
+
+export async function refreshStripeReceiptForOrder(payload: { orderId: string }) {
+  const order = await getOrderById(payload.orderId);
+  if (!order) {
+    throw new HTTPException(404, { message: "Order not found" });
+  }
+  if (order.paymentMethod !== "stripe_usd") {
+    throw new HTTPException(400, { message: "Order payment method is not Stripe" });
+  }
+
+  let paymentIntent: Stripe.PaymentIntent | undefined;
+  let charge: Stripe.Charge | undefined;
+
+  if (order.stripePaymentIntentId) {
+    paymentIntent = await stripe.paymentIntents.retrieve(order.stripePaymentIntentId, {
+      expand: ["latest_charge"],
+    });
+    if (typeof paymentIntent.latest_charge === "object" && paymentIntent.latest_charge) {
+      charge = paymentIntent.latest_charge as Stripe.Charge;
+    }
+  }
+
+  if (!charge && order.stripeChargeId) {
+    charge = await stripe.charges.retrieve(order.stripeChargeId);
+  }
+
+  if (!paymentIntent && charge?.payment_intent && typeof charge.payment_intent === "string") {
+    paymentIntent = await stripe.paymentIntents.retrieve(charge.payment_intent);
+  }
+
+  if (!paymentIntent && !charge) {
+    throw new HTTPException(400, { message: "No Stripe payment intent or charge is stored for this order" });
+  }
+
+  const updated = await updateStripeReceiptOnOrder({
+    orderId: order.id,
+    ...receiptFromStripeObjects({
+      paymentIntent,
+      charge,
+      fallbackCurrency: order.paymentCurrency,
+    }),
+  });
+
+  return updated;
+}
+
 export async function createStripeCheckoutSession(payload: {
   orderId: string;
   userEmail?: string;

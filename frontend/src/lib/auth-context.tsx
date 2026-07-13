@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
-import { signIn, signOut } from "next-auth/react";
+import { signIn } from "next-auth/react";
 
 type AuthErrorType = "auth_required" | "user_not_registered" | "unknown";
 
@@ -111,7 +111,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       body: JSON.stringify({ online: false }),
       keepalive: true,
     }).catch(() => undefined);
-    void signOut({ callbackUrl: "/" });
+    window.location.href = "/api/auth/logout";
   }, []);
 
   return (

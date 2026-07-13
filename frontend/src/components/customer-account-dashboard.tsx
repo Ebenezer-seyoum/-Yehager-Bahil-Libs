@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { signOut } from "next-auth/react";
 import {
   CalendarDays,
   Check,
@@ -254,7 +253,7 @@ export function CustomerAccountDashboard({
             <Link href="/catalog" className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90">
               <ShoppingBag className="h-3.5 w-3.5" /> Shop Now
             </Link>
-            <button type="button" onClick={() => signOut({ callbackUrl: "/" })} className="inline-flex items-center gap-2 rounded-md bg-rose-600 px-3 py-2 text-sm font-semibold text-white hover:bg-rose-700">
+            <button type="button" onClick={() => { window.location.href = "/api/auth/logout"; }} className="inline-flex items-center gap-2 rounded-md bg-rose-600 px-3 py-2 text-sm font-semibold text-white hover:bg-rose-700">
               <LogOut className="h-3.5 w-3.5" /> Sign Out
             </button>
           </div>
@@ -985,7 +984,7 @@ function SecurityPanel({ email }: { email: string }) {
               <p className="text-sm font-medium">Sign Out</p>
               <p className="mt-0.5 text-xs text-muted-foreground">Sign out of your account on this device.</p>
             </div>
-            <button type="button" onClick={() => signOut({ callbackUrl: "/" })} className="shrink-0 rounded-md bg-destructive px-3 py-2 text-sm font-semibold text-destructive-foreground">Sign Out</button>
+            <button type="button" onClick={() => { window.location.href = "/api/auth/logout"; }} className="shrink-0 rounded-md bg-destructive px-3 py-2 text-sm font-semibold text-destructive-foreground">Sign Out</button>
           </div>
         </div>
       </div>

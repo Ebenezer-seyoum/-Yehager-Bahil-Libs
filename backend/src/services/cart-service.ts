@@ -44,6 +44,22 @@ function getProductRoles(product: Awaited<ReturnType<typeof getActiveProductById
   ];
 }
 
+function inferCustomerType(role?: CartProductRole) {
+  if (role?.customerType) return role.customerType;
+  const label = String(role?.label ?? "").toLowerCase();
+  if (label.includes("women") || label.includes("woman") || label.includes("bride")) return "woman";
+  if (label.includes("men") || label.includes("man") || label.includes("groom")) return "man";
+  if (label.includes("girl")) return "girl";
+  if (label.includes("boy")) return "boy";
+  if (label.includes("kid") || label.includes("child")) return role?.gender === "male" ? "boy" : role?.gender === "female" ? "girl" : undefined;
+  return undefined;
+}
+
+function metadataNumber(value: unknown) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : undefined;
+}
+
 async function getProductCostFallback(productId: string) {
   const setting = await db.query.profitCostSettings.findFirst({
     where: and(eq(profitCostSettings.entityType, "product"), eq(profitCostSettings.entityId, productId)),
@@ -111,12 +127,15 @@ export async function addItemToCart(payload: {
   }
 
   const fallbackCost = await getProductCostFallback(product.id);
+  const customerType = inferCustomerType(selectedRole);
+  const outfitOption = selectedRole?.outfitOption ?? "standard";
+  const childAge = metadataNumber(payload.measurementSnapshot?.childAge ?? payload.measurementSnapshot?.child_age ?? payload.measurementSnapshot?.age);
   const roleCostSnapshot = selectedRole
     ? {
         role_label: selectedRole.label,
         role_gender: selectedRole.gender,
-        customer_type: selectedRole.customerType,
-        outfit_option: selectedRole.outfitOption,
+        customer_type: customerType,
+        outfit_option: outfitOption,
         option_description: selectedRole.description,
         selling_price_usd: selectedRole.price.toFixed(2),
         designer_cost_usd: Number(selectedRole.designerCostUsd ?? fallbackCost.designerCostUsd).toFixed(2),
@@ -157,6 +176,12 @@ export async function addItemToCart(payload: {
     eventId: payload.eventId,
     eventName: payload.eventName,
     itemMetadata: {
+      role_label: selectedRole?.label,
+      role_gender: selectedRole?.gender,
+      customer_type: customerType,
+      outfit_option: outfitOption,
+      gender: selectedRole?.gender ?? payload.measurementSnapshot?.gender,
+      child_age: customerType === "girl" || customerType === "boy" ? childAge : undefined,
       pricing_snapshot: roleCostSnapshot,
     },
   });

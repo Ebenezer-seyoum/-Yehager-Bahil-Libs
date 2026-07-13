@@ -1,7 +1,6 @@
 "use client";
 
 import { RefreshCw, LogOut } from "lucide-react";
-import { signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
 
 export function EmployeeAccessActions() {
@@ -19,7 +18,9 @@ export function EmployeeAccessActions() {
       </button>
       <button
         type="button"
-        onClick={() => signOut({ callbackUrl: "/signin" })}
+        onClick={() => {
+          window.location.href = "/api/auth/logout";
+        }}
         className="inline-flex h-12 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-sm font-bold text-slate-700 transition hover:bg-slate-50"
       >
         <LogOut className="h-4 w-4" />
