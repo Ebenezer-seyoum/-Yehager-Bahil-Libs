@@ -85,6 +85,7 @@ export default function SupportInboxPage() {
   const [admins, setAdmins] = useState([]);
   const [loading, setLoading] = useState(true);
   const [seeding, setSeeding] = useState(false);
+  const [syncingEmail, setSyncingEmail] = useState(false);
 
   // Filters & Tabs state
   const [activeTab, setActiveTab] = useState("all"); // SUPPORT_TABS ids
@@ -212,6 +213,25 @@ export default function SupportInboxPage() {
       showToast("Failed to seed demo data.", "error");
     } finally {
       setSeeding(false);
+    }
+  };
+
+  const handleSyncEmail = async () => {
+    setSyncingEmail(true);
+    try {
+      const res = await fetch("/api/backend/admin/support/sync-email", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        throw new Error(data.message || data.error || "Failed to sync support email.");
+      }
+      const result = data.data || {};
+      showToast(`Email sync complete: ${result.imported || 0} imported, ${result.skipped || 0} skipped.`, "success");
+      fetchData();
+    } catch (err) {
+      console.error(err);
+      showToast(err.message || "Failed to sync support email.", "error");
+    } finally {
+      setSyncingEmail(false);
     }
   };
 
@@ -357,15 +377,26 @@ export default function SupportInboxPage() {
         onRefresh={fetchData}
         isRefreshing={loading}
         primaryAction={
-          <button
-            type="button"
-            onClick={handleSeedDemo}
-            disabled={seeding}
-            className="inline-flex h-9 items-center gap-2 rounded-lg border border-border bg-white px-3 text-sm font-medium shadow-sm transition hover:bg-secondary disabled:opacity-60"
-          >
-            <Database className="h-4 w-4" />
-            {seeding ? "Loading..." : "Seed Demo Tickets"}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleSyncEmail}
+              disabled={syncingEmail}
+              className="inline-flex h-9 items-center gap-2 rounded-lg bg-blue-600 px-3 text-sm font-medium text-white shadow-sm transition hover:bg-blue-700 disabled:opacity-60"
+            >
+              <RefreshCw className={`h-4 w-4 ${syncingEmail ? "animate-spin" : ""}`} />
+              {syncingEmail ? "Syncing..." : "Sync Email"}
+            </button>
+            <button
+              type="button"
+              onClick={handleSeedDemo}
+              disabled={seeding}
+              className="inline-flex h-9 items-center gap-2 rounded-lg border border-border bg-white px-3 text-sm font-medium shadow-sm transition hover:bg-secondary disabled:opacity-60"
+            >
+              <Database className="h-4 w-4" />
+              {seeding ? "Loading..." : "Seed Demo Tickets"}
+            </button>
+          </div>
         }
       />
 

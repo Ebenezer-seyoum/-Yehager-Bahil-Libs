@@ -710,6 +710,8 @@ export const supportTickets = pgTable(
     category: varchar("category", { length: 100 }).notNull(),
     priority: varchar("priority", { length: 50 }).default("medium").notNull(),
     status: varchar("status", { length: 50 }).default("open").notNull(),
+    source: varchar("source", { length: 50 }).default("web").notNull(),
+    emailThreadKey: text("email_thread_key"),
     assignedAdminId: uuid("assigned_admin_id").references(() => users.id, { onDelete: "set null" }),
     unreadByAdmin: boolean("unread_by_admin").default(true).notNull(),
     unreadByCustomer: boolean("unread_by_customer").default(false).notNull(),
@@ -719,6 +721,7 @@ export const supportTickets = pgTable(
   (table) => [
     uniqueIndex("support_tickets_ticket_number_unique").on(table.ticketNumber),
     index("support_tickets_customer_email_idx").on(table.customerEmail),
+    index("support_tickets_email_thread_key_idx").on(table.emailThreadKey),
   ]
 );
 
@@ -734,11 +737,18 @@ export const supportMessages = pgTable(
     senderEmail: varchar("sender_email", { length: 320 }).notNull(),
     messageBody: text("message_body").notNull(),
     attachments: jsonb("attachments").$type<string[]>(),
+    emailMessageId: text("email_message_id"),
+    emailInReplyTo: text("email_in_reply_to"),
+    emailReferences: text("email_references"),
+    emailUid: integer("email_uid"),
+    emailMailbox: text("email_mailbox"),
+    emailSubject: text("email_subject"),
     isRead: boolean("is_read").default(false).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
     index("support_messages_ticket_id_idx").on(table.ticketId),
+    uniqueIndex("support_messages_email_message_id_unique").on(table.emailMessageId),
   ]
 );
 

@@ -11,6 +11,10 @@ type MailPayload = {
   html?: string;
   channel?: MailChannel;
   replyTo?: string;
+  messageId?: string;
+  inReplyTo?: string;
+  references?: string | string[];
+  headers?: Record<string, string>;
 };
 
 type PasswordLinkPayload = {
@@ -98,28 +102,51 @@ type EmployeeRoleAssignedPayload = {
 // ─── Transport setup ─────────────────────────────────────────────────────────
 
 const resend = env.RESEND_API_KEY ? new Resend(env.RESEND_API_KEY) : null;
-const smtpTransporter =
-  !resend && env.SMTP_HOST && env.SMTP_USER && env.SMTP_PASS
-    ? nodemailer.createTransport({
-        host: env.SMTP_HOST,
-        port: env.SMTP_PORT ?? 587,
-        secure: (env.SMTP_PORT ?? 587) === 465,
-        auth: {
-          user: env.SMTP_USER,
-          pass: env.SMTP_PASS,
-        },
-      })
-    : null;
 
-function isConfigured() {
-  return Boolean(resend || smtpTransporter);
+function smtpCredentials(channel: MailChannel = "notifications") {
+  if (channel === "team") {
+    return {
+      user: env.SMTP_TEAM_USER || env.SMTP_USER,
+      pass: env.SMTP_TEAM_PASS || env.SMTP_PASS,
+    };
+  }
+
+  if (channel === "support") {
+    return {
+      user: env.SMTP_SUPPORT_USER || env.SMTP_USER,
+      pass: env.SMTP_SUPPORT_PASS || env.SMTP_PASS,
+    };
+  }
+
+  return {
+    user: env.SMTP_INFO_USER || env.SMTP_USER,
+    pass: env.SMTP_INFO_PASS || env.SMTP_PASS,
+  };
 }
 
-function smtpDefaultFrom(name: string) {
-  return env.SMTP_USER ? `${name} <${env.SMTP_USER}>` : null;
+function smtpTransporter(channel: MailChannel = "notifications") {
+  if (resend || !env.SMTP_HOST) return null;
+  const credentials = smtpCredentials(channel);
+  if (!credentials.user || !credentials.pass) return null;
+
+  const port = env.SMTP_PORT ?? 587;
+  return nodemailer.createTransport({
+    host: env.SMTP_HOST,
+    port,
+    secure: env.SMTP_SECURE ?? port === 465,
+    auth: credentials,
+  });
 }
 
-function fromAddress(channel: MailChannel = "notifications") {
+function isConfigured(channel: MailChannel = "notifications") {
+  return Boolean(resend || smtpTransporter(channel));
+}
+
+function smtpDefaultFrom(name: string, smtpUser?: string | null) {
+  return smtpUser ? `${name} <${smtpUser}>` : null;
+}
+
+function fromAddress(channel: MailChannel = "notifications", smtpUser?: string | null) {
   let configuredFrom = env.EMAIL_NOTIFICATIONS_FROM;
   let defaultName = "Yehager Bahil Libs";
 
@@ -139,7 +166,7 @@ function fromAddress(channel: MailChannel = "notifications") {
   }
 
   // If using SMTP, force the email portion to be env.SMTP_USER to prevent 553 errors
-  if (env.SMTP_USER) {
+  if (smtpUser) {
     let displayName = defaultName;
     if (baseFrom) {
       const match = baseFrom.match(/^(.*?)\s*<.*?>/);
@@ -151,13 +178,14 @@ function fromAddress(channel: MailChannel = "notifications") {
     }
     // Clean up surrounding quotes
     displayName = displayName.replace(/^["']|["']$/g, "").trim();
-    return `${displayName} <${env.SMTP_USER}>`;
+    return `${displayName} <${smtpUser}>`;
   }
 
   return baseFrom || `${defaultName} <info@yehagerbahillibs.com>`;
 }
 
 function defaultReplyTo(channel: MailChannel = "notifications") {
+  if (channel === "support") return env.EMAIL_SUPPORT_FROM || env.SUPPORT_NOTIFICATION_EMAIL || env.ADMIN_NOTIFICATION_EMAIL;
   if (channel === "team") return env.ADMIN_NOTIFICATION_EMAIL;
   return env.SUPPORT_NOTIFICATION_EMAIL || env.ADMIN_NOTIFICATION_EMAIL;
 }
@@ -336,10 +364,12 @@ function htmlShell(title: string, body: string) {
 
 export async function sendTransactionalEmail(payload: MailPayload) {
   if (!payload.to) return { sent: false, skipped: true, reason: "missing_recipient" };
-  if (!isConfigured()) return { sent: false, skipped: true, reason: "mail_not_configured" };
+  const channel = payload.channel ?? "notifications";
+  if (!isConfigured(channel)) return { sent: false, skipped: true, reason: "mail_not_configured" };
 
-  const from = fromAddress(payload.channel);
-  const replyTo = payload.replyTo ?? defaultReplyTo(payload.channel);
+  const credentials = smtpCredentials(channel);
+  const from = fromAddress(channel, credentials.user);
+  const replyTo = payload.replyTo ?? defaultReplyTo(channel);
 
   if (resend) {
     await resend.emails.send({
@@ -349,15 +379,22 @@ export async function sendTransactionalEmail(payload: MailPayload) {
       text: payload.text,
       html: payload.html,
       replyTo,
+      headers: payload.headers,
     });
-  } else if (smtpTransporter) {
-    await smtpTransporter.sendMail({
+  } else {
+    const transporter = smtpTransporter(channel);
+    if (!transporter) return { sent: false, skipped: true, reason: "mail_not_configured" };
+    await transporter.sendMail({
       from,
       to: payload.to,
       subject: payload.subject,
       text: payload.text,
       html: payload.html,
       replyTo,
+      messageId: payload.messageId,
+      inReplyTo: payload.inReplyTo,
+      references: payload.references,
+      headers: payload.headers,
     });
   }
 
@@ -884,8 +921,8 @@ export async function sendCustomDesignDeclinedEmail(payload: CustomDesignPayload
 export async function sendSupportTicketCreatedAdminEmail(payload: SupportTicketPayload) {
   const supportUrl = appLink("/admin/support-inbox");
   return sendTransactionalEmailSafely({
-    channel: "support",
-    to: env.SUPPORT_NOTIFICATION_EMAIL || env.ADMIN_NOTIFICATION_EMAIL,
+    channel: "team",
+    to: env.ADMIN_NOTIFICATION_EMAIL,
     subject: `🎫 New support ticket${payload.ticketNumber ? `: ${payload.ticketNumber}` : ""}`,
     text: paragraph([
       `A customer submitted a support ticket${payload.ticketNumber ? ` (${payload.ticketNumber})` : ""}.`,
@@ -936,12 +973,24 @@ export async function sendSupportTicketCreatedCustomerEmail(payload: SupportTick
   });
 }
 
-export async function sendSupportReplyEmail(payload: SupportTicketPayload & { to?: string | null; reply?: string | null }) {
+export async function sendSupportReplyEmail(
+  payload: SupportTicketPayload & {
+    to?: string | null;
+    reply?: string | null;
+    messageId?: string;
+    inReplyTo?: string;
+    references?: string | string[];
+  },
+) {
   const supportUrl = appLink("/support");
   return sendTransactionalEmailSafely({
     channel: "support",
     to: payload.to,
     subject: `💬 Support reply${payload.ticketNumber ? `: ${payload.ticketNumber}` : ""}`,
+    messageId: payload.messageId,
+    inReplyTo: payload.inReplyTo,
+    references: payload.references,
+    headers: payload.ticketNumber ? { "X-Yehager-Ticket-Number": payload.ticketNumber } : undefined,
     text: paragraph([
       `Hello ${payload.customerName || "Customer"},`,
       "Our support team replied to your ticket.",

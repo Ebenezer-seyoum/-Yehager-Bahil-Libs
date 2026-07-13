@@ -21,6 +21,7 @@ import {
   sendSupportTicketCreatedAdminEmail,
   sendSupportTicketCreatedCustomerEmail,
 } from "../../services/email-service.js";
+import { syncSupportInboxEmails } from "../../services/support-email-sync-service.js";
 
 // Validation schemas
 const listQuerySchema = z.object({
@@ -140,7 +141,13 @@ supportRouter.get("/unread-count", requirePermission(PERMISSIONS.SUPPORT_VIEW), 
   return c.json({ count: row?.count ?? 0 });
 });
 
-// 3. List Support Tickets (with filtering & search)
+// 3. Sync support@ mailbox into the Support Inbox
+supportRouter.post("/sync-email", requirePermission(PERMISSIONS.SUPPORT_VIEW), async (c) => {
+  const result = await syncSupportInboxEmails({ limit: 50 });
+  return c.json({ data: result });
+});
+
+// 4. List Support Tickets (with filtering & search)
 supportRouter.get("/tickets", requirePermission(PERMISSIONS.SUPPORT_VIEW), zValidator("query", listQuerySchema), async (c) => {
   const { status, priority, category, search, unreadOnly, limit, offset } = c.req.valid("query");
   
@@ -200,7 +207,7 @@ supportRouter.get("/tickets", requirePermission(PERMISSIONS.SUPPORT_VIEW), zVali
   return c.json({ data });
 });
 
-// 4. Get ticket detail (ticket + messages + attachments)
+// 5. Get ticket detail (ticket + messages + attachments)
 supportRouter.get("/tickets/:ticketId", requirePermission(PERMISSIONS.SUPPORT_VIEW), zValidator("param", ticketIdParamSchema), async (c) => {
   const { ticketId } = c.req.valid("param");
   
@@ -241,7 +248,7 @@ supportRouter.get("/tickets/:ticketId", requirePermission(PERMISSIONS.SUPPORT_VI
   });
 });
 
-// 5. Update support ticket fields
+// 6. Update support ticket fields
 supportRouter.patch(
   "/tickets/:ticketId",
   requireAnyPermission([PERMISSIONS.SUPPORT_ASSIGN, PERMISSIONS.SUPPORT_RESOLVE]),
@@ -291,7 +298,7 @@ supportRouter.patch(
   },
 );
 
-// 6. Submit Admin Reply (Saves message, updates ticket, sends email)
+// 7. Submit Admin Reply (Saves message, updates ticket, sends email)
 supportRouter.post(
   "/tickets/:ticketId/reply",
   requirePermission(PERMISSIONS.SUPPORT_REPLY),
@@ -310,6 +317,16 @@ supportRouter.post(
     throw new HTTPException(404, { message: "Support ticket not found" });
   }
 
+  const previousMessages = await db.query.supportMessages.findMany({
+    where: eq(supportMessages.ticketId, ticketId),
+    orderBy: [supportMessages.createdAt],
+  });
+  const previousEmailMessageIds = previousMessages
+    .map((message) => message.emailMessageId)
+    .filter(Boolean) as string[];
+  const inReplyTo = previousEmailMessageIds.at(-1);
+  const outboundMessageId = `<support-${ticket.ticketNumber}-${Date.now()}@yehagerbahillibs.com>`;
+
   await sendSupportReplyEmail({
     to: ticket.customerEmail,
     customerName: ticket.customerName,
@@ -317,6 +334,9 @@ supportRouter.post(
     ticketNumber: ticket.ticketNumber,
     subject: ticket.subject,
     reply: body.messageBody,
+    messageId: outboundMessageId,
+    inReplyTo,
+    references: previousEmailMessageIds,
   });
 
   // 2. Query admin name
@@ -337,9 +357,13 @@ supportRouter.post(
       ticketId,
       senderType: "admin",
       senderName: adminName,
-      senderEmail: authUser?.email ?? "support@yehagerbahillibs.com",
+      senderEmail: "support@yehagerbahillibs.com",
       messageBody: body.messageBody,
       attachments: body.attachments ?? [],
+      emailMessageId: outboundMessageId,
+      emailInReplyTo: inReplyTo,
+      emailReferences: previousEmailMessageIds.join(" "),
+      emailSubject: `Support reply: ${ticket.ticketNumber}`,
       isRead: true, // Read by admin who sent it
     })
     .returning();
@@ -406,7 +430,7 @@ supportRouter.post(
   });
 });
 
-// 7. Create Support Ticket (customer submitting a message)
+// 8. Create Support Ticket (customer submitting a message)
 supportRouter.post("/tickets", zValidator("json", createTicketSchema), async (c) => {
   const authUser = c.get("authUser");
   const body = c.req.valid("json");
@@ -430,6 +454,8 @@ supportRouter.post("/tickets", zValidator("json", createTicketSchema), async (c)
       category: finalCategory,
       priority: body.priority || "medium",
       status: "new",
+      source: "web",
+      emailThreadKey: `${body.customerEmail.toLowerCase()}::${body.subject.replace(/\b(re|fw|fwd):\s*/gi, "").replace(/\s+/g, " ").trim().toLowerCase() || "(no subject)"}`,
       unreadByAdmin: true,
       unreadByCustomer: false,
       orderId: body.orderId || null,
@@ -494,7 +520,7 @@ supportRouter.post("/tickets", zValidator("json", createTicketSchema), async (c)
   );
 });
 
-// 8. Seeds some dummy data for testing (only visible/runnable in dev)
+// 9. Seeds some dummy data for testing (only visible/runnable in dev)
 supportRouter.post("/seed-demo", async (c) => {
   const authUser = c.get("authUser");
   

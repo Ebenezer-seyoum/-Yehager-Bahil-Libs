@@ -2,6 +2,7 @@ import { serve } from "@hono/node-server";
 import { createApp } from "./app.js";
 import { env } from "./config/env.js";
 import { logger } from "./lib/logger.js";
+import { startSupportEmailSyncScheduler } from "./services/support-email-sync-service.js";
 
 const app = createApp();
 
@@ -15,3 +16,5 @@ serve(
     logger.info(`API listening on http://${env.HOST}:${info.port}`);
   },
 );
+
+startSupportEmailSyncScheduler();
