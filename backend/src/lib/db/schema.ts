@@ -218,6 +218,8 @@ export const products = pgTable(
     category: text("category"),
     priceUsd: numeric("price_usd", { precision: 12, scale: 2 }).notNull(),
     baseCurrency: text("base_currency").default("USD").notNull(),
+    basePriceAmount: numeric("base_price_amount", { precision: 12, scale: 2 }),
+    baseExchangeRate: numeric("base_exchange_rate", { precision: 12, scale: 4 }),
     groomPriceUsd: numeric("groom_price_usd", { precision: 12, scale: 2 }),
     isCouple: boolean("is_couple").default(false).notNull(),
     familyRoles: jsonb("family_roles").$type<
@@ -226,6 +228,8 @@ export const products = pgTable(
         icon?: string;
         price: number;
         currency?: "USD" | "ETB";
+        enteredPrice?: number;
+        exchangeRate?: number;
         gender: "male" | "female" | "unisex";
         customerType?: "woman" | "man" | "girl" | "boy";
         outfitOption?: "standard" | "full_set" | "top_only" | "pants_only";

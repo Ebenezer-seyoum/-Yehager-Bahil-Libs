@@ -39,7 +39,9 @@ type Product = Record<string, unknown> & {
   embroideryStyle?: string | null;
   gender?: string | null;
   baseCurrency?: "USD" | "ETB" | null;
-  familyRoles?: Array<{ icon?: string; label?: string; price?: string | number | null; currency?: "USD" | "ETB"; customerType?: "woman" | "man" | "girl" | "boy"; outfitOption?: "standard" | "full_set" | "top_only" | "pants_only"; designerCostUsd?: string | number | null; taxPercent?: string | number | null; otherCostUsd?: string | number | null; description?: string | null }> | null;
+  basePriceAmount?: string | number | null;
+  baseExchangeRate?: string | number | null;
+  familyRoles?: Array<{ icon?: string; label?: string; price?: string | number | null; enteredPrice?: string | number | null; currency?: "USD" | "ETB"; customerType?: "woman" | "man" | "girl" | "boy"; outfitOption?: "standard" | "full_set" | "top_only" | "pants_only"; designerCostUsd?: string | number | null; taxPercent?: string | number | null; otherCostUsd?: string | number | null; description?: string | null }> | null;
   profitCostSetting?: {
     designerCostUsd?: string | number | null;
     taxPercent?: string | number | null;
@@ -291,8 +293,8 @@ export function ProductDetailClient({ initialProduct }: { initialProduct: Produc
                <div className="grid gap-4 md:grid-cols-2">
                   <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                      <div className="text-xs font-semibold text-slate-600 mb-1">Base Price ({product.baseCurrency ?? "USD"})</div>
-                     <div className="text-3xl font-black text-slate-900">{formatCurrency(product.priceUsd)}</div>
-                     <div className="mt-1 text-xs font-bold text-slate-400">≈ {formatEtb(product.priceUsd)}</div>
+                     <div className="text-3xl font-black text-slate-900">{product.baseCurrency ?? "USD"} {Number(product.basePriceAmount ?? product.priceUsd ?? 0).toFixed(2)}</div>
+                     {product.baseCurrency === "ETB" ? <div className="mt-1 text-xs font-bold text-slate-400">≈ USD {Number(product.priceUsd ?? 0).toFixed(2)}</div> : <div className="mt-1 text-xs font-bold text-slate-400">≈ {formatEtb(product.priceUsd)}</div>}
                   </div>
                   <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                      <div className="text-xs font-semibold text-slate-600 mb-1">Delivery Window</div>
@@ -308,7 +310,7 @@ export function ProductDetailClient({ initialProduct }: { initialProduct: Produc
                    const label = group === "woman" ? "Women" : group === "man" ? "Men" : group === "girl" ? "Girls" : "Boys";
                    return <div key={group} className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
                      <button type="button" onClick={() => setOpenRoleGroups((current) => ({ ...current, [group]: !open }))} className="flex w-full items-center justify-between px-5 py-4 text-left"><span className="text-xs font-black uppercase tracking-widest text-slate-700">{label}</span><span className="text-lg font-black text-slate-400">{open ? "−" : "+"}</span></button>
-                     {open ? <div className="grid gap-2 border-t border-slate-200 p-3 md:grid-cols-3">{roles.map((role, index) => <div key={`${role.label}-${index}`} className="rounded-xl bg-white p-3"><p className="text-xs font-black text-slate-900">{role.label}</p><p className="mt-2 text-lg font-black text-primary">{role.currency ?? "USD"} {Number(role.price ?? 0).toFixed(2)}</p></div>)}</div> : null}
+                     {open ? <div className="grid gap-2 border-t border-slate-200 p-3 md:grid-cols-3">{roles.map((role, index) => <div key={`${role.label}-${index}`} className="rounded-xl bg-white p-3"><p className="text-xs font-black text-slate-900">{role.label}</p><p className="mt-2 text-lg font-black text-primary">{role.currency ?? "USD"} {Number(role.enteredPrice ?? role.price ?? 0).toFixed(2)}</p>{role.currency === "ETB" ? <p className="text-[10px] font-semibold text-slate-400">≈ USD {Number(role.price ?? 0).toFixed(2)}</p> : null}</div>)}</div> : null}
                    </div>;
                  })}
                </div>

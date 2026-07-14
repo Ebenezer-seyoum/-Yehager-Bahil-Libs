@@ -17,6 +17,9 @@ type CartProductRole = {
   label: string;
   icon?: string;
   price: number;
+  currency?: "USD" | "ETB";
+  enteredPrice?: number;
+  exchangeRate?: number;
   gender: "male" | "female" | "unisex";
   customerType?: "woman" | "man" | "girl" | "boy";
   outfitOption?: "standard" | "full_set" | "top_only" | "pants_only";
@@ -143,6 +146,9 @@ export async function addItemToCart(payload: {
         outfit_option: outfitOption,
         option_description: selectedRole.description,
         selling_price_usd: selectedRole.price.toFixed(2),
+        entered_price: selectedRole.enteredPrice ?? selectedRole.price,
+        price_currency: selectedRole.currency ?? "USD",
+        price_exchange_rate: selectedRole.exchangeRate ?? 1,
         designer_cost_usd: Number(selectedRole.designerCostUsd ?? fallbackCost.designerCostUsd).toFixed(2),
         tax_percent: Number(selectedRole.taxPercent ?? fallbackCost.taxPercent).toFixed(4),
         other_cost_usd: Number(selectedRole.otherCostUsd ?? fallbackCost.otherCostUsd).toFixed(2),
@@ -188,6 +194,8 @@ export async function addItemToCart(payload: {
       gender: selectedRole?.gender ?? payload.measurementSnapshot?.gender,
       child_age: customerType === "girl" || customerType === "boy" ? childAge : undefined,
       pricing_snapshot: roleCostSnapshot,
+      price_currency: selectedRole?.currency ?? product.baseCurrency ?? "USD",
+      entered_price: selectedRole?.enteredPrice ?? Number(pricedProduct.effectivePriceUsd ?? product.priceUsd),
     },
   });
 

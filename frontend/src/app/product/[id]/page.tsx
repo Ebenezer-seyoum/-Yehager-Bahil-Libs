@@ -23,6 +23,8 @@ type Product = {
   embroideryStyle?: string | null;
   priceUsd?: number | null;
   baseCurrency?: "USD" | "ETB" | null;
+  basePriceAmount?: number | string | null;
+  baseExchangeRate?: number | string | null;
   effectivePriceUsd?: number | string | null;
   finalPriceUsd?: number | string | null;
   originalPriceUsd?: number | string | null;
@@ -33,6 +35,8 @@ type Product = {
     icon?: string;
     price: number;
     currency?: "USD" | "ETB";
+    enteredPrice?: number;
+    exchangeRate?: number;
     gender: "male" | "female" | "unisex";
     customerType?: "woman" | "man" | "girl" | "boy";
     outfitOption?: "standard" | "full_set" | "top_only" | "pants_only";

@@ -112,6 +112,8 @@ productsRouter.get("/home", zValidator("query", homeProductsQuerySchema), async 
       isCouple: products.isCouple,
       priceUsd: products.priceUsd,
       baseCurrency: products.baseCurrency,
+      basePriceAmount: products.basePriceAmount,
+      baseExchangeRate: products.baseExchangeRate,
       images: products.images,
       isFeatured: products.isFeatured,
     })
@@ -148,6 +150,8 @@ productsRouter.get("/", zValidator("query", querySchema), async (c) => {
       isCouple: products.isCouple,
       priceUsd: products.priceUsd,
       baseCurrency: products.baseCurrency,
+      basePriceAmount: products.basePriceAmount,
+      baseExchangeRate: products.baseExchangeRate,
       images: products.images,
       isFeatured: products.isFeatured,
     })

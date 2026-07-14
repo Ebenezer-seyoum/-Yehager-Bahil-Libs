@@ -43,6 +43,7 @@ import {
 } from "../../services/discounts-service.js";
 import { getCustomerCreditWorkspacePayload, updateCustomerCreditRuleForAdmin } from "../../services/customer-credits-service.js";
 import { getProfitCostsWorkspacePayload, upsertProfitCostSettingForAdmin } from "../../services/profit-costs-service.js";
+import { getUsdEtbRate } from "../../repositories/exchange-rates-repository.js";
 import { deleteOrderForAdmin } from "../../services/orders-service.js";
 import { refreshStripeReceiptForOrder } from "../../services/payments-service.js";
 import type { AppBindings } from "../../types/hono.js";
@@ -97,6 +98,31 @@ const productPatchSchema = z.object({
   taxPercent: z.coerce.number().nonnegative().optional(),
   otherCostUsd: z.coerce.number().nonnegative().optional(),
 });
+
+async function normalizeProductPrice(amount: number, currency: "USD" | "ETB") {
+  if (currency === "USD") return { priceUsd: amount, exchangeRate: 1 };
+  const rateRow = await getUsdEtbRate(db);
+  const rate = Number(rateRow?.rate ?? 0);
+  if (!Number.isFinite(rate) || rate <= 0) {
+    throw new HTTPException(400, { message: "A valid USD to ETB exchange rate is required before saving an ETB price." });
+  }
+  return { priceUsd: amount / rate, exchangeRate: rate };
+}
+
+async function normalizeFamilyRoles(roles: z.infer<typeof productFamilyRoleSchema>[] | null | undefined) {
+  if (!roles) return roles;
+  return Promise.all(roles.map(async (role) => {
+    const currency = role.currency ?? "USD";
+    const normalized = await normalizeProductPrice(role.price, currency);
+    return {
+      ...role,
+      price: normalized.priceUsd,
+      currency,
+      enteredPrice: role.price,
+      exchangeRate: normalized.exchangeRate,
+    };
+  }));
+}
 const createProductSchema = z.object({
   name: z.string().trim().min(1),
   description: z.string().trim().optional(),
@@ -1303,6 +1329,9 @@ adminRouter.post(
   async (c) => {
     const authUser = c.get("authUser");
     const body = c.req.valid("json");
+    const baseCurrency = body.baseCurrency ?? "USD";
+    const normalizedBase = await normalizeProductPrice(body.priceUsd, baseCurrency);
+    const normalizedRoles = await normalizeFamilyRoles(body.familyRoles);
     const [row] = await db
       .insert(products)
       .values({
@@ -1311,10 +1340,12 @@ adminRouter.post(
         region: body.region,
         subcategory: body.subcategory,
         category: body.category,
-        priceUsd: body.priceUsd.toFixed(2),
-        baseCurrency: body.baseCurrency,
+        priceUsd: normalizedBase.priceUsd.toFixed(2),
+        baseCurrency,
+        basePriceAmount: body.priceUsd.toFixed(2),
+        baseExchangeRate: normalizedBase.exchangeRate.toFixed(4),
         groomPriceUsd: body.groomPriceUsd == null ? null : body.groomPriceUsd.toFixed(2),
-        familyRoles: body.familyRoles ?? undefined,
+        familyRoles: normalizedRoles ?? undefined,
         uniqueId: body.uniqueId,
         images: body.images,
         fabricType: body.fabricType,
@@ -1368,6 +1399,10 @@ adminRouter.patch(
       throw new HTTPException(400, { message: "At least one product field must be updated" });
     }
 
+    const normalizedBase = body.priceUsd === undefined
+      ? undefined
+      : await normalizeProductPrice(body.priceUsd, body.baseCurrency ?? "USD");
+    const normalizedRoles = body.familyRoles === undefined ? undefined : await normalizeFamilyRoles(body.familyRoles);
     const [row] = await db
       .update(products)
       .set({
@@ -1376,15 +1411,17 @@ adminRouter.patch(
         region: body.region,
         subcategory: body.subcategory,
         category: body.category,
-        priceUsd: body.priceUsd !== undefined ? body.priceUsd.toFixed(2) : undefined,
+        priceUsd: normalizedBase ? normalizedBase.priceUsd.toFixed(2) : undefined,
         baseCurrency: body.baseCurrency,
+        basePriceAmount: body.priceUsd !== undefined ? body.priceUsd.toFixed(2) : undefined,
+        baseExchangeRate: normalizedBase ? normalizedBase.exchangeRate.toFixed(4) : undefined,
         groomPriceUsd:
           body.groomPriceUsd === undefined
             ? undefined
             : body.groomPriceUsd == null
               ? null
               : body.groomPriceUsd.toFixed(2),
-        familyRoles: body.familyRoles === undefined ? undefined : body.familyRoles,
+        familyRoles: normalizedRoles,
         uniqueId: body.uniqueId,
         gender: body.gender,
         fabricType: body.fabricType,
