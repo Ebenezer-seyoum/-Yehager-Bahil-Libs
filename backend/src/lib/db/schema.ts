@@ -664,6 +664,8 @@ export const exchangeRates = pgTable(
     currencyPair: text("currency_pair").default("USD_ETB").notNull(),
     rate: numeric("rate", { precision: 14, scale: 6 }).notNull(),
     source: text("source"),
+    rateType: text("rate_type").default("market_reference").notNull(),
+    updatedBy: text("updated_by"),
     lastUpdated: timestamp("last_updated", { withTimezone: true }),
     ...timestamps,
   },

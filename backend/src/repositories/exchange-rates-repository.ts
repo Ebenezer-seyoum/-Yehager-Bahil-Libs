@@ -11,7 +11,7 @@ export async function getUsdEtbRate(client: Pick<Database, "query">) {
 
 export async function upsertUsdEtbFromValues(
   db: Database,
-  payload: { rate: string; source: string; lastUpdated: Date },
+  payload: { rate: string; source: string; lastUpdated: Date; rateType?: "bank_selling" | "market_reference"; updatedBy?: string },
 ) {
   await db
     .insert(exchangeRates)
@@ -19,6 +19,8 @@ export async function upsertUsdEtbFromValues(
       currencyPair: "USD_ETB",
       rate: payload.rate,
       source: payload.source,
+      rateType: payload.rateType ?? "market_reference",
+      updatedBy: payload.updatedBy,
       lastUpdated: payload.lastUpdated,
     })
     .onConflictDoUpdate({
@@ -26,6 +28,8 @@ export async function upsertUsdEtbFromValues(
       set: {
         rate: payload.rate,
         source: payload.source,
+        rateType: payload.rateType ?? "market_reference",
+        updatedBy: payload.updatedBy,
         lastUpdated: payload.lastUpdated,
         updatedAt: new Date(),
       },

@@ -12,6 +12,8 @@ export async function getPublicUsdEtb() {
     currencyPair: row.currencyPair,
     rate: row.rate,
     source: row.source,
+    rateType: row.rateType,
+    updatedBy: row.updatedBy,
     lastUpdated: row.lastUpdated?.toISOString() ?? null,
   };
 }
@@ -33,13 +35,14 @@ export async function refreshUsdEtbFromOpenEr() {
   await upsertUsdEtbFromValues(db, {
     rate: String(etb),
     source: "open.er-api.com",
+    rateType: "market_reference",
     lastUpdated,
   });
 
-  return { rate: etb, lastUpdated: lastUpdated.toISOString() };
+  return { rate: etb, rateType: "market_reference", lastUpdated: lastUpdated.toISOString() };
 }
 
-export async function setManualUsdEtbRate(payload: { rate: number; performedBy?: string }) {
+export async function setManualUsdEtbRate(payload: { rate: number; performedBy?: string; rateType?: "bank_selling" | "market_reference" }) {
   if (!Number.isFinite(payload.rate) || payload.rate <= 0) {
     throw new HTTPException(400, { message: "Rate must be a positive number" });
   }
@@ -48,6 +51,8 @@ export async function setManualUsdEtbRate(payload: { rate: number; performedBy?:
   await upsertUsdEtbFromValues(db, {
     rate: String(payload.rate),
     source: "Manual override",
+    rateType: payload.rateType ?? "bank_selling",
+    updatedBy: payload.performedBy,
     lastUpdated,
   });
   await db.insert(auditLogs).values({
@@ -58,8 +63,8 @@ export async function setManualUsdEtbRate(payload: { rate: number; performedBy?:
     entityId: "USD_ETB",
     performedBy: payload.performedBy ?? "admin",
     details: `Manual USD_ETB override set to ${payload.rate}`,
-    metadata: { rate: payload.rate },
+    metadata: { rate: payload.rate, rateType: payload.rateType ?? "bank_selling" },
   });
 
-  return { rate: payload.rate, source: "Manual override", lastUpdated: lastUpdated.toISOString() };
+  return { rate: payload.rate, source: "Manual override", rateType: payload.rateType ?? "bank_selling", lastUpdated: lastUpdated.toISOString() };
 }

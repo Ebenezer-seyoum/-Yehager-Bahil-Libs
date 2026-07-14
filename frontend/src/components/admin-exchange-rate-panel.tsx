@@ -8,6 +8,8 @@ type ExchangeRate = {
   rate?: number | string | null;
   source?: string | null;
   lastUpdated?: string | null;
+  rateType?: "bank_selling" | "market_reference" | null;
+  updatedBy?: string | null;
 };
 
 export function AdminExchangeRatePanel({ exchangeRate, canEdit }: { exchangeRate: ExchangeRate | null; canEdit: boolean }) {
@@ -48,7 +50,7 @@ export function AdminExchangeRatePanel({ exchangeRate, canEdit }: { exchangeRate
       const res = await fetch("/api/backend/exchange-rate", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rate }),
+        body: JSON.stringify({ rate, rateType: "bank_selling" }),
       });
       if (!res.ok) throw new Error("Could not save manual rate");
       setManualRate("");
@@ -79,9 +81,15 @@ export function AdminExchangeRatePanel({ exchangeRate, canEdit }: { exchangeRate
           {exchangeRate?.rate ? (
             <>
               <p className="mt-2 font-heading text-3xl font-bold text-primary">1 USD = {Number(exchangeRate.rate).toFixed(2)} ETB</p>
+              <p className="mt-2 inline-flex rounded-full bg-primary/10 px-3 py-1 text-xs font-bold text-primary">
+                {exchangeRate.rateType === "bank_selling" ? "Bank selling rate" : "Live market reference"}
+              </p>
               <p className="mt-2 text-xs text-muted-foreground">
                 Source: {exchangeRate.source ?? "—"} · Last updated: {exchangeRate.lastUpdated ? new Date(exchangeRate.lastUpdated).toLocaleString() : "—"}
               </p>
+              {exchangeRate.lastUpdated && Date.now() - new Date(exchangeRate.lastUpdated).getTime() > 24 * 60 * 60 * 1000 ? (
+                <p className="mt-2 text-xs font-bold text-amber-600">This rate is older than 24 hours. Refresh or confirm the bank selling rate before creating ETB-priced products.</p>
+              ) : null}
             </>
           ) : (
             <p className="mt-2 text-sm text-muted-foreground">No rate configured yet.</p>
@@ -106,8 +114,8 @@ export function AdminExchangeRatePanel({ exchangeRate, canEdit }: { exchangeRate
 
       {canEdit ? (
         <div className="rounded-xl border border-border p-4">
-          <p className="font-medium">Manual override</p>
-          <p className="mt-1 text-sm text-muted-foreground">Use this when operations need to pin a known current rate manually.</p>
+          <p className="font-medium">Bank selling-rate override</p>
+          <p className="mt-1 text-sm text-muted-foreground">Enter the bank&apos;s selling rate used for ETB product pricing and bank-transfer orders.</p>
           <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center">
             <div className="flex flex-1 items-center gap-2">
               <span className="text-sm text-muted-foreground">1 USD =</span>

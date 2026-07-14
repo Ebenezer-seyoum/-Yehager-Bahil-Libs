@@ -17,6 +17,19 @@ exchangeRateRouter.get("/", async (c) => {
   return c.json({ data });
 });
 
+exchangeRateRouter.get("/status", async (c) => {
+  const data = await getPublicUsdEtb();
+  return c.json({
+    data: {
+      configured: Boolean(data),
+      currencyPair: "USD_ETB",
+      rate: data?.rate ?? null,
+      rateType: data?.rateType ?? null,
+      lastUpdated: data?.lastUpdated ?? null,
+    },
+  });
+});
+
 exchangeRateRouter.post("/refresh", requireAuth, requirePermission(PERMISSIONS.EXCHANGE_EDIT), async (c) => {
   const data = await refreshUsdEtbFromOpenEr();
   return c.json({ data }, 201);
@@ -26,11 +39,11 @@ exchangeRateRouter.patch(
   "/",
   requireAuth,
   requirePermission(PERMISSIONS.EXCHANGE_EDIT),
-  zValidator("json", z.object({ rate: z.coerce.number().positive() })),
+  zValidator("json", z.object({ rate: z.coerce.number().positive(), rateType: z.enum(["bank_selling", "market_reference"]).default("bank_selling") })),
   async (c) => {
     const authUser = c.get("authUser");
-    const { rate } = c.req.valid("json");
-    const data = await setManualUsdEtbRate({ rate, performedBy: authUser?.email });
+    const { rate, rateType } = c.req.valid("json");
+    const data = await setManualUsdEtbRate({ rate, rateType, performedBy: authUser?.email });
     return c.json({ data });
   },
 );

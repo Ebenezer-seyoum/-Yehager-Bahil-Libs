@@ -29,7 +29,23 @@ export function SiteNavbar() {
     if (!isAuthed) return;
     fetch("/api/backend/cart")
       .then((response) => (response.ok ? response.json() : null))
-      .then((payload) => setCartCount(Array.isArray(payload?.data) ? payload.data.length : 0))
+      .then((payload) => {
+        if (!Array.isArray(payload?.data)) {
+          setCartCount(0);
+          return;
+        }
+
+        // A group order is one checkout unit even though it contains one
+        // cart row per member. Standalone products remain individual units.
+        const groupIds = new Set<string>();
+        let standaloneCount = 0;
+        payload.data.forEach((item: { itemType?: string | null; itemMetadata?: Record<string, unknown> | null }) => {
+          const groupId = item.itemType === "group_order" ? item.itemMetadata?.group_id : undefined;
+          if (groupId) groupIds.add(String(groupId));
+          else standaloneCount += 1;
+        });
+        setCartCount(groupIds.size + standaloneCount);
+      })
       .catch(() => setCartCount(0));
   }, [isAuthed]);
 
