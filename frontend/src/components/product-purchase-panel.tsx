@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSession } from "next-auth/react";
 import { BookOpen, ChevronDown, Clock, Mail, Pencil, Play, Ruler, ShoppingBag, Users, X, PlusCircle } from "lucide-react";
 import type { FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
@@ -250,6 +251,7 @@ export function ProductPurchasePanel({
   createEventAction,
   createGroupAction,
 }: ProductPurchasePanelProps) {
+  const { status: sessionStatus } = useSession();
   const [selectedRoleIndex, setSelectedRoleIndex] = useState(0);
   const [eventOpen, setEventOpen] = useState(false);
   const [showVideo, setShowVideo] = useState(false);
@@ -274,6 +276,7 @@ export function ProductPurchasePanel({
   const etb = etbRate ? Math.round(displayPrice * etbRate).toLocaleString() : null;
   const signinHref = `/signin?callbackUrl=${encodeURIComponent(`/product/${product.id}`)}`;
   const hasMeasurement = Boolean(savedMeasurement?.id);
+  const canSubmitCart = isAuthenticated || sessionStatus === "authenticated";
 
   const measurementSummary = useMemo(() => measurementDisplayGroups(savedMeasurement ?? {}).filter((group) => group.title !== "Profile"), [savedMeasurement]);
 
@@ -307,10 +310,10 @@ export function ProductPurchasePanel({
   }
 
   useEffect(() => {
-    if (authRequired && !isAuthenticated) {
+    if (authRequired && !canSubmitCart) {
       customerToast("Account required to save measurements and continue with your order.");
     }
-  }, [authRequired, isAuthenticated]);
+  }, [authRequired, canSubmitCart]);
 
   useEffect(() => {
     if (cartError) {
@@ -653,7 +656,7 @@ export function ProductPurchasePanel({
       ) : null}
 
       <div className="space-y-3">
-        {isAuthenticated ? (
+        {canSubmitCart ? (
           <form action={addToCartAction} onSubmit={captureMeasurementDraft}>
             <input type="hidden" name="productId" value={product.id} />
             <input type="hidden" name="eventId" value={eventId} />

@@ -104,7 +104,7 @@ function parseMeasurementSnapshot(value: FormDataEntryValue | null) {
 }
 
 function isAuthApiError(error: unknown) {
-  return error instanceof Error && (/API error (401|403):/i.test(error.message) || /No authenticated user found/i.test(error.message));
+  return error instanceof Error && (/API error 401:/i.test(error.message) || /No authenticated user found/i.test(error.message));
 }
 
 export default async function ProductDetailPage({
@@ -122,6 +122,11 @@ export default async function ProductDetailPage({
     "use server";
     const productId = String(formData.get("productId") ?? "");
     const callbackPath = `/product/${productId}`;
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      signinRedirect(callbackPath);
+    }
+
     const measurementIdRaw = String(formData.get("measurementId") ?? "");
     const measurementSnapshot = parseMeasurementSnapshot(formData.get("measurementSnapshotJson"));
     const measurementId = measurementSnapshot ? undefined : measurementIdRaw.length > 0 ? measurementIdRaw : undefined;
