@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import type { ComponentType, PropsWithChildren } from "react";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, ClipboardList, Clock3, CreditCard, Eye, FileText, Images, Loader2, Package, Palette, Ruler, Scissors, Truck, UserRound, XCircle, ChevronRight, ExternalLink } from "lucide-react";
+import { CheckCircle2, ChevronDown, ClipboardList, Clock3, CreditCard, Eye, FileText, Images, Loader2, Package, Palette, Ruler, Scissors, Truck, UserRound, XCircle, ChevronRight, ExternalLink } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { dashboardError, dashboardSuccess } from "@/lib/dashboard-swal";
 
@@ -488,17 +488,25 @@ function DecisionDialog({
   const [busy, setBusy] = useState(false);
   const [reason, setReason] = useState("");
   const [quotedPrice, setQuotedPrice] = useState("");
+  const [memberPrices, setMemberPrices] = useState<Record<string, string>>({});
   const [delivery, setDelivery] = useState<(typeof DELIVERY_OPTIONS)[number]>(DELIVERY_OPTIONS[1]);
   const [customOpen, setCustomOpen] = useState(false);
   const [customMin, setCustomMin] = useState("");
   const [customMax, setCustomMax] = useState("");
+  const groupMembers = Array.isArray((design as any).members) ? (design as any).members as Array<Record<string, any>> : [];
+  const isGroup = Boolean((design as any).familyGroupId || (design as any).eventId) && groupMembers.length > 0;
+  const memberTotal = groupMembers.reduce((sum, member) => sum + (Number(memberPrices[String(member.id)] ?? member.priceUsd ?? 0) || 0), 0);
 
   async function submit() {
     const price = Number(quotedPrice);
     const min = customOpen ? Number(customMin) : delivery.min;
     const max = customOpen ? Number(customMax) : delivery.max;
-    if (isApprove && (!Number.isFinite(price) || price <= 0)) {
+    if (isApprove && !isGroup && (!Number.isFinite(price) || price <= 0)) {
       await dashboardError("Price Required", "Enter a valid quoted price before approving.");
+      return;
+    }
+    if (isApprove && isGroup && groupMembers.some((member) => !(Number(memberPrices[String(member.id)] ?? member.priceUsd ?? 0) > 0))) {
+      await dashboardError("Member Prices Required", "Enter a valid price for every group member before approving.");
       return;
     }
     if (isApprove && (!Number.isFinite(min) || !Number.isFinite(max) || min <= 0 || max < min)) {
@@ -514,7 +522,14 @@ function DecisionDialog({
         body: JSON.stringify({
           decision,
           reason: reason.trim() || undefined,
-          quotedPriceUsd: isApprove ? price : undefined,
+          quotedPriceUsd: isApprove && !isGroup ? price : undefined,
+          memberPrices: isApprove && isGroup
+            ? groupMembers.map((member) => ({
+                memberId: String(member.id),
+                priceUsd: Number(memberPrices[String(member.id)] ?? member.priceUsd),
+                roleLabel: member.relation ?? member.gender,
+              }))
+            : undefined,
           estimatedDeliveryLabel: isApprove ? (customOpen ? `${min}-${max} days` : delivery.label) : undefined,
           estimatedDeliveryDaysMin: isApprove ? min : undefined,
           estimatedDeliveryDaysMax: isApprove ? max : undefined,
@@ -550,13 +565,53 @@ function DecisionDialog({
 
           {isApprove ? (
             <>
-              <label className="mt-6 block">
-                <span className="text-sm font-semibold text-slate-700">Base Price (USD) <b className="text-red-600">*</b></span>
-                <div className="mt-2 flex h-14 items-center rounded-xl border border-slate-300 bg-white px-4 focus-within:border-blue-700 focus-within:ring-2 focus-within:ring-blue-100">
-                  <span className="mr-3 text-xl font-black text-blue-900">$</span>
-                  <input value={quotedPrice} onChange={(event) => setQuotedPrice(event.target.value)} type="number" min="0" step="0.01" className="h-full flex-1 bg-transparent text-lg outline-none" placeholder="e.g. 120.00" />
-                </div>
-              </label>
+              {isGroup ? (
+                <details open className="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
+                  <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-4 text-sm font-black text-slate-800 [&::-webkit-details-marker]:hidden">
+                    <span>Group member pricing ({groupMembers.length})</span>
+                    <ChevronDown className="h-5 w-5 text-slate-500 transition-transform" />
+                  </summary>
+                  <div className="space-y-3 border-t border-slate-200 p-4">
+                    {groupMembers.map((member, index) => {
+                      const memberId = String(member.id);
+                      return (
+                        <div key={memberId} className="rounded-xl border border-slate-200 bg-white p-4">
+                          <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div>
+                              <p className="font-black text-slate-900">{member.name || `Member ${index + 1}`}</p>
+                              <p className="text-xs font-semibold capitalize text-slate-500">{member.relation || member.gender || "Member"}{member.age ? ` · ${member.age} years` : ""}</p>
+                            </div>
+                            <div className="flex h-11 w-36 items-center rounded-lg border border-slate-300 bg-white px-3 focus-within:border-blue-700 focus-within:ring-2 focus-within:ring-blue-100">
+                              <span className="mr-2 font-black text-blue-900">$</span>
+                              <input
+                                value={memberPrices[memberId] ?? String(member.priceUsd ?? "")}
+                                onChange={(event) => setMemberPrices((current) => ({ ...current, [memberId]: event.target.value }))}
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                className="h-full w-full bg-transparent text-right font-bold outline-none"
+                                placeholder="Price"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    <div className="flex items-center justify-between border-t border-slate-200 pt-4 text-base font-black text-slate-900">
+                      <span>Group total</span>
+                      <span className="text-xl text-blue-900">${memberTotal.toFixed(2)}</span>
+                    </div>
+                  </div>
+                </details>
+              ) : (
+                <label className="mt-6 block">
+                  <span className="text-sm font-semibold text-slate-700">Base Price (USD) <b className="text-red-600">*</b></span>
+                  <div className="mt-2 flex h-14 items-center rounded-xl border border-slate-300 bg-white px-4 focus-within:border-blue-700 focus-within:ring-2 focus-within:ring-blue-100">
+                    <span className="mr-3 text-xl font-black text-blue-900">$</span>
+                    <input value={quotedPrice} onChange={(event) => setQuotedPrice(event.target.value)} type="number" min="0" step="0.01" className="h-full flex-1 bg-transparent text-lg outline-none" placeholder="e.g. 120.00" />
+                  </div>
+                </label>
+              )}
 
               <div className="mt-6">
                 <p className="text-sm font-semibold text-slate-700">Estimated Completion & Delivery Time <b className="text-red-600">*</b></p>

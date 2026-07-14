@@ -97,13 +97,59 @@ export default async function CartPage({
   }
 
   const renderItem = (item: CartItem) => <CartItemCard key={item.id} item={item} removeItem={removeItem} />;
+  const groupedItems = new Map<string, CartItem[]>();
+  const standaloneItems: CartItem[] = [];
+  for (const item of items) {
+    const groupId = item.itemMetadata?.group_id;
+    if (item.itemType === "group_order" && groupId) {
+      const existing = groupedItems.get(String(groupId)) ?? [];
+      existing.push(item);
+      groupedItems.set(String(groupId), existing);
+    } else {
+      standaloneItems.push(item);
+    }
+  }
+
+  const renderGroup = ([groupId, groupItems]: [string, CartItem[]]) => {
+    const first = groupItems[0];
+    const metadata = first.itemMetadata ?? {};
+    const groupTitle = String(metadata.design_title ?? first.productName ?? "Custom Group Order");
+    const requestNumber = String(metadata.submission_number ?? "");
+    const groupTotal = groupItems.reduce((sum, item) => sum + Number(item.priceUsd ?? 0) * Number(item.quantity ?? 1), 0);
+    return (
+      <details key={groupId} open className="overflow-hidden rounded-3xl border border-primary/30 bg-card shadow-sm">
+        <summary className="flex cursor-pointer list-none items-center gap-4 p-5 marker:hidden [&::-webkit-details-marker]:hidden sm:p-6">
+          <img src={first.productImage || ""} alt={groupTitle} className="h-20 w-20 shrink-0 rounded-xl object-cover" />
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-primary">Group custom design · {groupItems.length} members</p>
+            <h2 className="mt-1 truncate font-heading text-xl font-bold">{groupTitle}</h2>
+            {requestNumber ? <p className="mt-1 text-xs text-muted-foreground">Request #{requestNumber}</p> : null}
+          </div>
+          <div className="text-right">
+            <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Group total</p>
+            <p className="text-2xl font-black text-primary">${groupTotal.toFixed(2)}</p>
+          </div>
+        </summary>
+        <div className="space-y-3 border-t border-primary/20 bg-background/40 p-4 sm:p-6">
+          {groupItems.map(renderItem)}
+          <div className="flex items-center justify-between rounded-2xl border border-primary/30 bg-primary/5 px-5 py-4">
+            <span className="font-bold text-foreground">Group total</span>
+            <span className="text-2xl font-black text-primary">${groupTotal.toFixed(2)}</span>
+          </div>
+        </div>
+      </details>
+    );
+  };
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6 sm:py-16">
       <h1 className="mb-10 font-heading text-5xl font-bold">Your Cart</h1>
 
       <div className="space-y-4">
-        <div className="space-y-3">{items.map(renderItem)}</div>
+        <div className="space-y-4">
+          {Array.from(groupedItems.entries()).map(renderGroup)}
+          {standaloneItems.map(renderItem)}
+        </div>
 
         <aside className="mt-12 rounded-3xl border border-border bg-card p-8">
           <div className="mb-2 flex items-center justify-between">
