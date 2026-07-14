@@ -16,7 +16,26 @@ const NEXT_AUTH_COOKIE_NAMES = [
 ];
 
 export function GET(request: Request) {
-  const response = NextResponse.redirect(new URL("/", request.url));
+  const configuredOrigin = process.env.NEXT_PUBLIC_SITE_URL ?? process.env.NEXTAUTH_URL;
+  const forwardedHost = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
+  const forwardedProto = request.headers.get("x-forwarded-proto") ?? "https";
+  const proxyOrigin = forwardedHost ? `${forwardedProto}://${forwardedHost}` : null;
+  const isUsableOrigin = (value: string | null | undefined) => {
+    if (!value || /(?:^|\/\/)(?:0\.0\.0\.0|127\.0\.0\.1|localhost)(?::|\/|$)/i.test(value)) return false;
+    try {
+      const parsed = new URL(value);
+      return parsed.protocol === "http:" || parsed.protocol === "https:";
+    } catch {
+      return false;
+    }
+  };
+  const origin = isUsableOrigin(configuredOrigin)
+    ? configuredOrigin!
+    : isUsableOrigin(proxyOrigin)
+      ? proxyOrigin!
+      : new URL(request.url).origin;
+  const response = NextResponse.redirect(new URL("/", origin), { status: 303 });
+  response.headers.set("Cache-Control", "no-store, max-age=0");
 
   for (const name of NEXT_AUTH_COOKIE_NAMES) {
     response.cookies.set(name, "", {

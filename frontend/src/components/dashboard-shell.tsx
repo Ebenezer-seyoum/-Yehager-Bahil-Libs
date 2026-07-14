@@ -769,7 +769,7 @@ export function DashboardShell({
                   <button
                     type="button"
                     onClick={() => {
-                      window.location.href = "/api/logout";
+                      window.location.replace("/api/logout");
                     }}
                     className={
                       adminTopBar
