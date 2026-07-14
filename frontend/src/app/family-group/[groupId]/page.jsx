@@ -87,6 +87,15 @@ export default async function FamilyGroupPage({ params, searchParams }) {
     redirect("/cart");
   }
 
+  async function restoreCustomDesign() {
+    "use server";
+    await ensureBackendUserSynced();
+    await apiRequest(`/api/v1/family-groups/${groupId}/restore-custom-design`, { method: "POST" });
+    await apiRequest(`/api/v1/family-groups/${groupId}/add-to-cart`, { method: "POST" });
+    revalidatePath("/cart");
+    redirect("/cart");
+  }
+
   let payload;
   let savedMeasurements = [];
   try {
@@ -105,6 +114,7 @@ export default async function FamilyGroupPage({ params, searchParams }) {
   const members = Array.isArray(payload?.members) ? payload.members : [];
   const selectedDesign = payload?.selectedDesign ?? null;
   const hasSharedSource = Boolean(group.productId || group.uploadedDesignId);
+  const customDesignRemoved = group.selectionType === "custom_design" && selectedDesign?.status === "awaiting_payment" && Boolean(selectedDesign?.cartRemovedAt);
   const readyMembers = members.filter((member) => hasSharedSource && REQUIRED_MEASUREMENTS.every((field) => {
     const value = member.measurements?.[field];
     return value !== null && value !== undefined && String(value).trim() !== "";
@@ -119,7 +129,8 @@ export default async function FamilyGroupPage({ params, searchParams }) {
       selectionResult={typeof query?.selected === "string" ? query.selected : null}
       savedMeasurements={savedMeasurements}
       readyMembers={readyMembers}
-      canAddAllToCart={members.length > 0 && readyMembers === members.length && (!group.uploadedDesignId || selectedDesign?.status === "awaiting_payment")}
+      canAddAllToCart={members.length > 0 && readyMembers === members.length && !customDesignRemoved && (!group.uploadedDesignId || selectedDesign?.status === "awaiting_payment")}
+      restoreCustomDesign={restoreCustomDesign}
       addMember={addMember}
       renameGroup={renameGroup}
       removeMember={removeMember}

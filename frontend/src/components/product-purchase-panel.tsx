@@ -22,6 +22,7 @@ type Role = {
   label: string;
   icon?: string;
   price: number;
+  currency?: "USD" | "ETB";
   gender: "male" | "female" | "unisex";
   customerType?: "woman" | "man" | "girl" | "boy";
   outfitOption?: "standard" | "full_set" | "top_only" | "pants_only";
@@ -256,6 +257,7 @@ export function ProductPurchasePanel({
   const { status: sessionStatus } = useSession();
   const [selectedRoleIndex, setSelectedRoleIndex] = useState(0);
   const [eventOpen, setEventOpen] = useState(false);
+  const [openCustomerTypes, setOpenCustomerTypes] = useState<Record<string, boolean>>({ woman: true, man: true, girl: false, boy: false });
   const [showVideo, setShowVideo] = useState(false);
   const [isMeasurementEditorOpen, setIsMeasurementEditorOpen] = useState(!latestMeasurement?.id);
   const [savedMeasurement, setSavedMeasurement] = useState<SavedMeasurement | null>(latestMeasurement);
@@ -270,7 +272,6 @@ export function ProductPurchasePanel({
   const selectedRole = roleOptions[selectedRoleIndex] ?? roleOptions[0] ?? null;
   const selectedCustomerType = selectedRole ? customerTypeForRole(selectedRole) : "woman";
   const availableCustomerTypes = CUSTOMER_TYPES.filter((type) => roleOptions.some((role) => customerTypeForRole(role) === type.value));
-  const visibleRoleOptions = roleOptions.filter((role) => customerTypeForRole(role) === selectedCustomerType);
   const displayPrice = Number(selectedRole?.price ?? price);
   const originalPrice = Number(product.originalPriceUsd ?? product.priceUsd ?? displayPrice);
   const hasDiscount = Boolean(product.discount && originalPrice > displayPrice);
@@ -355,43 +356,33 @@ export function ProductPurchasePanel({
       {roleOptions.length > 0 ? (
         <div>
           <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Who is this for?</h3>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="space-y-2">
             {availableCustomerTypes.map((type) => {
               const firstRoleIndex = roleOptions.findIndex((role) => customerTypeForRole(role) === type.value);
               const selected = selectedCustomerType === type.value;
+              const isOpen = openCustomerTypes[type.value] ?? false;
+              const typeRoles = roleOptions.filter((role) => customerTypeForRole(role) === type.value);
               return (
-                <button
-                  key={type.value}
-                  type="button"
-                  onClick={() => setSelectedRoleIndex(firstRoleIndex >= 0 ? firstRoleIndex : 0)}
-                  className={`min-h-20 rounded-xl border-2 p-3 text-left transition-all ${
-                    selected ? "border-primary bg-primary/10" : "border-border bg-secondary hover:border-primary/50"
-                  }`}
-                >
-                  <span className="block text-sm font-black">{type.label}</span>
-                  <span className="mt-1 block text-[11px] leading-snug text-muted-foreground">{type.description}</span>
-                </button>
-              );
-            })}
-          </div>
-
-          <h3 className="mb-3 mt-5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Select outfit option</h3>
-          <div className={`grid gap-3 ${visibleRoleOptions.length === 3 ? "grid-cols-1 sm:grid-cols-3" : "grid-cols-1 sm:grid-cols-2"}`}>
-            {visibleRoleOptions.map((role) => {
-              const index = roleOptions.indexOf(role);
-              return (
-                <button
-                  key={`${role.label}-${index}`}
-                  type="button"
-                  onClick={() => setSelectedRoleIndex(index)}
-                  className={`min-h-28 rounded-xl border-2 p-5 text-left transition-all ${
-                    selectedRoleIndex === index ? "border-primary bg-primary/10" : "border-border bg-secondary hover:border-primary/50"
-                  }`}
-                >
-                  <span className="block text-sm font-semibold">{role.label}</span>
-                  <span className="mt-2 block text-xs text-muted-foreground">{optionDescription(role)}</span>
-                  <span className="mt-3 block text-xl font-black text-primary">${Number(role.price).toFixed(2)}</span>
-                </button>
+                <div key={type.value} className={`overflow-hidden rounded-xl border ${selected ? "border-primary" : "border-border"}`}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedRoleIndex(firstRoleIndex >= 0 ? firstRoleIndex : 0);
+                      setOpenCustomerTypes((current) => ({ ...current, [type.value]: !isOpen }));
+                    }}
+                    className={`flex w-full items-center justify-between p-4 text-left ${selected ? "bg-primary/10" : "bg-secondary"}`}
+                  >
+                    <span><span className="block text-sm font-black">{type.label}</span><span className="mt-1 block text-[11px] text-muted-foreground">{type.description}</span></span>
+                    <ChevronDown className={`h-5 w-5 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+                  </button>
+                  {isOpen ? <div className="grid gap-2 border-t border-border bg-background p-3 sm:grid-cols-3">
+                    {typeRoles.map((role) => {
+                      const index = roleOptions.indexOf(role);
+                      const roleCurrency = role.currency ?? "USD";
+                      return <button key={`${role.label}-${index}`} type="button" onClick={() => setSelectedRoleIndex(index)} className={`rounded-lg border p-3 text-left ${selectedRoleIndex === index ? "border-primary bg-primary/10" : "border-border bg-secondary"}`}><span className="block text-xs font-bold">{role.label}</span><span className="mt-2 block text-lg font-black text-primary">{roleCurrency} {Number(role.price).toFixed(2)}</span></button>;
+                    })}
+                  </div> : null}
+                </div>
               );
             })}
           </div>
@@ -401,7 +392,7 @@ export function ProductPurchasePanel({
               <p className="text-[10px] font-black uppercase tracking-[0.2em] text-primary">Selected</p>
               <p className="mt-1 text-sm font-bold">{selectedRole.label}</p>
               <p className="mt-1 text-xs text-muted-foreground">Includes: {optionDescription(selectedRole)}</p>
-              <p className="mt-2 text-2xl font-black text-primary">${Number(selectedRole.price).toFixed(2)}</p>
+              <p className="mt-2 text-2xl font-black text-primary">{selectedRole.currency ?? "USD"} {Number(selectedRole.price).toFixed(2)}</p>
             </div>
           ) : null}
         </div>

@@ -52,6 +52,7 @@ const updateGroupSchema = z.object({
   groupName: z.string().min(1).max(160).optional(),
   productId: z.string().uuid().nullable().optional(),
   uploadedDesignId: z.string().uuid().nullable().optional(),
+  forceChange: z.boolean().optional(),
 });
 
 const createMemberSchema = z.object({
@@ -200,6 +201,19 @@ familyGroupsRouter.patch("/:groupId", requireAuth, zValidator("param", groupIdPa
   const authUser = c.get("authUser");
   const { groupId } = c.req.valid("param");
   const body = c.req.valid("json");
+  const existingGroup = await db.query.familyGroups.findFirst({
+    where: and(eq(familyGroups.id, groupId), eq(familyGroups.leadEmail, authUser?.email ?? "")),
+  });
+  if (!existingGroup) throw new HTTPException(404, { message: "Family group not found" });
+  const changingSource = body.productId !== undefined || body.uploadedDesignId !== undefined;
+  const replacingCustomDesign = Boolean(changingSource && existingGroup.uploadedDesignId && (body.productId || body.uploadedDesignId !== existingGroup.uploadedDesignId));
+  if (changingSource && replacingCustomDesign && !body.forceChange) {
+    throw new HTTPException(409, { message: "This group already has a custom design selected. Confirm before changing the outfit." });
+  }
+  if (replacingCustomDesign && existingGroup.uploadedDesignId) {
+    await db.delete(cartItems).where(and(eq(cartItems.uploadedDesignId, existingGroup.uploadedDesignId), eq(cartItems.userEmail, authUser?.email ?? "")));
+    await db.update(uploadedDesigns).set({ cartRemovedAt: new Date(), updatedAt: new Date() }).where(eq(uploadedDesigns.id, existingGroup.uploadedDesignId));
+  }
 
   let sourcePatch: Record<string, unknown> = {};
   if (body.productId) {
@@ -221,11 +235,20 @@ familyGroupsRouter.patch("/:groupId", requireAuth, zValidator("param", groupIdPa
     .where(and(eq(familyGroups.id, groupId), eq(familyGroups.leadEmail, authUser?.email ?? "")))
     .returning();
 
-  if (!row) {
-    throw new HTTPException(404, { message: "Family group not found" });
-  }
-
   return c.json({ data: row });
+});
+
+familyGroupsRouter.post("/:groupId/restore-custom-design", requireAuth, zValidator("param", groupIdParam), async (c) => {
+  const authUser = c.get("authUser");
+  const { groupId } = c.req.valid("param");
+  const group = await db.query.familyGroups.findFirst({
+    where: and(eq(familyGroups.id, groupId), eq(familyGroups.leadEmail, authUser?.email ?? "")),
+  });
+  if (!group?.uploadedDesignId) throw new HTTPException(404, { message: "No custom design is selected for this group" });
+  const design = await db.query.uploadedDesigns.findFirst({ where: eq(uploadedDesigns.id, group.uploadedDesignId) });
+  if (!design || design.status !== "awaiting_payment") throw new HTTPException(400, { message: "Only an approved custom design can be restored" });
+  await db.update(uploadedDesigns).set({ cartRemovedAt: null, updatedAt: new Date() }).where(eq(uploadedDesigns.id, design.id));
+  return c.json({ data: { restored: true } });
 });
 
 familyGroupsRouter.post("/:groupId/members", requireAuth, zValidator("param", groupIdParam), zValidator("json", createMemberSchema), async (c) => {
@@ -403,6 +426,9 @@ familyGroupsRouter.post("/:groupId/add-to-cart", requireAuth, zValidator("param"
     }) : null;
     const design = designId ? await db.query.uploadedDesigns.findFirst({ where: eq(uploadedDesigns.id, designId) }) : null;
     if (!product && (!design || design.status !== "awaiting_payment" || !design.quotedPriceUsd)) continue;
+    if (!product && design?.cartRemovedAt) {
+      throw new HTTPException(409, { message: "This approved custom design was removed from the cart. Restore it before adding the group again." });
+    }
     const selectedRole = product ? roleForMember(product, member) : null;
     const fallbackCost = product ? await productCostFallback(product.id) : { designerCostUsd: 0, taxPercent: 0, otherCostUsd: 0 };
     const approvedCartRows = design

@@ -35,6 +35,7 @@ type BulkProduct = {
   middleText: string;
   files: File[];
   priceUsd: string;
+  baseCurrency: "USD" | "ETB";
   designerCostUsd: string;
   taxPercent: string;
   otherCostUsd: string;
@@ -85,12 +86,13 @@ type OutfitOptionDraft = {
   gender: "male" | "female" | "unisex";
   description: string;
   price: string;
+  currency: "USD" | "ETB";
   designerCostUsd: string;
   taxPercent: string;
   otherCostUsd: string;
 };
 
-const OPTION_PRICING_TEMPLATE: Array<Omit<OutfitOptionDraft, "price" | "designerCostUsd" | "taxPercent" | "otherCostUsd">> = [
+const OPTION_PRICING_TEMPLATE: Array<Omit<OutfitOptionDraft, "price" | "currency" | "designerCostUsd" | "taxPercent" | "otherCostUsd">> = [
   { label: "Men's Traditional Full Set", customerType: "man", outfitOption: "full_set", gender: "male", description: "Traditional top and pants" },
   { label: "Men's Traditional Top", customerType: "man", outfitOption: "top_only", gender: "male", description: "Traditional top garment" },
   { label: "Men's Traditional Pants", customerType: "man", outfitOption: "pants_only", gender: "male", description: "Traditional pants" },
@@ -101,10 +103,10 @@ const OPTION_PRICING_TEMPLATE: Array<Omit<OutfitOptionDraft, "price" | "designer
 ];
 
 const CUSTOMER_GROUPS = [
-  { key: "man", label: "Men" },
   { key: "woman", label: "Women" },
-  { key: "boy", label: "Boys' Traditional Outfits" },
+  { key: "man", label: "Men" },
   { key: "girl", label: "Girls' Traditional Outfit" },
+  { key: "boy", label: "Boys' Traditional Outfits" },
 ] as const;
 
 function optionKey(role: Pick<OutfitOptionDraft, "customerType" | "outfitOption">) {
@@ -115,6 +117,7 @@ function initialOptionPricing(): OutfitOptionDraft[] {
   return OPTION_PRICING_TEMPLATE.map((option) => ({
     ...option,
     price: "",
+    currency: "USD",
     designerCostUsd: "",
     taxPercent: "0",
     otherCostUsd: "0",
@@ -348,6 +351,7 @@ export function ProductCreateClient() {
   const [middleText, setMiddleText] = useState("Traditional Family Outfit");
   const [description, setDescription] = useState("");
   const [priceUsd, setPriceUsd] = useState("");
+  const [baseCurrency, setBaseCurrency] = useState<"USD" | "ETB">("USD");
   const [designerCostUsd, setDesignerCostUsd] = useState("");
   const [taxPercent, setTaxPercent] = useState("");
   const [otherCostUsd, setOtherCostUsd] = useState("");
@@ -387,6 +391,7 @@ export function ProductCreateClient() {
         customerType: "woman",
         outfitOption: "standard",
         description: "Complete traditional outfit",
+        currency: baseCurrency,
         designerCostUsd: optionalNumber(base.designerCostUsd),
         taxPercent: optionalNumber(base.taxPercent),
         otherCostUsd: optionalNumber(base.otherCostUsd),
@@ -398,6 +403,7 @@ export function ProductCreateClient() {
         customerType: option.customerType,
         outfitOption: option.outfitOption,
         description: option.description,
+        currency: option.currency,
         designerCostUsd: optionalNumber(option.designerCostUsd),
         taxPercent: optionalNumber(option.taxPercent),
         otherCostUsd: optionalNumber(option.otherCostUsd),
@@ -422,6 +428,17 @@ export function ProductCreateClient() {
             Est. cost ${cost.toFixed(2)}
           </span>
         </div>
+        <label className="mb-3 block max-w-[180px]">
+          <span className="mb-1 block text-[9px] font-black uppercase text-slate-400">Price Currency</span>
+          <select
+            value={option.currency}
+            onChange={(e) => updateOutfitOption(index, { currency: e.target.value as "USD" | "ETB" })}
+            className="h-9 w-full rounded-lg border border-slate-200 bg-slate-50 px-2 text-xs font-black outline-none focus:border-blue-500"
+          >
+            <option value="USD">USD</option>
+            <option value="ETB">ETB</option>
+          </select>
+        </label>
         <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
           {[
             ["Selling Price", "price"],
@@ -498,6 +515,7 @@ export function ProductCreateClient() {
     TAXONOMY[REGIONS[0]]?.[0] || "",
   );
   const [defaultPrice, setDefaultPrice] = useState("120");
+  const [defaultCurrency, setDefaultCurrency] = useState<"USD" | "ETB">("USD");
   const [defaultMiddleText, setDefaultMiddleText] = useState("");
   const [defaultDesignerCost, setDefaultDesignerCost] = useState("0");
   const [defaultTaxPercent, setDefaultTaxPercent] = useState("0");
@@ -614,6 +632,7 @@ export function ProductCreateClient() {
         region,
         subcategory: subcategory || undefined,
         priceUsd: Number(priceUsd),
+        baseCurrency,
         groomPriceUsd: null,
         familyRoles: buildFamilyRoles({
           price: priceUsd,
@@ -633,7 +652,7 @@ export function ProductCreateClient() {
         isFeatured,
         images: imageUrls,
         uniqueId,
-      };
+    };
 
       const res = await fetch("/api/backend/admin/products", {
         method: "POST",
@@ -710,12 +729,14 @@ export function ProductCreateClient() {
         middleText: defaultMiddleText.trim() || cleanName || "Traditional Dress",
         files: groups[folderName],
         priceUsd: defaultPrice,
+        baseCurrency: defaultCurrency,
         designerCostUsd: defaultDesignerCost,
         taxPercent: defaultTaxPercent,
         otherCostUsd: defaultOtherCost,
         outfitOptions: initialOptionPricing().map((option) => ({
           ...option,
           price: defaultPrice,
+          currency: defaultCurrency,
           designerCostUsd: defaultDesignerCost,
           taxPercent: defaultTaxPercent,
           otherCostUsd: defaultOtherCost,
@@ -889,6 +910,7 @@ export function ProductCreateClient() {
           region: prod.region,
           subcategory: prod.subcategory || undefined,
           priceUsd: Number(prod.priceUsd),
+          baseCurrency: prod.baseCurrency,
           groomPriceUsd: null,
           familyRoles: buildFamilyRoles({
             price: prod.priceUsd,
@@ -970,9 +992,11 @@ export function ProductCreateClient() {
             ? p.subcategory
             : getSubsectionsForSection(defaultRegion)[0] || "",
           priceUsd: defaultPrice,
+          baseCurrency: defaultCurrency,
           outfitOptions: p.outfitOptions.map((option) => ({
             ...option,
             price: defaultPrice,
+            currency: defaultCurrency,
             designerCostUsd: defaultDesignerCost,
             taxPercent: defaultTaxPercent,
             otherCostUsd: defaultOtherCost,
@@ -1376,8 +1400,16 @@ export function ProductCreateClient() {
               <div className="space-y-4">
                 <div className="rounded-2xl border-2 border-slate-100 bg-slate-50/50 p-4">
                   <label className="mb-1 block text-[10px] font-black uppercase text-slate-400 tracking-widest">
-                    Base Price (USD) *
+                    Base Price ({baseCurrency}) *
                   </label>
+                  <select
+                    value={baseCurrency}
+                    onChange={(e) => setBaseCurrency(e.target.value as "USD" | "ETB")}
+                    className="mb-2 w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-black outline-none"
+                  >
+                    <option value="USD">USD</option>
+                    <option value="ETB">ETB</option>
+                  </select>
                   <input
                     type="number"
                     value={priceUsd}
@@ -1619,7 +1651,20 @@ export function ProductCreateClient() {
               </div>
               <div className="space-y-1">
                 <label className="text-[10px] font-black uppercase text-slate-400">
-                  Price (USD)
+                  Price Currency
+                </label>
+                <select
+                  value={defaultCurrency}
+                  onChange={(e) => setDefaultCurrency(e.target.value as "USD" | "ETB")}
+                  className="w-full rounded-xl border border-slate-100 bg-slate-50 p-3 text-xs font-bold"
+                >
+                  <option value="USD">USD</option>
+                  <option value="ETB">ETB</option>
+                </select>
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-black uppercase text-slate-400">
+                  Price ({defaultCurrency})
                 </label>
                 <input
                   type="number"

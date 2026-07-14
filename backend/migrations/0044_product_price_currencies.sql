@@ -1,0 +1,1 @@
+ALTER TABLE products ADD COLUMN IF NOT EXISTS base_currency text NOT NULL DEFAULT 'USD';

@@ -22,6 +22,7 @@ type Product = {
   fabricType?: string | null;
   embroideryStyle?: string | null;
   priceUsd?: number | null;
+  baseCurrency?: "USD" | "ETB" | null;
   effectivePriceUsd?: number | string | null;
   finalPriceUsd?: number | string | null;
   originalPriceUsd?: number | string | null;
@@ -31,6 +32,7 @@ type Product = {
     label: string;
     icon?: string;
     price: number;
+    currency?: "USD" | "ETB";
     gender: "male" | "female" | "unisex";
     customerType?: "woman" | "man" | "girl" | "boy";
     outfitOption?: "standard" | "full_set" | "top_only" | "pants_only";
@@ -234,9 +236,10 @@ export default async function ProductDetailPage({
     const productId = String(formData.get("productId") ?? "");
     const selectionMode = String(formData.get("selectionMode") ?? "");
     const groupId = String(formData.get("groupId") ?? "");
+    const forceChange = String(formData.get("forceChange") ?? "") === "1";
     const eventId = String(formData.get("eventId") ?? "");
     if (selectionMode === "group" && groupId) {
-      await apiRequest(`/api/v1/family-groups/${groupId}`, { method: "PATCH", body: { productId } });
+      await apiRequest(`/api/v1/family-groups/${groupId}`, { method: "PATCH", body: { productId, forceChange } });
       revalidatePath(`/family-group/${groupId}`);
       redirect(`/family-group/${groupId}?selected=catalog`);
     }
@@ -346,6 +349,7 @@ export default async function ProductDetailPage({
           <input type="hidden" name="productId" value={product.id} />
           <input type="hidden" name="selectionMode" value={selectionMode} />
           <input type="hidden" name="groupId" value={selectionGroupId} />
+          <input type="hidden" name="forceChange" value={query?.changeSelection === "1" ? "1" : "0"} />
           <input type="hidden" name="eventId" value={selectionEventId} />
           <div>
             <p className="font-semibold">Use this catalog product for your {selectionMode === "event" ? "Event Match-Up" : "Group Order"}?</p>

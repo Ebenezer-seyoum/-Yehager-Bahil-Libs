@@ -217,6 +217,7 @@ export const products = pgTable(
     subcategory: text("subcategory"),
     category: text("category"),
     priceUsd: numeric("price_usd", { precision: 12, scale: 2 }).notNull(),
+    baseCurrency: text("base_currency").default("USD").notNull(),
     groomPriceUsd: numeric("groom_price_usd", { precision: 12, scale: 2 }),
     isCouple: boolean("is_couple").default(false).notNull(),
     familyRoles: jsonb("family_roles").$type<
@@ -224,6 +225,7 @@ export const products = pgTable(
         label: string;
         icon?: string;
         price: number;
+        currency?: "USD" | "ETB";
         gender: "male" | "female" | "unisex";
         customerType?: "woman" | "man" | "girl" | "boy";
         outfitOption?: "standard" | "full_set" | "top_only" | "pants_only";
@@ -818,6 +820,7 @@ export const uploadedDesigns = pgTable(
     submittedAt: timestamp("submitted_at", { withTimezone: true }),
     approvedOrderId: uuid("approved_order_id").references(() => orders.id, { onDelete: "set null" }),
     approvedCartItemId: uuid("approved_cart_item_id"),
+    cartRemovedAt: timestamp("cart_removed_at", { withTimezone: true }),
     quotedPriceUsd: numeric("quoted_price_usd", { precision: 12, scale: 2 }),
     familyGroupId: uuid("family_group_id").references(() => familyGroups.id, { onDelete: "set null" }),
     eventId: uuid("event_id").references(() => events.id, { onDelete: "set null" }),

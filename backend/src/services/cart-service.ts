@@ -9,7 +9,7 @@ import { getMeasurementForUser } from "../repositories/measurements-repository.j
 import { getActiveProductById } from "../repositories/products-repository.js";
 import { getUserByEmail } from "../repositories/users-repository.js";
 import { db } from "../lib/db/drizzle.js";
-import { profitCostSettings } from "../lib/db/schema.js";
+import { cartItems, profitCostSettings, uploadedDesigns } from "../lib/db/schema.js";
 import { and, eq } from "drizzle-orm";
 import { getEffectiveProductPrice } from "./discounts-service.js";
 
@@ -219,6 +219,9 @@ export async function removeCartItem(payload: { userEmail?: string; itemId: stri
     throw new HTTPException(400, { message: "Authenticated token must include email" });
   }
 
+  const existing = await db.query.cartItems.findFirst({
+    where: and(eq(cartItems.id, payload.itemId), eq(cartItems.userEmail, payload.userEmail)),
+  });
   const deleted = await deleteCartItemById({
     id: payload.itemId,
     userEmail: payload.userEmail,
@@ -226,5 +229,8 @@ export async function removeCartItem(payload: { userEmail?: string; itemId: stri
 
   if (!deleted) {
     throw new HTTPException(404, { message: "Cart item not found" });
+  }
+  if (existing?.uploadedDesignId) {
+    await db.update(uploadedDesigns).set({ cartRemovedAt: new Date(), updatedAt: new Date() }).where(eq(uploadedDesigns.id, existing.uploadedDesignId));
   }
 }

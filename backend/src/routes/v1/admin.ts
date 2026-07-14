@@ -66,6 +66,7 @@ const productFamilyRoleSchema = z.object({
   label: z.string().trim().min(1).max(80),
   icon: z.string().trim().max(16).optional(),
   price: z.coerce.number().positive(),
+  currency: z.enum(["USD", "ETB"]).optional(),
   gender: z.enum(["male", "female", "unisex"]),
   customerType: z.enum(["woman", "man", "girl", "boy"]).optional(),
   outfitOption: z.enum(["standard", "full_set", "top_only", "pants_only"]).optional(),
@@ -81,6 +82,7 @@ const productPatchSchema = z.object({
   subcategory: z.string().trim().optional(),
   category: z.string().trim().optional(),
   priceUsd: z.coerce.number().positive().optional(),
+  baseCurrency: z.enum(["USD", "ETB"]).optional(),
   groomPriceUsd: z.coerce.number().positive().nullable().optional(),
   familyRoles: z.array(productFamilyRoleSchema).nullable().optional(),
   uniqueId: z.string().trim().min(1).optional(),
@@ -102,6 +104,7 @@ const createProductSchema = z.object({
   subcategory: z.string().trim().optional(),
   category: z.string().trim().optional(),
   priceUsd: z.coerce.number().positive(),
+  baseCurrency: z.enum(["USD", "ETB"]).default("USD"),
   groomPriceUsd: z.coerce.number().positive().nullable().optional(),
   familyRoles: z.array(productFamilyRoleSchema).nullable().optional(),
   uniqueId: z.string().trim().min(1).optional(),
@@ -1309,6 +1312,7 @@ adminRouter.post(
         subcategory: body.subcategory,
         category: body.category,
         priceUsd: body.priceUsd.toFixed(2),
+        baseCurrency: body.baseCurrency,
         groomPriceUsd: body.groomPriceUsd == null ? null : body.groomPriceUsd.toFixed(2),
         familyRoles: body.familyRoles ?? undefined,
         uniqueId: body.uniqueId,
@@ -1373,6 +1377,7 @@ adminRouter.patch(
         subcategory: body.subcategory,
         category: body.category,
         priceUsd: body.priceUsd !== undefined ? body.priceUsd.toFixed(2) : undefined,
+        baseCurrency: body.baseCurrency,
         groomPriceUsd:
           body.groomPriceUsd === undefined
             ? undefined

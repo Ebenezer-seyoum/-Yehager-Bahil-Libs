@@ -38,7 +38,8 @@ type Product = Record<string, unknown> & {
   fabricType?: string | null;
   embroideryStyle?: string | null;
   gender?: string | null;
-  familyRoles?: Array<{ icon?: string; label?: string; price?: string | number | null; customerType?: "woman" | "man" | "girl" | "boy"; outfitOption?: "standard" | "full_set" | "top_only" | "pants_only"; designerCostUsd?: string | number | null; taxPercent?: string | number | null; otherCostUsd?: string | number | null; description?: string | null }> | null;
+  baseCurrency?: "USD" | "ETB" | null;
+  familyRoles?: Array<{ icon?: string; label?: string; price?: string | number | null; currency?: "USD" | "ETB"; customerType?: "woman" | "man" | "girl" | "boy"; outfitOption?: "standard" | "full_set" | "top_only" | "pants_only"; designerCostUsd?: string | number | null; taxPercent?: string | number | null; otherCostUsd?: string | number | null; description?: string | null }> | null;
   profitCostSetting?: {
     designerCostUsd?: string | number | null;
     taxPercent?: string | number | null;
@@ -85,6 +86,7 @@ export function ProductDetailClient({ initialProduct }: { initialProduct: Produc
   const [activeImage, setActiveImage] = useState(product.images?.[0] || "");
   const [activeSection, setActiveSection] = useState<"general" | "pricing" | "garment" | "inventory">("general");
   const [editingCost, setEditingCost] = useState(false);
+  const [openRoleGroups, setOpenRoleGroups] = useState<Record<string, boolean>>({ woman: true, man: true, girl: false, boy: false });
   const [costForm, setCostForm] = useState({
     designerCostUsd: String(product.profitCostSetting?.designerCostUsd ?? ""),
     taxPercent: String(product.profitCostSetting?.taxPercent ?? ""),
@@ -288,7 +290,7 @@ export function ProductDetailClient({ initialProduct }: { initialProduct: Produc
                <div className="mt-4">
                <div className="grid gap-4 md:grid-cols-2">
                   <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                     <div className="text-xs font-semibold text-slate-600 mb-1">Base Price (USD)</div>
+                     <div className="text-xs font-semibold text-slate-600 mb-1">Base Price ({product.baseCurrency ?? "USD"})</div>
                      <div className="text-3xl font-black text-slate-900">{formatCurrency(product.priceUsd)}</div>
                      <div className="mt-1 text-xs font-bold text-slate-400">≈ {formatEtb(product.priceUsd)}</div>
                   </div>
@@ -297,6 +299,18 @@ export function ProductDetailClient({ initialProduct }: { initialProduct: Produc
                      <div className="text-3xl font-black text-slate-900">{product.tailoringDays || 30} Days</div>
                      <div className="mt-1 text-xs font-bold text-slate-400">Estimated tailoring time</div>
                   </div>
+               </div>
+               <div className="mt-4 space-y-2">
+                 {["woman", "man", "girl", "boy"].map((group) => {
+                   const roles = (product.familyRoles ?? []).filter((role) => role.customerType === group);
+                   if (!roles.length) return null;
+                   const open = openRoleGroups[group] ?? false;
+                   const label = group === "woman" ? "Women" : group === "man" ? "Men" : group === "girl" ? "Girls" : "Boys";
+                   return <div key={group} className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
+                     <button type="button" onClick={() => setOpenRoleGroups((current) => ({ ...current, [group]: !open }))} className="flex w-full items-center justify-between px-5 py-4 text-left"><span className="text-xs font-black uppercase tracking-widest text-slate-700">{label}</span><span className="text-lg font-black text-slate-400">{open ? "−" : "+"}</span></button>
+                     {open ? <div className="grid gap-2 border-t border-slate-200 p-3 md:grid-cols-3">{roles.map((role, index) => <div key={`${role.label}-${index}`} className="rounded-xl bg-white p-3"><p className="text-xs font-black text-slate-900">{role.label}</p><p className="mt-2 text-lg font-black text-primary">{role.currency ?? "USD"} {Number(role.price ?? 0).toFixed(2)}</p></div>)}</div> : null}
+                   </div>;
+                 })}
                </div>
                <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
                   <div className="mb-4 flex flex-wrap items-center justify-between gap-3">

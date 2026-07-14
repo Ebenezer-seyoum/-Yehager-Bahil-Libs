@@ -27,6 +27,7 @@ type SelectedDesign = {
   submissionNumber?: string | null;
   quotedPriceUsd?: number | string | null;
   estimatedDeliveryLabel?: string | null;
+  cartRemovedAt?: string | null;
 };
 
 type Measurement = { id: string; label?: string | null };
@@ -44,6 +45,7 @@ export function FamilyGroupCustomerWorkspace({
   renameGroup,
   removeMember,
   addAllToCart,
+  restoreCustomDesign,
 }: {
   groupId: string;
   group: Group;
@@ -57,6 +59,7 @@ export function FamilyGroupCustomerWorkspace({
   renameGroup: (formData: FormData) => Promise<void>;
   removeMember: (formData: FormData) => Promise<void>;
   addAllToCart: () => Promise<void>;
+  restoreCustomDesign: () => Promise<void>;
 }) {
   const [memberOpen, setMemberOpen] = useState(false);
   const [step, setStep] = useState(1);
@@ -69,7 +72,10 @@ export function FamilyGroupCustomerWorkspace({
   const [isAddingMember, startAddMemberTransition] = useTransition();
   const memberFormRef = useRef<HTMLFormElement | null>(null);
   const hasSource = Boolean(group.productName);
-  const customReady = group.selectionType !== "custom_design" || selectedDesign?.status === "awaiting_payment";
+  const isCustomSelection = group.selectionType === "custom_design";
+  const customPending = isCustomSelection && selectedDesign?.status !== "awaiting_payment";
+  const customReady = !isCustomSelection || selectedDesign?.status === "awaiting_payment";
+  const customRemoved = isCustomSelection && selectedDesign?.status === "awaiting_payment" && Boolean(selectedDesign.cartRemovedAt);
 
   useEffect(() => {
     if (selectionResult) {
@@ -220,9 +226,29 @@ export function FamilyGroupCustomerWorkspace({
           {group.productImage ? <img src={group.productImage} alt="" className="h-28 w-24 rounded-xl object-cover" /> : null}
         </div>
         <div className="mt-5 flex flex-wrap gap-3">
-          <Link href={`/catalog?selectionMode=group&groupId=${groupId}`} className="inline-flex h-10 items-center rounded-lg bg-primary px-5 text-sm font-semibold text-black">Select Catalog Outfit</Link>
-          <Link href={`/upload-your-design?groupId=${groupId}`} className="inline-flex h-10 items-center rounded-lg border border-primary px-5 text-sm font-semibold text-primary hover:bg-primary/10">Upload Your Design</Link>
+          {!hasSource ? (
+            <>
+              <Link href={`/catalog?selectionMode=group&groupId=${groupId}`} className="inline-flex h-10 items-center rounded-lg bg-primary px-5 text-sm font-semibold text-black">Select Catalog Outfit</Link>
+              <Link href={`/upload-your-design?groupId=${groupId}`} className="inline-flex h-10 items-center rounded-lg border border-primary px-5 text-sm font-semibold text-primary hover:bg-primary/10">Upload Your Design</Link>
+            </>
+          ) : customPending ? (
+            <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-sm font-semibold text-amber-300">Selection locked while your custom design is under review.</p>
+          ) : (
+            <>
+              <Link href={`/catalog?selectionMode=group&groupId=${groupId}&changeSelection=1`} className="inline-flex h-10 items-center rounded-lg bg-primary px-5 text-sm font-semibold text-black">Change to Catalog Outfit</Link>
+              <Link href={`/upload-your-design?groupId=${groupId}&changeSelection=1`} className="inline-flex h-10 items-center rounded-lg border border-primary px-5 text-sm font-semibold text-primary hover:bg-primary/10">Change to Custom Design</Link>
+            </>
+          )}
         </div>
+        {customRemoved ? (
+          <div className="mt-5 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4">
+            <p className="text-sm font-bold text-amber-200">This approved custom design was removed from your cart.</p>
+            <p className="mt-1 text-xs leading-6 text-amber-100/80">Your design, member prices, and measurements are saved. Restore the complete group order whenever you are ready.</p>
+            <form action={restoreCustomDesign} className="mt-3">
+              <button className="inline-flex h-10 items-center rounded-lg bg-primary px-4 text-sm font-bold text-black">Add Custom Design Back to Cart</button>
+            </form>
+          </div>
+        ) : null}
       </section>
 
       <section id="members" className="scroll-mt-24 rounded-3xl border border-primary/40 bg-primary/10 p-7">

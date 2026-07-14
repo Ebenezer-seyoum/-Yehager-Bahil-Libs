@@ -81,6 +81,17 @@ export async function createUploadedDesignSubmission(payload: {
     .returning();
 
   if (payload.familyGroupId) {
+    await db.update(familyGroups).set({
+      selectionType: "custom_design",
+      uploadedDesignId: submission.id,
+      productId: null,
+      productName: submission.designTitle,
+      productImage: submission.frontImageUrl,
+      updatedAt: new Date(),
+    }).where(and(eq(familyGroups.id, payload.familyGroupId), eq(familyGroups.leadEmail, payload.userEmail)));
+  }
+
+  if (payload.familyGroupId) {
     await db
       .update(familyGroups)
       .set({
@@ -409,6 +420,7 @@ export async function reviewUploadedDesign(payload: {
           reviewedAt: new Date(),
           reviewReason: payload.reason,
           approvedCartItemId: cartItem?.id,
+          cartRemovedAt: null,
           quotedPriceUsd: numberToMoney(memberPricing.length ? (quotedPrice > 0 ? quotedPrice : totalPrice / memberPricing.length) : quotedPrice),
           estimatedDeliveryLabel: payload.estimatedDeliveryLabel,
           estimatedDeliveryDaysMin: deliveryMin,
