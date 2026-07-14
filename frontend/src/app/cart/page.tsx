@@ -46,6 +46,15 @@ export default async function CartPage({
     redirect("/cart");
   }
 
+  async function removeGroup(formData: FormData) {
+    "use server";
+    await ensureBackendUserSynced();
+    const itemIds = formData.getAll("itemId").map((value) => String(value)).filter(Boolean);
+    await Promise.all(itemIds.map((itemId) => apiRequest(`/api/v1/cart/${itemId}`, { method: "DELETE" }).catch(() => null)));
+    revalidatePath("/cart");
+    redirect("/cart");
+  }
+
   let items: CartItem[] = [];
   let authRequired = authHint;
   let profileComplete = true;
@@ -131,7 +140,28 @@ export default async function CartPage({
           </div>
         </summary>
         <div className="space-y-3 border-t border-primary/20 bg-background/40 p-4 sm:p-6">
-          {groupItems.map(renderItem)}
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3">
+            <p className="text-xs font-bold text-muted-foreground">{groupItems.length} members in this group order</p>
+            <form action={removeGroup}>
+              {groupItems.map((item) => <input key={item.id} type="hidden" name="itemId" value={item.id} />)}
+              <button type="submit" className="text-xs font-bold text-destructive hover:underline">Remove group</button>
+            </form>
+          </div>
+          {groupItems.map((item) => {
+            const itemMetadata = item.itemMetadata ?? {};
+            const memberName = String(itemMetadata.member_name ?? item.productName.replace(/^.*—\s*/, "Member"));
+            const memberRole = String(itemMetadata.role_label ?? itemMetadata.member_gender ?? "Member");
+            const memberPrice = Number(item.priceUsd ?? 0) * Number(item.quantity ?? 1);
+            return (
+              <div key={item.id} className="flex items-center justify-between gap-4 rounded-2xl border border-border bg-card px-5 py-4">
+                <div className="min-w-0">
+                  <p className="truncate font-bold text-foreground">{memberName}</p>
+                  <p className="text-xs capitalize text-muted-foreground">{memberRole}</p>
+                </div>
+                <p className="shrink-0 text-lg font-black text-primary">${memberPrice.toFixed(2)}</p>
+              </div>
+            );
+          })}
           <div className="flex items-center justify-between rounded-2xl border border-primary/30 bg-primary/5 px-5 py-4">
             <span className="font-bold text-foreground">Group total</span>
             <span className="text-2xl font-black text-primary">${groupTotal.toFixed(2)}</span>
