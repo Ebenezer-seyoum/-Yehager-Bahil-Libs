@@ -144,6 +144,7 @@ export async function createUploadedDesignSubmission(payload: {
     customerEmail: submission.userEmail,
     submissionNumber: submission.submissionNumber,
     designTitle: submission.designTitle,
+    imageUrls: [submission.frontImageUrl, submission.sideImageUrl, submission.backImageUrl, submission.detailImageUrl].filter((url): url is string => Boolean(url)),
   });
 
   return submission;
@@ -325,44 +326,76 @@ export async function reviewUploadedDesign(payload: {
         otherCostUsd: memberPricing.reduce((sum, item) => sum + numberOrZero(item.pricing_snapshot.other_cost_usd), 0),
       });
 
-      const [cartItem] = await tx
-        .insert(cartItems)
-        .values({
-          userId: submission.userId,
-          userEmail: submission.userEmail,
-          productName: `Custom Design - ${submission.designTitle}${memberCount > 1 ? ` (Group of ${memberCount})` : ""}`,
-          productImage: submission.frontImageUrl,
-          priceUsd: numberToMoney(totalPrice),
-          quantity: 1,
-          itemType: submission.familyGroupId || submission.eventId ? "group_order" : "custom_design",
-          uploadedDesignId: submission.id,
-          measurementSnapshot: submission.measurementSnapshot,
-          eventId: submission.eventId,
-          itemMetadata: {
-            type: submission.familyGroupId || submission.eventId ? "group_order" : "custom_design",
-            submission_number: submission.submissionNumber,
-            design_title: submission.designTitle,
-            front_image_url: submission.frontImageUrl,
-            side_image_url: submission.sideImageUrl,
-            back_image_url: submission.backImageUrl,
-            detail_image_url: submission.detailImageUrl,
-            fabric_type: submission.fabricType,
-            embroidery_style: submission.embroideryStyle,
-            color_preference: submission.colorPreference,
-            child_age: submission.childAge,
-            contact_address: submission.contactAddress,
-            admin_note: payload.reason,
-            estimated_delivery_label: payload.estimatedDeliveryLabel,
-            estimated_delivery_days_min: deliveryMin,
-            estimated_delivery_days_max: deliveryMax,
-            quoted_price_usd: numberToMoney(quotedPrice),
-            member_pricing: memberPricing,
-            pricing_snapshot: cartSnapshot,
-            ...(submission.familyGroupId ? { group_id: submission.familyGroupId } : {}),
-            ...(submission.eventId ? { event_id: submission.eventId } : {}),
-          },
-        })
-        .returning();
+      const groupMetadata = {
+        submission_number: submission.submissionNumber,
+        design_title: submission.designTitle,
+        front_image_url: submission.frontImageUrl,
+        side_image_url: submission.sideImageUrl,
+        back_image_url: submission.backImageUrl,
+        detail_image_url: submission.detailImageUrl,
+        fabric_type: submission.fabricType,
+        embroidery_style: submission.embroideryStyle,
+        color_preference: submission.colorPreference,
+        child_age: submission.childAge,
+        contact_address: submission.contactAddress,
+        admin_note: payload.reason,
+        estimated_delivery_label: payload.estimatedDeliveryLabel,
+        estimated_delivery_days_min: deliveryMin,
+        estimated_delivery_days_max: deliveryMax,
+        quoted_price_usd: numberToMoney(quotedPrice),
+        group_total_price_usd: numberToMoney(totalPrice),
+        ...(submission.familyGroupId ? { group_id: submission.familyGroupId } : {}),
+        ...(submission.eventId ? { event_id: submission.eventId } : {}),
+      };
+
+      const cartRows = memberPricing.length
+        ? memberPricing.map((member) => {
+            const groupMember = members.find((row) => row.id === member.member_id);
+            return {
+              userId: submission.userId,
+              userEmail: submission.userEmail,
+              productName: `Custom Design - ${submission.designTitle} — ${member.member_name}`,
+              productImage: submission.frontImageUrl,
+              priceUsd: numberToMoney(numberOrZero(member.price_usd)),
+              quantity: 1,
+              itemType: "group_order",
+              uploadedDesignId: submission.id,
+              measurementSnapshot: groupMember?.measurements ?? submission.measurementSnapshot,
+              eventId: submission.eventId,
+              itemMetadata: {
+                type: "group_order",
+                ...groupMetadata,
+                member_id: member.member_id,
+                member_name: member.member_name,
+                member_gender: member.member_gender,
+                member_age: member.member_age,
+                role_label: member.role_label,
+                member_pricing: [member],
+                pricing_snapshot: member.pricing_snapshot,
+              },
+            };
+          })
+        : [{
+            userId: submission.userId,
+            userEmail: submission.userEmail,
+            productName: `Custom Design - ${submission.designTitle}`,
+            productImage: submission.frontImageUrl,
+            priceUsd: numberToMoney(totalPrice),
+            quantity: 1,
+            itemType: submission.familyGroupId || submission.eventId ? "group_order" : "custom_design",
+            uploadedDesignId: submission.id,
+            measurementSnapshot: submission.measurementSnapshot,
+            eventId: submission.eventId,
+            itemMetadata: {
+              type: submission.familyGroupId || submission.eventId ? "group_order" : "custom_design",
+              ...groupMetadata,
+              member_pricing: [],
+              pricing_snapshot: cartSnapshot,
+            },
+          }];
+
+      const insertedCartItems = await tx.insert(cartItems).values(cartRows).returning();
+      const cartItem = insertedCartItems[0];
 
       const [updated] = await tx
         .update(uploadedDesigns)
@@ -422,6 +455,7 @@ export async function reviewUploadedDesign(payload: {
       quotedPriceUsd: result.submission.quotedPriceUsd,
       estimatedDeliveryLabel: result.submission.estimatedDeliveryLabel,
       reason: result.submission.reviewReason,
+      imageUrls: [result.submission.frontImageUrl, result.submission.sideImageUrl, result.submission.backImageUrl, result.submission.detailImageUrl].filter((url): url is string => Boolean(url)),
     });
     return result;
   }
@@ -461,6 +495,7 @@ export async function reviewUploadedDesign(payload: {
     submissionNumber: updated.submissionNumber,
     designTitle: updated.designTitle,
     reason: updated.reviewReason,
+    imageUrls: [updated.frontImageUrl, updated.sideImageUrl, updated.backImageUrl, updated.detailImageUrl].filter((url): url is string => Boolean(url)),
   });
 
   return { submission: updated, cartItem: null };

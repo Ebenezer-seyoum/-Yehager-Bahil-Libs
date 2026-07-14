@@ -40,6 +40,7 @@ export function PaymentDetailClient({ order: initialOrder }: { order: Order }) {
   const router = useRouter();
   const [order, setOrder] = useState<Order>(initialOrder);
   const [busy, setBusy] = useState(false);
+  const [receiptBusy, setReceiptBusy] = useState(false);
   const [showFullProof, setShowFullProof] = useState(false);
   const [activeSection, setActiveSection] = useState<"summary" | "breakdown" | "proof" | "audit">("summary");
 
@@ -61,6 +62,7 @@ export function PaymentDetailClient({ order: initialOrder }: { order: Order }) {
   const stripeSessionId = stringValue(order.stripeSessionId ?? order.stripe_session_id);
   const stripePaymentIntentId = stringValue(order.stripePaymentIntentId ?? order.stripe_payment_intent_id);
   const stripeChargeId = stringValue(order.stripeChargeId ?? order.stripe_charge_id);
+  const stripeTransactionId = stripeChargeId || stripePaymentIntentId || stripeSessionId;
   const stripeAmountReceived = order.stripeAmountReceived ?? order.stripe_amount_received;
   const stripeCurrency = String(order.stripeCurrency ?? order.stripe_currency ?? paymentCurrency);
   const stripePaidAt = order.stripePaidAt ?? order.stripe_paid_at;
@@ -73,6 +75,9 @@ export function PaymentDetailClient({ order: initialOrder }: { order: Order }) {
   const stripeFailureReason = order.stripeFailureReason ?? order.stripe_failure_reason;
   const stripeRefundStatus = stringValue(order.stripeRefundStatus ?? order.stripe_refund_status);
   const stripeRefundAmount = order.stripeRefundAmount ?? order.stripe_refund_amount;
+  const paymentProofUploadedAt = order.paymentProofUploadedAt ?? order.payment_proof_uploaded_at;
+  const stripePaymentStatus = String(order.stripePaymentStatus ?? order.stripe_payment_status ?? paymentStatus).toLowerCase();
+  const stripePaymentCompleted = ["paid", "succeeded", "complete", "completed"].includes(paymentStatus.toLowerCase()) || ["paid", "succeeded", "complete", "completed"].includes(stripePaymentStatus);
 
   useEffect(() => {
     if (!order.id) return;
@@ -86,6 +91,22 @@ export function PaymentDetailClient({ order: initialOrder }: { order: Order }) {
       const json = await res.json();
       if (res.ok && json.data) setOrder(json.data);
     } catch { /* ignore */ } finally { setBusy(false); }
+  }
+
+  async function refreshStripeReceipt() {
+    if (!stripePaymentCompleted || !stripeTransactionId) return;
+    setReceiptBusy(true);
+    try {
+      const res = await fetch(`/api/backend/admin/orders/${order.id}/stripe-receipt`, { method: "POST" });
+      const json = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(json?.error ?? "Could not retrieve the Stripe receipt");
+      if (json?.data) setOrder((current) => ({ ...current, ...json.data }));
+      await dashboardSuccess("Receipt retrieved", "The Stripe receipt details are now available.");
+    } catch (error) {
+      await dashboardError("Receipt unavailable", error instanceof Error ? error.message : "Could not retrieve the Stripe receipt");
+    } finally {
+      setReceiptBusy(false);
+    }
   }
 
   async function updateStatus(status: "paid" | "failed") {
@@ -248,7 +269,12 @@ export function PaymentDetailClient({ order: initialOrder }: { order: Order }) {
            <section className="rounded-[2.5rem] border border-slate-200 bg-white p-8 shadow-sm">
               <div className="flex items-center justify-between mb-8">
                  <h2 className="flex items-center gap-2 text-sm font-black uppercase tracking-widest text-slate-400"><FileText className="h-4 w-4" /> Proof of Transfer</h2>
-                 <button onClick={() => setShowFullProof(true)} className="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-primary hover:underline"><Maximize2 className="h-3 w-3" /> View Full Screen</button>
+                 {proofUrl ? <button onClick={() => setShowFullProof(true)} className="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-primary hover:underline"><Maximize2 className="h-3 w-3" /> View Full Screen</button> : null}
+              </div>
+              <div className="mb-6 grid gap-3 sm:grid-cols-3">
+                <ReceiptField label="Transfer Amount" value={totalEtb ? `${Number(totalEtb).toLocaleString()} ETB` : "Not available"} />
+                <ReceiptField label="Payment Status" value={paymentStatus.replaceAll("_", " ")} />
+                <ReceiptField label="Proof Uploaded" value={paymentProofUploadedAt ? new Date(String(paymentProofUploadedAt)).toLocaleString() : "Not uploaded"} />
               </div>
               <div className="relative aspect-video w-full overflow-hidden rounded-[2rem] border border-slate-100 bg-slate-50 group cursor-zoom-in" onClick={() => setShowFullProof(true)}>
                  {proofUrl ? (
@@ -292,8 +318,14 @@ export function PaymentDetailClient({ order: initialOrder }: { order: Order }) {
                 <a href={stripeReceiptUrl} target="_blank" rel="noreferrer" className="mt-6 inline-flex h-11 items-center justify-center rounded-xl bg-slate-950 px-5 text-sm font-black text-white transition hover:bg-black">
                   View Stripe Receipt
                 </a>
+              ) : stripePaymentCompleted && stripeTransactionId ? (
+                <button type="button" onClick={() => void refreshStripeReceipt()} disabled={receiptBusy} className="mt-6 inline-flex h-11 items-center justify-center rounded-xl bg-slate-950 px-5 text-sm font-black text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-60">
+                  {receiptBusy ? "Fetching Receipt..." : "Fetch Stripe Receipt"}
+                </button>
               ) : (
-                <p className="mt-6 rounded-2xl border border-amber-100 bg-amber-50 p-4 text-sm font-semibold text-amber-800">Stripe receipt URL is not stored yet. It will appear after the next completed Stripe webhook with receipt details.</p>
+                <p className="mt-6 rounded-2xl border border-amber-100 bg-amber-50 p-4 text-sm font-semibold text-amber-800">
+                  {stripePaymentCompleted ? "Stripe receipt is not available for this transaction yet." : "A Stripe receipt is available only after the payment is completed successfully."}
+                </p>
               )}
            </section>
         )

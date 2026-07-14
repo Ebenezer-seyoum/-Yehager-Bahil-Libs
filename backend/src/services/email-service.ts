@@ -5,7 +5,7 @@ import { env } from "../config/env.js";
 type MailChannel = "notifications" | "support" | "team";
 
 type MailPayload = {
-  to?: string | null;
+  to?: string | string[] | null;
   subject: string;
   text: string;
   html?: string;
@@ -33,6 +33,7 @@ type CustomDesignPayload = {
   quotedPriceUsd?: string | number | null;
   estimatedDeliveryLabel?: string | null;
   reason?: string | null;
+  imageUrls?: string[];
 };
 
 type OrderStatusPayload = {
@@ -188,6 +189,10 @@ function defaultReplyTo(channel: MailChannel = "notifications") {
   return env.EMAIL_SUPPORT_FROM || "Yehager Bahil Support <support@yehagerbahillibs.com>";
 }
 
+function internalNotificationRecipients() {
+  return emailAddress(env.EMAIL_TEAM_FROM, "") || undefined;
+}
+
 // ─── HTML helpers ─────────────────────────────────────────────────────────────
 
 function escapeHtml(value: unknown) {
@@ -222,6 +227,16 @@ function actionButton(label: string, href: string) {
 function logoUrl() {
   // Prefer an explicit logo URL env var; fall back to the production website.
   return env.EMAIL_LOGO_URL || "https://www.yehagerbahillibs.com/images/email-logo.jpg";
+}
+
+function emailAddress(value: string | undefined, fallback: string) {
+  const match = value?.match(/<([^>]+)>/);
+  return match?.[1] ?? value ?? fallback;
+}
+
+function emailImage(url: string | null | undefined, alt: string, width = 560) {
+  if (!url || !/^https:\/\//i.test(url)) return "";
+  return `<div style="margin:20px 0;text-align:center"><img src="${escapeHtml(url)}" alt="${escapeHtml(alt)}" width="${width}" style="display:block;width:100%;max-width:${width}px;height:auto;margin:0 auto;border:0;border-radius:8px" /></div>`;
 }
 
 export function appLink(path: string) {
@@ -328,7 +343,7 @@ function htmlShell(title: string, body: string) {
           <!-- Header -->
           <div style="text-align:center;margin-bottom:22px">
             <div style="text-align:center">
-              <img src="${escapeHtml(logoUrl())}" alt="Yehager Bahil Libs" width="120" style="display:block;width:120px;max-width:120px;height:auto;margin:0 auto;border:0;outline:none;text-decoration:none" />
+              <img src="${escapeHtml(logoUrl())}" alt="Yehager Bahil Libs" width="120" height="120" style="display:block;width:120px;height:120px;object-fit:cover;margin:0 auto;border:4px solid #fff;border-radius:50%;background:#fff;outline:none;text-decoration:none" />
             </div>
           </div>
           <p style="margin:0 0 4px;text-align:center;color:#d6a43d;font-size:22px;font-weight:900;letter-spacing:.01em">Yehager Bahil Libs</p>
@@ -343,10 +358,16 @@ function htmlShell(title: string, body: string) {
           <!-- Footer -->
           <div style="margin-top:28px;padding-top:20px;border-top:1px solid #3d321d;color:#c8b98b;font-size:13px">
             <p style="margin:0 0 12px">If you have any questions or need any changes before placing your order, please contact us at the details below before proceeding.</p>
-            <p style="margin:0 0 8px;color:#fff7df;font-weight:800">Questions? Contact Us Directly:</p>
-            <p style="margin:0 0 4px">📞 +251 92 394 0978 (WhatsApp / Production Manager Ethiopia)</p>
-            <p style="margin:0 0 12px">✉️ <a href="mailto:support@yehagerbahillibs.com" style="color:#d6a43d;text-decoration:none">support@yehagerbahillibs.com</a></p>
-            <p style="margin:0 0 12px">Email: <a href="mailto:naomiinvestments2100@gmail.com" style="color:#d6a43d;text-decoration:none">naomiinvestments2100@gmail.com</a></p>
+            <div style="margin:18px 0;padding:16px;border:1px solid #6d511d;border-radius:8px;background:#211a0d">
+              <p style="margin:0 0 8px;color:#d6a43d;font-size:16px;font-weight:900">📞 Questions? Contact Us Directly</p>
+              <p style="margin:0 0 4px;color:#fff7df;font-weight:800">Production Manager (Ethiopia)</p>
+              <p style="margin:0 0 4px">📞 <a href="tel:${escapeHtml(env.PRODUCTION_PHONE)}" style="color:#d6a43d;text-decoration:none;font-weight:800">${escapeHtml(env.PRODUCTION_PHONE)}</a> (WhatsApp)</p>
+              <p style="margin:0">✉️ <a href="mailto:${escapeHtml(env.PRODUCTION_EMAIL)}" style="color:#d6a43d;text-decoration:none">${escapeHtml(env.PRODUCTION_EMAIL)}</a></p>
+            </div>
+            <div style="margin:18px 0;padding:16px;border:1px solid #4d3714;border-radius:8px;background:#1b160d">
+              <p style="margin:0 0 4px;color:#fff7df;font-weight:800">Customer Support</p>
+              <p style="margin:0">✉️ <a href="mailto:${escapeHtml(emailAddress(env.SUPPORT_NOTIFICATION_EMAIL, "support@yehagerbahillibs.com"))}" style="color:#d6a43d;text-decoration:none">${escapeHtml(emailAddress(env.SUPPORT_NOTIFICATION_EMAIL, "support@yehagerbahillibs.com"))}</a></p>
+            </div>
             <p style="margin:0 0 4px">Thank you for choosing us.</p>
             <p style="margin:0 0 12px;color:#d6a43d;font-style:italic">Wear your culture with pride.</p>
             <p style="margin:0"><a href="https://www.yehagerbahillibs.com/" style="color:#d6a43d;text-decoration:none;font-weight:800">🌐 YehagerBahilLibs.com</a></p>
@@ -362,7 +383,7 @@ function htmlShell(title: string, body: string) {
 // ─── Send helpers ─────────────────────────────────────────────────────────────
 
 export async function sendTransactionalEmail(payload: MailPayload) {
-  if (!payload.to) return { sent: false, skipped: true, reason: "missing_recipient" };
+  if (!payload.to || (Array.isArray(payload.to) && payload.to.length === 0)) return { sent: false, skipped: true, reason: "missing_recipient" };
   const channel = payload.channel ?? "notifications";
   if (!isConfigured(channel)) return { sent: false, skipped: true, reason: "mail_not_configured" };
 
@@ -589,7 +610,7 @@ export async function sendAdminAccountStatusChangedEmail(payload: AccountStatusP
   const status = String(payload.status ?? "updated").toLowerCase();
   return sendTransactionalEmailSafely({
     channel: "team",
-    to: env.ADMIN_NOTIFICATION_EMAIL,
+    to: internalNotificationRecipients(),
     subject: `Account ${status}: ${payload.email ?? payload.name ?? "user"}`,
     text: paragraph([
       `Account status changed to ${status}.`,
@@ -745,7 +766,7 @@ export async function sendAdminOrderCreatedEmail(payload: AdminOrderPayload) {
   const orderUrl = payload.orderId ? appLink(`/admin/orders/${payload.orderId}`) : appLink("/admin/orders");
   return sendTransactionalEmailSafely({
     channel: "team",
-    to: env.ADMIN_NOTIFICATION_EMAIL,
+    to: internalNotificationRecipients(),
     subject: `✅ New order created${payload.orderNumber ? `: ${payload.orderNumber}` : ""}`,
     text: paragraph([
       `A new order was created${payload.orderNumber ? `: ${payload.orderNumber}` : "."}`,
@@ -772,7 +793,7 @@ export async function sendAdminOrderStatusChangedEmail(payload: AdminOrderStatus
   const statusLabel = String(payload.status ?? "updated").replaceAll("_", " ");
   return sendTransactionalEmailSafely({
     channel: "team",
-    to: env.ADMIN_NOTIFICATION_EMAIL,
+    to: internalNotificationRecipients(),
     subject: `📦 Order status changed${payload.orderNumber ? `: ${payload.orderNumber}` : ""}`,
     text: paragraph([
       `Order ${payload.orderNumber ?? ""} status changed to ${statusLabel}.`.trim(),
@@ -806,7 +827,7 @@ export async function sendAdminPaymentReceivedEmail(payload: AdminOrderPayload) 
   const orderUrl = payload.orderId ? appLink(`/admin/payments/${payload.orderId}`) : appLink("/admin/payments");
   return sendTransactionalEmailSafely({
     channel: "team",
-    to: env.ADMIN_NOTIFICATION_EMAIL,
+    to: internalNotificationRecipients(),
     subject: `💳 Payment confirmed${payload.orderNumber ? `: ${payload.orderNumber}` : ""}`,
     text: paragraph([
       `Payment was confirmed${payload.orderNumber ? ` for ${payload.orderNumber}` : ""}.`,
@@ -833,7 +854,7 @@ export async function sendCustomDesignSubmittedAdminEmail(payload: CustomDesignP
   const adminUrl = appLink("/admin/custom-orders");
   return sendTransactionalEmailSafely({
     channel: "team",
-    to: env.ADMIN_NOTIFICATION_EMAIL,
+    to: internalNotificationRecipients(),
     subject: `✨ New custom design submitted${payload.submissionNumber ? `: ${payload.submissionNumber}` : ""}`,
     text: paragraph([
       `A customer submitted a custom design${payload.submissionNumber ? ` (${payload.submissionNumber})` : ""}.`,
@@ -843,7 +864,7 @@ export async function sendCustomDesignSubmittedAdminEmail(payload: CustomDesignP
     ]),
     html: htmlShell(
       "New Custom Design Submitted ✨",
-      `<p>A customer submitted a custom design request.</p>${detailsList([
+      `<p>A customer submitted a custom design request.</p>${(payload.imageUrls ?? []).map((url) => emailImage(url, payload.designTitle || "Custom design")).join("")}${detailsList([
         ["Submission", payload.submissionNumber],
         ["Design", payload.designTitle],
         ["Customer", payload.customerName || payload.customerEmail],
@@ -870,6 +891,7 @@ export async function sendCustomDesignApprovedEmail(payload: CustomDesignPayload
       "Custom Design Approved! ✅",
       `
       <p>Hello <strong>${escapeHtml(payload.customerName || "Customer")}</strong>,</p>
+      ${(payload.imageUrls ?? []).map((url) => emailImage(url, payload.designTitle || "Custom design")).join("")}
       <div style="margin:20px 0;padding:16px;background:#0d1f0d;border:1px solid #2a6e2a;border-radius:8px">
         <p style="margin:0 0 6px;color:#5ecf5e;font-size:14px;font-weight:800">✅ Your custom design has been approved!</p>
         <p style="margin:0;color:#9ecf9e;font-size:13px">${payload.designTitle ? `<strong>"${escapeHtml(payload.designTitle)}"</strong> has` : "Your design has"} been approved and added to your cart. Complete your payment when ready.</p>
@@ -901,6 +923,7 @@ export async function sendCustomDesignDeclinedEmail(payload: CustomDesignPayload
       "Custom Design Request Update",
       `
       <p>Hello <strong>${escapeHtml(payload.customerName || "Customer")}</strong>,</p>
+      ${(payload.imageUrls ?? []).map((url) => emailImage(url, payload.designTitle || "Custom design")).join("")}
       <div style="margin:20px 0;padding:16px;background:#1f0d0d;border:1px solid #6e2a2a;border-radius:8px">
         <p style="margin:0 0 6px;color:#cf5e5e;font-size:14px;font-weight:800">📋 Design Review Update</p>
         <p style="margin:0;color:#cf9e9e;font-size:13px">We reviewed your custom design ${payload.designTitle ? `<strong>"${escapeHtml(payload.designTitle)}"</strong> ` : ""}and are unable to approve it at this time.</p>
@@ -921,7 +944,7 @@ export async function sendSupportTicketCreatedAdminEmail(payload: SupportTicketP
   const supportUrl = appLink("/admin/support-inbox");
   return sendTransactionalEmailSafely({
     channel: "team",
-    to: env.ADMIN_NOTIFICATION_EMAIL,
+    to: internalNotificationRecipients(),
     subject: `🎫 New support ticket${payload.ticketNumber ? `: ${payload.ticketNumber}` : ""}`,
     text: paragraph([
       `A customer submitted a support ticket${payload.ticketNumber ? ` (${payload.ticketNumber})` : ""}.`,

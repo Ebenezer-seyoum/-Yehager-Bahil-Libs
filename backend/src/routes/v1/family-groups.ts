@@ -405,7 +405,17 @@ familyGroupsRouter.post("/:groupId/add-to-cart", requireAuth, zValidator("param"
     if (!product && (!design || design.status !== "awaiting_payment" || !design.quotedPriceUsd)) continue;
     const selectedRole = product ? roleForMember(product, member) : null;
     const fallbackCost = product ? await productCostFallback(product.id) : { designerCostUsd: 0, taxPercent: 0, otherCostUsd: 0 };
-    const sellingPriceUsd = selectedRole?.price ?? Number(member.priceUsd ?? product?.priceUsd ?? design?.quotedPriceUsd ?? 0);
+    const approvedCartRows = design
+      ? await db.query.cartItems.findMany({
+          where: and(eq(cartItems.uploadedDesignId, design.id), eq(cartItems.itemType, "group_order")),
+        })
+      : [];
+    const savedMemberRow = approvedCartRows.find((row) => row.itemMetadata && String(row.itemMetadata.member_id ?? "") === member.id);
+    const savedMemberPricing = savedMemberRow?.itemMetadata;
+    const savedSnapshot = savedMemberPricing?.pricing_snapshot && typeof savedMemberPricing.pricing_snapshot === "object"
+      ? savedMemberPricing.pricing_snapshot as Record<string, unknown>
+      : undefined;
+    const sellingPriceUsd = selectedRole?.price ?? Number(savedMemberRow?.priceUsd ?? member.priceUsd ?? product?.priceUsd ?? design?.quotedPriceUsd ?? 0);
 
     rowsToInsert.push({
       userEmail: authUser.email,
@@ -424,16 +434,16 @@ familyGroupsRouter.post("/:groupId/add-to-cart", requireAuth, zValidator("param"
         member_name: member.name,
         member_gender: member.gender,
         member_age: member.age,
-        role_label: selectedRole?.label,
+        role_label: selectedRole?.label ?? savedMemberPricing?.role_label,
         selection_type: design ? "custom_design" : "catalog_product",
         uploaded_design_id: design?.id,
         pricing_snapshot: {
-          role_label: selectedRole?.label,
-          role_gender: selectedRole?.gender ?? member.gender,
+          role_label: selectedRole?.label ?? savedSnapshot?.role_label ?? savedMemberPricing?.role_label,
+          role_gender: selectedRole?.gender ?? savedSnapshot?.role_gender ?? member.gender,
           selling_price_usd: sellingPriceUsd.toFixed(2),
-          designer_cost_usd: Number(selectedRole?.designerCostUsd ?? fallbackCost.designerCostUsd).toFixed(2),
-          tax_percent: Number(selectedRole?.taxPercent ?? fallbackCost.taxPercent).toFixed(4),
-          other_cost_usd: Number(selectedRole?.otherCostUsd ?? fallbackCost.otherCostUsd).toFixed(2),
+          designer_cost_usd: Number(selectedRole?.designerCostUsd ?? savedSnapshot?.designer_cost_usd ?? fallbackCost.designerCostUsd).toFixed(2),
+          tax_percent: Number(selectedRole?.taxPercent ?? savedSnapshot?.tax_percent ?? fallbackCost.taxPercent).toFixed(4),
+          other_cost_usd: Number(selectedRole?.otherCostUsd ?? savedSnapshot?.other_cost_usd ?? fallbackCost.otherCostUsd).toFixed(2),
         },
       },
       measurementSnapshot: member.measurements ?? {},

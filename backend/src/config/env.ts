@@ -55,6 +55,8 @@ const envSchema = z.object({
   SUPPORT_IMAP_SYNC_INTERVAL_SECONDS: z.coerce.number().int().positive().default(60),
   ADMIN_NOTIFICATION_EMAIL: z.string().email().optional(),
   SUPPORT_NOTIFICATION_EMAIL: z.string().email().optional(),
+  PRODUCTION_EMAIL: z.string().email().default("naomiinvestments2100@gmail.com"),
+  PRODUCTION_PHONE: z.string().min(1).default("+251 92 394 0978"),
 });
 
 export const env = envSchema.parse(process.env);
