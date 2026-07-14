@@ -144,6 +144,10 @@ export async function createUploadedDesignSubmission(payload: {
     customerEmail: submission.userEmail,
     submissionNumber: submission.submissionNumber,
     designTitle: submission.designTitle,
+    fabricType: submission.fabricType,
+    embroideryStyle: submission.embroideryStyle,
+    colorPreference: submission.colorPreference,
+    measurementSnapshot: submission.measurementSnapshot,
     imageUrls: [submission.frontImageUrl, submission.sideImageUrl, submission.backImageUrl, submission.detailImageUrl].filter((url): url is string => Boolean(url)),
   });
 
@@ -445,7 +449,7 @@ export async function reviewUploadedDesign(payload: {
         entityId: submission.id,
       });
 
-      return { submission: updated, cartItem };
+      return { submission: updated, cartItem, memberPricing };
     });
     await sendCustomDesignApprovedEmail({
       to: result.submission.userEmail,
@@ -455,6 +459,11 @@ export async function reviewUploadedDesign(payload: {
       quotedPriceUsd: result.submission.quotedPriceUsd,
       estimatedDeliveryLabel: result.submission.estimatedDeliveryLabel,
       reason: result.submission.reviewReason,
+      fabricType: result.submission.fabricType,
+      embroideryStyle: result.submission.embroideryStyle,
+      colorPreference: result.submission.colorPreference,
+      measurementSnapshot: result.submission.measurementSnapshot,
+      memberPricing: result.memberPricing as Array<Record<string, unknown>>,
       imageUrls: [result.submission.frontImageUrl, result.submission.sideImageUrl, result.submission.backImageUrl, result.submission.detailImageUrl].filter((url): url is string => Boolean(url)),
     });
     return result;
@@ -495,6 +504,10 @@ export async function reviewUploadedDesign(payload: {
     submissionNumber: updated.submissionNumber,
     designTitle: updated.designTitle,
     reason: updated.reviewReason,
+    fabricType: updated.fabricType,
+    embroideryStyle: updated.embroideryStyle,
+    colorPreference: updated.colorPreference,
+    measurementSnapshot: updated.measurementSnapshot,
     imageUrls: [updated.frontImageUrl, updated.sideImageUrl, updated.backImageUrl, updated.detailImageUrl].filter((url): url is string => Boolean(url)),
   });
 

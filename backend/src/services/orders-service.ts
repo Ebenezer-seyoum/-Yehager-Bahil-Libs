@@ -135,6 +135,31 @@ function measurementRecord(row: typeof measurements.$inferSelect) {
   };
 }
 
+function orderDesignEmailDetails(order: { items?: unknown }) {
+  const itemRows = Array.isArray(order.items) ? order.items.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object") : [];
+  const firstItem = itemRows[0] ?? {};
+  const metadata = firstItem.item_metadata && typeof firstItem.item_metadata === "object" ? firstItem.item_metadata as Record<string, unknown> : {};
+  const imageUrls = [
+    metadata.front_image_url ?? metadata.frontImageUrl,
+    metadata.side_image_url ?? metadata.sideImageUrl,
+    metadata.back_image_url ?? metadata.backImageUrl,
+    metadata.detail_image_url ?? metadata.detailImageUrl,
+  ].filter((url): url is string => typeof url === "string" && url.length > 0);
+  return {
+    designTitle: typeof metadata.design_title === "string" ? metadata.design_title : typeof firstItem.product_name === "string" ? firstItem.product_name : undefined,
+    fabricType: typeof metadata.fabric_type === "string" ? metadata.fabric_type : undefined,
+    embroideryStyle: typeof metadata.embroidery_style === "string" ? metadata.embroidery_style : undefined,
+    colorPreference: typeof metadata.color_preference === "string" ? metadata.color_preference : undefined,
+    gender: typeof metadata.gender === "string" ? metadata.gender : undefined,
+    measurementSnapshot: firstItem.measurement_snapshot && typeof firstItem.measurement_snapshot === "object" ? firstItem.measurement_snapshot as Record<string, unknown> : undefined,
+    imageUrls,
+    memberPricing: itemRows.flatMap((item) => {
+      const itemMetadata = item.item_metadata && typeof item.item_metadata === "object" ? item.item_metadata as Record<string, unknown> : {};
+      return Array.isArray(itemMetadata.member_pricing) ? itemMetadata.member_pricing as Array<Record<string, unknown>> : [];
+    }),
+  };
+}
+
 function imageList(...values: unknown[]) {
   const images: string[] = [];
   const visit = (value: unknown) => {
@@ -551,6 +576,7 @@ export async function updateOrderAdminState(payload: {
     }
 
     await sendOrderStatusEmail({
+      ...orderDesignEmailDetails(updated),
       to: updated.userEmail,
       customerName: updated.customerName,
       orderNumber: updated.orderNumber,
@@ -811,6 +837,7 @@ export async function createCheckoutIntent(payload: {
     };
   });
   await sendOrderStatusEmail({
+    ...orderDesignEmailDetails(result.order),
     to: result.order.userEmail,
     customerName: result.order.customerName,
     orderNumber: result.order.orderNumber,
@@ -954,6 +981,7 @@ export async function submitEtbPaymentProof(payload: {
   });
 
   await sendOrderStatusEmail({
+    ...orderDesignEmailDetails(updated),
     to: updated.userEmail,
     customerName: updated.customerName,
     orderNumber: updated.orderNumber,

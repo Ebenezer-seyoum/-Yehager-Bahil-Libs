@@ -34,6 +34,12 @@ type CustomDesignPayload = {
   estimatedDeliveryLabel?: string | null;
   reason?: string | null;
   imageUrls?: string[];
+  fabricType?: string | null;
+  embroideryStyle?: string | null;
+  colorPreference?: string | null;
+  gender?: string | null;
+  measurementSnapshot?: Record<string, unknown> | null;
+  memberPricing?: Array<Record<string, unknown>>;
 };
 
 type OrderStatusPayload = {
@@ -46,6 +52,14 @@ type OrderStatusPayload = {
   fulfillmentType?: string | null;
   carrier?: string | null;
   trackingNumber?: string | null;
+  designTitle?: string | null;
+  fabricType?: string | null;
+  embroideryStyle?: string | null;
+  colorPreference?: string | null;
+  gender?: string | null;
+  measurementSnapshot?: Record<string, unknown> | null;
+  imageUrls?: string[];
+  memberPricing?: Array<Record<string, unknown>>;
   /** Pass true to show the cancellation policy block (e.g. on new order confirmation). */
   showCancellationPolicy?: boolean;
 };
@@ -239,6 +253,41 @@ function emailImage(url: string | null | undefined, alt: string, width = 560) {
   return `<div style="margin:20px 0;text-align:center"><img src="${escapeHtml(url)}" alt="${escapeHtml(alt)}" width="${width}" style="display:block;width:100%;max-width:${width}px;height:auto;margin:0 auto;border:0;border-radius:8px" /></div>`;
 }
 
+function designImageGrid(imageUrls: string[] = []) {
+  const labels = ["Front View", "Side View", "Back View", "Detail / Close-Up"];
+  const images = imageUrls
+    .filter((url): url is string => Boolean(url) && /^https:\/\//i.test(url))
+    .slice(0, 4);
+  if (!images.length) return "";
+  const cells = images.map((url, index) => `
+    <td style="width:${Math.floor(100 / images.length)}%;padding:4px;vertical-align:top;text-align:center">
+      <img src="${escapeHtml(url)}" alt="${escapeHtml(labels[index])}" width="140" style="display:block;width:100%;height:120px;object-fit:cover;margin:0 auto;border:1px solid #4d3714;border-radius:6px" />
+      <p style="margin:6px 0 0;color:#d6a43d;font-size:11px;font-weight:800;line-height:1.2">${escapeHtml(labels[index])}</p>
+    </td>`).join("");
+  return `<div style="margin:20px 0"><p style="margin:0 0 8px;color:#d6a43d;font-size:16px;font-weight:900">🖼️ Uploaded Design Images</p><table role="presentation" style="width:100%;border-collapse:collapse;table-layout:fixed"><tr>${cells}</tr></table></div>`;
+}
+
+function designSpecificationsSection(payload: CustomDesignPayload) {
+  const rows: Array<[string, unknown]> = [
+    ["Outfit Type", payload.designTitle],
+    ["Fabric", payload.fabricType],
+    ["Embroidery Type", payload.embroideryStyle],
+    ["Color Theme", payload.colorPreference],
+    ["Gender", payload.gender],
+  ];
+  const measurementEntries = Object.entries(payload.measurementSnapshot ?? {}).filter(([, value]) => value != null && String(value).trim() !== "");
+  if (!rows.some(([, value]) => value) && !measurementEntries.length) return "";
+  const measurementHtml = measurementEntries.length
+    ? `<p style="margin:18px 0 8px;color:#d6a43d;font-size:15px;font-weight:900">📏 Custom Measurements</p>${detailsList(measurementEntries.map(([key, value]) => [key.replaceAll("_", " "), value]))}`
+    : "";
+  return `<div style="margin:20px 0"><p style="margin:0 0 8px;color:#d6a43d;font-size:16px;font-weight:900">🎨 Your Design Specifications</p>${detailsList(rows)}${measurementHtml}</div>`;
+}
+
+function memberPricingSection(memberPricing: Array<Record<string, unknown>> = []) {
+  if (!memberPricing.length) return "";
+  return `<div style="margin:20px 0"><p style="margin:0 0 8px;color:#d6a43d;font-size:16px;font-weight:900">👥 Member Pricing</p>${detailsList(memberPricing.map((member) => [String(member.member_name ?? member.member_id ?? "Member"), `$${Number(member.price_usd ?? 0).toFixed(2)}`]))}</div>`;
+}
+
 export function appLink(path: string) {
   const base = env.FRONTEND_APP_URL.replace(/\/$/, "");
   return `${base}${path.startsWith("/") ? path : `/${path}`}`;
@@ -343,7 +392,7 @@ function htmlShell(title: string, body: string) {
           <!-- Header -->
           <div style="text-align:center;margin-bottom:22px">
             <div style="text-align:center">
-              <img src="${escapeHtml(logoUrl())}" alt="Yehager Bahil Libs" width="120" height="120" style="display:block;width:120px;height:120px;object-fit:cover;margin:0 auto;border:4px solid #fff;border-radius:50%;background:#fff;outline:none;text-decoration:none" />
+              <img src="${escapeHtml(logoUrl())}" alt="Yehager Bahil Libs" width="88" height="88" style="display:block;width:88px;height:88px;object-fit:contain;margin:0 auto;border:3px solid #fff;border-radius:50%;background:#fff;outline:none;text-decoration:none" />
             </div>
           </div>
           <p style="margin:0 0 4px;text-align:center;color:#d6a43d;font-size:22px;font-weight:900;letter-spacing:.01em">Yehager Bahil Libs</p>
@@ -368,13 +417,14 @@ function htmlShell(title: string, body: string) {
               <p style="margin:0 0 4px;color:#fff7df;font-weight:800">Customer Support</p>
               <p style="margin:0">✉️ <a href="mailto:${escapeHtml(emailAddress(env.SUPPORT_NOTIFICATION_EMAIL, "support@yehagerbahillibs.com"))}" style="color:#d6a43d;text-decoration:none">${escapeHtml(emailAddress(env.SUPPORT_NOTIFICATION_EMAIL, "support@yehagerbahillibs.com"))}</a></p>
             </div>
-            <p style="margin:0 0 4px">Thank you for choosing us.</p>
-            <p style="margin:0 0 12px;color:#d6a43d;font-style:italic">Wear your culture with pride.</p>
-            <p style="margin:0"><a href="https://www.yehagerbahillibs.com/" style="color:#d6a43d;text-decoration:none;font-weight:800">🌐 YehagerBahilLibs.com</a></p>
+            <div style="margin:26px -4px 0;padding:28px 16px;background:#1b160d;text-align:center">
+              <p style="margin:0 0 6px;color:#d6a43d;font-size:22px;font-weight:700;font-style:italic">Thank you for choosing us.</p>
+              <p style="margin:0 0 12px;color:#b8b0a5;font-size:18px">Wear your culture with pride.</p>
+              <p style="margin:0 0 14px"><a href="https://www.yehagerbahillibs.com/" style="color:#d6a43d;text-decoration:none;font-size:18px;font-weight:800">🌐 YehagerBahilLibs.com</a></p>
+              <p style="margin:0;color:#706b66;font-size:14px;line-height:1.5">© ${new Date().getFullYear()} Yehager Bahil Libs · Naomi Investments LLC ·<br />Minnesota, USA</p>
+            </div>
           </div>
-
         </div>
-        <p style="margin:16px 0 0;color:#a88b4a;font-size:12px;text-align:center">© 2025 Yehager Bahil Libs · Naomi Investments LLC · Minnesota, USA</p>
       </div>
     </div>
   `;
@@ -728,6 +778,10 @@ export async function sendOrderStatusEmail(payload: OrderStatusPayload) {
       `
       <p>Hello <strong>${escapeHtml(payload.customerName || "Customer")}</strong>,</p>
 
+      ${designImageGrid(payload.imageUrls)}
+      ${designSpecificationsSection(payload)}
+      ${memberPricingSection(payload.memberPricing)}
+
       ${isNewOrder || isEtbAwaiting
         ? `<div style="margin:0 0 20px;padding:18px;background:${isEtbAwaiting ? "#3d2e00" : "#0d1f0d"};border:1px solid ${isEtbAwaiting ? "#b8860b" : "#2a6e2a"};border-radius:8px;text-align:center">
             <p style="margin:0 0 6px;color:${isEtbAwaiting ? "#ffd166" : "#5ecf5e"};font-size:18px;font-weight:900">${isEtbAwaiting ? "⏳ Order Received!" : "✅ Order Confirmed!"}</p>
@@ -864,7 +918,7 @@ export async function sendCustomDesignSubmittedAdminEmail(payload: CustomDesignP
     ]),
     html: htmlShell(
       "New Custom Design Submitted ✨",
-      `<p>A customer submitted a custom design request.</p>${(payload.imageUrls ?? []).map((url) => emailImage(url, payload.designTitle || "Custom design")).join("")}${detailsList([
+      `<p>A customer submitted a custom design request.</p>${designImageGrid(payload.imageUrls)}${designSpecificationsSection(payload)}${memberPricingSection(payload.memberPricing)}${detailsList([
         ["Submission", payload.submissionNumber],
         ["Design", payload.designTitle],
         ["Customer", payload.customerName || payload.customerEmail],
@@ -891,7 +945,9 @@ export async function sendCustomDesignApprovedEmail(payload: CustomDesignPayload
       "Custom Design Approved! ✅",
       `
       <p>Hello <strong>${escapeHtml(payload.customerName || "Customer")}</strong>,</p>
-      ${(payload.imageUrls ?? []).map((url) => emailImage(url, payload.designTitle || "Custom design")).join("")}
+      ${designImageGrid(payload.imageUrls)}
+      ${designSpecificationsSection(payload)}
+      ${memberPricingSection(payload.memberPricing)}
       <div style="margin:20px 0;padding:16px;background:#0d1f0d;border:1px solid #2a6e2a;border-radius:8px">
         <p style="margin:0 0 6px;color:#5ecf5e;font-size:14px;font-weight:800">✅ Your custom design has been approved!</p>
         <p style="margin:0;color:#9ecf9e;font-size:13px">${payload.designTitle ? `<strong>"${escapeHtml(payload.designTitle)}"</strong> has` : "Your design has"} been approved and added to your cart. Complete your payment when ready.</p>
@@ -923,7 +979,9 @@ export async function sendCustomDesignDeclinedEmail(payload: CustomDesignPayload
       "Custom Design Request Update",
       `
       <p>Hello <strong>${escapeHtml(payload.customerName || "Customer")}</strong>,</p>
-      ${(payload.imageUrls ?? []).map((url) => emailImage(url, payload.designTitle || "Custom design")).join("")}
+      ${designImageGrid(payload.imageUrls)}
+      ${designSpecificationsSection(payload)}
+      ${memberPricingSection(payload.memberPricing)}
       <div style="margin:20px 0;padding:16px;background:#1f0d0d;border:1px solid #6e2a2a;border-radius:8px">
         <p style="margin:0 0 6px;color:#cf5e5e;font-size:14px;font-weight:800">📋 Design Review Update</p>
         <p style="margin:0;color:#cf9e9e;font-size:13px">We reviewed your custom design ${payload.designTitle ? `<strong>"${escapeHtml(payload.designTitle)}"</strong> ` : ""}and are unable to approve it at this time.</p>
