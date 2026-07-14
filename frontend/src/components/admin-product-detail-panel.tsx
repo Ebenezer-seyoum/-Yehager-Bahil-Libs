@@ -82,6 +82,25 @@ type DraftRole = {
   otherCostUsd: string;
 };
 
+const DETAIL_ROLE_TEMPLATES: DraftRole[] = [
+  { label: "Women's Traditional Outfit", gender: "female", customerType: "woman", outfitOption: "standard", description: "Traditional outfit for women", price: "", designerCostUsd: "", taxPercent: "", otherCostUsd: "" },
+  { label: "Men's Traditional Full Set", gender: "male", customerType: "man", outfitOption: "full_set", description: "Traditional top and pants", price: "", designerCostUsd: "", taxPercent: "", otherCostUsd: "" },
+  { label: "Men's Traditional Top", gender: "male", customerType: "man", outfitOption: "top_only", description: "Traditional top garment", price: "", designerCostUsd: "", taxPercent: "", otherCostUsd: "" },
+  { label: "Men's Traditional Pants", gender: "male", customerType: "man", outfitOption: "pants_only", description: "Traditional pants", price: "", designerCostUsd: "", taxPercent: "", otherCostUsd: "" },
+  { label: "Girls' Traditional Outfit", gender: "female", customerType: "girl", outfitOption: "standard", description: "Traditional outfit for girls", price: "", designerCostUsd: "", taxPercent: "", otherCostUsd: "" },
+  { label: "Boys' Traditional Full Set", gender: "male", customerType: "boy", outfitOption: "full_set", description: "Traditional top and pants for boys", price: "", designerCostUsd: "", taxPercent: "", otherCostUsd: "" },
+  { label: "Boys' Traditional Top", gender: "male", customerType: "boy", outfitOption: "top_only", description: "Traditional top garment for boys", price: "", designerCostUsd: "", taxPercent: "", otherCostUsd: "" },
+  { label: "Boys' Traditional Pants", gender: "male", customerType: "boy", outfitOption: "pants_only", description: "Traditional pants for boys", price: "", designerCostUsd: "", taxPercent: "", otherCostUsd: "" },
+];
+
+function roleKey(role: { label?: string; customerType?: DraftRole["customerType"]; outfitOption?: DraftRole["outfitOption"] }) {
+  if (role.customerType) return `${role.customerType}:${role.outfitOption ?? "standard"}`;
+  const label = String(role.label ?? "").toLowerCase();
+  const customerType = label.includes("boy") ? "boy" : label.includes("girl") ? "girl" : label.includes("men") || label.includes("groom") ? "man" : "woman";
+  const outfitOption = label.includes("pants") ? "pants_only" : label.includes("top") || label.includes("tishri") ? "top_only" : label.includes("full") ? "full_set" : "standard";
+  return `${customerType}:${outfitOption}`;
+}
+
 type TabKey = "info" | "pricing" | "garment" | "storefront" | "images";
 
 const TABS: { key: TabKey; label: string; icon: React.ReactNode }[] = [
@@ -207,6 +226,14 @@ function draftFromProduct(product: Product) {
           },
         ]
       : [];
+  const sourceRoles = existingRoles.length ? existingRoles : DETAIL_ROLE_TEMPLATES;
+  const sourceByKey = new Map(sourceRoles.map((role) => [roleKey(role), role]));
+  const normalizedRoles = DETAIL_ROLE_TEMPLATES.map((template) => {
+    const role = sourceByKey.get(roleKey(template)) ?? template;
+    return roleKey(template) === "woman:standard" && !role.price
+      ? { ...role, price: String(product.priceUsd ?? "") }
+      : role;
+  });
   return {
     name: product.name ?? "",
     description: product.description ?? "",
@@ -220,7 +247,7 @@ function draftFromProduct(product: Product) {
     embroideryStyle: product.embroideryStyle ?? "",
     tailoringDays: String(product.tailoringDays ?? 30),
     imagesText: (product.images ?? []).join("\n"),
-    familyRoles: existingRoles.map((role) => ({
+    familyRoles: normalizedRoles.map((role) => ({
       label: role.label,
       icon: role.icon ?? "",
       price: String(role.price ?? ""),
@@ -522,6 +549,7 @@ export function AdminProductDetailPanel({
     let taxPercent: number;
     let otherCostUsd: number;
     try {
+      parseRequiredNumber(draft.priceUsd, "Base selling price");
       designerCostUsd = parseRequiredNumber(
         draft.designerCostUsd,
         "Designer labor cost",
@@ -532,10 +560,10 @@ export function AdminProductDetailPanel({
         "Other production costs",
       );
       for (const role of draft.familyRoles) {
-        parseRequiredNumber(role.price, `${role.label} selling price`);
-        parseRequiredNumber(role.designerCostUsd, `${role.label} designer labor cost`);
-        parseRequiredNumber(role.taxPercent, `${role.label} production tax rate`);
-        parseRequiredNumber(role.otherCostUsd, `${role.label} other production costs`);
+        if (!role.price.trim() || Number(role.price) <= 0) continue;
+        parseRequiredNumber(role.designerCostUsd || "0", `${role.label} designer labor cost`);
+        parseRequiredNumber(role.taxPercent || "0", `${role.label} production tax rate`);
+        parseRequiredNumber(role.otherCostUsd || "0", `${role.label} other production costs`);
       }
     } catch (error) {
       showResult(
@@ -562,8 +590,8 @@ export function AdminProductDetailPanel({
         designerCostUsd,
         taxPercent,
         otherCostUsd,
-        familyRoles: draft.familyRoles.length
-          ? draft.familyRoles.map((role) => ({
+        familyRoles: draft.familyRoles.filter((role) => Number(role.price) > 0).length
+          ? draft.familyRoles.filter((role) => Number(role.price) > 0).map((role) => ({
               label: role.label,
               icon: role.icon || undefined,
               price: Number(role.price),
@@ -571,9 +599,9 @@ export function AdminProductDetailPanel({
               customerType: role.customerType,
               outfitOption: role.outfitOption,
               description: role.description,
-              designerCostUsd: Number(role.designerCostUsd),
-              taxPercent: Number(role.taxPercent),
-              otherCostUsd: Number(role.otherCostUsd),
+              designerCostUsd: Number(role.designerCostUsd || 0),
+              taxPercent: Number(role.taxPercent || 0),
+              otherCostUsd: Number(role.otherCostUsd || 0),
             }))
           : undefined,
         gender: draft.gender as Product["gender"],
@@ -698,6 +726,12 @@ export function AdminProductDetailPanel({
     const displayRoles = product.familyRoles?.length
       ? product.familyRoles
       : draftFromProduct(product).familyRoles;
+    const summaryRoles = [
+      { key: "woman", label: "Women's Traditional Outfit", price: product.priceUsd },
+      { key: "man", label: "Men's Traditional Outfit", price: displayRoles.find((role) => role.customerType === "man" && role.outfitOption === "full_set")?.price },
+      { key: "girl", label: "Girls' Traditional Outfit", price: displayRoles.find((role) => role.customerType === "girl")?.price },
+      { key: "boy", label: "Boys' Traditional Outfit", price: displayRoles.find((role) => role.customerType === "boy" && role.outfitOption === "full_set")?.price },
+    ];
     function updateDraftRole(index: number, patch: Partial<DraftRole>) {
       setDraft((current) => ({
         ...current,
@@ -731,7 +765,7 @@ export function AdminProductDetailPanel({
                 </p>
               </div>
               <EditableField
-                label="Groom / Men Price (USD)"
+                label="Men's Traditional Outfit Price (USD)"
                 value={draft.groomPriceUsd}
                 onChange={(v) => setDraft((c) => ({ ...c, groomPriceUsd: v }))}
                 type="number"
@@ -841,33 +875,20 @@ export function AdminProductDetailPanel({
           </div>
         ) : (
           <div className="space-y-4">
-            <div className="grid gap-4 sm:grid-cols-3">
-              <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-5">
-                <p className="text-xs font-bold uppercase tracking-widest text-emerald-700">
-                  USD Price
-                </p>
-                <p className="mt-2 text-3xl font-extrabold text-emerald-800">
-                  {formatCurrency(product.priceUsd)}
-                </p>
-              </div>
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
-                <p className="text-xs font-bold uppercase tracking-widest text-slate-500">
-                  ETB Price
-                </p>
-                <p className="mt-2 text-2xl font-extrabold text-slate-950">
-                  {formatEtb(product.priceUsd)}
-                </p>
-              </div>
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
-                <p className="text-xs font-bold uppercase tracking-widest text-slate-500">
-                  Men / Groom
-                </p>
-                <p className="mt-2 text-2xl font-extrabold text-slate-950">
-                  {product.groomPriceUsd
-                    ? formatCurrency(product.groomPriceUsd)
-                    : "—"}
-                </p>
-              </div>
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              {summaryRoles.map((role, index) => (
+                <div key={role.key} className={cn("rounded-2xl border p-5", index === 0 ? "border-emerald-100 bg-emerald-50" : "border-slate-200 bg-slate-50")}>
+                  <p className={cn("text-xs font-bold uppercase tracking-widest", index === 0 ? "text-emerald-700" : "text-slate-500")}>
+                    {role.label}
+                  </p>
+                  <p className={cn("mt-2 text-2xl font-extrabold", index === 0 ? "text-emerald-800" : "text-slate-950")}>
+                    {role.price && Number(role.price) > 0 ? formatCurrency(role.price) : "Not set"}
+                  </p>
+                  <p className="mt-1 text-xs font-semibold text-slate-500">
+                    {role.price && Number(role.price) > 0 ? formatEtb(role.price) : "Optional price"}
+                  </p>
+                </div>
+              ))}
             </div>
             <div className="rounded-2xl border border-emerald-100 bg-emerald-50/70 p-5">
               <div className="mb-4 flex items-center justify-between gap-3">

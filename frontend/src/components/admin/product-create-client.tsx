@@ -91,20 +91,20 @@ type OutfitOptionDraft = {
 };
 
 const OPTION_PRICING_TEMPLATE: Array<Omit<OutfitOptionDraft, "price" | "designerCostUsd" | "taxPercent" | "otherCostUsd">> = [
-  { label: "Men - Full Set", customerType: "man", outfitOption: "full_set", gender: "male", description: "Top + pants" },
-  { label: "Men - Tishri / Top", customerType: "man", outfitOption: "top_only", gender: "male", description: "Top garment only" },
-  { label: "Men - Pants", customerType: "man", outfitOption: "pants_only", gender: "male", description: "Pants only" },
-  { label: "Girl Outfit", customerType: "girl", outfitOption: "standard", gender: "female", description: "Child girl outfit" },
-  { label: "Boy - Full Set", customerType: "boy", outfitOption: "full_set", gender: "male", description: "Top + pants" },
-  { label: "Boy - Tishri / Top", customerType: "boy", outfitOption: "top_only", gender: "male", description: "Top garment only" },
-  { label: "Boy - Pants", customerType: "boy", outfitOption: "pants_only", gender: "male", description: "Pants only" },
+  { label: "Men's Traditional Full Set", customerType: "man", outfitOption: "full_set", gender: "male", description: "Traditional top and pants" },
+  { label: "Men's Traditional Top", customerType: "man", outfitOption: "top_only", gender: "male", description: "Traditional top garment" },
+  { label: "Men's Traditional Pants", customerType: "man", outfitOption: "pants_only", gender: "male", description: "Traditional pants" },
+  { label: "Girls' Traditional Outfit", customerType: "girl", outfitOption: "standard", gender: "female", description: "Traditional outfit for girls" },
+  { label: "Boys' Traditional Full Set", customerType: "boy", outfitOption: "full_set", gender: "male", description: "Traditional top and pants for boys" },
+  { label: "Boys' Traditional Top", customerType: "boy", outfitOption: "top_only", gender: "male", description: "Traditional top garment for boys" },
+  { label: "Boys' Traditional Pants", customerType: "boy", outfitOption: "pants_only", gender: "male", description: "Traditional pants for boys" },
 ];
 
 const CUSTOMER_GROUPS = [
   { key: "man", label: "Men" },
   { key: "woman", label: "Women" },
-  { key: "boy", label: "Boy" },
-  { key: "girl", label: "Girl" },
+  { key: "boy", label: "Boys' Traditional Outfits" },
+  { key: "girl", label: "Girls' Traditional Outfit" },
 ] as const;
 
 function optionKey(role: Pick<OutfitOptionDraft, "customerType" | "outfitOption">) {
@@ -381,7 +381,7 @@ export function ProductCreateClient() {
   }) {
     return [
       {
-        label: "Women Outfit",
+        label: "Women's Traditional Outfit",
         price: Number(base.price),
         gender: "female",
         customerType: "woman",
@@ -391,7 +391,7 @@ export function ProductCreateClient() {
         taxPercent: optionalNumber(base.taxPercent),
         otherCostUsd: optionalNumber(base.otherCostUsd),
       },
-      ...base.options.map((option) => ({
+      ...base.options.filter((option) => Number(option.price) > 0).map((option) => ({
         label: option.label,
         price: Number(option.price),
         gender: option.gender,
@@ -415,7 +415,7 @@ export function ProductCreateClient() {
       <div key={`${option.customerType}-${option.outfitOption}`} className="rounded-xl border border-slate-200 bg-white p-3">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <div>
-            <p className="text-xs font-black text-slate-900">{option.label.replace("Men - ", "").replace("Boy - ", "")}</p>
+        <p className="text-xs font-black text-slate-900">{option.label}</p>
             <p className="text-[10px] font-semibold text-slate-500">{option.description}</p>
           </div>
           <span className="rounded-full bg-blue-50 px-2.5 py-1 text-[10px] font-black uppercase text-blue-800">
@@ -576,17 +576,6 @@ export function ProductCreateClient() {
         tone: "error",
         title: "Missing Data",
         message: "Please enter a base price.",
-      });
-      return;
-    }
-    const incompleteOption = outfitOptions.find(
-      (option) => !option.price,
-    );
-    if (incompleteOption) {
-      setFormNotice({
-        tone: "error",
-        title: "Missing Option Pricing",
-        message: `${incompleteOption.label} needs a selling price.`,
       });
       return;
     }
@@ -1518,7 +1507,7 @@ export function ProductCreateClient() {
                   <DollarSign className="h-4 w-4" /> Customer Option Pricing
                 </h3>
                 <p className="mt-2 text-xs font-bold text-slate-500">
-                  Men and Boy use three sub-options. Women and Girl use the standard outfit price.
+                  Men and boys may use three optional sub-options. Women and girls use the standard outfit price.
                 </p>
               </div>
             </div>
@@ -1545,7 +1534,7 @@ export function ProductCreateClient() {
                       <div className="space-y-4 border-t border-slate-200 p-4">
                         {group.key === "woman" ? (
                           <div className="rounded-xl border border-slate-200 bg-white p-4">
-                            <p className="text-sm font-black text-slate-900">Women Outfit</p>
+                            <p className="text-sm font-black text-slate-900">Women's Traditional Outfit</p>
                             <p className="mt-1 text-xs font-semibold text-slate-500">
                               Uses the base price and production cost fields above.
                             </p>
@@ -2063,7 +2052,7 @@ export function ProductCreateClient() {
                                 <div className="mb-3 flex items-center justify-between">
                                   <div>
                                     <p className="text-xs font-black uppercase tracking-widest text-slate-900">Option Pricing</p>
-                                    <p className="mt-1 text-[11px] font-semibold text-slate-500">Women uses the base row price. Men and Boy have three sub-options.</p>
+                                    <p className="mt-1 text-[11px] font-semibold text-slate-500">Women uses the base price. Men and boys may have optional sub-options.</p>
                                   </div>
                                 </div>
                                 <div className="grid gap-3 lg:grid-cols-2">

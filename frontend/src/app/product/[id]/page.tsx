@@ -67,17 +67,17 @@ function buildStorefrontRoles(product: Product, price: number) {
   const isFamilyOutfit = name.includes("family") || Boolean(product.groomPriceUsd) || product.isCouple;
   if (!isFamilyOutfit) {
     return [
-      { label: "Women Outfit", price, gender: "female" as const, customerType: "woman" as const, outfitOption: "standard" as const, description: "Complete traditional outfit" },
+      { label: "Women's Traditional Outfit", price, gender: "female" as const, customerType: "woman" as const, outfitOption: "standard" as const, description: "Traditional outfit for women" },
     ];
   }
 
-  const menPrice = Number(product.groomPriceUsd ?? 0) > 0 ? Number(product.groomPriceUsd) : Math.max(1, Math.round(price * 0.57));
-  const kidsPrice = Math.max(1, Math.round(price * 0.43));
-  return [
-    { label: "Women Outfit", price, gender: "female" as const, customerType: "woman" as const, outfitOption: "standard" as const, description: "Complete traditional outfit" },
-    { label: "Men - Full Set", price: menPrice, gender: "male" as const, customerType: "man" as const, outfitOption: "full_set" as const, description: "Top + pants" },
-    { label: "Girl Outfit", price: kidsPrice, gender: "female" as const, customerType: "girl" as const, outfitOption: "standard" as const, description: "Child girl outfit" },
-  ];
+  const menPrice = Number(product.groomPriceUsd ?? 0);
+  return menPrice > 0
+    ? [
+        { label: "Women's Traditional Outfit", price, gender: "female" as const, customerType: "woman" as const, outfitOption: "standard" as const, description: "Traditional outfit for women" },
+        { label: "Men's Traditional Full Set", price: menPrice, gender: "male" as const, customerType: "man" as const, outfitOption: "full_set" as const, description: "Traditional top and pants" },
+      ]
+    : [{ label: "Women's Traditional Outfit", price, gender: "female" as const, customerType: "woman" as const, outfitOption: "standard" as const, description: "Traditional outfit for women" }];
 }
 
 function signinRedirect(path: string) {

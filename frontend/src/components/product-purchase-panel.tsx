@@ -103,10 +103,10 @@ function formatGender(value?: string | null) {
 }
 
 const CUSTOMER_TYPES: Array<{ value: "woman" | "man" | "girl" | "boy"; label: string; description: string }> = [
-  { value: "woman", label: "Woman", description: "Adult woman outfit" },
-  { value: "man", label: "Man", description: "Adult man outfit" },
-  { value: "girl", label: "Girl", description: "Child girl outfit" },
-  { value: "boy", label: "Boy", description: "Child boy outfit" },
+  { value: "woman", label: "Women's Traditional Outfit", description: "Traditional outfit for women" },
+  { value: "man", label: "Men's Traditional Outfit", description: "Traditional outfit for men" },
+  { value: "girl", label: "Girls' Traditional Outfit", description: "Traditional outfit for girls" },
+  { value: "boy", label: "Boys' Traditional Outfit", description: "Traditional outfit for boys" },
 ];
 
 function customerTypeForRole(role: Role) {
@@ -123,7 +123,9 @@ function optionDescription(role: Role) {
   if (role.outfitOption === "full_set") return "Top + pants";
   if (role.outfitOption === "top_only") return "Shirt / top clothes";
   if (role.outfitOption === "pants_only") return "Bottom / suri";
-  return role.customerType === "girl" ? "Child girl outfit" : "Complete traditional outfit";
+  if (role.customerType === "girl") return "Traditional outfit for girls";
+  if (role.customerType === "boy") return "Traditional outfit for boys";
+  return "Complete traditional outfit";
 }
 
 function inchesToCm(inches?: number | null) {
@@ -264,7 +266,7 @@ export function ProductPurchasePanel({
 
   const roleOptions = roles.length > 0
     ? roles
-    : [{ label: "Women Outfit", price, gender: "female" as const, customerType: "woman" as const, outfitOption: "standard" as const, description: "Complete traditional outfit" }];
+    : [{ label: "Women's Traditional Outfit", price, gender: "female" as const, customerType: "woman" as const, outfitOption: "standard" as const, description: "Traditional outfit for women" }];
   const selectedRole = roleOptions[selectedRoleIndex] ?? roleOptions[0] ?? null;
   const selectedCustomerType = selectedRole ? customerTypeForRole(selectedRole) : "woman";
   const availableCustomerTypes = CUSTOMER_TYPES.filter((type) => roleOptions.some((role) => customerTypeForRole(role) === type.value));

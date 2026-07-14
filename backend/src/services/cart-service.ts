@@ -31,22 +31,22 @@ function getProductRoles(product: Awaited<ReturnType<typeof getActiveProductById
   if (product.familyRoles?.length) return product.familyRoles;
 
   const name = `${product.name} ${product.category ?? ""}`.toLowerCase();
-  const price = Number(product.effectivePriceUsd ?? product.finalPriceUsd ?? product.priceUsd);
+  const price = Number(product.priceUsd);
   const isFamilyOutfit = name.includes("family") || Boolean(product.groomPriceUsd) || product.isCouple;
   if (!Number.isFinite(price)) return [];
   if (!isFamilyOutfit) {
     return [
-      { label: "Women Outfit", price, gender: "female", customerType: "woman", outfitOption: "standard", description: "Complete traditional outfit" },
+      { label: "Women's Traditional Outfit", price, gender: "female", customerType: "woman", outfitOption: "standard", description: "Traditional outfit for women" },
     ];
   }
 
-  const menPrice = Number(product.groomPriceUsd ?? 0) > 0 ? Number(product.groomPriceUsd) : Math.max(1, Math.round(price * 0.57));
-  const kidsPrice = Math.max(1, Math.round(price * 0.43));
-  return [
-    { label: "Women Outfit", price, gender: "female", customerType: "woman", outfitOption: "standard", description: "Complete traditional outfit" },
-    { label: "Men - Full Set", price: menPrice, gender: "male", customerType: "man", outfitOption: "full_set", description: "Top + pants" },
-    { label: "Girl Outfit", price: kidsPrice, gender: "female", customerType: "girl", outfitOption: "standard", description: "Child girl outfit" },
-  ];
+  const menPrice = Number(product.groomPriceUsd ?? 0);
+  return menPrice > 0
+    ? [
+        { label: "Women's Traditional Outfit", price, gender: "female", customerType: "woman", outfitOption: "standard", description: "Traditional outfit for women" },
+        { label: "Men's Traditional Full Set", price: menPrice, gender: "male", customerType: "man", outfitOption: "full_set", description: "Traditional top and pants" },
+      ]
+    : [{ label: "Women's Traditional Outfit", price, gender: "female", customerType: "woman", outfitOption: "standard", description: "Traditional outfit for women" }];
 }
 
 function inferCustomerType(role?: CartProductRole) {
