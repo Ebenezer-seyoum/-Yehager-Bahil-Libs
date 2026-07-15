@@ -47,6 +47,8 @@ import { getUsdEtbRate } from "../../repositories/exchange-rates-repository.js";
 import { deleteOrderForAdmin } from "../../services/orders-service.js";
 import { refreshStripeReceiptForOrder } from "../../services/payments-service.js";
 import type { AppBindings } from "../../types/hono.js";
+3
+import { logger } from "../../lib/logger.js";
 import { editTelegramMessage, priceSummary, sendTelegramProduct } from "../../services/telegram-pricing-service.js";
 
 const listQuerySchema = z.object({
@@ -1434,7 +1436,8 @@ adminRouter.post(
       try {
         const telegramResult = await sendTelegramProduct(row);
         await db.update(products).set({ telegramStatus: "waiting_price", telegramMessageId: String(telegramResult.message.message_id), telegramTopicId: telegramResult.topicId, priceStatus: "waiting_price", updatedAt: new Date() }).where(eq(products.id, row.id));
-      } catch {
+      } catch (error) {
+        logger.error({ error, productId: row.id, region: row.region }, "telegram_product_send_failed_on_create");
         await db.update(products).set({ telegramStatus: "not_sent", updatedAt: new Date() }).where(eq(products.id, row.id));
       }
     }
@@ -1558,7 +1561,8 @@ adminRouter.patch(
       try {
         const telegramResult = await sendTelegramProduct(row);
         await db.update(products).set({ telegramStatus: "waiting_price", telegramMessageId: String(telegramResult.message.message_id), telegramTopicId: telegramResult.topicId, priceStatus: "waiting_price", updatedAt: new Date() }).where(eq(products.id, row.id));
-      } catch {
+      } catch (error) {
+        logger.error({ error, productId: row.id, region: row.region }, "telegram_product_send_failed_on_toggle");
         await db.update(products).set({ telegramStatus: "not_sent", updatedAt: new Date() }).where(eq(products.id, row.id));
       }
     }
