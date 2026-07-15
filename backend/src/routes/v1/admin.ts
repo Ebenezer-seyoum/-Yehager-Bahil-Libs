@@ -1557,13 +1557,18 @@ adminRouter.patch(
       metadata: body,
     });
 
-    if (body.sendToTelegram === true && row.sendToTelegram) {
+    // Enabling Telegram must also retry products that were previously enabled
+    // but never received a topic/message (for example after a failed deploy or
+    // a missing runtime configuration). Do not duplicate a product that already
+    // has a Telegram message.
+    if (body.sendToTelegram === true && row.sendToTelegram && !row.telegramMessageId) {
       try {
         const telegramResult = await sendTelegramProduct(row);
         await db.update(products).set({ telegramStatus: "waiting_price", telegramMessageId: String(telegramResult.message.message_id), telegramTopicId: telegramResult.topicId, priceStatus: "waiting_price", updatedAt: new Date() }).where(eq(products.id, row.id));
       } catch (error) {
         logger.error({ error, productId: row.id, region: row.region }, "telegram_product_send_failed_on_toggle");
         await db.update(products).set({ telegramStatus: "not_sent", updatedAt: new Date() }).where(eq(products.id, row.id));
+        throw new HTTPException(502, { message: error instanceof Error ? `Telegram send failed: ${error.message}` : "Telegram send failed" });
       }
     }
 
