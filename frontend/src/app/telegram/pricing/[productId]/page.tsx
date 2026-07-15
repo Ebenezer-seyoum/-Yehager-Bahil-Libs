@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 
 declare global { interface Window { Telegram?: { WebApp?: { initData: string; ready(): void; close(): void } } } }
 
@@ -10,6 +10,8 @@ const fields = ["men", "woman", "boy", "girl"] as const;
 export default function TelegramPricingPage() {
   const params = useParams<{ productId: string }>();
   const productId = params?.productId ?? "";
+  const searchParams = useSearchParams();
+  const token = searchParams?.get("token") ?? "";
   const [prices, setPrices] = useState<Record<string, string>>({ men: "", woman: "", boy: "", girl: "" });
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
@@ -18,7 +20,7 @@ export default function TelegramPricingPage() {
     event.preventDefault();
     setBusy(true);
     setMessage("");
-    void fetch("/api/backend/integrations/telegram/price-submit", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ productId, prices: Object.fromEntries(fields.map((key) => [key, Number(prices[key])])), initData: window.Telegram?.WebApp?.initData || "" }) })
+    void fetch("/api/backend/integrations/telegram/price-submit", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ productId, token, prices: Object.fromEntries(fields.map((key) => [key, Number(prices[key])])), initData: window.Telegram?.WebApp?.initData || "" }) })
       .then(async (response) => { const data = await response.json(); if (!response.ok) throw new Error(data.error || "Submission failed"); setMessage("✅ Price submitted successfully"); window.Telegram?.WebApp?.close(); })
       .catch((error) => setMessage(error instanceof Error ? error.message : "Submission failed"))
       .finally(() => setBusy(false));

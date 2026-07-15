@@ -5,9 +5,19 @@ import type { AppBindings } from "../../types/hono.js";
 import { env } from "../../config/env.js";
 import { db } from "../../lib/db/drizzle.js";
 import { products } from "../../lib/db/schema.js";
-import { answerTelegramCallbackQuery, approvalKeyboard, editTelegramMessage, priceSummary, processTelegramPriceMessage, sendTelegramMessage } from "../../services/telegram-pricing-service.js";
+import { answerTelegramCallbackQuery, approvalKeyboard, createPriceFormToken, editTelegramMessage, priceSummary, processTelegramPriceMessage, sendTelegramMessage } from "../../services/telegram-pricing-service.js";
 
 export const telegramRouter = new Hono<AppBindings>();
+
+function validPriceFormToken(productId: string, token: string) {
+  if (!token) return false;
+  const [expiresText, receivedSignature] = token.split(".");
+  const expiresAt = Number(expiresText);
+  if (!Number.isFinite(expiresAt) || expiresAt < Date.now() / 1000 || !receivedSignature) return false;
+  const expectedToken = createPriceFormToken(productId, expiresAt);
+  const expectedSignature = expectedToken.split(".")[1];
+  return receivedSignature.length === expectedSignature.length && timingSafeEqual(Buffer.from(receivedSignature), Buffer.from(expectedSignature));
+}
 
 function validWebAppInitData(initData: string) {
   if (!env.TELEGRAM_BOT_TOKEN || !initData) return false;
@@ -24,7 +34,7 @@ function validWebAppInitData(initData: string) {
 
 telegramRouter.post("/price-submit", async (c) => {
   const body = await c.req.json().catch(() => null) as { productId?: string; initData?: string; prices?: Record<string, number> } | null;
-  if (!body?.productId || !validWebAppInitData(body.initData || "")) return c.json({ error: "Invalid Telegram form session" }, 401);
+  if (!body?.productId || (!validPriceFormToken(body.productId, String((body as { token?: string }).token || "")) && !validWebAppInitData(body.initData || ""))) return c.json({ error: "Invalid Telegram form session" }, 401);
   const [product] = await db.select().from(products).where(eq(products.id, body.productId)).limit(1);
   if (!product?.uniqueId) return c.json({ error: "Product not found" }, 404);
   const prices = body.prices || {};

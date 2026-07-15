@@ -1,4 +1,5 @@
 import { and, eq } from "drizzle-orm";
+import { createHmac } from "node:crypto";
 import { db } from "../lib/db/drizzle.js";
 import { globalPricingRules, products, telegramRegionTopics } from "../lib/db/schema.js";
 import { env } from "../config/env.js";
@@ -16,6 +17,13 @@ async function telegram<T>(method: string, body: Record<string, unknown>) {
   const payload = (await response.json()) as TelegramResponse<T>;
   if (!response.ok || !payload.ok) throw new Error(payload.description || `Telegram ${method} failed`);
   return payload.result as T;
+}
+
+export function createPriceFormToken(productId: string, expiresAt = Math.floor(Date.now() / 1000) + 86400) {
+  const payload = `${productId}.${expiresAt}`;
+  const secret = env.TELEGRAM_WEBHOOK_SECRET || env.TELEGRAM_BOT_TOKEN || "";
+  const signature = createHmac("sha256", secret).update(payload).digest("hex");
+  return `${expiresAt}.${signature}`;
 }
 
 async function makeTelegramImageUrl(imageUrl: string) {
@@ -74,7 +82,7 @@ export async function sendTelegramProduct(product: { id: string; uniqueId?: stri
   }
   const message = await sendTelegramMessage(
     priceEntryPrompt({ uniqueId: product.uniqueId || product.id, name: productName }),
-    { inline_keyboard: [[{ text: "Enter / Edit Price", web_app: { url: `${env.FRONTEND_APP_URL.replace(/\/$/, "")}/telegram/pricing/${product.id}` } }]] },
+    { inline_keyboard: [[{ text: "Enter / Edit Price", url: `${env.FRONTEND_APP_URL.replace(/\/$/, "")}/telegram/pricing/${product.id}?token=${createPriceFormToken(product.id)}` }]] },
     regionTopic.telegramTopicId,
   );
   return { message, topicId: regionTopic.telegramTopicId };
