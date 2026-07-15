@@ -593,14 +593,6 @@ export function ProductCreateClient() {
       });
       return;
     }
-    if (!priceUsd) {
-      setFormNotice({
-        tone: "error",
-        title: "Missing Data",
-        message: "Please enter a base price.",
-      });
-      return;
-    }
     const uploadedFiles = singleFiles.filter((file) =>
       file.type.startsWith("image/"),
     );
@@ -628,6 +620,8 @@ export function ProductCreateClient() {
       const nextNum = getNextIncrementNumber(region, subcategory);
       const uniqueId = buildProductUniqueId(region, subcategory, nextNum);
       const generatedName = buildProductName(region, subcategory, middleText, uniqueId);
+      const internalPrice = Number(priceUsd) > 0 ? Number(priceUsd) : 1;
+      const pricePending = Number(priceUsd) <= 0;
 
       // 4. Create Product
       const payload = {
@@ -635,11 +629,11 @@ export function ProductCreateClient() {
         description: description.trim() || undefined,
         region,
         subcategory: subcategory || undefined,
-        priceUsd: Number(priceUsd),
+        priceUsd: internalPrice,
         baseCurrency,
         groomPriceUsd: null,
         familyRoles: buildFamilyRoles({
-          price: priceUsd,
+          price: String(internalPrice),
           designerCostUsd,
           taxPercent,
           otherCostUsd,
@@ -655,6 +649,7 @@ export function ProductCreateClient() {
         isActive,
         isFeatured,
         sendToTelegram,
+        priceStatus: pricePending ? "waiting_price" : "draft",
         images: imageUrls,
         uniqueId,
     };
@@ -1408,7 +1403,7 @@ export function ProductCreateClient() {
               <div className="space-y-4">
                 <div className="rounded-2xl border-2 border-slate-100 bg-slate-50/50 p-4">
                   <label className="mb-1 block text-[10px] font-black uppercase text-slate-400 tracking-widest">
-                    Base Price ({baseCurrency}) *
+                    Base Price ({baseCurrency}) (optional)
                   </label>
                   <select
                     value={baseCurrency}
@@ -1423,7 +1418,7 @@ export function ProductCreateClient() {
                     value={priceUsd}
                     onChange={(e) => setPriceUsd(e.target.value)}
                     className="w-full bg-transparent text-xl font-black outline-none"
-                    placeholder="0.00"
+                    placeholder="Leave blank to price via Telegram"
                   />
                 </div>
                 <div className="rounded-2xl border border-emerald-100 bg-emerald-50/60 p-4">
