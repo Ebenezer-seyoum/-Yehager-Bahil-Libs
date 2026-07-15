@@ -39,6 +39,10 @@ type Product = Record<string, unknown> & {
   priceStatus?: string | null;
   telegramStatus?: string | null;
   priceDeadline?: string | null;
+  priceSubmissionCount?: number | null;
+  lastPriceSubmittedAt?: string | null;
+  lastPriceApprovedAt?: string | null;
+  priceVersion?: number | null;
   description?: string | null;
   fabricType?: string | null;
   embroideryStyle?: string | null;
@@ -480,6 +484,11 @@ export function ProductDetailClient({ initialProduct }: { initialProduct: Produc
                         <Field label="Price Status" value={product.priceStatus?.replaceAll("_", " ") || "Draft"} />
                         <Field label="Telegram Status" value={product.telegramStatus?.replaceAll("_", " ") || "Not sent"} />
                         <Field label="Price Deadline" value={product.priceDeadline ? new Date(product.priceDeadline).toLocaleString() : "Not set"} />
+                      </div>
+                      <div className="mt-3 grid gap-3 md:grid-cols-3">
+                        <Field label="Price Submission Count" value={product.priceSubmissionCount ?? 0} />
+                        <Field label="Last Submitted" value={product.lastPriceSubmittedAt ? new Date(product.lastPriceSubmittedAt).toLocaleString() : "Not submitted"} />
+                        <Field label="Last Approved" value={product.lastPriceApprovedAt ? new Date(product.lastPriceApprovedAt).toLocaleString() : "Not approved"} />
                       </div>
                       {(product.priceStatus === "pending_approval" || product.priceStatus === "submitted") ? <div className="mt-4 flex flex-wrap justify-end gap-2"><button type="button" disabled={savingTelegram} onClick={() => void decidePrice("rejected")} className="rounded-xl bg-rose-600 px-4 py-2 text-xs font-black text-white hover:bg-rose-700">Reject Price</button><button type="button" disabled={savingTelegram} onClick={() => void decidePrice("approved")} className="rounded-xl bg-emerald-700 px-4 py-2 text-xs font-black text-white hover:bg-emerald-800">Approve Price</button></div> : null}
                    </div>

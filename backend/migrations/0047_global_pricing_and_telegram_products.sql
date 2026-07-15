@@ -6,6 +6,11 @@ ALTER TABLE products
   ADD COLUMN IF NOT EXISTS telegram_status VARCHAR(40) NOT NULL DEFAULT 'not_sent',
   ADD COLUMN IF NOT EXISTS telegram_message_id TEXT,
   ADD COLUMN IF NOT EXISTS price_deadline TIMESTAMPTZ;
+ALTER TABLE products
+  ADD COLUMN IF NOT EXISTS price_submission_count INTEGER NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS last_price_submitted_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS last_price_approved_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS price_version INTEGER NOT NULL DEFAULT 0;
 
 CREATE INDEX IF NOT EXISTS products_price_status_idx ON products(price_status);
 

@@ -1513,6 +1513,17 @@ adminRouter.patch(
       }
     }
 
+    if (body.priceStatus === "approved" || body.priceStatus === "published") {
+      const roles = Array.isArray(row.familyRoles) ? row.familyRoles as Array<Record<string, unknown>> : [];
+      const approvedRole = roles.find((role) => role.customerType === "woman" && Number(role.sellingPriceEtb) > 0) ?? roles.find((role) => Number(role.sellingPriceEtb) > 0);
+      const approvedEtb = Number(approvedRole?.sellingPriceEtb ?? 0);
+      if (approvedEtb > 0) {
+        const normalized = await normalizeProductPrice(approvedEtb, "ETB");
+        const approvedAt = new Date();
+        await db.update(products).set({ priceUsd: normalized.priceUsd.toFixed(2), baseCurrency: "ETB", basePriceAmount: approvedEtb.toFixed(2), baseExchangeRate: normalized.exchangeRate.toFixed(4), lastPriceApprovedAt: approvedAt, updatedAt: approvedAt }).where(eq(products.id, row.id));
+      }
+    }
+
     if (body.designerCostUsd !== undefined || body.taxPercent !== undefined || body.otherCostUsd !== undefined) {
       const existing = await db.query.profitCostSettings.findFirst({
         where: and(eq(profitCostSettings.entityType, "product"), eq(profitCostSettings.entityId, productId)),

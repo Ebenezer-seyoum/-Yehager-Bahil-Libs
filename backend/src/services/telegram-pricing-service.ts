@@ -94,7 +94,8 @@ export async function processTelegramPriceMessage(text: string) {
     return { ...role, designerPriceEtb: entered, markupAmountEtb: markup, sellingPriceEtb: entered + markup, pricingRuleKey: key, enteredPrice: entered, currency: "ETB" as const };
   });
   if (!updated) return { uniqueId, status: "no_matching_roles" as const };
-  const [row] = await db.update(products).set({ familyRoles: nextRoles, priceStatus: "pending_approval", telegramStatus: "submitted", updatedAt: new Date() }).where(eq(products.id, product.id)).returning();
+  const submittedAt = new Date();
+  const [row] = await db.update(products).set({ familyRoles: nextRoles, priceStatus: "pending_approval", telegramStatus: "submitted", priceSubmissionCount: Number(product.priceSubmissionCount ?? 0) + 1, lastPriceSubmittedAt: submittedAt, priceVersion: Number(product.priceVersion ?? 0) + 1, updatedAt: submittedAt }).where(eq(products.id, product.id)).returning();
   return { uniqueId, status: "submitted" as const, product: row, updated };
 }
 

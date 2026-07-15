@@ -18,6 +18,10 @@ export function AdminSettingsChrome({ children }: { children: ReactNode }) {
 
   const setActiveTab = useCallback(
     (tabId: string) => {
+      if (tabId === "pricing") {
+        router.push("/admin/settings/pricing-rules");
+        return;
+      }
       const params = new URLSearchParams(searchParams.toString());
       params.set("tab", tabId);
       router.replace(`${pathname}?${params.toString()}`, { scroll: false });
