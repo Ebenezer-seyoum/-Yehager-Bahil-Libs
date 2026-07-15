@@ -223,6 +223,7 @@ export const products = pgTable(
     sendToTelegram: boolean("send_to_telegram").default(false).notNull(),
     telegramStatus: varchar("telegram_status", { length: 40 }).default("not_sent").notNull(),
     telegramMessageId: text("telegram_message_id"),
+    telegramTopicId: text("telegram_topic_id"),
     priceDeadline: timestamp("price_deadline", { withTimezone: true }),
     priceSubmissionCount: integer("price_submission_count").default(0).notNull(),
     lastPriceSubmittedAt: timestamp("last_price_submitted_at", { withTimezone: true }),
@@ -285,6 +286,20 @@ export const globalPricingRules = pgTable(
     ...timestamps,
   },
   (table) => [uniqueIndex("global_pricing_rules_key_uidx").on(table.ruleKey)],
+);
+
+export const telegramRegionTopics = pgTable(
+  "telegram_region_topics",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    regionName: varchar("region_name", { length: 160 }).notNull(),
+    telegramGroupId: text("telegram_group_id").notNull(),
+    telegramTopicId: text("telegram_topic_id").notNull(),
+    status: varchar("status", { length: 24 }).default("active").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [uniqueIndex("telegram_region_topics_group_region_uidx").on(table.telegramGroupId, table.regionName)],
 );
 
 export const productDiscounts = pgTable(

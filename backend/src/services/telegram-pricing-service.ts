@@ -1,6 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { db } from "../lib/db/drizzle.js";
-import { globalPricingRules, products } from "../lib/db/schema.js";
+import { globalPricingRules, products, telegramRegionTopics } from "../lib/db/schema.js";
 import { env } from "../config/env.js";
 
 type TelegramResponse<T> = { ok: boolean; result?: T; description?: string };
@@ -17,27 +17,41 @@ async function telegram<T>(method: string, body: Record<string, unknown>) {
   return payload.result as T;
 }
 
-export async function sendTelegramMessage(text: string, replyMarkup?: unknown) {
+export async function sendTelegramMessage(text: string, replyMarkup?: unknown, topicId?: string | null) {
   return telegram<{ message_id: number }>("sendMessage", {
     chat_id: env.TELEGRAM_GROUP_ID,
+    ...(topicId ? { message_thread_id: Number(topicId) } : {}),
     text,
     parse_mode: "HTML",
     ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
   });
 }
 
-export async function sendTelegramProduct(product: { id: string; uniqueId?: string | null; name: string; images?: string[] | null }) {
+export async function getOrCreateRegionTopic(regionName: string) {
+  if (!env.TELEGRAM_GROUP_ID) throw new Error("Telegram group ID is not configured");
+  const existing = await db.query.telegramRegionTopics.findFirst({ where: and(eq(telegramRegionTopics.telegramGroupId, env.TELEGRAM_GROUP_ID), eq(telegramRegionTopics.regionName, regionName), eq(telegramRegionTopics.status, "active")) });
+  if (existing) return existing;
+  const topic = await telegram<{ message_thread_id: number }>("createForumTopic", { chat_id: env.TELEGRAM_GROUP_ID, name: regionName });
+  const [row] = await db.insert(telegramRegionTopics).values({ regionName, telegramGroupId: env.TELEGRAM_GROUP_ID, telegramTopicId: String(topic.message_thread_id), status: "active" }).returning();
+  return row;
+}
+
+export async function sendTelegramProduct(product: { id: string; uniqueId?: string | null; name: string; region: string; images?: string[] | null }) {
+  const regionTopic = await getOrCreateRegionTopic(product.region);
   const images = (product.images ?? []).filter(Boolean).slice(0, 10);
   if (images.length) {
     await telegram("sendMediaGroup", {
       chat_id: env.TELEGRAM_GROUP_ID,
+      message_thread_id: Number(regionTopic.telegramTopicId),
       media: images.map((url, index) => ({ type: "photo", media: url, caption: index === 0 ? `<b>${product.uniqueId || product.id}</b>\n${product.name}` : undefined, parse_mode: "HTML" })),
     });
   }
-  return sendTelegramMessage(
+  const message = await sendTelegramMessage(
     `<b>${product.uniqueId || product.id}</b>\n${product.name}\n\nEnter prices using this format:\n<code>${product.uniqueId || product.id}\nMen Top: 0 ETB\nMen Pants: 0 ETB\nBoy Top: 0 ETB\nBoy Pants: 0 ETB\nWoman Outfit: 0 ETB\nGirl Outfit: 0 ETB</code>`,
     { inline_keyboard: [[{ text: "Enter / Edit Price", callback_data: `price:edit:${product.id}` }]] },
+    regionTopic.telegramTopicId,
   );
+  return { message, topicId: regionTopic.telegramTopicId };
 }
 
 export async function editTelegramMessage(messageId: string | number, text: string, replyMarkup?: unknown) {

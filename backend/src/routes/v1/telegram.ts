@@ -15,7 +15,12 @@ telegramRouter.post("/webhook", async (c) => {
   if (update.message?.text || update.message?.caption) {
     const result = await processTelegramPriceMessage(update.message.text || update.message.caption || "");
     if (result?.status === "submitted" && result.product) {
-      await sendTelegramMessage(`${priceSummary(result.product)}\n\n<b>Pending admin approval.</b>`, approvalKeyboard(result.product.id));
+      const submittedText = `${priceSummary(result.product)}\n\n<b>✅ PRICE SUBMITTED SUCCESSFULLY</b>\nPending admin approval.`;
+      if (result.product.telegramMessageId) {
+        await editTelegramMessage(result.product.telegramMessageId, submittedText, approvalKeyboard(result.product.id));
+      } else {
+        await sendTelegramMessage(submittedText, approvalKeyboard(result.product.id), result.product.telegramTopicId);
+      }
     }
   }
   if (update.callback_query?.data?.startsWith("price:")) {
@@ -29,4 +34,3 @@ telegramRouter.post("/webhook", async (c) => {
   }
   return c.json({ ok: true });
 });
-

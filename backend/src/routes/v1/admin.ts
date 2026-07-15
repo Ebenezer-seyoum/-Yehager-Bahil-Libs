@@ -1432,8 +1432,8 @@ adminRouter.post(
 
     if (row.sendToTelegram) {
       try {
-        const telegramMessage = await sendTelegramProduct(row);
-        await db.update(products).set({ telegramStatus: "waiting_price", telegramMessageId: String(telegramMessage.message_id), priceStatus: "waiting_price", updatedAt: new Date() }).where(eq(products.id, row.id));
+        const telegramResult = await sendTelegramProduct(row);
+        await db.update(products).set({ telegramStatus: "waiting_price", telegramMessageId: String(telegramResult.message.message_id), telegramTopicId: telegramResult.topicId, priceStatus: "waiting_price", updatedAt: new Date() }).where(eq(products.id, row.id));
       } catch {
         await db.update(products).set({ telegramStatus: "not_sent", updatedAt: new Date() }).where(eq(products.id, row.id));
       }
@@ -1556,8 +1556,8 @@ adminRouter.patch(
 
     if (body.sendToTelegram === true && row.sendToTelegram) {
       try {
-        const telegramMessage = await sendTelegramProduct(row);
-        await db.update(products).set({ telegramStatus: "waiting_price", telegramMessageId: String(telegramMessage.message_id), priceStatus: "waiting_price", updatedAt: new Date() }).where(eq(products.id, row.id));
+        const telegramResult = await sendTelegramProduct(row);
+        await db.update(products).set({ telegramStatus: "waiting_price", telegramMessageId: String(telegramResult.message.message_id), telegramTopicId: telegramResult.topicId, priceStatus: "waiting_price", updatedAt: new Date() }).where(eq(products.id, row.id));
       } catch {
         await db.update(products).set({ telegramStatus: "not_sent", updatedAt: new Date() }).where(eq(products.id, row.id));
       }
