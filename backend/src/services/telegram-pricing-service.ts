@@ -2,6 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "../lib/db/drizzle.js";
 import { globalPricingRules, products, telegramRegionTopics } from "../lib/db/schema.js";
 import { env } from "../config/env.js";
+import { getSignedReadUrl } from "../lib/storage/s3.js";
 
 type TelegramResponse<T> = { ok: boolean; result?: T; description?: string };
 
@@ -15,6 +16,16 @@ async function telegram<T>(method: string, body: Record<string, unknown>) {
   const payload = (await response.json()) as TelegramResponse<T>;
   if (!response.ok || !payload.ok) throw new Error(payload.description || `Telegram ${method} failed`);
   return payload.result as T;
+}
+
+async function makeTelegramImageUrl(imageUrl: string) {
+  // Product images are stored in a private S3 bucket. Telegram cannot fetch
+  // the stored public-looking URL directly, so convert our S3 URL to a short-
+  // lived signed read URL before sending it to Telegram.
+  const publicBase = env.AWS_S3_PUBLIC_BASE_URL.replace(/\/+$/, "");
+  if (!imageUrl.startsWith(`${publicBase}/`)) return imageUrl;
+  const key = decodeURIComponent(imageUrl.slice(publicBase.length + 1));
+  return getSignedReadUrl(key, 15 * 60);
 }
 
 export async function sendTelegramMessage(text: string, replyMarkup?: unknown, topicId?: string | null) {
@@ -40,10 +51,11 @@ export async function sendTelegramProduct(product: { id: string; uniqueId?: stri
   const regionTopic = await getOrCreateRegionTopic(product.region);
   const images = (product.images ?? []).filter(Boolean).slice(0, 10);
   if (images.length) {
+    const telegramImages = await Promise.all(images.map(makeTelegramImageUrl));
     await telegram("sendMediaGroup", {
       chat_id: env.TELEGRAM_GROUP_ID,
       message_thread_id: Number(regionTopic.telegramTopicId),
-      media: images.map((url, index) => ({ type: "photo", media: url, caption: index === 0 ? `<b>${product.uniqueId || product.id}</b>\n${product.name}` : undefined, parse_mode: "HTML" })),
+      media: telegramImages.map((url, index) => ({ type: "photo", media: url, caption: index === 0 ? `<b>${product.uniqueId || product.id}</b>\n${product.name}` : undefined, parse_mode: "HTML" })),
     });
   }
   const message = await sendTelegramMessage(
