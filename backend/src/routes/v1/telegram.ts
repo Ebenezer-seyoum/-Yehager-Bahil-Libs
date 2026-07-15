@@ -45,10 +45,23 @@ telegramRouter.post("/price-submit", async (c) => {
 
 telegramRouter.post("/webhook", async (c) => {
   if (env.TELEGRAM_WEBHOOK_SECRET && c.req.header("x-telegram-bot-api-secret-token") !== env.TELEGRAM_WEBHOOK_SECRET) return c.json({ error: "Invalid webhook secret" }, 401);
-  const update = await c.req.json().catch(() => null) as { message?: { text?: string; caption?: string; message_id?: number }; callback_query?: { id: string; data?: string; message?: { message_id?: number } } } | null;
+  const update = await c.req.json().catch(() => null) as { message?: { text?: string; caption?: string; message_id?: number; chat?: { id?: number; type?: string } }; callback_query?: { id: string; data?: string; message?: { message_id?: number } } } | null;
   if (!update) return c.json({ ok: true });
+  const incomingText = update.message?.text || update.message?.caption || "";
+  if (update.message?.chat?.id && update.message.chat.type === "private" && incomingText.startsWith("/start")) {
+    const payload = incomingText.split(/\s+/, 2)[1] || "";
+    const productId = payload.startsWith("price_") ? payload.slice("price_".length) : "";
+    const [product] = productId ? await db.select().from(products).where(eq(products.id, productId)).limit(1) : [];
+    if (product) {
+      const token = createPriceFormToken(product.id);
+      await sendTelegramMessage(`<b>${product.uniqueId}</b>\n${product.name}\n\nOpen the secure price form to enter Men, Woman, Boy, and Girl prices.`, { inline_keyboard: [[{ text: "Open Price Form", web_app: { url: `${env.FRONTEND_APP_URL.replace(/\/$/, "")}/telegram/pricing/${product.id}?token=${token}` } }]] }, null, update.message.chat.id);
+    } else {
+      await sendTelegramMessage("Welcome to Yehager Price Manager. Open this bot from a product's Telegram price button to enter its prices.", undefined, null, update.message.chat.id);
+    }
+    return c.json({ ok: true });
+  }
   if (update.message?.text || update.message?.caption) {
-    const result = await processTelegramPriceMessage(update.message.text || update.message.caption || "");
+    const result = await processTelegramPriceMessage(incomingText);
     if (result?.status === "submitted" && result.product) {
       const submittedText = `${priceSummary(result.product)}\n\n<b>✅ PRICE SUBMITTED SUCCESSFULLY</b>\nPending admin approval.`;
       if (result.product.telegramMessageId) {

@@ -36,9 +36,9 @@ async function makeTelegramImageUrl(imageUrl: string) {
   return getSignedReadUrl(key, 15 * 60);
 }
 
-export async function sendTelegramMessage(text: string, replyMarkup?: unknown, topicId?: string | null) {
+export async function sendTelegramMessage(text: string, replyMarkup?: unknown, topicId?: string | null, chatId: string | number | null = env.TELEGRAM_GROUP_ID ?? null) {
   return telegram<{ message_id: number }>("sendMessage", {
-    chat_id: env.TELEGRAM_GROUP_ID,
+    chat_id: chatId,
     ...(topicId ? { message_thread_id: Number(topicId) } : {}),
     text,
     parse_mode: "HTML",
