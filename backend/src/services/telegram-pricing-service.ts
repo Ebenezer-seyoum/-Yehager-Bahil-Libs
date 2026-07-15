@@ -38,6 +38,19 @@ export async function sendTelegramMessage(text: string, replyMarkup?: unknown, t
   });
 }
 
+export async function answerTelegramCallbackQuery(callbackQueryId: string) {
+  return telegram("answerCallbackQuery", { callback_query_id: callbackQueryId });
+}
+
+function cleanProductName(name: string, uniqueId: string) {
+  return name.replace(new RegExp(`\\s*[-–—]\\s*${uniqueId.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&")}\\s*$`, "i"), "").trim();
+}
+
+function priceEntryPrompt(product: { uniqueId?: string | null; name: string }) {
+  const uniqueId = product.uniqueId || "PRODUCT-ID";
+  return `<b>${uniqueId}</b>\n${cleanProductName(product.name, uniqueId)}\n\nEnter only these four prices:\n<code>${uniqueId}\nMen: 0 ETB\nWoman: 0 ETB\nBoy: 0 ETB\nGirl: 0 ETB</code>`;
+}
+
 export async function getOrCreateRegionTopic(regionName: string) {
   if (!env.TELEGRAM_GROUP_ID) throw new Error("Telegram group ID is not configured");
   const existing = await db.query.telegramRegionTopics.findFirst({ where: and(eq(telegramRegionTopics.telegramGroupId, env.TELEGRAM_GROUP_ID), eq(telegramRegionTopics.regionName, regionName), eq(telegramRegionTopics.status, "active")) });
@@ -49,17 +62,18 @@ export async function getOrCreateRegionTopic(regionName: string) {
 
 export async function sendTelegramProduct(product: { id: string; uniqueId?: string | null; name: string; region: string; images?: string[] | null }) {
   const regionTopic = await getOrCreateRegionTopic(product.region);
+  const productName = cleanProductName(product.name, product.uniqueId || product.id);
   const images = (product.images ?? []).filter(Boolean).slice(0, 10);
   if (images.length) {
     const telegramImages = await Promise.all(images.map(makeTelegramImageUrl));
     await telegram("sendMediaGroup", {
       chat_id: env.TELEGRAM_GROUP_ID,
       message_thread_id: Number(regionTopic.telegramTopicId),
-      media: telegramImages.map((url, index) => ({ type: "photo", media: url, caption: index === 0 ? `<b>${product.uniqueId || product.id}</b>\n${product.name}` : undefined, parse_mode: "HTML" })),
+      media: telegramImages.map((url, index) => ({ type: "photo", media: url, caption: index === 0 ? `<b>${product.uniqueId || product.id}</b>\n${productName}` : undefined, parse_mode: "HTML" })),
     });
   }
   const message = await sendTelegramMessage(
-    `<b>${product.uniqueId || product.id}</b>\n${product.name}\n\nEnter prices using this format:\n<code>${product.uniqueId || product.id}\nMen Top: 0 ETB\nMen Pants: 0 ETB\nBoy Top: 0 ETB\nBoy Pants: 0 ETB\nWoman Outfit: 0 ETB\nGirl Outfit: 0 ETB</code>`,
+    priceEntryPrompt({ uniqueId: product.uniqueId || product.id, name: productName }),
     { inline_keyboard: [[{ text: "Enter / Edit Price", callback_data: `price:edit:${product.id}` }]] },
     regionTopic.telegramTopicId,
   );
@@ -80,8 +94,12 @@ function normalizeKey(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
 }
 
+function customerPriceKey(role: { customerType?: string }) {
+  return role.customerType === "man" ? "men" : role.customerType === "boy" ? "boy" : role.customerType === "girl" ? "girl" : "woman";
+}
+
 function roleRuleKey(role: { customerType?: string; outfitOption?: string }) {
-  const customer = role.customerType === "man" ? "men" : role.customerType === "boy" ? "boy" : role.customerType === "girl" ? "girl" : "woman";
+  const customer = customerPriceKey(role);
   const outfit = role.outfitOption === "top_only" ? "top" : role.outfitOption === "pants_only" ? "pants" : role.outfitOption === "full_set" ? "full_set" : "outfit";
   return `${customer}_${outfit}`;
 }
@@ -99,7 +117,7 @@ function parsePriceLines(text: string) {
 }
 
 export async function processTelegramPriceMessage(text: string) {
-  const idMatch = text.match(/\b(YB-[A-Z0-9-]+)\b/i);
+  const idMatch = text.match(/\b([A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+)\b/i);
   if (!idMatch) return null;
   const uniqueId = idMatch[1].toUpperCase();
   const [product] = await db.select().from(products).where(eq(products.uniqueId, uniqueId)).limit(1);
@@ -111,11 +129,12 @@ export async function processTelegramPriceMessage(text: string) {
   const roles = Array.isArray(product.familyRoles) ? product.familyRoles.map((role) => ({ ...role })) : [];
   let updated = 0;
   const nextRoles = roles.map((role) => {
+    const customer = customerPriceKey(role);
     const key = roleRuleKey(role);
-    const aliases = [key, normalizeKey(role.label || "")];
+    const aliases = [customer, `${customer}_outfit`, key, normalizeKey(role.label || "")];
     const entered = aliases.map((alias) => entries.get(alias)).find((value) => value !== undefined);
     if (!entered) return role;
-    const markup = ruleByKey.get(key) ?? 0;
+    const markup = ruleByKey.get(customer) ?? ruleByKey.get(`${customer}_outfit`) ?? ruleByKey.get(key) ?? 0;
     updated += 1;
     return { ...role, designerPriceEtb: entered, markupAmountEtb: markup, sellingPriceEtb: entered + markup, pricingRuleKey: key, enteredPrice: entered, currency: "ETB" as const };
   });

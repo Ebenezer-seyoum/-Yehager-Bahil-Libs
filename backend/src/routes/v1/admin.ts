@@ -1312,7 +1312,7 @@ const pricingRulePatchSchema = z.object({
 });
 
 adminRouter.get("/pricing-rules", requirePermission(PERMISSIONS.PRODUCTS_VIEW), async (c) => {
-  const data = await db.query.globalPricingRules.findMany({ orderBy: [asc(globalPricingRules.label)] });
+  const data = await db.query.globalPricingRules.findMany({ where: eq(globalPricingRules.isActive, true), orderBy: [asc(globalPricingRules.label)] });
   return c.json({ data });
 });
 

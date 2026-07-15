@@ -4,7 +4,7 @@ import type { AppBindings } from "../../types/hono.js";
 import { env } from "../../config/env.js";
 import { db } from "../../lib/db/drizzle.js";
 import { products } from "../../lib/db/schema.js";
-import { approvalKeyboard, editTelegramMessage, priceSummary, processTelegramPriceMessage, sendTelegramMessage } from "../../services/telegram-pricing-service.js";
+import { answerTelegramCallbackQuery, approvalKeyboard, editTelegramMessage, priceSummary, processTelegramPriceMessage, sendTelegramMessage } from "../../services/telegram-pricing-service.js";
 
 export const telegramRouter = new Hono<AppBindings>();
 
@@ -26,7 +26,14 @@ telegramRouter.post("/webhook", async (c) => {
   if (update.callback_query?.data?.startsWith("price:")) {
     const [, action, productId] = update.callback_query.data.split(":");
     const [product] = await db.select().from(products).where(eq(products.id, productId)).limit(1);
-    if (product && (action === "approve" || action === "reject")) {
+    if (product && action === "edit") {
+      await answerTelegramCallbackQuery(update.callback_query.id);
+      await sendTelegramMessage(
+        `<b>${product.uniqueId}</b>\nEnter only these four prices:\n<code>${product.uniqueId}\nMen: 0 ETB\nWoman: 0 ETB\nBoy: 0 ETB\nGirl: 0 ETB</code>`,
+        { force_reply: true, selective: true },
+        product.telegramTopicId,
+      );
+    } else if (product && (action === "approve" || action === "reject")) {
       const status = action === "approve" ? "approved" : "rejected";
       await db.update(products).set({ priceStatus: status, telegramStatus: status, updatedAt: new Date() }).where(eq(products.id, product.id));
       if (update.callback_query.message?.message_id) await editTelegramMessage(update.callback_query.message.message_id, `${priceSummary(product)}\n\n<b>${action === "approve" ? "✅ APPROVED" : "🔴 REJECTED - PLEASE ENTER PRICE AGAIN"}</b>`);
