@@ -11,11 +11,12 @@ export const telegramRouter = new Hono<AppBindings>();
 
 function validPriceFormToken(productId: string, token: string) {
   if (!token) return false;
-  const [expiresText, receivedSignature] = token.split(".");
+  const [tokenProductId, expiresText, receivedSignature] = token.split(".");
+  if (tokenProductId !== productId) return false;
   const expiresAt = Number(expiresText);
   if (!Number.isFinite(expiresAt) || expiresAt < Date.now() / 1000 || !receivedSignature) return false;
   const expectedToken = createPriceFormToken(productId, expiresAt);
-  const expectedSignature = expectedToken.split(".")[1];
+  const expectedSignature = expectedToken.split(".")[2];
   return receivedSignature.length === expectedSignature.length && timingSafeEqual(Buffer.from(receivedSignature), Buffer.from(expectedSignature));
 }
 

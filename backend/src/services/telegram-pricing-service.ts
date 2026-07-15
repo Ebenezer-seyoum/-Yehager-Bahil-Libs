@@ -23,7 +23,7 @@ export function createPriceFormToken(productId: string, expiresAt = Math.floor(D
   const payload = `${productId}.${expiresAt}`;
   const secret = env.TELEGRAM_WEBHOOK_SECRET || env.TELEGRAM_BOT_TOKEN || "";
   const signature = createHmac("sha256", secret).update(payload).digest("hex");
-  return `${expiresAt}.${signature}`;
+  return `${productId}.${expiresAt}.${signature}`;
 }
 
 async function makeTelegramImageUrl(imageUrl: string) {
@@ -82,7 +82,7 @@ export async function sendTelegramProduct(product: { id: string; uniqueId?: stri
   }
   const message = await sendTelegramMessage(
     priceEntryPrompt({ uniqueId: product.uniqueId || product.id, name: productName }),
-    { inline_keyboard: [[{ text: "Enter / Edit Price", url: `https://t.me/${env.TELEGRAM_BOT_USERNAME || "yehager_price_manager_bot"}?start=price_${product.id}` }]] },
+    { inline_keyboard: [[{ text: "Enter / Edit Price", url: env.TELEGRAM_MINI_APP_SHORT_NAME ? `https://t.me/${env.TELEGRAM_BOT_USERNAME || "yehager_price_manager_bot"}/${env.TELEGRAM_MINI_APP_SHORT_NAME}?startapp=${encodeURIComponent(createPriceFormToken(product.id))}` : `https://t.me/${env.TELEGRAM_BOT_USERNAME || "yehager_price_manager_bot"}?start=price_${product.id}` }]] },
     regionTopic.telegramTopicId,
   );
   return { message, topicId: regionTopic.telegramTopicId };
