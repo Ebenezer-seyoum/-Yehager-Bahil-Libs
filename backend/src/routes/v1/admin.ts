@@ -1577,6 +1577,27 @@ adminRouter.patch(
   },
 );
 
+adminRouter.post(
+  "/products/:productId/telegram/resend",
+  requirePermission(PERMISSIONS.PRODUCTS_EDIT),
+  zValidator("param", productParamSchema),
+  async (c) => {
+    const { productId } = c.req.valid("param");
+    const [product] = await db.select().from(products).where(eq(products.id, productId)).limit(1);
+    if (!product) throw new HTTPException(404, { message: "Product not found" });
+    if (!product.sendToTelegram) throw new HTTPException(400, { message: "Enable Telegram pricing before resending" });
+    try {
+      const telegramResult = await sendTelegramProduct(product);
+      const [updated] = await db.update(products).set({ telegramStatus: "waiting_price", telegramMessageId: String(telegramResult.message.message_id), telegramTopicId: telegramResult.topicId, priceStatus: "waiting_price", updatedAt: new Date() }).where(eq(products.id, product.id)).returning();
+      return c.json({ data: updated });
+    } catch (error) {
+      logger.error({ error, productId: product.id, region: product.region }, "telegram_product_resend_failed");
+      await db.update(products).set({ telegramStatus: "not_sent", updatedAt: new Date() }).where(eq(products.id, product.id));
+      throw new HTTPException(502, { message: error instanceof Error ? `Telegram resend failed: ${error.message}` : "Telegram resend failed" });
+    }
+  },
+);
+
 adminRouter.delete(
   "/products/:productId",
   requirePermission(PERMISSIONS.PRODUCTS_DELETE),
