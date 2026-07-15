@@ -74,7 +74,7 @@ export async function sendTelegramProduct(product: { id: string; uniqueId?: stri
   }
   const message = await sendTelegramMessage(
     priceEntryPrompt({ uniqueId: product.uniqueId || product.id, name: productName }),
-    { inline_keyboard: [[{ text: "Enter / Edit Price", callback_data: `price:edit:${product.id}` }]] },
+    { inline_keyboard: [[{ text: "Enter / Edit Price", web_app: { url: `${env.FRONTEND_APP_URL.replace(/\/$/, "")}/telegram/pricing/${product.id}` } }]] },
     regionTopic.telegramTopicId,
   );
   return { message, topicId: regionTopic.telegramTopicId };

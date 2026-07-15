@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { createHmac, timingSafeEqual } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import type { AppBindings } from "../../types/hono.js";
 import { env } from "../../config/env.js";
@@ -7,6 +8,30 @@ import { products } from "../../lib/db/schema.js";
 import { answerTelegramCallbackQuery, approvalKeyboard, editTelegramMessage, priceSummary, processTelegramPriceMessage, sendTelegramMessage } from "../../services/telegram-pricing-service.js";
 
 export const telegramRouter = new Hono<AppBindings>();
+
+function validWebAppInitData(initData: string) {
+  if (!env.TELEGRAM_BOT_TOKEN || !initData) return false;
+  const params = new URLSearchParams(initData);
+  const receivedHash = params.get("hash");
+  const authDate = Number(params.get("auth_date"));
+  if (!receivedHash || !Number.isFinite(authDate) || Math.abs(Date.now() / 1000 - authDate) > 86400) return false;
+  params.delete("hash");
+  const dataCheckString = [...params.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([key, value]) => `${key}=${value}`).join("\n");
+  const secret = createHmac("sha256", "WebAppData").update(env.TELEGRAM_BOT_TOKEN).digest();
+  const calculated = createHmac("sha256", secret).update(dataCheckString).digest("hex");
+  return receivedHash.length === calculated.length && timingSafeEqual(Buffer.from(receivedHash), Buffer.from(calculated));
+}
+
+telegramRouter.post("/price-submit", async (c) => {
+  const body = await c.req.json().catch(() => null) as { productId?: string; initData?: string; prices?: Record<string, number> } | null;
+  if (!body?.productId || !validWebAppInitData(body.initData || "")) return c.json({ error: "Invalid Telegram form session" }, 401);
+  const [product] = await db.select().from(products).where(eq(products.id, body.productId)).limit(1);
+  if (!product?.uniqueId) return c.json({ error: "Product not found" }, 404);
+  const prices = body.prices || {};
+  const result = await processTelegramPriceMessage(`${product.uniqueId}\nMen: ${Number(prices.men)} ETB\nWoman: ${Number(prices.woman)} ETB\nBoy: ${Number(prices.boy)} ETB\nGirl: ${Number(prices.girl)} ETB`);
+  if (!result || result.status !== "submitted") return c.json({ error: "All four prices are required" }, 422);
+  return c.json({ ok: true, status: "submitted" });
+});
 
 telegramRouter.post("/webhook", async (c) => {
   if (env.TELEGRAM_WEBHOOK_SECRET && c.req.header("x-telegram-bot-api-secret-token") !== env.TELEGRAM_WEBHOOK_SECRET) return c.json({ error: "Invalid webhook secret" }, 401);
