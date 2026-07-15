@@ -18,6 +18,7 @@ import {
   Upload,
   FolderOpen,
   X,
+  Send,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -49,6 +50,7 @@ type BulkProduct = {
   tailoringDays: string;
   isFeatured: boolean;
   isActive: boolean;
+  sendToTelegram: boolean;
   import: boolean;
   status: "pending" | "uploading" | "success" | "error";
   errorMsg?: string;
@@ -368,6 +370,7 @@ export function ProductCreateClient() {
   const [tailoringDays, setTailoringDays] = useState("30");
   const [isActive, setIsActive] = useState(true);
   const [isFeatured, setIsFeatured] = useState(false);
+  const [sendToTelegram, setSendToTelegram] = useState(false);
 
   // Single mode flexible image list
   const [singleFiles, setSingleFiles] = useState<File[]>([]);
@@ -527,6 +530,7 @@ export function ProductCreateClient() {
   const [defaultTailoringDays, setDefaultTailoringDays] = useState("30");
   const [defaultFeatured, setDefaultFeatured] = useState(false);
   const [defaultActive, setDefaultActive] = useState(true);
+  const [defaultSendToTelegram, setDefaultSendToTelegram] = useState(false);
 
   useEffect(() => {
     const firstSection = sectionOptions[0]?.name;
@@ -650,6 +654,7 @@ export function ProductCreateClient() {
         tailoringDays: Number(tailoringDays) || 30,
         isActive,
         isFeatured,
+        sendToTelegram,
         images: imageUrls,
         uniqueId,
     };
@@ -750,6 +755,7 @@ export function ProductCreateClient() {
         tailoringDays: defaultTailoringDays,
         isFeatured: defaultFeatured,
         isActive: defaultActive,
+        sendToTelegram: defaultSendToTelegram,
         import: true,
         status: "pending",
       };
@@ -928,6 +934,7 @@ export function ProductCreateClient() {
           tailoringDays: Number(prod.tailoringDays) || 30,
           isActive: prod.isActive,
           isFeatured: prod.isFeatured,
+          sendToTelegram: prod.sendToTelegram,
           images: urls,
           uniqueId,
         };
@@ -1011,6 +1018,7 @@ export function ProductCreateClient() {
           tailoringDays: defaultTailoringDays,
           isFeatured: defaultFeatured,
           isActive: defaultActive,
+          sendToTelegram: defaultSendToTelegram,
         };
       }),
     );
@@ -1531,6 +1539,16 @@ export function ProductCreateClient() {
                 </div>
               </div>
             </section>
+
+            <section className="rounded-[2.5rem] border border-indigo-100 bg-indigo-50/40 p-6 shadow-sm">
+              <h3 className="mb-4 flex items-center gap-2 text-sm font-black uppercase tracking-widest text-indigo-700">
+                <Send className="h-4 w-4" /> Telegram Price Collection
+              </h3>
+              <div className="flex items-center justify-between p-2">
+                <div className="space-y-1"><p className="text-xs font-black uppercase text-slate-900">Send to Telegram Pricing Group</p><p className="text-[10px] font-bold text-slate-500">Send this product ID and images for designer pricing after creation.</p></div>
+                <button type="button" onClick={() => setSendToTelegram(!sendToTelegram)} className={cn("relative inline-flex h-6 w-11 rounded-full p-1 transition-all", sendToTelegram ? "bg-indigo-600" : "bg-slate-200")}><span className={cn("h-4 w-4 rounded-full bg-white transition-all", sendToTelegram ? "translate-x-5" : "translate-x-0")} /></button>
+              </div>
+            </section>
           </aside>
           <section className="lg:col-span-12 rounded-[2.5rem] border border-slate-200 bg-white p-8 shadow-sm">
             <div className="mb-6 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
@@ -1795,6 +1813,12 @@ export function ProductCreateClient() {
                   />
                 </button>
               </div>
+              <div className="flex items-center gap-3">
+                <span className="text-[10px] font-black uppercase text-slate-400">Telegram Pricing</span>
+                <button type="button" onClick={() => setDefaultSendToTelegram(!defaultSendToTelegram)} className={cn("relative inline-flex h-5 w-10 rounded-full p-0.5 transition-all", defaultSendToTelegram ? "bg-indigo-600" : "bg-slate-200")}>
+                  <span className={cn("h-4 w-4 rounded-full bg-white transition-all", defaultSendToTelegram ? "translate-x-5" : "translate-x-0")} />
+                </button>
+              </div>
               <button
                 onClick={applyDefaultsToAll}
                 className="ml-auto rounded-xl border border-emerald-600 hover:bg-emerald-50 px-4 py-2 text-xs font-bold text-emerald-800 transition-colors"
@@ -1889,6 +1913,8 @@ export function ProductCreateClient() {
                       <th className="px-6 py-4 font-bold text-slate-400 uppercase tracking-widest w-12">
                         Import
                       </th>
+                      <th className="px-6 py-4 font-bold text-slate-400 uppercase tracking-widest w-24">Active</th>
+                      <th className="px-6 py-4 font-bold text-slate-400 uppercase tracking-widest w-28">Telegram</th>
                       <th className="px-6 py-4 font-bold text-slate-400 uppercase tracking-widest w-40">
                         Subfolder Name
                       </th>
@@ -2063,6 +2089,12 @@ export function ProductCreateClient() {
                                 Pricing
                               </button>
                             </div>
+                          </td>
+                          <td className="px-6 py-6">
+                            <button type="button" onClick={() => updateBulkProduct(prod.id, "isActive", !prod.isActive)} className={cn("rounded-full px-3 py-1 text-[10px] font-black uppercase", prod.isActive ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500")}>{prod.isActive ? "ON" : "OFF"}</button>
+                          </td>
+                          <td className="px-6 py-6">
+                            <button type="button" onClick={() => updateBulkProduct(prod.id, "sendToTelegram", !prod.sendToTelegram)} className={cn("rounded-full px-3 py-1 text-[10px] font-black uppercase", prod.sendToTelegram ? "bg-indigo-100 text-indigo-700" : "bg-slate-100 text-slate-500")}>{prod.sendToTelegram ? "ON" : "OFF"}</button>
                           </td>
                           <td className="px-6 py-6">
                             <span

@@ -6,7 +6,7 @@ import { HTTPException } from "hono/http-exception";
 import { requireAuth } from "../../middleware/auth.js";
 import { requireAnyPermission, requirePermission } from "../../middleware/permissions.js";
 import { db } from "../../lib/db/drizzle.js";
-import { auditLogs, homepageSections, orders, products, profitCostSettings, systemAlerts, uploadedDesigns } from "../../lib/db/schema.js";
+import { auditLogs, globalPricingRules, homepageSections, orders, products, profitCostSettings, systemAlerts, uploadedDesigns } from "../../lib/db/schema.js";
 import { USER_ROLES } from "../../lib/auth/roles.js";
 import { PERMISSIONS } from "../../lib/auth/permissions.js";
 import {
@@ -47,6 +47,7 @@ import { getUsdEtbRate } from "../../repositories/exchange-rates-repository.js";
 import { deleteOrderForAdmin } from "../../services/orders-service.js";
 import { refreshStripeReceiptForOrder } from "../../services/payments-service.js";
 import type { AppBindings } from "../../types/hono.js";
+import { editTelegramMessage, priceSummary, sendTelegramProduct } from "../../services/telegram-pricing-service.js";
 
 const listQuerySchema = z.object({
   limit: z.coerce.number().int().positive().max(200).optional(),
@@ -94,6 +95,10 @@ const productPatchSchema = z.object({
   images: z.array(productImageSchema).optional(),
   isActive: z.boolean().optional(),
   isFeatured: z.boolean().optional(),
+  sendToTelegram: z.boolean().optional(),
+  priceStatus: z.enum(["draft", "waiting_price", "submitted", "pending_approval", "approved", "rejected", "published"]).optional(),
+  telegramStatus: z.enum(["not_sent", "sent", "waiting_price", "submitted", "approved", "rejected"]).optional(),
+  priceDeadline: z.coerce.date().nullable().optional(),
   designerCostUsd: z.coerce.number().nonnegative().optional(),
   taxPercent: z.coerce.number().nonnegative().optional(),
   otherCostUsd: z.coerce.number().nonnegative().optional(),
@@ -141,6 +146,9 @@ const createProductSchema = z.object({
   images: z.array(productImageSchema).default([]),
   isActive: z.boolean().optional(),
   isFeatured: z.boolean().optional(),
+  sendToTelegram: z.boolean().optional(),
+  priceStatus: z.enum(["draft", "waiting_price", "submitted", "pending_approval", "approved", "rejected", "published"]).optional(),
+  priceDeadline: z.coerce.date().nullable().optional(),
   designerCostUsd: z.coerce.number().nonnegative(),
   taxPercent: z.coerce.number().nonnegative(),
   otherCostUsd: z.coerce.number().nonnegative(),
@@ -1296,6 +1304,43 @@ adminRouter.get("/products", requirePermission(PERMISSIONS.PRODUCTS_VIEW), zVali
   return c.json({ data });
 });
 
+const pricingRulePatchSchema = z.object({
+  markupAmountEtb: z.coerce.number().nonnegative(),
+  isActive: z.boolean().optional(),
+});
+
+adminRouter.get("/pricing-rules", requirePermission(PERMISSIONS.PRODUCTS_VIEW), async (c) => {
+  const data = await db.query.globalPricingRules.findMany({ orderBy: [asc(globalPricingRules.label)] });
+  return c.json({ data });
+});
+
+adminRouter.patch(
+  "/pricing-rules/:ruleKey",
+  requirePermission(PERMISSIONS.PRODUCTS_EDIT),
+  zValidator("json", pricingRulePatchSchema),
+  async (c) => {
+    const authUser = c.get("authUser");
+    const ruleKey = c.req.param("ruleKey");
+    const body = c.req.valid("json");
+    const [row] = await db.update(globalPricingRules)
+      .set({ markupAmountEtb: body.markupAmountEtb.toFixed(2), isActive: body.isActive, updatedBy: authUser?.email, updatedAt: new Date() })
+      .where(eq(globalPricingRules.ruleKey, ruleKey))
+      .returning();
+    if (!row) throw new HTTPException(404, { message: "Pricing rule not found" });
+    await db.insert(auditLogs).values({
+      action: "global_pricing_rule_updated",
+      category: "inventory",
+      severity: "info",
+      entityType: "global_pricing_rule",
+      entityId: row.id,
+      performedBy: authUser?.email ?? "admin",
+      details: `Updated ${row.label}`,
+      metadata: { ruleKey, markupAmountEtb: row.markupAmountEtb },
+    });
+    return c.json({ data: row });
+  },
+);
+
 async function getProductDetailForAdmin(productId: string) {
   const data = await db.query.products.findFirst({
     where: eq(products.id, productId),
@@ -1354,6 +1399,9 @@ adminRouter.post(
         tailoringDays: body.tailoringDays ?? 30,
         isActive: body.isActive ?? true,
         isFeatured: body.isFeatured ?? false,
+        sendToTelegram: body.sendToTelegram ?? false,
+        priceStatus: body.priceStatus ?? "draft",
+        priceDeadline: body.priceDeadline ?? null,
       })
       .returning();
 
@@ -1381,6 +1429,15 @@ adminRouter.post(
         priceUsd: row.priceUsd,
       },
     });
+
+    if (row.sendToTelegram) {
+      try {
+        const telegramMessage = await sendTelegramProduct(row);
+        await db.update(products).set({ telegramStatus: "waiting_price", telegramMessageId: String(telegramMessage.message_id), priceStatus: "waiting_price", updatedAt: new Date() }).where(eq(products.id, row.id));
+      } catch {
+        await db.update(products).set({ telegramStatus: "not_sent", updatedAt: new Date() }).where(eq(products.id, row.id));
+      }
+    }
 
     return c.json({ data: row }, 201);
   },
@@ -1430,6 +1487,10 @@ adminRouter.patch(
         images: body.images,
         isActive: body.isActive,
         isFeatured: body.isFeatured,
+        sendToTelegram: body.sendToTelegram,
+        priceStatus: body.priceStatus,
+        telegramStatus: body.telegramStatus,
+        priceDeadline: body.priceDeadline,
         updatedAt: new Date(),
       })
       .where(eq(products.id, productId))
@@ -1437,6 +1498,19 @@ adminRouter.patch(
 
     if (!row) {
       throw new HTTPException(404, { message: "Product not found" });
+    }
+
+    if (body.priceStatus && row.telegramMessageId) {
+      const approved = body.priceStatus === "approved" || body.priceStatus === "published";
+      const rejected = body.priceStatus === "rejected";
+      if (approved || rejected) {
+        try {
+          await editTelegramMessage(row.telegramMessageId, `${priceSummary(row)}\n\n<b>${approved ? "✅ PRICE APPROVED" : "🔴 PRICE REJECTED — PLEASE ENTER AGAIN"}</b>`);
+          await db.update(products).set({ telegramStatus: approved ? "approved" : "rejected", updatedAt: new Date() }).where(eq(products.id, row.id));
+        } catch {
+          // Telegram availability must not prevent an admin price decision from being saved.
+        }
+      }
     }
 
     if (body.designerCostUsd !== undefined || body.taxPercent !== undefined || body.otherCostUsd !== undefined) {
@@ -1468,6 +1542,15 @@ adminRouter.patch(
       details: "Admin updated product",
       metadata: body,
     });
+
+    if (body.sendToTelegram === true && row.sendToTelegram) {
+      try {
+        const telegramMessage = await sendTelegramProduct(row);
+        await db.update(products).set({ telegramStatus: "waiting_price", telegramMessageId: String(telegramMessage.message_id), priceStatus: "waiting_price", updatedAt: new Date() }).where(eq(products.id, row.id));
+      } catch {
+        await db.update(products).set({ telegramStatus: "not_sent", updatedAt: new Date() }).where(eq(products.id, row.id));
+      }
+    }
 
     const data = await getProductDetailForAdmin(productId);
     return c.json({ data: data ?? row });

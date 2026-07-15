@@ -1,0 +1,32 @@
+import { Hono } from "hono";
+import { and, eq } from "drizzle-orm";
+import type { AppBindings } from "../../types/hono.js";
+import { env } from "../../config/env.js";
+import { db } from "../../lib/db/drizzle.js";
+import { products } from "../../lib/db/schema.js";
+import { approvalKeyboard, editTelegramMessage, priceSummary, processTelegramPriceMessage, sendTelegramMessage } from "../../services/telegram-pricing-service.js";
+
+export const telegramRouter = new Hono<AppBindings>();
+
+telegramRouter.post("/webhook", async (c) => {
+  if (env.TELEGRAM_WEBHOOK_SECRET && c.req.header("x-telegram-bot-api-secret-token") !== env.TELEGRAM_WEBHOOK_SECRET) return c.json({ error: "Invalid webhook secret" }, 401);
+  const update = await c.req.json().catch(() => null) as { message?: { text?: string; caption?: string; message_id?: number }; callback_query?: { id: string; data?: string; message?: { message_id?: number } } } | null;
+  if (!update) return c.json({ ok: true });
+  if (update.message?.text || update.message?.caption) {
+    const result = await processTelegramPriceMessage(update.message.text || update.message.caption || "");
+    if (result?.status === "submitted" && result.product) {
+      await sendTelegramMessage(`${priceSummary(result.product)}\n\n<b>Pending admin approval.</b>`, approvalKeyboard(result.product.id));
+    }
+  }
+  if (update.callback_query?.data?.startsWith("price:")) {
+    const [, action, productId] = update.callback_query.data.split(":");
+    const [product] = await db.select().from(products).where(eq(products.id, productId)).limit(1);
+    if (product && (action === "approve" || action === "reject")) {
+      const status = action === "approve" ? "approved" : "rejected";
+      await db.update(products).set({ priceStatus: status, telegramStatus: status, updatedAt: new Date() }).where(eq(products.id, product.id));
+      if (update.callback_query.message?.message_id) await editTelegramMessage(update.callback_query.message.message_id, `${priceSummary(product)}\n\n<b>${action === "approve" ? "✅ APPROVED" : "🔴 REJECTED - PLEASE ENTER PRICE AGAIN"}</b>`);
+    }
+  }
+  return c.json({ ok: true });
+});
+

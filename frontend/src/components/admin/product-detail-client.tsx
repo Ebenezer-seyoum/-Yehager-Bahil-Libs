@@ -16,7 +16,8 @@ import {
   MapPin,
   Hash,
   Save,
-  X
+  X,
+  Send
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { dashboardConfirm, dashboardSuccess, dashboardError } from "@/lib/dashboard-swal";
@@ -34,6 +35,10 @@ type Product = Record<string, unknown> & {
   tailoringDays?: string | number | null;
   isActive?: boolean | null;
   isFeatured?: boolean | null;
+  sendToTelegram?: boolean | null;
+  priceStatus?: string | null;
+  telegramStatus?: string | null;
+  priceDeadline?: string | null;
   description?: string | null;
   fabricType?: string | null;
   embroideryStyle?: string | null;
@@ -88,6 +93,7 @@ export function ProductDetailClient({ initialProduct }: { initialProduct: Produc
   const [activeImage, setActiveImage] = useState(product.images?.[0] || "");
   const [activeSection, setActiveSection] = useState<"general" | "pricing" | "garment" | "inventory">("general");
   const [editingCost, setEditingCost] = useState(false);
+  const [savingTelegram, setSavingTelegram] = useState(false);
   const [openRoleGroups, setOpenRoleGroups] = useState<Record<string, boolean>>({ woman: true, man: true, girl: false, boy: false });
   const [costForm, setCostForm] = useState({
     designerCostUsd: String(product.profitCostSetting?.designerCostUsd ?? ""),
@@ -129,6 +135,45 @@ export function ProductDetailClient({ initialProduct }: { initialProduct: Produc
           refresh();
         }
       } catch { /* ignore */ } finally { setBusy(false); }
+    }
+  }
+
+  async function toggleTelegramPricing() {
+    const next = !product.sendToTelegram;
+    setSavingTelegram(true);
+    try {
+      const res = await fetch(`/api/backend/admin/products/${product.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sendToTelegram: next, priceStatus: next ? "waiting_price" : "draft" }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error || json.message || "Could not update Telegram pricing");
+      if (json.data) setProduct(json.data);
+      void dashboardSuccess("Updated", next ? "Product enabled for Telegram pricing." : "Telegram pricing disabled.");
+    } catch (error) {
+      void dashboardError("Update Failed", error instanceof Error ? error.message : "Could not update Telegram pricing.");
+    } finally {
+      setSavingTelegram(false);
+    }
+  }
+
+  async function decidePrice(decision: "approved" | "rejected") {
+    setSavingTelegram(true);
+    try {
+      const res = await fetch(`/api/backend/admin/products/${product.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ priceStatus: decision }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error || json.message || "Could not update price status");
+      if (json.data) setProduct(json.data);
+      void dashboardSuccess("Price Updated", decision === "approved" ? "Price approved and Telegram marked green." : "Price rejected and Telegram marked red.");
+    } catch (error) {
+      void dashboardError("Price Update Failed", error instanceof Error ? error.message : "Could not update price status.");
+    } finally {
+      setSavingTelegram(false);
     }
   }
 
@@ -425,6 +470,18 @@ export function ProductDetailClient({ initialProduct }: { initialProduct: Produc
                    <div className="flex items-center justify-between rounded-2xl border border-slate-100 p-6">
                       <div className="space-y-1"><p className="text-sm font-black uppercase text-slate-900">Visibility Status</p><p className="text-xs font-bold text-slate-400">Live on storefront and available for search.</p></div>
                       <span className={cn("inline-flex items-center rounded-full border px-4 py-1 text-[10px] font-black uppercase tracking-widest", product.isActive ? "bg-emerald-50 text-emerald-700 border-emerald-100" : "bg-rose-50 text-rose-700 border-rose-100")}>{product.isActive ? "Public" : "Private"}</span>
+                   </div>
+                   <div className="rounded-2xl border border-indigo-100 bg-indigo-50/40 p-6">
+                      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                        <div className="space-y-1"><p className="flex items-center gap-2 text-sm font-black uppercase text-slate-900"><Send className="h-4 w-4 text-indigo-600" /> Telegram Price Collection</p><p className="text-xs font-bold text-slate-500">Send this product to the designer pricing group and collect role-based ETB prices.</p></div>
+                        <button type="button" disabled={savingTelegram} onClick={() => void toggleTelegramPricing()} className={cn("inline-flex h-10 items-center gap-2 rounded-xl px-4 text-xs font-black text-white shadow-sm", product.sendToTelegram ? "bg-indigo-700 hover:bg-indigo-800" : "bg-slate-500 hover:bg-slate-600")}>{product.sendToTelegram ? "Enabled" : "Disabled"}</button>
+                      </div>
+                      <div className="mt-4 grid gap-3 md:grid-cols-3">
+                        <Field label="Price Status" value={product.priceStatus?.replaceAll("_", " ") || "Draft"} />
+                        <Field label="Telegram Status" value={product.telegramStatus?.replaceAll("_", " ") || "Not sent"} />
+                        <Field label="Price Deadline" value={product.priceDeadline ? new Date(product.priceDeadline).toLocaleString() : "Not set"} />
+                      </div>
+                      {(product.priceStatus === "pending_approval" || product.priceStatus === "submitted") ? <div className="mt-4 flex flex-wrap justify-end gap-2"><button type="button" disabled={savingTelegram} onClick={() => void decidePrice("rejected")} className="rounded-xl bg-rose-600 px-4 py-2 text-xs font-black text-white hover:bg-rose-700">Reject Price</button><button type="button" disabled={savingTelegram} onClick={() => void decidePrice("approved")} className="rounded-xl bg-emerald-700 px-4 py-2 text-xs font-black text-white hover:bg-emerald-800">Approve Price</button></div> : null}
                    </div>
                 </div>
              </section>

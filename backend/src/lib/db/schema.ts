@@ -217,6 +217,13 @@ export const products = pgTable(
     subcategory: text("subcategory"),
     category: text("category"),
     priceUsd: numeric("price_usd", { precision: 12, scale: 2 }).notNull(),
+    designerPriceEtb: numeric("designer_price_etb", { precision: 12, scale: 2 }),
+    markupAmountEtb: numeric("markup_amount_etb", { precision: 12, scale: 2 }),
+    priceStatus: varchar("price_status", { length: 40 }).default("draft").notNull(),
+    sendToTelegram: boolean("send_to_telegram").default(false).notNull(),
+    telegramStatus: varchar("telegram_status", { length: 40 }).default("not_sent").notNull(),
+    telegramMessageId: text("telegram_message_id"),
+    priceDeadline: timestamp("price_deadline", { withTimezone: true }),
     baseCurrency: text("base_currency").default("USD").notNull(),
     basePriceAmount: numeric("base_price_amount", { precision: 12, scale: 2 }),
     baseExchangeRate: numeric("base_exchange_rate", { precision: 12, scale: 4 }),
@@ -237,6 +244,10 @@ export const products = pgTable(
         designerCostUsd?: number;
         taxPercent?: number;
         otherCostUsd?: number;
+        designerPriceEtb?: number;
+        markupAmountEtb?: number;
+        sellingPriceEtb?: number;
+        pricingRuleKey?: string;
       }>
     >(),
     images: jsonb("images").$type<string[]>().default([]).notNull(),
@@ -249,7 +260,27 @@ export const products = pgTable(
     isFeatured: boolean("is_featured").default(false).notNull(),
     ...timestamps,
   },
-  (table) => [index("products_region_idx").on(table.region), index("products_active_idx").on(table.isActive)],
+  (table) => [
+    index("products_region_idx").on(table.region),
+    index("products_active_idx").on(table.isActive),
+    index("products_price_status_idx").on(table.priceStatus),
+    check("products_price_status_check", sql`${table.priceStatus} in ('draft', 'waiting_price', 'submitted', 'pending_approval', 'approved', 'rejected', 'published')`),
+    check("products_telegram_status_check", sql`${table.telegramStatus} in ('not_sent', 'sent', 'waiting_price', 'submitted', 'approved', 'rejected')`),
+  ],
+);
+
+export const globalPricingRules = pgTable(
+  "global_pricing_rules",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    ruleKey: varchar("rule_key", { length: 80 }).notNull(),
+    label: varchar("label", { length: 160 }).notNull(),
+    markupAmountEtb: numeric("markup_amount_etb", { precision: 12, scale: 2 }).default("0").notNull(),
+    isActive: boolean("is_active").default(true).notNull(),
+    updatedBy: text("updated_by"),
+    ...timestamps,
+  },
+  (table) => [uniqueIndex("global_pricing_rules_key_uidx").on(table.ruleKey)],
 );
 
 export const productDiscounts = pgTable(
