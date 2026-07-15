@@ -58,6 +58,7 @@ const envSchema = z.object({
   PRODUCTION_EMAIL: z.string().email().default("naomiinvestments2100@gmail.com"),
   PRODUCTION_PHONE: z.string().min(1).default("+251 92 394 0978"),
   TELEGRAM_BOT_TOKEN: z.string().min(1).optional(),
+  TELEGRAM_BOT_USERNAME: z.string().min(1).optional(),
   TELEGRAM_GROUP_ID: z.string().min(1).optional(),
   TELEGRAM_WEBHOOK_SECRET: z.string().min(16).optional(),
 });
