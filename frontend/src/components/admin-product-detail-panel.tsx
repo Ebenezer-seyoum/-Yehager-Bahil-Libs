@@ -19,6 +19,7 @@ import {
   ImageIcon,
   Eye,
   EyeOff,
+  Send,
 } from "lucide-react";
 import {
   dashboardConfirm,
@@ -61,6 +62,15 @@ type Product = {
   tailoringDays?: number | null;
   isActive?: boolean;
   isFeatured?: boolean;
+  sendToTelegram?: boolean;
+  priceStatus?: string | null;
+  telegramStatus?: string | null;
+  telegramTopicId?: string | null;
+  telegramMessageId?: string | null;
+  priceSubmissionCount?: number | null;
+  priceVersion?: number | null;
+  lastPriceSubmittedAt?: string | null;
+  lastPriceApprovedAt?: string | null;
 };
 
 type ProductPatch = Partial<Product> & {
@@ -101,7 +111,7 @@ function roleKey(role: { label?: string; customerType?: DraftRole["customerType"
   return `${customerType}:${outfitOption}`;
 }
 
-type TabKey = "info" | "pricing" | "garment" | "storefront" | "images";
+type TabKey = "info" | "pricing" | "garment" | "storefront" | "telegram" | "images";
 
 const TABS: { key: TabKey; label: string; icon: React.ReactNode }[] = [
   {
@@ -123,6 +133,11 @@ const TABS: { key: TabKey; label: string; icon: React.ReactNode }[] = [
     key: "storefront",
     label: "Storefront Controls",
     icon: <ShieldCheck className="h-4 w-4" />,
+  },
+  {
+    key: "telegram",
+    label: "Telegram Pricing",
+    icon: <Send className="h-4 w-4" />,
   },
   {
     key: "images",
@@ -1235,11 +1250,30 @@ export function AdminProductDetailPanel({
     );
   }
 
+  function renderTelegramPricing() {
+    const statusLabel = (value?: string | null) => value ? value.replaceAll("_", " ") : "Not set";
+    const toggleTelegram = async () => {
+      const enabled = !product.sendToTelegram;
+      await patchProduct({ sendToTelegram: enabled, priceStatus: enabled ? "waiting_price" : "draft" }, enabled ? "Telegram pricing enabled. The product will be sent to its region topic." : "Telegram pricing disabled.");
+    };
+    return (
+      <div className="space-y-5">
+        <div><h3 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-indigo-700"><Send className="h-4 w-4" /> Telegram Pricing Workflow</h3><p className="mt-2 text-xs font-semibold text-slate-500">Route this product to its region topic, collect prices, and track submission history.</p></div>
+        <div className="flex items-center justify-between rounded-2xl border border-indigo-100 bg-indigo-50/50 p-5"><div><p className="text-xs font-black uppercase text-slate-900">Send to Telegram Pricing Group</p><p className="mt-1 text-[10px] font-bold text-slate-500">ON sends the product to the matching region topic.</p></div>{canEdit ? <button type="button" onClick={() => void toggleTelegram()} disabled={Boolean(busy)} className={cn("relative inline-flex h-7 w-14 rounded-full p-1 transition-all", product.sendToTelegram ? "bg-indigo-700" : "bg-slate-300")}><span className={cn("h-5 w-5 rounded-full bg-white transition-all", product.sendToTelegram ? "translate-x-7" : "translate-x-0")} /></button> : null}</div>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><ReadOnlyField label="Region Topic" value={`${product.region}${product.subcategory ? ` / ${product.subcategory}` : ""}`} /><ReadOnlyField label="Telegram Status" value={statusLabel(product.telegramStatus)} /><ReadOnlyField label="Topic ID" value={product.telegramTopicId || "Not created"} /><ReadOnlyField label="Message ID" value={product.telegramMessageId || "Not sent"} /></div>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><ReadOnlyField label="Price Status" value={statusLabel(product.priceStatus)} /><ReadOnlyField label="Submission Count" value={String(product.priceSubmissionCount ?? 0)} /><ReadOnlyField label="Price Version" value={String(product.priceVersion ?? 0)} /><ReadOnlyField label="Last Submitted" value={product.lastPriceSubmittedAt ? new Date(product.lastPriceSubmittedAt).toLocaleString() : "Not submitted"} /></div>
+        <div className="grid gap-3 sm:grid-cols-2"><ReadOnlyField label="Last Approved" value={product.lastPriceApprovedAt ? new Date(product.lastPriceApprovedAt).toLocaleString() : "Not approved"} /><ReadOnlyField label="Product ID" value={displayUniqueId} /></div>
+        {(product.priceStatus === "pending_approval" || product.priceStatus === "submitted") && canEdit ? <div className="flex justify-end gap-2"><button type="button" onClick={() => void patchProduct({ priceStatus: "rejected" }, "Price rejected. Telegram now requests a new price.")} className="rounded-xl bg-rose-600 px-4 py-2 text-xs font-black text-white">Reject Price</button><button type="button" onClick={() => void patchProduct({ priceStatus: "approved" }, "Price approved and product price updated.")} className="rounded-xl bg-emerald-700 px-4 py-2 text-xs font-black text-white">Approve Price</button></div> : null}
+      </div>
+    );
+  }
+
   const tabRenderers: Record<TabKey, () => React.ReactNode> = {
     info: renderProductInfo,
     pricing: renderPricing,
     garment: renderGarmentSpecs,
     storefront: renderStorefrontControls,
+    telegram: renderTelegramPricing,
     images: renderImagesManager,
   };
 
