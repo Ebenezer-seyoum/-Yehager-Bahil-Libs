@@ -95,7 +95,7 @@ export function ProductDetailClient({ initialProduct }: { initialProduct: Produc
   const [product, setProduct] = useState<Product>(initialProduct);
   const [, setBusy] = useState(false);
   const [activeImage, setActiveImage] = useState(product.images?.[0] || "");
-  const [activeSection, setActiveSection] = useState<"general" | "pricing" | "garment" | "inventory">("general");
+  const [activeSection, setActiveSection] = useState<"general" | "pricing" | "garment" | "inventory" | "telegram">("general");
   const [editingCost, setEditingCost] = useState(false);
   const [savingTelegram, setSavingTelegram] = useState(false);
   const [openRoleGroups, setOpenRoleGroups] = useState<Record<string, boolean>>({ woman: true, man: true, girl: false, boy: false });
@@ -296,9 +296,10 @@ export function ProductDetailClient({ initialProduct }: { initialProduct: Produc
         { id: "pricing", label: "Financial Data", icon: DollarSign },
         { id: "garment", label: "Garment Specs", icon: Shirt },
         { id: "inventory", label: "Stock & Settings", icon: Package },
+        { id: "telegram", label: "Telegram Pricing", icon: Send },
       ]}
       activeSection={activeSection}
-      onSectionChange={(id) => setActiveSection(id as "general" | "pricing" | "garment" | "inventory")}
+      onSectionChange={(id) => setActiveSection(id as "general" | "pricing" | "garment" | "inventory" | "telegram")}
     >
           {activeSection === "general" && (
             <div className="space-y-6">
@@ -494,6 +495,38 @@ export function ProductDetailClient({ initialProduct }: { initialProduct: Produc
                    </div>
                 </div>
              </section>
+          )}
+
+          {activeSection === "telegram" && (
+            <section className="space-y-6 rounded-2xl border border-indigo-100 bg-white p-5 shadow-sm">
+              <div>
+                <h2 className="flex items-center gap-2 text-base font-black text-slate-900"><Send className="h-5 w-5 text-indigo-600" /> Telegram Pricing Workflow</h2>
+                <p className="mt-1 text-sm font-semibold text-slate-500">Send this product to its region topic, collect designer prices, and track approval without reposting images.</p>
+              </div>
+              <div className="rounded-2xl border border-indigo-100 bg-indigo-50/50 p-5">
+                <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                  <div><p className="text-xs font-black uppercase tracking-widest text-slate-500">Send to Telegram Pricing Group</p><p className="mt-1 text-sm font-black text-slate-900">{product.sendToTelegram ? "Enabled" : "Disabled"}</p></div>
+                  <button type="button" disabled={savingTelegram} onClick={() => void toggleTelegramPricing()} className={cn("relative inline-flex h-7 w-14 rounded-full p-1 transition-all", product.sendToTelegram ? "bg-indigo-700" : "bg-slate-300")}><span className={cn("h-5 w-5 rounded-full bg-white transition-all", product.sendToTelegram ? "translate-x-7" : "translate-x-0")} /></button>
+                </div>
+              </div>
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                <Field label="Region Topic" value={product.region ? `${product.region}${product.subcategory ? ` / ${product.subcategory}` : ""}` : "Not assigned"} />
+                <Field label="Telegram Status" value={product.telegramStatus?.replaceAll("_", " ") || "Not sent"} />
+                <Field label="Telegram Topic ID" value={(product as Product & { telegramTopicId?: string | null }).telegramTopicId || "Not created"} />
+                <Field label="Telegram Message ID" value={(product as Product & { telegramMessageId?: string | null }).telegramMessageId || "Not sent"} />
+              </div>
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                <Field label="Price Status" value={product.priceStatus?.replaceAll("_", " ") || "Draft"} />
+                <Field label="Price Submission Count" value={product.priceSubmissionCount ?? 0} />
+                <Field label="Price Version" value={product.priceVersion ?? 0} />
+                <Field label="Last Submitted" value={product.lastPriceSubmittedAt ? new Date(product.lastPriceSubmittedAt).toLocaleString() : "Not submitted"} />
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <Field label="Last Approved" value={product.lastPriceApprovedAt ? new Date(product.lastPriceApprovedAt).toLocaleString() : "Not approved"} />
+                <Field label="Product ID" value={product.uniqueId || product.id} icon={Hash} />
+              </div>
+              {(product.priceStatus === "pending_approval" || product.priceStatus === "submitted") ? <div className="flex flex-wrap justify-end gap-2"><button type="button" disabled={savingTelegram} onClick={() => void decidePrice("rejected")} className="rounded-xl bg-rose-600 px-4 py-2 text-xs font-black text-white hover:bg-rose-700">Reject Price</button><button type="button" disabled={savingTelegram} onClick={() => void decidePrice("approved")} className="rounded-xl bg-emerald-700 px-4 py-2 text-xs font-black text-white hover:bg-emerald-800">Approve Price</button></div> : null}
+            </section>
           )}
     </AdminDetailLayout>
   );
