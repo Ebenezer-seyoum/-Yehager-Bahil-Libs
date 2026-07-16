@@ -27,7 +27,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { NavigationGroup, NavigationItem } from "@/lib/dashboard-navigation";
-import { can } from "@/lib/permissions";
+import { canAny } from "@/lib/permissions";
 
 type NotificationCounts = {
   orders?: number;
@@ -96,8 +96,14 @@ export function DashboardShell({
   const router = useRouter();
   const searchParams = useSearchParams()!;
   const { data: session, update: updateSession } = useSession();
-  const isReportsRoute = pathname.startsWith("/admin/reports");
-  const shellTitle = isReportsRoute ? "Reports Center" : title;
+  const isReportsRoute =
+    pathname.startsWith("/admin/reports") || pathname.startsWith("/employee/reports");
+  const isEmployeeActivityRoute = pathname.startsWith("/employee/activity");
+  const shellTitle = isReportsRoute
+    ? "Reports Center"
+    : isEmployeeActivityRoute
+      ? "Activity Logs"
+      : title;
   const [mobileOpen, setMobileOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [refreshedPermissions, setRefreshedPermissions] = useState<string[] | null>(null);
@@ -135,7 +141,11 @@ export function DashboardShell({
         : navigation
             .map((group) => ({
               ...group,
-              items: group.items.filter((item) => item.href === "/employee/settings" || can(permissions, item.permission)),
+              items: group.items.filter(
+                (item) =>
+                  item.href === "/employee/settings" ||
+                  canAny(permissions, [item.permission, ...(item.alternativePermissions ?? [])]),
+              ),
             }))
             .filter((group) => group.items.length > 0),
     [isFullAdmin, isUnassignedEmployee, navigation, permissions],
@@ -143,6 +153,7 @@ export function DashboardShell({
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
   const [expandedNavItems, setExpandedNavItems] = useState<Record<string, boolean>>({
     "/admin/reports": true,
+    "/employee/reports": true,
   });
 
   function isReportChildActive(href: string) {
@@ -152,10 +163,9 @@ export function DashboardShell({
       return true;
     }
     const params = new URLSearchParams(href.slice(queryIndex + 1));
-    return (
-      searchParams.get("category") === params.get("category") &&
-      searchParams.get("report") === params.get("report")
-    );
+    const activeCategory = searchParams.get("category") ?? "overview";
+    const activeReport = searchParams.get("report") ?? "business-overview";
+    return activeCategory === params.get("category") && activeReport === params.get("report");
   }
 
   function isNavItemActive(item: NavigationItem) {

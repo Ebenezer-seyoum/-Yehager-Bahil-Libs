@@ -1,3 +1,8 @@
+import {
+  buildAdminReportNavChildren,
+  buildEmployeeReportNavChildren,
+} from "@/lib/reports/admin-report-navigation";
+
 export type NavigationIcon =
   | "dashboard"
   | "users"
@@ -26,6 +31,7 @@ export type NavigationItem = {
   label: string;
   icon: NavigationIcon;
   permission: string;
+  alternativePermissions?: readonly string[];
   children?: NavigationChild[];
 };
 
@@ -80,7 +86,13 @@ export const adminNavigation: readonly NavigationGroup[] = [
   {
     label: "Reports",
     items: [
-      { href: "/admin/reports", label: "Reports Center", icon: "reports", permission: "reports.view" },
+      {
+        href: "/admin/reports",
+        label: "Reports Center",
+        icon: "reports",
+        permission: "reports.view",
+        children: buildAdminReportNavChildren(),
+      },
     ],
   },
   {
@@ -112,6 +124,30 @@ export const employeeNavigation: readonly NavigationGroup[] = [
   {
     label: "Operations",
     items: [{ href: "/employee/orders", label: "Orders", icon: "orders", permission: "orders.view" }],
+  },
+  {
+    label: "Reports",
+    items: [
+      {
+        href: "/employee/reports",
+        label: "Reports Center",
+        icon: "reports",
+        permission: "reports.view",
+        children: buildEmployeeReportNavChildren(),
+      },
+    ],
+  },
+  {
+    label: "Activity",
+    items: [
+      {
+        href: "/employee/activity",
+        label: "Activity Logs",
+        icon: "audit",
+        permission: "activity.view",
+        alternativePermissions: ["audit.view"],
+      },
+    ],
   },
   {
     label: "Settings",

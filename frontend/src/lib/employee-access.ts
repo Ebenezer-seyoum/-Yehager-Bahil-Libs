@@ -23,6 +23,13 @@ export function employeeAccessBlocked(profile: EmployeeAccessProfile | null) {
 }
 
 export async function requireEmployeePageAccess(callbackUrl: string, permissionKey: string) {
+  return requireEmployeePageAnyAccess(callbackUrl, [permissionKey]);
+}
+
+export async function requireEmployeePageAnyAccess(
+  callbackUrl: string,
+  permissionKeys: readonly string[],
+) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) redirect(`/signin?callbackUrl=${encodeURIComponent(callbackUrl)}`);
   if (session.user.role !== "employee" && session.user.role !== "admin") redirect("/");
@@ -40,7 +47,10 @@ export async function requireEmployeePageAccess(callbackUrl: string, permissionK
   }
 
   const permissions = Array.isArray(profile?.permissions) ? profile.permissions : [];
-  if (employeeAccessBlocked(profile) || !permissions.includes(permissionKey)) {
+  if (
+    employeeAccessBlocked(profile) ||
+    !permissionKeys.some((permissionKey) => permissions.includes(permissionKey))
+  ) {
     redirect("/employee/access-pending");
   }
 

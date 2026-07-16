@@ -196,6 +196,7 @@ export function ReportsResults({
   hasGenerated,
   onGenerate,
   isLoading,
+  canExport = true,
 }: {
   reportKey: ReportKey;
   reportTitle: string;
@@ -209,6 +210,7 @@ export function ReportsResults({
   hasGenerated: boolean;
   onGenerate: () => void | Promise<void>;
   isLoading?: boolean;
+  canExport?: boolean;
 }) {
   const table = buildTableView(reportKey, rows);
   const chartData = buildChartData(reportKey, rows);
@@ -407,62 +409,64 @@ export function ReportsResults({
               />
             ) : null}
 
-            <div className="relative" ref={exportMenuRef}>
-              <button
-                type="button"
-                onClick={() => setExportMenuOpen((current) => !current)}
-                className="flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-sm font-bold text-slate-700 shadow-sm hover:bg-slate-50"
-              >
-                <Download className="h-4.5 w-4.5" />
-                Export
-                <ChevronDown className="h-4 w-4" />
-              </button>
-              {exportMenuOpen ? (
-                <div className="absolute right-0 top-full z-30 mt-2 min-w-56 rounded-xl border border-slate-200 bg-white p-2 shadow-2xl">
-                  <button
-                    type="button"
-                    onClick={handleClientExport}
-                    className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-50"
-                  >
-                    Current filtered CSV
-                    <span className="text-xs text-slate-400">CSV</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleExcelExport}
-                    className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-50"
-                  >
-                    Current filtered Excel
-                    <span className="text-xs text-slate-400">XLSX</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handlePdfExport}
-                    className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-50"
-                  >
-                    Current filtered PDF
-                    <span className="text-xs text-slate-400">PDF</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleExportPage}
-                    className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-50"
-                  >
-                    Current page CSV
-                    <span className="text-xs text-slate-400">CSV</span>
-                  </button>
-                  {orderExportHref ? (
-                    <a
-                      href={orderExportHref}
+            {canExport ? (
+              <div className="relative" ref={exportMenuRef}>
+                <button
+                  type="button"
+                  onClick={() => setExportMenuOpen((current) => !current)}
+                  className="flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-sm font-bold text-slate-700 shadow-sm hover:bg-slate-50"
+                >
+                  <Download className="h-4.5 w-4.5" />
+                  Export
+                  <ChevronDown className="h-4 w-4" />
+                </button>
+                {exportMenuOpen ? (
+                  <div className="absolute right-0 top-full z-30 mt-2 min-w-56 rounded-xl border border-slate-200 bg-white p-2 shadow-2xl">
+                    <button
+                      type="button"
+                      onClick={handleClientExport}
                       className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-50"
                     >
-                      API export for orders
-                      <span className="text-xs text-slate-400">API</span>
-                    </a>
-                  ) : null}
-                </div>
-              ) : null}
-            </div>
+                      Current filtered CSV
+                      <span className="text-xs text-slate-400">CSV</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleExcelExport}
+                      className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-50"
+                    >
+                      Current filtered Excel
+                      <span className="text-xs text-slate-400">XLSX</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handlePdfExport}
+                      className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-50"
+                    >
+                      Current filtered PDF
+                      <span className="text-xs text-slate-400">PDF</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleExportPage}
+                      className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-50"
+                    >
+                      Current page CSV
+                      <span className="text-xs text-slate-400">CSV</span>
+                    </button>
+                    {orderExportHref ? (
+                      <a
+                        href={orderExportHref}
+                        className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-50"
+                      >
+                        API export for orders
+                        <span className="text-xs text-slate-400">API</span>
+                      </a>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
 
             <button
               type="button"

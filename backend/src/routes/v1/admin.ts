@@ -582,25 +582,34 @@ adminRouter.get("/summary-counts", requirePermission(PERMISSIONS.ALERTS_VIEW), a
   return c.json({ data: counts });
 });
 
-adminRouter.get("/audit", requirePermission(PERMISSIONS.AUDIT_VIEW), zValidator("query", listQuerySchema), async (c) => {
-  const { limit } = c.req.valid("query");
-  const data = await db.query.auditLogs.findMany({
-    orderBy: [desc(auditLogs.createdAt)],
-    limit: limit ?? 150,
-  });
-  return c.json({ data });
-});
+adminRouter.get(
+  "/audit",
+  requireAnyPermission([PERMISSIONS.ACTIVITY_VIEW, PERMISSIONS.AUDIT_VIEW]),
+  zValidator("query", listQuerySchema),
+  async (c) => {
+    const { limit } = c.req.valid("query");
+    const data = await db.query.auditLogs.findMany({
+      orderBy: [desc(auditLogs.createdAt)],
+      limit: limit ?? 150,
+    });
+    return c.json({ data });
+  },
+);
 
-adminRouter.get("/audit/:auditId", requirePermission(PERMISSIONS.AUDIT_VIEW), async (c) => {
-  const auditId = c.req.param("auditId");
-  const data = await db.query.auditLogs.findFirst({
-    where: eq(auditLogs.id, auditId),
-  });
-  if (!data) {
-    throw new HTTPException(404, { message: "Audit log not found" });
-  }
-  return c.json({ data });
-});
+adminRouter.get(
+  "/audit/:auditId",
+  requireAnyPermission([PERMISSIONS.ACTIVITY_VIEW, PERMISSIONS.AUDIT_VIEW]),
+  async (c) => {
+    const auditId = c.req.param("auditId");
+    const data = await db.query.auditLogs.findFirst({
+      where: eq(auditLogs.id, auditId),
+    });
+    if (!data) {
+      throw new HTTPException(404, { message: "Audit log not found" });
+    }
+    return c.json({ data });
+  },
+);
 
 adminRouter.get("/users", requirePermission(PERMISSIONS.EMPLOYEES_VIEW), zValidator("query", listQuerySchema), async (c) => {
   const { limit } = c.req.valid("query");
@@ -896,7 +905,7 @@ adminRouter.get(
 
 adminRouter.get(
   "/reports/orders/export",
-  requirePermission(PERMISSIONS.REPORTS_VIEW),
+  requirePermission(PERMISSIONS.REPORTS_EXPORT),
   zValidator("query", orderReportQuerySchema.extend({ format: z.enum(["csv", "pdf"]).optional() })),
   async (c) => {
     const { format = "csv", ...filters } = c.req.valid("query");

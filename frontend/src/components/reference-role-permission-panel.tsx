@@ -533,7 +533,11 @@ export function ReferenceRolePermissionPanel({
   }, [selectedPermissions, selectedRole]);
   const accessPreview = useMemo(() => {
     const items = employeeNavigation.flatMap((group) => group.items);
-    return items.filter((item) => effectivePermissions.includes(item.permission));
+    return items.filter((item) =>
+      [item.permission, ...(item.alternativePermissions ?? [])].some((permission) =>
+        effectivePermissions.includes(permission),
+      ),
+    );
   }, [effectivePermissions]);
   return (
     <>
@@ -601,7 +605,16 @@ export function ReferenceRolePermissionPanel({
               ) : (
                 <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">
                   {accessPreview.map((item) => (
-                    <li key={item.href}>{item.label}</li>
+                    <li key={item.href}>
+                      {item.label}
+                      {item.children?.length ? (
+                        <ul className="mt-1 list-[circle] space-y-1 pl-5 text-muted-foreground">
+                          {item.children.map((child) => (
+                            <li key={child.href}>{child.label}</li>
+                          ))}
+                        </ul>
+                      ) : null}
+                    </li>
                   ))}
                 </ul>
               )}

@@ -43,6 +43,7 @@ export default async function AdminReportsPage() {
         reports={reports}
         initialCategory={DEFAULT_CATEGORY}
         initialReport={DEFAULT_REPORT}
+        canExport={session.user.role === "admin" || can(session.user.permissions, "reports.export")}
       />
     </Suspense>
   );
