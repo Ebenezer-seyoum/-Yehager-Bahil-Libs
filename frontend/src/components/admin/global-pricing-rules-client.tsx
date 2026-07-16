@@ -5,6 +5,7 @@ import {
   Calculator,
   Loader2,
   RefreshCw,
+  RotateCcw,
   Save,
 } from "lucide-react";
 import { RolePricingAccordion } from "@/components/admin/role-pricing-accordion";
@@ -24,7 +25,9 @@ const RULES = {
 
 type RuleKey = keyof typeof RULES;
 type RuleValues = Record<RuleKey, string>;
-type ApiRule = { ruleKey: string; markupAmountEtb: string | number };
+type ScopeType = "global" | "tribe" | "region";
+type ApiRule = { ruleKey: string; markupAmountEtb: string | number; isOverride?: boolean };
+type ApiTribe = { name: string; regions: string[] };
 
 const INITIAL_VALUES = Object.fromEntries(
   Object.entries(RULES).map(([key, value]) => [key, String(value)]),
@@ -99,14 +102,24 @@ export function GlobalPricingRulesClient() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<{ tone: "success" | "error"; message: string } | null>(null);
+  const [scopeType, setScopeType] = useState<ScopeType>("global");
+  const [tribeName, setTribeName] = useState("");
+  const [regionName, setRegionName] = useState("");
+  const [tribes, setTribes] = useState<ApiTribe[]>([]);
+  const [hasOverrides, setHasOverrides] = useState(false);
 
   const loadRules = useCallback(async () => {
     setLoading(true);
     setNotice(null);
     try {
-      const response = await fetch("/api/backend/admin/pricing-rules", { cache: "no-store" });
-      const payload = await response.json().catch(() => ({})) as { data?: ApiRule[] };
+      const params = new URLSearchParams({ scopeType });
+      if (scopeType !== "global" && tribeName) params.set("tribeName", tribeName);
+      if (scopeType === "region" && regionName) params.set("regionName", regionName);
+      const response = await fetch(`/api/backend/admin/pricing-rules?${params}`, { cache: "no-store" });
+      const payload = await response.json().catch(() => ({})) as { data?: ApiRule[]; tribes?: ApiTribe[] };
       if (!response.ok) throw new Error(responseMessage(payload, "Pricing rules could not be loaded."));
+      setTribes(payload.tribes ?? []);
+      setHasOverrides((payload.data ?? []).some((rule) => rule.isOverride));
       const next = { ...INITIAL_VALUES };
       for (const rule of payload.data ?? []) {
         if (rule.ruleKey in next) next[rule.ruleKey as RuleKey] = String(rule.markupAmountEtb);
@@ -117,7 +130,7 @@ export function GlobalPricingRulesClient() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [regionName, scopeType, tribeName]);
 
   useEffect(() => {
     void loadRules();
@@ -128,6 +141,10 @@ export function GlobalPricingRulesClient() {
   }
 
   async function saveRules() {
+    if ((scopeType !== "global" && !tribeName) || (scopeType === "region" && !regionName)) {
+      setNotice({ tone: "error", message: "Choose the tribe and region before saving scoped pricing rules." });
+      return;
+    }
     const invalid = (Object.keys(RULES) as RuleKey[]).find(
       (key) => values[key].trim() === "" || !Number.isFinite(Number(values[key])) || Number(values[key]) < 0,
     );
@@ -142,19 +159,46 @@ export function GlobalPricingRulesClient() {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          scopeType,
+          tribeName: scopeType === "global" ? undefined : tribeName,
+          regionName: scopeType === "region" ? regionName : undefined,
           rules: (Object.keys(RULES) as RuleKey[]).map((ruleKey) => ({
             ruleKey,
             markupAmountEtb: Number(values[ruleKey]),
           })),
         }),
       });
-      const payload = await response.json().catch(() => ({}));
+      const payload = await response.json().catch(() => ({})) as { recalculation?: { affected?: number; updated?: number; skipped?: number; failed?: number } };
       if (!response.ok) throw new Error(responseMessage(payload, "Pricing rules could not be saved."));
-      setNotice({ tone: "success", message: "All global pricing formulas were saved successfully." });
+      const result = payload.recalculation;
+      const scopeLabel = scopeType === "global" ? "global" : scopeType === "tribe" ? `${tribeName} tribe` : `${tribeName} / ${regionName} region`;
+      const resultMessage = result
+        ? ` ${result.updated ?? 0} of ${result.affected ?? 0} approved products were updated${result.skipped ? `; ${result.skipped} had no approved estimate` : ""}${result.failed ? `; ${result.failed} require review` : ""}.`
+        : "";
+      setNotice({ tone: "success", message: `The ${scopeLabel} pricing formulas were saved.${resultMessage}` });
       await loadRules();
-      setNotice({ tone: "success", message: "All global pricing formulas were saved successfully." });
+      setNotice({ tone: "success", message: `The ${scopeLabel} pricing formulas were saved.${resultMessage}` });
     } catch (error) {
       setNotice({ tone: "error", message: error instanceof Error ? error.message : "Pricing rules could not be saved." });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function resetOverrides() {
+    if (scopeType === "global") return;
+    setSaving(true);
+    setNotice(null);
+    try {
+      const params = new URLSearchParams({ scopeType, tribeName });
+      if (scopeType === "region") params.set("regionName", regionName);
+      const response = await fetch(`/api/backend/admin/pricing-rules?${params}`, { method: "DELETE" });
+      const payload = await response.json().catch(() => ({})) as { recalculation?: { affected?: number; updated?: number } };
+      if (!response.ok) throw new Error(responseMessage(payload, "Pricing overrides could not be reset."));
+      await loadRules();
+      setNotice({ tone: "success", message: `Scope overrides were removed. ${payload.recalculation?.updated ?? 0} approved products now use inherited pricing.` });
+    } catch (error) {
+      setNotice({ tone: "error", message: error instanceof Error ? error.message : "Pricing overrides could not be reset." });
     } finally {
       setSaving(false);
     }
@@ -166,6 +210,24 @@ export function GlobalPricingRulesClient() {
   const boyPantsBase = amount(values.boy_pants_base);
   const womanEstimate = 4000;
   const girlEstimate = 4000;
+  const selectedTribe = tribes.find((tribe) => tribe.name === tribeName);
+  const regionOptions = selectedTribe?.regions ?? [];
+
+  function changeScope(nextScope: ScopeType) {
+    setHasOverrides(false);
+    setScopeType(nextScope);
+    if (nextScope === "global") {
+      setTribeName("");
+      setRegionName("");
+      return;
+    }
+    const nextTribe = tribeName || tribes[0]?.name || "";
+    setTribeName(nextTribe);
+    const nextRegions = tribes.find((tribe) => tribe.name === nextTribe)?.regions ?? [];
+    setRegionName(nextScope === "region" ? regionName || nextRegions[0] || "" : "");
+  }
+
+  const scopeReady = scopeType === "global" || Boolean(tribeName && (scopeType !== "region" || regionName));
 
   return (
     <div className="mx-auto w-full max-w-screen-2xl space-y-5">
@@ -183,7 +245,13 @@ export function GlobalPricingRulesClient() {
               <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
               Refresh
             </button>
-            <button type="button" onClick={() => void saveRules()} disabled={loading || saving} className="inline-flex h-11 items-center gap-2 rounded-xl bg-blue-600 px-5 text-sm font-black text-white transition hover:bg-blue-700 disabled:opacity-60">
+            {scopeType !== "global" ? (
+              <button type="button" onClick={() => void resetOverrides()} disabled={loading || saving || !hasOverrides} className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-sm font-black text-slate-700 transition hover:bg-slate-50 disabled:opacity-50">
+                <RotateCcw className="h-4 w-4" />
+                Use Inherited Rules
+              </button>
+            ) : null}
+            <button type="button" onClick={() => void saveRules()} disabled={loading || saving || !scopeReady} className="inline-flex h-11 items-center gap-2 rounded-xl bg-blue-600 px-5 text-sm font-black text-white transition hover:bg-blue-700 disabled:opacity-60">
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
               {saving ? "Saving..." : "Save All Rules"}
             </button>
@@ -196,6 +264,48 @@ export function GlobalPricingRulesClient() {
           {notice.message}
         </div>
       ) : null}
+
+      <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="flex flex-col gap-5 xl:flex-row xl:items-end">
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-black uppercase tracking-[0.2em] text-blue-600">Pricing scope</p>
+            <h2 className="mt-1 text-xl font-black text-slate-950">Choose which products receive these rules</h2>
+            <p className="mt-1 text-sm font-semibold text-slate-500">Region rules override tribe rules, and tribe rules override the global defaults.</p>
+          </div>
+          <div className="grid min-w-0 gap-3 sm:grid-cols-3 xl:min-w-[720px]">
+            <label className="space-y-2">
+              <span className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">Apply to</span>
+              <select value={scopeType} onChange={(event) => changeScope(event.target.value as ScopeType)} disabled={saving} className="h-12 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 text-sm font-black text-slate-900 outline-none focus:border-blue-500">
+                <option value="global">All Products</option>
+                <option value="tribe">Selected Tribe</option>
+                <option value="region">Selected Region</option>
+              </select>
+            </label>
+            <label className="space-y-2">
+              <span className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">Tribe</span>
+              <select value={tribeName} onChange={(event) => {
+                const nextTribe = event.target.value;
+                setTribeName(nextTribe);
+                const nextRegions = tribes.find((tribe) => tribe.name === nextTribe)?.regions ?? [];
+                setRegionName(scopeType === "region" ? nextRegions[0] ?? "" : "");
+              }} disabled={scopeType === "global" || saving} className="h-12 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 text-sm font-black text-slate-900 outline-none disabled:cursor-not-allowed disabled:opacity-50 focus:border-blue-500">
+                <option value="">Choose tribe</option>
+                {tribes.map((tribe) => <option key={tribe.name} value={tribe.name}>{tribe.name}</option>)}
+              </select>
+            </label>
+            <label className="space-y-2">
+              <span className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">Region</span>
+              <select value={regionName} onChange={(event) => setRegionName(event.target.value)} disabled={scopeType !== "region" || saving} className="h-12 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 text-sm font-black text-slate-900 outline-none disabled:cursor-not-allowed disabled:opacity-50 focus:border-blue-500">
+                <option value="">Choose region</option>
+                {regionOptions.map((region) => <option key={region} value={region}>{region}</option>)}
+              </select>
+            </label>
+          </div>
+        </div>
+        <div className="mt-4 rounded-2xl border border-blue-100 bg-blue-50/70 px-4 py-3 text-sm font-bold text-blue-900">
+          Editing: {scopeType === "global" ? "all products" : scopeType === "tribe" ? tribeName || "select a tribe" : tribeName && regionName ? `${tribeName} / ${regionName}` : "select a tribe and region"}. Saving automatically recalculates approved products in this scope.
+        </div>
+      </section>
 
       {loading ? (
         <div className="flex min-h-72 items-center justify-center rounded-[2rem] border border-slate-200 bg-white shadow-sm">

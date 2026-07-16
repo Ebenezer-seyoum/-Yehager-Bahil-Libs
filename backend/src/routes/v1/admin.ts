@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import { zValidator } from "@hono/zod-validator";
-import { and, asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, or } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
 import { requireAuth } from "../../middleware/auth.js";
 import { requireAnyPermission, requirePermission } from "../../middleware/permissions.js";
@@ -49,10 +49,13 @@ import { refreshStripeReceiptForOrder } from "../../services/payments-service.js
 import type { AppBindings } from "../../types/hono.js";
 3
 import { logger } from "../../lib/logger.js";
-import { approvalKeyboard, editTelegramMessage, priceSummary, sendTelegramProduct, updateEstimatedPrices } from "../../services/telegram-pricing-service.js";
+import { approvalKeyboard, calculateProductFamilyRoles, editTelegramMessage, priceSummary, sendTelegramProduct, updateEstimatedPrices } from "../../services/telegram-pricing-service.js";
 import {
   GLOBAL_PRICING_RULE_DEFINITIONS,
   GLOBAL_PRICING_RULE_KEYS,
+  pricingRuleScopeKey,
+  resolveEffectivePricingRuleValues,
+  type PricingRuleScope,
 } from "../../services/global-pricing-rules.js";
 
 const listQuerySchema = z.object({
@@ -1351,24 +1354,139 @@ const pricingRulePatchSchema = z.object({
   markupAmountEtb: z.coerce.number().nonnegative(),
   isActive: z.boolean().optional(),
 });
+const pricingRuleScopeSchema = z.object({
+  scopeType: z.enum(["global", "tribe", "region"]).default("global"),
+  tribeName: z.string().trim().min(1).optional(),
+  regionName: z.string().trim().min(1).optional(),
+}).superRefine((value, context) => {
+  if (value.scopeType !== "global" && !value.tribeName) {
+    context.addIssue({ code: "custom", path: ["tribeName"], message: "A tribe is required for this pricing scope" });
+  }
+  if (value.scopeType === "region" && !value.regionName) {
+    context.addIssue({ code: "custom", path: ["regionName"], message: "A region is required for region pricing" });
+  }
+});
 const pricingRulesBulkSchema = z.object({
+  scopeType: z.enum(["global", "tribe", "region"]).default("global"),
+  tribeName: z.string().trim().min(1).optional(),
+  regionName: z.string().trim().min(1).optional(),
   rules: z.array(z.object({
     ruleKey: z.enum(GLOBAL_PRICING_RULE_KEYS),
     markupAmountEtb: z.coerce.number().nonnegative(),
   })).min(1),
+}).superRefine((value, context) => {
+  if (value.scopeType !== "global" && !value.tribeName) {
+    context.addIssue({ code: "custom", path: ["tribeName"], message: "A tribe is required for this pricing scope" });
+  }
+  if (value.scopeType === "region" && !value.regionName) {
+    context.addIssue({ code: "custom", path: ["regionName"], message: "A region is required for region pricing" });
+  }
 });
 
-adminRouter.get("/pricing-rules", requirePermission(PERMISSIONS.PRODUCTS_VIEW), async (c) => {
-  const data = await db.query.globalPricingRules.findMany({ where: eq(globalPricingRules.isActive, true), orderBy: [asc(globalPricingRules.label)] });
-  const ruleByKey = new Map(data.map((rule) => [rule.ruleKey, rule]));
-  return c.json({
-    data: GLOBAL_PRICING_RULE_DEFINITIONS.map((definition) => ruleByKey.get(definition.ruleKey) ?? {
+function pricingScope(input: { scopeType: "global" | "tribe" | "region"; tribeName?: string; regionName?: string }): PricingRuleScope {
+  return {
+    scopeType: input.scopeType,
+    tribeName: input.scopeType === "global" ? null : input.tribeName,
+    regionName: input.scopeType === "region" ? input.regionName : null,
+  };
+}
+
+async function pricingRulesPayload(scope: PricingRuleScope) {
+  const [allRules, sections] = await Promise.all([
+    db.query.globalPricingRules.findMany({ where: eq(globalPricingRules.isActive, true), orderBy: [asc(globalPricingRules.label)] }),
+    db.select({ name: homepageSections.name, collections: homepageSections.collections })
+      .from(homepageSections)
+      .where(eq(homepageSections.isActive, true))
+      .orderBy(asc(homepageSections.sortOrder), asc(homepageSections.name)),
+  ]);
+  const effective = resolveEffectivePricingRuleValues(allRules, {
+    region: scope.tribeName,
+    subcategory: scope.regionName,
+  });
+  const currentScopeKey = pricingRuleScopeKey(scope);
+  const ownRules = new Map(
+    allRules.filter((rule) => rule.scopeKey === currentScopeKey).map((rule) => [rule.ruleKey, rule]),
+  );
+  return {
+    data: GLOBAL_PRICING_RULE_DEFINITIONS.map((definition) => ({
+      ...(ownRules.get(definition.ruleKey) ?? {}),
       ruleKey: definition.ruleKey,
       label: definition.label,
-      markupAmountEtb: definition.defaultValue.toFixed(2),
-      isActive: true,
+      markupAmountEtb: effective[definition.ruleKey].toFixed(2),
+      isOverride: ownRules.has(definition.ruleKey),
+    })),
+    scope: { ...scope, scopeKey: currentScopeKey },
+    tribes: sections.map((section) => ({
+      name: section.name,
+      regions: (section.collections ?? []).filter((region) => region.isActive).sort((a, b) => a.sortOrder - b.sortOrder).map((region) => region.name),
+    })),
+  };
+}
+
+async function recalculateProductsForPricingScope(scope: PricingRuleScope) {
+  const [allRules, candidates] = await Promise.all([
+    db.query.globalPricingRules.findMany({ where: eq(globalPricingRules.isActive, true) }),
+    db.query.products.findMany({
+      where: or(eq(products.priceStatus, "approved"), eq(products.priceStatus, "published")),
     }),
+  ]);
+  const affected = candidates.filter((product) => {
+    if (scope.scopeType === "global") return true;
+    if (product.region !== scope.tribeName) return false;
+    return scope.scopeType === "tribe" || product.subcategory === scope.regionName;
   });
+  let updated = 0;
+  let skipped = 0;
+  let failed = 0;
+  for (const product of affected) {
+    const prices = product.approvedEstimatedPrices;
+    if (!prices || Object.values(prices).some((price) => !Number.isFinite(Number(price)) || Number(price) <= 0)) {
+      skipped += 1;
+      continue;
+    }
+    const effectiveRules = resolveEffectivePricingRuleValues(allRules, product);
+    const calculated = calculateProductFamilyRoles(product, prices, effectiveRules);
+    if (calculated.pricingError || calculated.updated === 0) {
+      failed += 1;
+      continue;
+    }
+    try {
+      const normalizedRoles = await Promise.all(calculated.nextRoles.map(async (role) => {
+        const sellingPriceEtb = Number(role.sellingPriceEtb ?? 0);
+        if (sellingPriceEtb <= 0) return role;
+        const normalized = await normalizeProductPrice(sellingPriceEtb, "ETB");
+        return { ...role, price: normalized.priceUsd, currency: "ETB" as const, enteredPrice: sellingPriceEtb, exchangeRate: normalized.exchangeRate };
+      }));
+      const baseRole = normalizedRoles.find((role) => role.customerType === "woman" && Number(role.sellingPriceEtb) > 0)
+        ?? normalizedRoles.find((role) => Number(role.sellingPriceEtb) > 0);
+      const baseSellingPriceEtb = Number(baseRole?.sellingPriceEtb ?? 0);
+      if (baseSellingPriceEtb <= 0) {
+        failed += 1;
+        continue;
+      }
+      const normalizedBase = await normalizeProductPrice(baseSellingPriceEtb, "ETB");
+      await db.update(products).set({
+        familyRoles: normalizedRoles,
+        designerPriceEtb: Number(baseRole?.designerPriceEtb ?? 0).toFixed(2),
+        markupAmountEtb: Number(baseRole?.markupAmountEtb ?? 0).toFixed(2),
+        priceUsd: normalizedBase.priceUsd.toFixed(2),
+        baseCurrency: "ETB",
+        basePriceAmount: baseSellingPriceEtb.toFixed(2),
+        baseExchangeRate: normalizedBase.exchangeRate.toFixed(4),
+        priceVersion: Number(product.priceVersion ?? 0) + 1,
+        updatedAt: new Date(),
+      }).where(eq(products.id, product.id));
+      updated += 1;
+    } catch (error) {
+      failed += 1;
+      logger.error({ error, productId: product.id, pricingScope: pricingRuleScopeKey(scope) }, "scoped_pricing_product_recalculation_failed");
+    }
+  }
+  return { affected: affected.length, updated, skipped, failed };
+}
+
+adminRouter.get("/pricing-rules", requirePermission(PERMISSIONS.PRODUCTS_VIEW), zValidator("query", pricingRuleScopeSchema), async (c) => {
+  return c.json(await pricingRulesPayload(pricingScope(c.req.valid("query"))));
 });
 
 adminRouter.put(
@@ -1377,7 +1495,10 @@ adminRouter.put(
   zValidator("json", pricingRulesBulkSchema),
   async (c) => {
     const authUser = c.get("authUser");
-    const { rules } = c.req.valid("json");
+    const body = c.req.valid("json");
+    const { rules } = body;
+    const scope = pricingScope(body);
+    const scopeKey = pricingRuleScopeKey(scope);
     const definitions = new Map(GLOBAL_PRICING_RULE_DEFINITIONS.map((rule) => [rule.ruleKey, rule]));
     await db.transaction(async (tx) => {
       for (const rule of rules) {
@@ -1385,12 +1506,16 @@ adminRouter.put(
         if (!definition) continue;
         await tx.insert(globalPricingRules).values({
           ruleKey: rule.ruleKey,
+          scopeType: scope.scopeType,
+          scopeKey,
+          tribeName: scope.tribeName,
+          regionName: scope.regionName,
           label: definition.label,
           markupAmountEtb: rule.markupAmountEtb.toFixed(2),
           isActive: true,
           updatedBy: authUser?.email,
         }).onConflictDoUpdate({
-          target: globalPricingRules.ruleKey,
+          target: [globalPricingRules.scopeKey, globalPricingRules.ruleKey],
           set: {
             label: definition.label,
             markupAmountEtb: rule.markupAmountEtb.toFixed(2),
@@ -1402,16 +1527,16 @@ adminRouter.put(
       }
     });
     await db.insert(auditLogs).values({
-      action: "global_pricing_rules_updated",
+      action: "scoped_pricing_rules_updated",
       category: "inventory",
       severity: "info",
       entityType: "global_pricing_rules",
       performedBy: authUser?.email ?? "admin",
-      details: "Updated global role pricing formulas",
-      metadata: Object.fromEntries(rules.map((rule) => [rule.ruleKey, rule.markupAmountEtb])),
+      details: `Updated ${scope.scopeType} role pricing formulas`,
+      metadata: { scope, rules: Object.fromEntries(rules.map((rule) => [rule.ruleKey, rule.markupAmountEtb])) },
     });
-    const data = await db.query.globalPricingRules.findMany({ where: eq(globalPricingRules.isActive, true), orderBy: [asc(globalPricingRules.label)] });
-    return c.json({ data });
+    const recalculation = await recalculateProductsForPricingScope(scope);
+    return c.json({ ...(await pricingRulesPayload(scope)), recalculation });
   },
 );
 
@@ -1425,7 +1550,7 @@ adminRouter.patch(
     const body = c.req.valid("json");
     const [row] = await db.update(globalPricingRules)
       .set({ markupAmountEtb: body.markupAmountEtb.toFixed(2), isActive: body.isActive, updatedBy: authUser?.email, updatedAt: new Date() })
-      .where(eq(globalPricingRules.ruleKey, ruleKey))
+      .where(and(eq(globalPricingRules.scopeKey, "global"), eq(globalPricingRules.ruleKey, ruleKey)))
       .returning();
     if (!row) throw new HTTPException(404, { message: "Pricing rule not found" });
     await db.insert(auditLogs).values({
@@ -1438,7 +1563,8 @@ adminRouter.patch(
       details: `Updated ${row.label}`,
       metadata: { ruleKey, markupAmountEtb: row.markupAmountEtb },
     });
-    return c.json({ data: row });
+    const recalculation = await recalculateProductsForPricingScope({ scopeType: "global" });
+    return c.json({ data: row, recalculation });
   },
 );
 
@@ -1464,6 +1590,34 @@ adminRouter.get(
       throw new HTTPException(404, { message: "Product not found" });
     }
     return c.json({ data });
+  },
+);
+
+adminRouter.delete(
+  "/pricing-rules",
+  requirePermission(PERMISSIONS.PRODUCTS_EDIT),
+  zValidator("query", pricingRuleScopeSchema),
+  async (c) => {
+    const authUser = c.get("authUser");
+    const scope = pricingScope(c.req.valid("query"));
+    if (scope.scopeType === "global") {
+      throw new HTTPException(400, { message: "Global rules cannot inherit from another scope" });
+    }
+    const scopeKey = pricingRuleScopeKey(scope);
+    const deleted = await db.delete(globalPricingRules)
+      .where(eq(globalPricingRules.scopeKey, scopeKey))
+      .returning({ id: globalPricingRules.id });
+    await db.insert(auditLogs).values({
+      action: "scoped_pricing_rules_reset",
+      category: "inventory",
+      severity: "info",
+      entityType: "global_pricing_rules",
+      performedBy: authUser?.email ?? "admin",
+      details: `Reset ${scope.scopeType} pricing formulas to inherited values`,
+      metadata: { scope, deletedRules: deleted.length },
+    });
+    const recalculation = await recalculateProductsForPricingScope(scope);
+    return c.json({ ...(await pricingRulesPayload(scope)), recalculation });
   },
 );
 
@@ -1773,6 +1927,9 @@ adminRouter.post(
       const normalized = await normalizeProductPrice(approvedEtb, "ETB");
       [updated] = await db.update(products).set({
         familyRoles: approvedRoles,
+        approvedEstimatedPrices: estimates,
+        designerPriceEtb: Number(approvedRole?.designerPriceEtb ?? estimates.woman).toFixed(2),
+        markupAmountEtb: Number(approvedRole?.markupAmountEtb ?? 0).toFixed(2),
         priceUsd: normalized.priceUsd.toFixed(2),
         baseCurrency: "ETB",
         basePriceAmount: approvedEtb.toFixed(2),

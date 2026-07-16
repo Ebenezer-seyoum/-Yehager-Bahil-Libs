@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   calculateRolePricing,
+  pricingRuleScopeKey,
+  resolveEffectivePricingRuleValues,
   resolveGlobalPricingRuleValues,
 } from "../global-pricing-rules.js";
 
@@ -36,5 +38,23 @@ describe("global role pricing rules", () => {
 
   it("rejects a full estimate below the configured pants base", () => {
     expect(() => calculateRolePricing({ customerType: "man", outfitOption: "top_only", telegramEstimateEtb: 1600, rules })).toThrow("at least 1,700 ETB");
+  });
+
+  it("applies region rules over tribe rules and global rules", () => {
+    const scopedRules = resolveEffectivePricingRuleValues([
+      { ruleKey: "woman_outfit_addition", markupAmountEtb: 6500, scopeKey: "global" },
+      { ruleKey: "woman_outfit_addition", markupAmountEtb: 7000, scopeKey: "tribe:oromo" },
+      { ruleKey: "woman_outfit_addition", markupAmountEtb: 7500, scopeKey: "region:oromo:wollega" },
+      { ruleKey: "girl_outfit_addition", markupAmountEtb: 7200, scopeKey: "tribe:oromo" },
+    ], { region: "Oromo", subcategory: "Wollega" });
+
+    expect(scopedRules.woman_outfit_addition).toBe(7500);
+    expect(scopedRules.girl_outfit_addition).toBe(7200);
+    expect(scopedRules.men_full_set_addition).toBe(6500);
+  });
+
+  it("normalizes names when generating pricing scope keys", () => {
+    expect(pricingRuleScopeKey({ scopeType: "tribe", tribeName: "  Oromo " })).toBe("tribe:oromo");
+    expect(pricingRuleScopeKey({ scopeType: "region", tribeName: "Amhara", regionName: "North Wollo" })).toBe("region:amhara:north wollo");
   });
 });

@@ -13,6 +13,19 @@ export const GLOBAL_PRICING_RULE_DEFINITIONS = [
 
 export type GlobalPricingRuleKey = typeof GLOBAL_PRICING_RULE_DEFINITIONS[number]["ruleKey"];
 export type GlobalPricingRuleValues = Record<GlobalPricingRuleKey, number>;
+export type PricingRuleScope = {
+  scopeType: "global" | "tribe" | "region";
+  tribeName?: string | null;
+  regionName?: string | null;
+};
+
+export function pricingRuleScopeKey(scope: PricingRuleScope) {
+  const tribe = scope.tribeName?.trim().toLocaleLowerCase() ?? "";
+  const region = scope.regionName?.trim().toLocaleLowerCase() ?? "";
+  if (scope.scopeType === "region") return `region:${tribe}:${region}`;
+  if (scope.scopeType === "tribe") return `tribe:${tribe}`;
+  return "global";
+}
 
 export const GLOBAL_PRICING_RULE_KEYS = GLOBAL_PRICING_RULE_DEFINITIONS.map(
   (rule) => rule.ruleKey,
@@ -29,6 +42,38 @@ export function resolveGlobalPricingRuleValues(
     const amount = Number(row.markupAmountEtb);
     if (Number.isFinite(amount) && amount >= 0) {
       values[row.ruleKey as GlobalPricingRuleKey] = amount;
+    }
+  }
+  return values;
+}
+
+export function resolveEffectivePricingRuleValues(
+  rows: Array<{
+    ruleKey: string;
+    markupAmountEtb: string | number;
+    scopeKey?: string | null;
+  }>,
+  product?: { region?: string | null; subcategory?: string | null },
+): GlobalPricingRuleValues {
+  const scopeKeys = ["global"];
+  if (product?.region) {
+    scopeKeys.push(pricingRuleScopeKey({ scopeType: "tribe", tribeName: product.region }));
+    if (product.subcategory) {
+      scopeKeys.push(pricingRuleScopeKey({
+        scopeType: "region",
+        tribeName: product.region,
+        regionName: product.subcategory,
+      }));
+    }
+  }
+  const values = resolveGlobalPricingRuleValues([]);
+  for (const scopeKey of scopeKeys) {
+    for (const row of rows) {
+      if ((row.scopeKey ?? "global") !== scopeKey || !(row.ruleKey in values)) continue;
+      const amount = Number(row.markupAmountEtb);
+      if (Number.isFinite(amount) && amount >= 0) {
+        values[row.ruleKey as GlobalPricingRuleKey] = amount;
+      }
     }
   }
   return values;

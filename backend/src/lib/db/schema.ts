@@ -235,6 +235,12 @@ export const products = pgTable(
       boy: number;
       girl: number;
     }>(),
+    approvedEstimatedPrices: jsonb("approved_estimated_prices").$type<{
+      men: number;
+      woman: number;
+      boy: number;
+      girl: number;
+    }>(),
     baseCurrency: text("base_currency").default("USD").notNull(),
     basePriceAmount: numeric("base_price_amount", { precision: 12, scale: 2 }),
     baseExchangeRate: numeric("base_exchange_rate", { precision: 12, scale: 4 }),
@@ -285,13 +291,20 @@ export const globalPricingRules = pgTable(
   {
     id: uuid("id").defaultRandom().primaryKey(),
     ruleKey: varchar("rule_key", { length: 80 }).notNull(),
+    scopeType: varchar("scope_type", { length: 20 }).default("global").notNull(),
+    scopeKey: varchar("scope_key", { length: 400 }).default("global").notNull(),
+    tribeName: text("tribe_name"),
+    regionName: text("region_name"),
     label: varchar("label", { length: 160 }).notNull(),
     markupAmountEtb: numeric("markup_amount_etb", { precision: 12, scale: 2 }).default("0").notNull(),
     isActive: boolean("is_active").default(true).notNull(),
     updatedBy: text("updated_by"),
     ...timestamps,
   },
-  (table) => [uniqueIndex("global_pricing_rules_key_uidx").on(table.ruleKey)],
+  (table) => [
+    uniqueIndex("global_pricing_rules_scope_rule_uidx").on(table.scopeKey, table.ruleKey),
+    index("global_pricing_rules_scope_idx").on(table.scopeType, table.tribeName, table.regionName),
+  ],
 );
 
 export const telegramRegionTopics = pgTable(

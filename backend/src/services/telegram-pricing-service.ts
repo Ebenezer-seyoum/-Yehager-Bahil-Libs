@@ -7,7 +7,8 @@ import { getSignedReadUrl } from "../lib/storage/s3.js";
 import { logger } from "../lib/logger.js";
 import {
   calculateRolePricing,
-  resolveGlobalPricingRuleValues,
+  resolveEffectivePricingRuleValues,
+  type GlobalPricingRuleValues,
 } from "./global-pricing-rules.js";
 
 type TelegramResponse<T> = { ok: boolean; result?: T; description?: string };
@@ -179,49 +180,11 @@ function customerPriceKey(role: { customerType?: string }) {
   return role.customerType === "man" ? "men" : role.customerType === "boy" ? "boy" : role.customerType === "girl" ? "girl" : "woman";
 }
 
-function parsePriceLines(text: string) {
-  const entries = new Map<string, number>();
-  for (const line of text.split(/\r?\n/)) {
-    const match = line.match(/^\s*([a-z][a-z0-9 _-]*)\s*[:=]\s*([0-9]+(?:[.,][0-9]{1,2})?)/i);
-    if (!match) continue;
-    const key = normalizeKey(match[1]);
-    const amount = Number(match[2].replace(/,/g, ""));
-    if (Number.isFinite(amount) && amount > 0) entries.set(key, amount);
-  }
-  return entries;
-}
-
-export async function processTelegramPriceMessage(text: string) {
-  const idMatch = text.match(/\b([A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+)\b/i);
-  if (!idMatch) return null;
-  const uniqueId = idMatch[1].toUpperCase();
-  const [product] = await db.select().from(products).where(eq(products.uniqueId, uniqueId)).limit(1);
-  if (!product) return { uniqueId, status: "unmatched" as const };
-  const entries = parsePriceLines(text);
-  if (!entries.size) return { uniqueId, status: "no_prices" as const };
-  const prices = {
-    men: entries.get("men") ?? entries.get("man") ?? 0,
-    woman: entries.get("woman") ?? entries.get("women") ?? 0,
-    boy: entries.get("boy") ?? 0,
-    girl: entries.get("girl") ?? 0,
-  };
-  if (Object.values(prices).some((price) => !Number.isFinite(price) || price <= 0)) return { uniqueId, status: "no_prices" as const };
-  return updateEstimatedPrices(product.id, prices, { recordSubmission: true });
-}
-
-export async function updateEstimatedPrices(
-  productId: string,
+export function calculateProductFamilyRoles(
+  product: typeof products.$inferSelect,
   prices: EstimatedPrices,
-  options: { recordSubmission?: boolean } = {},
+  pricingRules: GlobalPricingRuleValues,
 ) {
-  const values = Object.values(prices);
-  if (values.some((price) => !Number.isFinite(price) || price <= 0)) {
-    return { status: "invalid_prices" as const };
-  }
-  const [product] = await db.select().from(products).where(eq(products.id, productId)).limit(1);
-  if (!product) return { status: "unmatched" as const };
-  const rules = await db.select().from(globalPricingRules).where(eq(globalPricingRules.isActive, true));
-  const pricingRules = resolveGlobalPricingRuleValues(rules);
   const roles = Array.isArray(product.familyRoles) ? product.familyRoles.map((role) => ({ ...role })) : [];
   const roleTemplates = [
     { label: "Women's Traditional Outfit", customerType: "woman", outfitOption: "standard", gender: "female", description: "Complete traditional outfit" },
@@ -267,6 +230,53 @@ export async function updateEstimatedPrices(
       return role;
     }
   });
+  return { nextRoles, updated, pricingError };
+}
+
+function parsePriceLines(text: string) {
+  const entries = new Map<string, number>();
+  for (const line of text.split(/\r?\n/)) {
+    const match = line.match(/^\s*([a-z][a-z0-9 _-]*)\s*[:=]\s*([0-9]+(?:[.,][0-9]{1,2})?)/i);
+    if (!match) continue;
+    const key = normalizeKey(match[1]);
+    const amount = Number(match[2].replace(/,/g, ""));
+    if (Number.isFinite(amount) && amount > 0) entries.set(key, amount);
+  }
+  return entries;
+}
+
+export async function processTelegramPriceMessage(text: string) {
+  const idMatch = text.match(/\b([A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+)\b/i);
+  if (!idMatch) return null;
+  const uniqueId = idMatch[1].toUpperCase();
+  const [product] = await db.select().from(products).where(eq(products.uniqueId, uniqueId)).limit(1);
+  if (!product) return { uniqueId, status: "unmatched" as const };
+  const entries = parsePriceLines(text);
+  if (!entries.size) return { uniqueId, status: "no_prices" as const };
+  const prices = {
+    men: entries.get("men") ?? entries.get("man") ?? 0,
+    woman: entries.get("woman") ?? entries.get("women") ?? 0,
+    boy: entries.get("boy") ?? 0,
+    girl: entries.get("girl") ?? 0,
+  };
+  if (Object.values(prices).some((price) => !Number.isFinite(price) || price <= 0)) return { uniqueId, status: "no_prices" as const };
+  return updateEstimatedPrices(product.id, prices, { recordSubmission: true });
+}
+
+export async function updateEstimatedPrices(
+  productId: string,
+  prices: EstimatedPrices,
+  options: { recordSubmission?: boolean } = {},
+) {
+  const values = Object.values(prices);
+  if (values.some((price) => !Number.isFinite(price) || price <= 0)) {
+    return { status: "invalid_prices" as const };
+  }
+  const [product] = await db.select().from(products).where(eq(products.id, productId)).limit(1);
+  if (!product) return { status: "unmatched" as const };
+  const rules = await db.select().from(globalPricingRules).where(eq(globalPricingRules.isActive, true));
+  const pricingRules = resolveEffectivePricingRuleValues(rules, product);
+  const { nextRoles, updated, pricingError } = calculateProductFamilyRoles(product, prices, pricingRules);
   if (pricingError) return { status: "invalid_pricing_rules" as const, message: pricingError };
   const submittedAt = new Date();
   const recordSubmission = options.recordSubmission ?? false;
