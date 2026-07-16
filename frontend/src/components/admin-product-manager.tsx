@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { TableHeadCell, TableHeadRow, TableHeader } from "@/components/admin/table-header";
 import { DashboardActionButton, DashboardTableActions } from "@/components/admin/dashboard-action-button";
@@ -22,6 +22,8 @@ type Product = {
   tailoringDays?: number | null;
   isActive?: boolean;
   isFeatured?: boolean;
+  hasNewPriceSubmission?: boolean;
+  priceSubmissionAlertId?: string | null;
 };
 
 function formatCurrency(value: string | number | null | undefined) {
@@ -47,6 +49,28 @@ export function AdminProductManager({
   onFilteredCountChange?: (count: number) => void;
 }) {
   const router = useRouter();
+  const [newPriceProductIds, setNewPriceProductIds] = useState<string[]>(
+    initialProducts.filter((product) => product.hasNewPriceSubmission).map((product) => product.id),
+  );
+
+  useEffect(() => {
+    const refresh = () => {
+      fetch("/api/backend/admin/summary-counts", { cache: "no-store" })
+        .then((response) => response.ok ? response.json() : null)
+        .then((payload) => {
+          const ids = payload?.data?.catalogPriceProductIds;
+          if (Array.isArray(ids)) setNewPriceProductIds(ids.filter(Boolean).map(String));
+        })
+        .catch(() => undefined);
+    };
+    refresh();
+    const intervalId = window.setInterval(refresh, 15000);
+    window.addEventListener("focus", refresh);
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", refresh);
+    };
+  }, []);
 
   const filteredProducts = initialProducts.filter((p) => {
     if (!externalSearch) return true;
@@ -83,6 +107,7 @@ export function AdminProductManager({
           <tbody className="divide-y divide-slate-100">
             {filteredProducts.map((product, index) => {
               const image = product.images?.[0];
+              const hasNewPrice = newPriceProductIds.includes(product.id);
               return (
                 <tr 
                   key={product.id} 
@@ -102,6 +127,11 @@ export function AdminProductManager({
                           {product.name}
                         </p>
                         <div className="mt-1 flex items-center gap-2">
+                          {hasNewPrice ? (
+                            <span className="rounded-full border border-emerald-200 bg-emerald-100 px-2 py-0.5 text-[9px] font-black uppercase tracking-widest text-emerald-800">
+                              New Price
+                            </span>
+                          ) : null}
                           <span className="font-mono text-[10px] font-black tracking-widest text-primary bg-primary/5 px-2 py-0.5 rounded-md border border-primary/10">
                             #{product.uniqueId ?? product.id.slice(0, 8).toUpperCase()}
                           </span>

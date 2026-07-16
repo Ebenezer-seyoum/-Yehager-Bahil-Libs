@@ -45,6 +45,8 @@ type NotificationCounts = {
   refundIssueIds?: Array<string | null | undefined>;
   shippingDelivery?: number;
   shippingDeliveryIds?: Array<string | null | undefined>;
+  catalogPrices?: number;
+  catalogPriceProductIds?: Array<string | null | undefined>;
   total?: number;
 };
 
@@ -189,6 +191,10 @@ export function DashboardShell({
   const [viewedCustomDesignIds, setViewedCustomDesignIds] = useState<string[]>([]);
   const [viewedShippingDeliveryIds, setViewedShippingDeliveryIds] = useState<string[]>([]);
   const [visibleSupportCount, setVisibleSupportCount] = useState(counts.support ?? 0);
+  const [visibleCatalogPriceCount, setVisibleCatalogPriceCount] = useState(counts.catalogPrices ?? 0);
+  const [catalogPriceProductIds, setCatalogPriceProductIds] = useState<string[]>(
+    (counts.catalogPriceProductIds ?? []).filter(Boolean).map(String),
+  );
   const activeOrderIds = (counts.orderIds ?? []).filter(Boolean).map(String);
   const activePaymentIds = (counts.paymentIds ?? []).filter(Boolean).map(String);
   const activeCustomDesignIds = (counts.customDesignIds ?? []).filter(Boolean).map(String);
@@ -213,7 +219,7 @@ export function DashboardShell({
   const visibleShippingDeliveryCount = activeShippingDeliveryIds.length > 0
     ? activeShippingDeliveryIds.filter((id) => !viewedShippingDeliveryIds.includes(id)).length
     : Math.max((counts.shippingDelivery ?? 0) - viewedShippingDeliveryIds.length, 0);
-  const totalNotifications = visibleOrderCount + visiblePaymentCount + visibleCustomDesignCount + visibleCustomOrderCount + visibleRefundIssueCount + visibleShippingDeliveryCount;
+  const totalNotifications = visibleOrderCount + visiblePaymentCount + visibleCustomDesignCount + visibleCustomOrderCount + visibleRefundIssueCount + visibleShippingDeliveryCount + visibleCatalogPriceCount;
   const badgeForHref = (href: string) => {
     if (variant !== "admin") return 0;
     if (href === "/admin/orders" || href === "/admin/catalog-orders") return visibleOrderCount;
@@ -222,6 +228,7 @@ export function DashboardShell({
     if (href === "/admin/uploaded-designs" || href === "/admin/custom-orders") return visibleCustomDesignCount + visibleCustomOrderCount;
     if (href === "/admin/orders/shipping-delivery") return visibleShippingDeliveryCount;
     if (href === "/admin/orders/returns-refunds") return visibleRefundIssueCount;
+    if (href === "/admin/inventory") return visibleCatalogPriceCount;
     if (href === "/admin/alerts") return totalNotifications;
     if (href === "/admin/support-inbox") return visibleSupportCount;
     return 0;
@@ -302,6 +309,43 @@ export function DashboardShell({
     if (variant !== "admin") return;
     setVisibleSupportCount(counts.support ?? 0);
   }, [counts.support, variant]);
+
+  useEffect(() => {
+    if (variant !== "admin") return;
+    const refreshCatalogPriceNotifications = () => {
+      fetch("/api/backend/admin/summary-counts", { cache: "no-store" })
+        .then((response) => response.ok ? response.json() : null)
+        .then((payload) => {
+          const data = payload?.data;
+          if (!data) return;
+          const ids = Array.isArray(data.catalogPriceProductIds)
+            ? data.catalogPriceProductIds.filter(Boolean).map(String)
+            : [];
+          setCatalogPriceProductIds(ids);
+          setVisibleCatalogPriceCount(Number(data.catalog_price_submission ?? ids.length) || 0);
+        })
+        .catch(() => undefined);
+    };
+    refreshCatalogPriceNotifications();
+    const intervalId = window.setInterval(refreshCatalogPriceNotifications, 15000);
+    window.addEventListener("focus", refreshCatalogPriceNotifications);
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", refreshCatalogPriceNotifications);
+    };
+  }, [variant]);
+
+  useEffect(() => {
+    if (variant !== "admin") return;
+    const onCatalogPriceViewed = (event: Event) => {
+      const productId = (event as CustomEvent<string>).detail;
+      if (!productId) return;
+      setCatalogPriceProductIds((current) => current.filter((id) => id !== productId));
+      setVisibleCatalogPriceCount((current) => Math.max(current - 1, 0));
+    };
+    window.addEventListener("admin-catalog-price-viewed", onCatalogPriceViewed);
+    return () => window.removeEventListener("admin-catalog-price-viewed", onCatalogPriceViewed);
+  }, [variant]);
 
   useEffect(() => {
     if (variant !== "admin") return;
@@ -615,6 +659,15 @@ export function DashboardShell({
                   </div>
                   <div className="my-1 h-px bg-sidebar-border" />
                   {[
+                    {
+                      href: catalogPriceProductIds[0] ? `/admin/inventory/${catalogPriceProductIds[0]}` : "/admin/inventory?tab=new-prices",
+                      label: "New catalog price submitted",
+                      value: visibleCatalogPriceCount,
+                      Icon: Boxes,
+                      accent: "bg-emerald-400",
+                      active: "border-emerald-400/30 bg-emerald-400/10 text-emerald-50",
+                      badge: "bg-emerald-400 text-slate-950",
+                    },
                     {
                       href: "/admin/payments",
                       label: "New payments received",

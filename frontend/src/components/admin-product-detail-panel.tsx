@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useRef } from "react";
+import { useEffect, useState, useRef } from "react";
 import {
   ArrowLeft,
   Pencil,
@@ -408,6 +408,19 @@ export function AdminProductDetailPanel({
   const [draft, setDraft] = useState(draftFromProduct(initialProduct));
   const [estimateDraft, setEstimateDraft] = useState<EstimateDraft>(estimateDraftFromProduct(initialProduct));
   const [activeTab, setActiveTab] = useState<TabKey>("info");
+
+  useEffect(() => {
+    fetch(`/api/backend/admin/products/${initialProduct.id}/price-submission-viewed`, {
+      method: "PATCH",
+    })
+      .then((response) => response.ok ? response.json() : null)
+      .then((payload) => {
+        if (Number(payload?.count ?? 0) > 0) {
+          window.dispatchEvent(new CustomEvent("admin-catalog-price-viewed", { detail: initialProduct.id }));
+        }
+      })
+      .catch(() => undefined);
+  }, [initialProduct.id]);
 
   const images = product.images?.filter(Boolean) ?? [];
   const activeImage = images.includes(selectedImage)

@@ -1,9 +1,10 @@
 import { and, eq } from "drizzle-orm";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { db } from "../lib/db/drizzle.js";
-import { globalPricingRules, products, telegramRegionTopics } from "../lib/db/schema.js";
+import { globalPricingRules, products, systemAlerts, telegramRegionTopics } from "../lib/db/schema.js";
 import { env } from "../config/env.js";
 import { getSignedReadUrl } from "../lib/storage/s3.js";
+import { logger } from "../lib/logger.js";
 import {
   calculateRolePricing,
   resolveGlobalPricingRuleValues,
@@ -279,6 +280,34 @@ export async function updateEstimatedPrices(
     priceVersion: Number(product.priceVersion ?? 0) + 1,
     updatedAt: submittedAt,
   }).where(eq(products.id, product.id)).returning();
+  if (recordSubmission) {
+    try {
+      const existingAlert = await db.query.systemAlerts.findFirst({
+        where: and(
+          eq(systemAlerts.type, "catalog_price_submitted"),
+          eq(systemAlerts.entityId, product.id),
+          eq(systemAlerts.isResolved, false),
+        ),
+      });
+      const alertValues = {
+        title: "New catalog price submitted",
+        message: `${product.uniqueId || product.id} — ${product.name}`,
+        type: "catalog_price_submitted",
+        severity: "info",
+        entityId: product.id,
+        isResolved: false,
+        resolvedBy: null,
+        updatedAt: submittedAt,
+      } as const;
+      if (existingAlert) {
+        await db.update(systemAlerts).set(alertValues).where(eq(systemAlerts.id, existingAlert.id));
+      } else {
+        await db.insert(systemAlerts).values(alertValues);
+      }
+    } catch (error) {
+      logger.error({ error, productId: product.id }, "catalog_price_submission_alert_failed");
+    }
+  }
   return { uniqueId: product.uniqueId || product.id, status: "submitted" as const, product: row, updated };
 }
 

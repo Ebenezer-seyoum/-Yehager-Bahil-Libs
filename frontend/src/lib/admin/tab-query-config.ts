@@ -71,6 +71,8 @@ function filterOrders(orders: Row[], tabId: string): Row[] {
 
 function filterProducts(products: Row[], tabId: string): Row[] {
   switch (tabId) {
+    case "new-prices":
+      return products.filter((p) => Boolean(p.hasNewPriceSubmission));
     case "active":
       return products.filter((p) => p.isActive !== false);
     case "draft":

@@ -15,6 +15,7 @@ export function AdminProductsWorkspace({ data, canCreate = false }: { data: Admi
   const activeTab = searchParams.get("tab") || "all";
 
   const products = useMemo(() => (data.products ?? []), [data.products]);
+  const newPriceCount = products.filter((product) => Boolean(product.hasNewPriceSubmission)).length;
 
   return (
     <AdminWorkspace
@@ -27,6 +28,7 @@ export function AdminProductsWorkspace({ data, canCreate = false }: { data: Admi
       defaultTab="all"
       tabs={[
         { id: "all", label: "All Items", icon: Package },
+        { id: "new-prices", label: "New Prices", icon: Package, badgeCount: newPriceCount },
         { id: "active", label: "Active", icon: Package },
         { id: "draft", label: "Drafts", icon: Package },
       ]}

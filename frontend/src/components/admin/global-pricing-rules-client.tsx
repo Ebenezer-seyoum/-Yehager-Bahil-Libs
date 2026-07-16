@@ -2,14 +2,12 @@
 
 import { useCallback, useEffect, useState } from "react";
 import {
-  Baby,
   Calculator,
   Loader2,
   RefreshCw,
   Save,
-  UserRound,
-  Users,
 } from "lucide-react";
+import { RolePricingAccordion } from "@/components/admin/role-pricing-accordion";
 
 const RULES = {
   woman_outfit_addition: 6500,
@@ -204,58 +202,68 @@ export function GlobalPricingRulesClient() {
           <Loader2 className="h-7 w-7 animate-spin text-blue-600" />
         </div>
       ) : (
-        <div className="grid gap-5 xl:grid-cols-2">
-          <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm xl:col-span-2">
-            <div className="mb-5 flex items-center gap-3">
-              <div className="rounded-2xl bg-blue-100 p-3 text-blue-700"><Users className="h-5 w-5" /></div>
-              <div><h2 className="text-xl font-black text-slate-950">Men</h2><p className="text-sm font-semibold text-slate-500">Full set, pants, and top prices from one Telegram estimate.</p></div>
-            </div>
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-              <RuleInput label="Full-set addition" description="Added to the complete men's Telegram estimate." value={values.men_full_set_addition} onChange={(value) => update("men_full_set_addition", value)} />
-              <RuleInput label="Pants base cost" description="The fixed designer component assigned to pants." value={values.men_pants_base} onChange={(value) => update("men_pants_base", value)} />
-              <RuleInput label="Pants addition" description="Added to the pants base cost." value={values.men_pants_addition} onChange={(value) => update("men_pants_addition", value)} />
-              <RuleInput label="Top addition" description="Added after deducting the pants base from the estimate." value={values.men_top_addition} onChange={(value) => update("men_top_addition", value)} />
-            </div>
-            <div className="mt-4 rounded-2xl border border-blue-100 bg-slate-50/70 p-4">
-              <p className="mb-3 flex items-center gap-2 text-xs font-black uppercase tracking-[0.18em] text-slate-500"><Calculator className="h-4 w-4" /> Example using an 8,000 ETB Telegram estimate</p>
-              <div className="grid gap-3 md:grid-cols-3">
-                <FormulaResult label="Full set" formula={`8,000 + ${amount(values.men_full_set_addition).toLocaleString()}`} result={menEstimate + amount(values.men_full_set_addition)} />
-                <FormulaResult label="Pants only" formula={`${menPantsBase.toLocaleString()} + ${amount(values.men_pants_addition).toLocaleString()}`} result={menPantsBase + amount(values.men_pants_addition)} />
-                <FormulaResult label="Top only" formula={`8,000 − ${menPantsBase.toLocaleString()} + ${amount(values.men_top_addition).toLocaleString()}`} result={menEstimate - menPantsBase + amount(values.men_top_addition)} />
-              </div>
-            </div>
-          </section>
-
-          <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm xl:col-span-2">
-            <div className="mb-5 flex items-center gap-3">
-              <div className="rounded-2xl bg-violet-100 p-3 text-violet-700"><Baby className="h-5 w-5" /></div>
-              <div><h2 className="text-xl font-black text-slate-950">Boys</h2><p className="text-sm font-semibold text-slate-500">The men's formula with a separate lower pants base.</p></div>
-            </div>
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-              <RuleInput label="Full-set addition" description="Added to the complete boys' Telegram estimate." value={values.boy_full_set_addition} onChange={(value) => update("boy_full_set_addition", value)} />
-              <RuleInput label="Pants base cost" description="The fixed designer component assigned to boys' pants." value={values.boy_pants_base} onChange={(value) => update("boy_pants_base", value)} />
-              <RuleInput label="Pants addition" description="Added to the boys' pants base cost." value={values.boy_pants_addition} onChange={(value) => update("boy_pants_addition", value)} />
-              <RuleInput label="Top addition" description="Added after deducting the boys' pants base." value={values.boy_top_addition} onChange={(value) => update("boy_top_addition", value)} />
-            </div>
-            <div className="mt-4 grid gap-3 md:grid-cols-3">
-              <FormulaResult label="Full set" formula={`8,000 + ${amount(values.boy_full_set_addition).toLocaleString()}`} result={boyEstimate + amount(values.boy_full_set_addition)} />
-              <FormulaResult label="Pants only" formula={`${boyPantsBase.toLocaleString()} + ${amount(values.boy_pants_addition).toLocaleString()}`} result={boyPantsBase + amount(values.boy_pants_addition)} />
-              <FormulaResult label="Top only" formula={`8,000 − ${boyPantsBase.toLocaleString()} + ${amount(values.boy_top_addition).toLocaleString()}`} result={boyEstimate - boyPantsBase + amount(values.boy_top_addition)} />
-            </div>
-          </section>
-
-          <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
-            <div className="mb-5 flex items-center gap-3"><div className="rounded-2xl bg-rose-100 p-3 text-rose-700"><UserRound className="h-5 w-5" /></div><div><h2 className="text-xl font-black text-slate-950">Women</h2><p className="text-sm font-semibold text-slate-500">One addition for the complete outfit.</p></div></div>
-            <RuleInput label="Outfit addition" description="Added directly to the Telegram Woman estimate." value={values.woman_outfit_addition} onChange={(value) => update("woman_outfit_addition", value)} />
-            <div className="mt-4"><FormulaResult label="4,000 ETB example" formula={`4,000 + ${amount(values.woman_outfit_addition).toLocaleString()}`} result={womanEstimate + amount(values.woman_outfit_addition)} /></div>
-          </section>
-
-          <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
-            <div className="mb-5 flex items-center gap-3"><div className="rounded-2xl bg-amber-100 p-3 text-amber-700"><UserRound className="h-5 w-5" /></div><div><h2 className="text-xl font-black text-slate-950">Girls</h2><p className="text-sm font-semibold text-slate-500">One addition for the complete outfit.</p></div></div>
-            <RuleInput label="Outfit addition" description="Added directly to the Telegram Girl estimate." value={values.girl_outfit_addition} onChange={(value) => update("girl_outfit_addition", value)} />
-            <div className="mt-4"><FormulaResult label="4,000 ETB example" formula={`4,000 + ${amount(values.girl_outfit_addition).toLocaleString()}`} result={girlEstimate + amount(values.girl_outfit_addition)} /></div>
-          </section>
-        </div>
+        <RolePricingAccordion
+          defaultValue="man"
+          groups={[
+            {
+              value: "man",
+              label: "Men",
+              description: "4 rules · Full set, pants, and top from one Telegram estimate",
+              content: <div className="space-y-4">
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                  <RuleInput label="Full-set addition" description="Added to the complete men's Telegram estimate." value={values.men_full_set_addition} onChange={(value) => update("men_full_set_addition", value)} />
+                  <RuleInput label="Pants base cost" description="The fixed designer component assigned to pants." value={values.men_pants_base} onChange={(value) => update("men_pants_base", value)} />
+                  <RuleInput label="Pants addition" description="Added to the pants base cost." value={values.men_pants_addition} onChange={(value) => update("men_pants_addition", value)} />
+                  <RuleInput label="Top addition" description="Added after deducting the pants base from the estimate." value={values.men_top_addition} onChange={(value) => update("men_top_addition", value)} />
+                </div>
+                <div className="rounded-2xl border border-blue-100 bg-slate-50/70 p-4">
+                  <p className="mb-3 flex items-center gap-2 text-xs font-black uppercase tracking-[0.18em] text-slate-500"><Calculator className="h-4 w-4" /> Example using an 8,000 ETB Telegram estimate</p>
+                  <div className="grid gap-3 md:grid-cols-3">
+                    <FormulaResult label="Full set" formula={`8,000 + ${amount(values.men_full_set_addition).toLocaleString()}`} result={menEstimate + amount(values.men_full_set_addition)} />
+                    <FormulaResult label="Pants only" formula={`${menPantsBase.toLocaleString()} + ${amount(values.men_pants_addition).toLocaleString()}`} result={menPantsBase + amount(values.men_pants_addition)} />
+                    <FormulaResult label="Top only" formula={`8,000 − ${menPantsBase.toLocaleString()} + ${amount(values.men_top_addition).toLocaleString()}`} result={menEstimate - menPantsBase + amount(values.men_top_addition)} />
+                  </div>
+                </div>
+              </div>,
+            },
+            {
+              value: "woman",
+              label: "Women",
+              description: "1 rule · One addition for the complete outfit",
+              content: <div className="grid gap-4 lg:grid-cols-[minmax(280px,1fr)_minmax(280px,1fr)]">
+                <RuleInput label="Outfit addition" description="Added directly to the Telegram Woman estimate." value={values.woman_outfit_addition} onChange={(value) => update("woman_outfit_addition", value)} />
+                <FormulaResult label="4,000 ETB example" formula={`4,000 + ${amount(values.woman_outfit_addition).toLocaleString()}`} result={womanEstimate + amount(values.woman_outfit_addition)} />
+              </div>,
+            },
+            {
+              value: "boy",
+              label: "Boys",
+              description: "4 rules · Men's formula with a lower pants base",
+              content: <div className="space-y-4">
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                  <RuleInput label="Full-set addition" description="Added to the complete boys' Telegram estimate." value={values.boy_full_set_addition} onChange={(value) => update("boy_full_set_addition", value)} />
+                  <RuleInput label="Pants base cost" description="The fixed designer component assigned to boys' pants." value={values.boy_pants_base} onChange={(value) => update("boy_pants_base", value)} />
+                  <RuleInput label="Pants addition" description="Added to the boys' pants base cost." value={values.boy_pants_addition} onChange={(value) => update("boy_pants_addition", value)} />
+                  <RuleInput label="Top addition" description="Added after deducting the boys' pants base." value={values.boy_top_addition} onChange={(value) => update("boy_top_addition", value)} />
+                </div>
+                <div className="grid gap-3 md:grid-cols-3">
+                  <FormulaResult label="Full set" formula={`8,000 + ${amount(values.boy_full_set_addition).toLocaleString()}`} result={boyEstimate + amount(values.boy_full_set_addition)} />
+                  <FormulaResult label="Pants only" formula={`${boyPantsBase.toLocaleString()} + ${amount(values.boy_pants_addition).toLocaleString()}`} result={boyPantsBase + amount(values.boy_pants_addition)} />
+                  <FormulaResult label="Top only" formula={`8,000 − ${boyPantsBase.toLocaleString()} + ${amount(values.boy_top_addition).toLocaleString()}`} result={boyEstimate - boyPantsBase + amount(values.boy_top_addition)} />
+                </div>
+              </div>,
+            },
+            {
+              value: "girl",
+              label: "Girls",
+              description: "1 rule · One addition for the complete outfit",
+              content: <div className="grid gap-4 lg:grid-cols-[minmax(280px,1fr)_minmax(280px,1fr)]">
+                <RuleInput label="Outfit addition" description="Added directly to the Telegram Girl estimate." value={values.girl_outfit_addition} onChange={(value) => update("girl_outfit_addition", value)} />
+                <FormulaResult label="4,000 ETB example" formula={`4,000 + ${amount(values.girl_outfit_addition).toLocaleString()}`} result={girlEstimate + amount(values.girl_outfit_addition)} />
+              </div>,
+            },
+          ]}
+        />
       )}
     </div>
   );

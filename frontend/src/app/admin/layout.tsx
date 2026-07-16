@@ -22,6 +22,7 @@ async function getAdminNotificationCounts() {
         catalog_order: number;
         refund_issue: number;
         shipping_delivery: number;
+        catalog_price_submission: number;
         total: number;
         paymentIds?: string[];
         customRequestIds?: string[];
@@ -29,6 +30,7 @@ async function getAdminNotificationCounts() {
         catalogOrderIds?: string[];
         refundIssueIds?: string[];
         shippingDeliveryIds?: string[];
+        catalogPriceProductIds?: string[];
       };
       }>("/api/v1/admin/summary-counts"),
       apiRequest<{ count?: number }>("/api/v1/admin/support/unread-count").catch(() => ({ count: 0 })),
@@ -48,12 +50,14 @@ async function getAdminNotificationCounts() {
       refundIssueIds: counts?.refundIssueIds ?? [],
       shippingDelivery: counts?.shipping_delivery ?? 0,
       shippingDeliveryIds: counts?.shippingDeliveryIds ?? [],
+      catalogPrices: counts?.catalog_price_submission ?? 0,
+      catalogPriceProductIds: counts?.catalogPriceProductIds ?? [],
       total: counts?.total ?? 0,
       alerts: 0,
       support: supportResponse?.count ?? 0,
     };
   } catch {
-    return { orders: 0, orderIds: [], payments: 0, paymentIds: [], customDesigns: 0, customDesignIds: [], customOrders: 0, customOrderIds: [], refundIssues: 0, refundIssueIds: [], shippingDelivery: 0, shippingDeliveryIds: [], total: 0, alerts: 0, support: 0 };
+    return { orders: 0, orderIds: [], payments: 0, paymentIds: [], customDesigns: 0, customDesignIds: [], customOrders: 0, customOrderIds: [], refundIssues: 0, refundIssueIds: [], shippingDelivery: 0, shippingDeliveryIds: [], catalogPrices: 0, catalogPriceProductIds: [], total: 0, alerts: 0, support: 0 };
   }
 }
 

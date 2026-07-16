@@ -456,6 +456,7 @@ adminRouter.get("/summary-counts", requirePermission(PERMISSIONS.ALERTS_VIEW), a
   const catalogTypes = new Set(["new_order", "new_catalog_order"]);
   const refundTypes = new Set(["refund_issue", "refund_requested", "return_refund", "refund_pending"]);
   const shippingTypes = new Set(["shipping_delivery_ready"]);
+  const catalogPriceTypes = new Set(["catalog_price_submitted"]);
 
   const counts = {
     payment: 0,
@@ -464,6 +465,7 @@ adminRouter.get("/summary-counts", requirePermission(PERMISSIONS.ALERTS_VIEW), a
     catalog_order: 0,
     refund_issue: 0,
     shipping_delivery: 0,
+    catalog_price_submission: 0,
     total: 0,
     paymentIds: [] as string[],
     customRequestIds: [] as string[],
@@ -471,6 +473,7 @@ adminRouter.get("/summary-counts", requirePermission(PERMISSIONS.ALERTS_VIEW), a
     catalogOrderIds: [] as string[],
     refundIssueIds: [] as string[],
     shippingDeliveryIds: [] as string[],
+    catalogPriceProductIds: [] as string[],
   };
 
   function orderHasUploadedDesign(order: typeof orderRows[number] | null | undefined) {
@@ -528,6 +531,14 @@ adminRouter.get("/summary-counts", requirePermission(PERMISSIONS.ALERTS_VIEW), a
     const order = entityId ? orderById.get(entityId) : null;
     const type = String(alert.type ?? "");
 
+    if (catalogPriceTypes.has(type)) {
+      counts.catalog_price_submission++;
+      if (entityId && !counts.catalogPriceProductIds.includes(entityId)) {
+        counts.catalogPriceProductIds.push(entityId);
+      }
+      return;
+    }
+
     if (customRequestTypes.has(type)) {
       if (entityId && !counts.customRequestIds.includes(entityId)) {
         counts.custom_request++;
@@ -562,7 +573,8 @@ adminRouter.get("/summary-counts", requirePermission(PERMISSIONS.ALERTS_VIEW), a
     }
   });
 
-  counts.total = counts.payment + counts.custom_request + counts.custom_order + counts.catalog_order + counts.refund_issue + counts.shipping_delivery;
+  counts.catalog_price_submission = counts.catalogPriceProductIds.length;
+  counts.total = counts.payment + counts.custom_request + counts.custom_order + counts.catalog_order + counts.refund_issue + counts.shipping_delivery + counts.catalog_price_submission;
 
   return c.json({ data: counts });
 });
@@ -1312,11 +1324,27 @@ adminRouter.delete(
 
 adminRouter.get("/products", requirePermission(PERMISSIONS.PRODUCTS_VIEW), zValidator("query", listQuerySchema), async (c) => {
   const { limit } = c.req.valid("query");
-  const data = await db.query.products.findMany({
-    orderBy: [desc(products.createdAt)],
-    limit: limit ?? 200,
+  const [data, priceAlerts] = await Promise.all([
+    db.query.products.findMany({
+      orderBy: [desc(products.createdAt)],
+      limit: limit ?? 200,
+    }),
+    db.query.systemAlerts.findMany({
+      where: and(eq(systemAlerts.type, "catalog_price_submitted"), eq(systemAlerts.isResolved, false)),
+      orderBy: [desc(systemAlerts.updatedAt)],
+    }),
+  ]);
+  const alertByProductId = new Map(priceAlerts.map((alert) => [String(alert.entityId), alert]));
+  return c.json({
+    data: data.map((product) => {
+      const alert = alertByProductId.get(String(product.id));
+      return {
+        ...product,
+        hasNewPriceSubmission: Boolean(alert),
+        priceSubmissionAlertId: alert?.id ?? null,
+      };
+    }),
   });
-  return c.json({ data });
 });
 
 const pricingRulePatchSchema = z.object({
@@ -1436,6 +1464,26 @@ adminRouter.get(
       throw new HTTPException(404, { message: "Product not found" });
     }
     return c.json({ data });
+  },
+);
+
+adminRouter.patch(
+  "/products/:productId/price-submission-viewed",
+  requirePermission(PERMISSIONS.PRODUCTS_VIEW),
+  zValidator("param", productParamSchema),
+  async (c) => {
+    const authUser = c.get("authUser");
+    const { productId } = c.req.valid("param");
+    const rows = await db.update(systemAlerts).set({
+      isResolved: true,
+      resolvedBy: authUser?.email ?? "admin",
+      updatedAt: new Date(),
+    }).where(and(
+      eq(systemAlerts.type, "catalog_price_submitted"),
+      eq(systemAlerts.entityId, productId),
+      eq(systemAlerts.isResolved, false),
+    )).returning();
+    return c.json({ data: rows, count: rows.length });
   },
 );
 
