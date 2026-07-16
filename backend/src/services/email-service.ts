@@ -4,6 +4,11 @@ import { env } from "../config/env.js";
 
 type MailChannel = "notifications" | "support" | "team";
 
+export type MailAttachment = {
+  filename: string;
+  path: string;
+};
+
 type MailPayload = {
   to?: string | string[] | null;
   subject: string;
@@ -15,6 +20,7 @@ type MailPayload = {
   inReplyTo?: string;
   references?: string | string[];
   headers?: Record<string, string>;
+  attachments?: MailAttachment[];
 };
 
 type PasswordLinkPayload = {
@@ -105,6 +111,7 @@ type SupportTicketPayload = {
   customerName?: string | null;
   customerEmail?: string | null;
   message?: string | null;
+  attachments?: MailAttachment[];
 };
 
 type EmployeeRoleAssignedPayload = {
@@ -450,6 +457,7 @@ export async function sendTransactionalEmail(payload: MailPayload) {
       html: payload.html,
       replyTo,
       headers: payload.headers,
+      attachments: payload.attachments,
     });
   } else {
     const transporter = smtpTransporter(channel);
@@ -465,6 +473,7 @@ export async function sendTransactionalEmail(payload: MailPayload) {
       inReplyTo: payload.inReplyTo,
       references: payload.references,
       headers: payload.headers,
+      attachments: payload.attachments,
     });
   }
 
@@ -1027,7 +1036,7 @@ export async function sendSupportTicketCreatedCustomerEmail(payload: SupportTick
   return sendTransactionalEmailSafely({
     channel: "support",
     to: payload.to,
-    subject: `🎫 We received your support request${payload.ticketNumber ? `: ${payload.ticketNumber}` : ""}`,
+    subject: payload.subject?.trim() || "We received your support message",
     text: paragraph([
       `Hello ${payload.customerName || "Customer"},`,
       "We received your support request. Our team will reply as soon as possible.",
@@ -1044,7 +1053,6 @@ export async function sendSupportTicketCreatedCustomerEmail(payload: SupportTick
         <p style="margin:0;color:#c8c880;font-size:13px">We have received your support request and our team will reply as soon as possible — typically within a few hours during business hours.</p>
       </div>
       ${detailsList([
-        ["Ticket", payload.ticketNumber],
         ["Subject", payload.subject],
       ])}
       ${actionButton("View My Support Requests", supportUrl)}
@@ -1066,26 +1074,25 @@ export async function sendSupportReplyEmail(
   return sendTransactionalEmailSafely({
     channel: "support",
     to: payload.to,
-    subject: `💬 Support reply${payload.ticketNumber ? `: ${payload.ticketNumber}` : ""}`,
+    subject: payload.subject?.trim() || "New message from Yehager Bahil Support",
     messageId: payload.messageId,
     inReplyTo: payload.inReplyTo,
     references: payload.references,
-    headers: payload.ticketNumber ? { "X-Yehager-Ticket-Number": payload.ticketNumber } : undefined,
+    attachments: payload.attachments,
     text: paragraph([
       `Hello ${payload.customerName || "Customer"},`,
-      "Our support team replied to your ticket.",
+      "Our support team replied to your message.",
+      payload.subject ? "Subject: " + payload.subject : null,
+      payload.attachments?.length ? "Attachments: " + payload.attachments.map((attachment) => attachment.filename).join(", ") : null,
       payload.reply,
       `Open support: ${supportUrl}`,
     ]),
     html: htmlShell(
-      "New Reply From Our Team 💬",
+      payload.subject?.trim() || "New Reply From Our Team",
       `
       <p>Hello <strong>${escapeHtml(payload.customerName || "Customer")}</strong>,</p>
-      <p>Our support team has replied to your request.</p>
-      ${detailsList([
-        ["Ticket", payload.ticketNumber],
-        ["Subject", payload.subject],
-      ])}
+      <p>Our support team has replied to your message.</p>
+      ${payload.subject ? "<p style=\"margin:16px 0;color:#d6a43d;font-size:14px;font-weight:700\">Subject: " + escapeHtml(payload.subject) + "</p>" : ""}
       ${payload.reply
         ? `<div style="margin:20px 0;padding:16px;background:#1a1610;border:1px solid #5c4a14;border-radius:8px">
             <p style="margin:0 0 6px;color:#d6a43d;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.08em">Reply from Support</p>

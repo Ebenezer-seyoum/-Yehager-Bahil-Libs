@@ -19,7 +19,7 @@ export const FILTER_PLACEHOLDERS: Record<AdminPageId, string> = {
   "uploaded-designs": "Search custom designs by submission #, title, customer, or status...",
   "exchange-rate": "Search currencies...",
   reports: "Search reports...",
-  "support-inbox": "Search by ticket #, customer, email, subject, or order id...",
+  "support-inbox": "Search by customer, email, or subject...",
   settings: "Search settings...",
   "backup-restore": "Search backup and restore activity...",
   "activity-logs": "Search activity logs...",

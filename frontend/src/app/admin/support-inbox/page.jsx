@@ -92,10 +92,7 @@ export default function SupportInboxPage() {
   const isAdmin = session?.user?.role === "admin";
   const canViewSupport = isAdmin || can(permissions, "support.view");
   const canReplySupport = isAdmin || can(permissions, "support.reply");
-  const canAssignSupport = isAdmin || can(permissions, "support.assign");
-  const canResolveSupport = isAdmin || can(permissions, "support.resolve");
   const [tickets, setTickets] = useState([]);
-  const [admins, setAdmins] = useState([]);
   const [loading, setLoading] = useState(true);
   const [syncingEmail, setSyncingEmail] = useState(false);
   const [lastEmailSyncAt, setLastEmailSyncAt] = useState(null);
@@ -103,9 +100,7 @@ export default function SupportInboxPage() {
   // Filters & Tabs state
   const [activeTab, setActiveTab] = useState("all"); // SUPPORT_TABS ids
   const [searchQuery, setSearchQuery] = useState("");
-  const [filterPriority, setFilterPriority] = useState("all");
   const [filterCategory, setFilterCategory] = useState("all");
-  const [filterAssignee, setFilterAssignee] = useState("all");
   const [dateRange, setDateRange] = useState("all"); // all, today, week, month
 
   // Active Ticket Modal
@@ -113,10 +108,7 @@ export default function SupportInboxPage() {
   const [selectedTicket, setSelectedTicket] = useState(null);
   const [ticketLoading, setTicketLoading] = useState(false);
   const [replyBody, setReplyBody] = useState("");
-  const [internalNote, setInternalNote] = useState("");
-  const [replyStatus, setReplyStatus] = useState("pending_reply");
-  const [replyPriority, setReplyPriority] = useState("medium");
-  const [replyAssignee, setReplyAssignee] = useState("");
+  const [replySubject, setReplySubject] = useState("");
   const [replyAttachments, setReplyAttachments] = useState([]);
   const [replySubmitting, setReplySubmitting] = useState(false);
   const [sendState, setSendState] = useState("idle");
@@ -139,7 +131,6 @@ export default function SupportInboxPage() {
       const queryParams = new URLSearchParams();
       if (readStateParam !== "all") queryParams.append("readState", readStateParam);
       if (filterCategory !== "all") queryParams.append("category", filterCategory);
-      if (filterPriority !== "all") queryParams.append("priority", filterPriority);
       if (searchQuery) queryParams.append("search", searchQuery);
 
       // Fetch tickets
@@ -148,11 +139,6 @@ export default function SupportInboxPage() {
       
       let fetchedTickets = dataTickets.data || [];
       
-      // Filter by Assignee (client side or fallback)
-      if (filterAssignee !== "all") {
-        fetchedTickets = fetchedTickets.filter(t => t.assignedAdminId === filterAssignee);
-      }
-
       // Filter by Date Range (client side)
       if (dateRange !== "all") {
         const now = new Date();
@@ -181,31 +167,11 @@ export default function SupportInboxPage() {
     }
   };
 
-  // 2. Fetch admins / employees list
-  const fetchAdmins = async () => {
-    if (!canAssignSupport) return;
-    try {
-      const res = await fetch("/api/v1/admin/users?limit=100");
-      const data = await res.json();
-      const userList = data.data || [];
-      // Filter for admins and employees
-      const filtered = userList.filter(u => u.role === "admin" || u.role === "employee");
-      setAdmins(filtered);
-    } catch (err) {
-      console.error("Failed to fetch admin list:", err);
-    }
-  };
-
   useEffect(() => {
     if (!canViewSupport) return;
     const timeoutId = window.setTimeout(() => void fetchData(), 0);
     return () => window.clearTimeout(timeoutId);
-  }, [canViewSupport, activeTab, searchQuery, filterPriority, filterCategory, filterAssignee, dateRange]);
-
-  useEffect(() => {
-    const timeoutId = window.setTimeout(() => void fetchAdmins(), 0);
-    return () => window.clearTimeout(timeoutId);
-  }, [canAssignSupport]);
+  }, [canViewSupport, activeTab, searchQuery, filterCategory, dateRange]);
 
   const handleSyncEmail = async ({ silent = false } = {}) => {
     if (!canViewSupport) return;
@@ -254,7 +220,7 @@ export default function SupportInboxPage() {
       isActive = false;
       window.clearInterval(intervalId);
     };
-  }, [canViewSupport, activeTab, searchQuery, filterPriority, filterCategory, filterAssignee, dateRange]);
+  }, [canViewSupport, activeTab, searchQuery, filterCategory, dateRange]);
 
   // 4. Load single ticket details
   const handleOpenTicket = async (ticketId) => {
@@ -268,9 +234,7 @@ export default function SupportInboxPage() {
       const data = await res.json();
       if (data.data) {
         setSelectedTicket(data.data);
-        setReplyStatus(data.data.status);
-        setReplyPriority(data.data.priority);
-        setReplyAssignee(data.data.assignedAdminId || "");
+        setReplySubject(data.data.subject || "");
         setReplyAttachments([]);
         if (wasUnread) {
           window.dispatchEvent(new CustomEvent("admin-support-read", { detail: ticketId }));
@@ -301,10 +265,7 @@ export default function SupportInboxPage() {
 
     const payload = {
       messageBody: replyBody,
-      status: replyStatus,
-      priority: replyPriority,
-      assignedAdminId: replyAssignee || null,
-      internalNote: internalNote.trim() || undefined,
+      subject: replySubject.trim(),
       attachments: replyAttachments
         .filter((attachment) => attachment.status === "ready" && attachment.url)
         .map((attachment) => attachment.url),
@@ -326,7 +287,6 @@ export default function SupportInboxPage() {
       showToast("Reply sent successfully and customer notified!", "success");
       setSendState("sent");
       setReplyBody("");
-      setInternalNote("");
       setReplyAttachments([]);
       
       // Reload ticket details
@@ -340,23 +300,6 @@ export default function SupportInboxPage() {
       });
     } finally {
       setReplySubmitting(false);
-    }
-  };
-
-  // 6. Handle status change directly
-  const handleUpdateTicketStatus = async (statusVal) => {
-    if (!canResolveSupport) return;
-    if (!selectedTicket) return;
-    try {
-      await fetch(`/api/backend/admin/support/tickets/${selectedTicket.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: statusVal }),
-      });
-      showToast(`Ticket status set to ${statusVal}`, "success");
-      handleOpenTicket(selectedTicket.id);
-    } catch (err) {
-      console.error(err);
     }
   };
 
@@ -487,7 +430,7 @@ export default function SupportInboxPage() {
           <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
           <input
             type="text"
-            placeholder="Search by ticket #, customer, email, subject..."
+            placeholder="Search by customer, email, or subject..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full rounded-lg border border-slate-200 bg-slate-50 py-2 pl-10 pr-4 text-xs text-slate-800 placeholder-slate-400 focus:border-blue-500 focus:bg-white focus:outline-none"
@@ -510,36 +453,6 @@ export default function SupportInboxPage() {
             >
               {MESSAGE_TYPES.map((type) => (
                 <option key={type.id} value={type.id}>{type.label}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="flex items-center gap-1.5">
-            <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Priority:</span>
-            <select
-              value={filterPriority}
-              onChange={(e) => setFilterPriority(e.target.value)}
-              className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs focus:outline-none"
-            >
-              <option value="all">All Priorities</option>
-              <option value="low">Low</option>
-              <option value="medium">Medium</option>
-              <option value="high">High</option>
-              <option value="urgent">Urgent</option>
-            </select>
-          </div>
-
-          {/* Assignee */}
-          <div className="flex items-center gap-1.5">
-            <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Assignee:</span>
-            <select
-              value={filterAssignee}
-              onChange={(e) => setFilterAssignee(e.target.value)}
-              className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs focus:outline-none max-w-[150px]"
-            >
-              <option value="all">Anyone</option>
-              {admins.map(admin => (
-                <option key={admin.id} value={admin.id}>{admin.name || admin.email}</option>
               ))}
             </select>
           </div>
@@ -580,43 +493,22 @@ export default function SupportInboxPage() {
         </div>
       ) : (
         /* CARD VIEW */
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
           {tickets.map((t) => {
-            const hasReply = t.status === "pending_reply" || t.status === "resolved";
             return (
               <div
                 key={t.id}
                 onClick={() => handleOpenTicket(t.id)}
-                className={`relative flex flex-col justify-between rounded-xl border bg-white p-4 shadow-sm hover:shadow-md transition-all cursor-pointer hover:border-blue-400 ${
-                  t.unreadByAdmin 
-                    ? "border-l-4 border-l-blue-600 border-slate-200 font-semibold" 
-                    : "border-slate-200"
+                className={`flex items-center gap-4 border-b border-slate-100 bg-white px-5 py-4 transition hover:bg-slate-50 cursor-pointer ${
+                  t.unreadByAdmin
+                    ? "border-l-4 border-l-blue-600 bg-blue-50/30 font-semibold"
+                    : ""
                 }`}
               >
                 <div>
                   <div className="flex items-center justify-between gap-2">
-                    <span className="font-mono text-[10px] text-slate-400">
-                      {t.ticketNumber}
-                    </span>
                     <div className="flex items-center gap-1.5">
-                      {t.priority === "urgent" && (
-                        <span className="rounded bg-rose-100 text-rose-700 px-1.5 py-0.5 text-[9px] uppercase font-extrabold animate-pulse">
-                          Urgent
-                        </span>
-                      )}
-                      {t.priority === "high" && (
-                        <span className="rounded bg-orange-100 text-orange-700 px-1.5 py-0.5 text-[9px] uppercase font-bold">
-                          High
-                        </span>
-                      )}
-                      <span className={`rounded-full px-2 py-0.5 text-[9px] font-bold ${
-                        t.status === "new" ? "bg-sky-100 text-sky-700" :
-                        t.status === "open" ? "bg-emerald-100 text-emerald-700" :
-                        t.status === "pending_reply" ? "bg-amber-100 text-amber-700" :
-                        "bg-slate-100 text-slate-700"
-                      }`}>
-                        {t.status.replace("_", " ")}
-                      </span>
+                      {t.unreadByAdmin ? <span className="h-2 w-2 rounded-full bg-blue-600" aria-label="Unread message" /> : null}
                     </div>
                   </div>
 
@@ -635,10 +527,8 @@ export default function SupportInboxPage() {
                   </div>
                 </div>
 
-                <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3 text-[10px] text-slate-400">
-                  <span className="bg-slate-50 rounded px-1.5 py-0.5 border border-slate-100 text-slate-500 font-medium">
-                    {categoryLabel(t.category)}
-                  </span>
+                <div className="ml-auto flex items-center gap-4 text-[10px] text-slate-400">
+                  <span className="text-slate-400">{categoryLabel(t.category)}</span>
                   <span>{formatTimeAgo(t.lastMessageAt || t.updatedAt)}</span>
                 </div>
               </div>
@@ -658,8 +548,8 @@ export default function SupportInboxPage() {
           maxWidth="max-w-6xl"
         >
           <DashboardModalHeader
-            title={selectedTicket?.subject || "Support ticket"}
-            description={`${selectedTicket?.ticketNumber || ""}${selectedTicket?.status ? ` / ${selectedTicket.status.replace("_", " ")}` : ""}`}
+            title={selectedTicket?.subject || "Support message"}
+            description={selectedTicket?.customerEmail || "Email conversation"}
             icon={MessageSquare}
             onClose={() => {
               setSelectedTicketId(null);
@@ -763,6 +653,15 @@ export default function SupportInboxPage() {
                   {canReplySupport ? (
                     <form onSubmit={handleSendReply} className="border-t border-slate-200 bg-white p-4">
                       <div className="flex flex-col gap-2">
+                        <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Subject</label>
+                        <input
+                          type="text"
+                          value={replySubject}
+                          onChange={(e) => setReplySubject(e.target.value)}
+                          placeholder="Email subject"
+                          className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-800 placeholder-slate-400 focus:border-blue-500 focus:bg-white focus:outline-none"
+                          required
+                        />
                         {/* Text area */}
                         <textarea
                           rows="3"
@@ -772,15 +671,6 @@ export default function SupportInboxPage() {
                           className="w-full rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-800 placeholder-slate-400 focus:border-blue-500 focus:bg-white focus:outline-none"
                           required
                         />
-
-                      {/* Internal Note field */}
-                      <input
-                        type="text"
-                        placeholder="Add an internal system note (optional, customer will not see this)..."
-                        value={internalNote}
-                        onChange={(e) => setInternalNote(e.target.value)}
-                        className="w-full rounded-lg border border-dashed border-slate-200 bg-white px-3 py-2 text-[11px] text-slate-800 focus:outline-none"
-                      />
 
                       {/* Attachment Upload Bar */}
                       {replyAttachments.length > 0 && (
@@ -849,7 +739,7 @@ export default function SupportInboxPage() {
 
                 </div>
 
-                {/* Right side: Ticket Metadata & Admin Actions */}
+                {/* Right side: Email sender details */}
                 <div className="w-full md:w-72 bg-slate-50 p-6 space-y-6">
                   
                   {/* Customer Info Card */}
@@ -867,87 +757,10 @@ export default function SupportInboxPage() {
                   </div>
 
                   <hr className="border-slate-200" />
-
-                  {/* Admin Metadata & Properties */}
-                  <div className="space-y-4">
-                    <h3 className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Ticket Administration</h3>
-                    
-                    {/* Status Select */}
-                    {canResolveSupport ? (
-                      <div className="flex flex-col gap-1.5">
-                        <label className="text-[10px] text-slate-500 font-medium">Ticket Status</label>
-                        <select
-                          value={replyStatus}
-                          onChange={(e) => {
-                            setReplyStatus(e.target.value);
-                            handleUpdateTicketStatus(e.target.value);
-                          }}
-                          className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-800 focus:outline-none"
-                        >
-                          <option value="new">New</option>
-                          <option value="open">Open / Active</option>
-                          <option value="pending_reply">Pending Reply</option>
-                          <option value="resolved">Resolved</option>
-                          <option value="archived">Archived / Spam</option>
-                        </select>
-                      </div>
-                    ) : null}
-
-                    {/* Priority Select */}
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-[10px] text-slate-500 font-medium">Ticket Priority</label>
-                      <select
-                        value={replyPriority}
-                        onChange={(e) => setReplyPriority(e.target.value)}
-                        className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-800 focus:outline-none"
-                      >
-                        <option value="low">Low</option>
-                        <option value="medium">Medium</option>
-                        <option value="high">High</option>
-                        <option value="urgent">Urgent</option>
-                      </select>
-                    </div>
-
-                    {/* Assigned Employee Select */}
-                    {canAssignSupport ? (
-                      <div className="flex flex-col gap-1.5">
-                        <label className="text-[10px] text-slate-500 font-medium">Assign Ticket to Staff</label>
-                        <select
-                          value={replyAssignee}
-                          onChange={(e) => setReplyAssignee(e.target.value)}
-                          className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-800 focus:outline-none"
-                        >
-                          <option value="">Unassigned</option>
-                          {admins.map(admin => (
-                            <option key={admin.id} value={admin.id}>{admin.name || admin.email}</option>
-                          ))}
-                        </select>
-                      </div>
-                    ) : null}
-                  </div>
-
-                  <hr className="border-slate-200" />
-
-                  {/* Context Info */}
-                  <div className="text-[10px] text-slate-400 space-y-2">
-                    <p>
-                      <span className="font-semibold">Category: </span>
-                      <span>{categoryLabel(selectedTicket?.category)}</span>
-                    </p>
-                    {selectedTicket?.orderId && (
-                      <p className="truncate">
-                        <span className="font-semibold">Linked Order: </span>
-                        <span className="font-mono">{selectedTicket.orderId}</span>
-                      </p>
-                    )}
-                    <p>
-                      <span className="font-semibold">Opened: </span>
-                      {selectedTicket?.createdAt ? new Date(selectedTicket.createdAt).toLocaleString() : ""}
-                    </p>
-                    <p>
-                      <span className="font-semibold">Last Message: </span>
-                      {selectedTicket?.lastMessageAt ? new Date(selectedTicket.lastMessageAt).toLocaleString() : ""}
-                    </p>
+                  <div className="space-y-3 text-xs text-slate-500">
+                    <p><span className="font-semibold text-slate-700">Subject:</span> {selectedTicket?.subject || "No subject"}</p>
+                    <p><span className="font-semibold text-slate-700">Last message:</span> {selectedTicket?.lastMessageAt ? new Date(selectedTicket.lastMessageAt).toLocaleString() : "—"}</p>
+                    <p><span className="font-semibold text-slate-700">Message type:</span> {categoryLabel(selectedTicket?.category)}</p>
                   </div>
 
                 </div>

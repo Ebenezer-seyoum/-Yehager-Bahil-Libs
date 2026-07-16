@@ -49,6 +49,7 @@ const patchTicketSchema = z.object({
 
 const replySchema = z.object({
   messageBody: z.string().trim().min(1, "Message body is required"),
+  subject: z.string().trim().min(1, "Subject is required").optional(),
   status: z.string().optional(),
   priority: z.string().optional(),
   assignedAdminId: z.string().uuid().nullable().optional(),
@@ -332,6 +333,12 @@ supportRouter.post(
   const previousEmailMessageIds = previousMessages
     .map((message) => message.emailMessageId)
     .filter(Boolean) as string[];
+  const replySubject = body.subject?.trim() || ticket.subject;
+  const emailAttachments = (body.attachments ?? []).map((url) => {
+    const cleanUrl = url.split("?")[0];
+    const encodedName = cleanUrl.slice(cleanUrl.lastIndexOf("/") + 1) || "attachment";
+    return { filename: decodeURIComponent(encodedName), path: url };
+  });
   const inReplyTo = previousEmailMessageIds.at(-1);
   const outboundMessageId = `<support-${ticket.ticketNumber}-${Date.now()}@yehagerbahillibs.com>`;
 
@@ -340,8 +347,9 @@ supportRouter.post(
     customerName: ticket.customerName,
     customerEmail: ticket.customerEmail,
     ticketNumber: ticket.ticketNumber,
-    subject: ticket.subject,
+    subject: replySubject,
     reply: body.messageBody,
+    attachments: emailAttachments,
     messageId: outboundMessageId,
     inReplyTo,
     references: previousEmailMessageIds,

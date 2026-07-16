@@ -113,9 +113,6 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       <DashboardShell
         navigation={adminNavigation}
         title={isEmployee ? "Employee workspace" : "Admin workspace"}
-        subtitle={
-          isEmployee ? "Shared dashboard access based on your assigned role." : undefined
-        }
         variant="admin"
         notificationCounts={notificationCounts}
         accountProfile={{
