@@ -7,6 +7,13 @@ import { getSignedReadUrl } from "../lib/storage/s3.js";
 
 type TelegramResponse<T> = { ok: boolean; result?: T; description?: string };
 
+export type EstimatedPrices = {
+  men: number;
+  woman: number;
+  boy: number;
+  girl: number;
+};
+
 async function telegram<T>(method: string, body: Record<string, unknown>) {
   if (!env.TELEGRAM_BOT_TOKEN) throw new Error("Telegram bot token is not configured");
   const response = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/${method}`, {
@@ -19,11 +26,21 @@ async function telegram<T>(method: string, body: Record<string, unknown>) {
   return payload.result as T;
 }
 
-export function createPriceFormToken(productId: string, expiresAt = Math.floor(Date.now() / 1000) + 86400) {
+export function createPriceFormToken(productId: string, expiresAt = Math.floor(Date.now() / 1000) + 30 * 86400) {
   const payload = `${productId}.${expiresAt}`;
   const secret = env.TELEGRAM_WEBHOOK_SECRET || env.TELEGRAM_BOT_TOKEN || "";
   const signature = createHmac("sha256", secret).update(payload).digest("hex");
   return `${productId}.${expiresAt}.${signature}`;
+}
+
+function miniAppUrl(productId: string) {
+  if (!env.TELEGRAM_MINI_APP_SHORT_NAME) throw new Error("Telegram Mini App short name is not configured");
+  const botUsername = env.TELEGRAM_BOT_USERNAME || "yehager_price_manager_bot";
+  return `https://t.me/${botUsername}/${env.TELEGRAM_MINI_APP_SHORT_NAME}?startapp=${encodeURIComponent(createPriceFormToken(productId))}`;
+}
+
+export function priceEntryKeyboard(productId: string, label = "Enter / Edit Price") {
+  return { inline_keyboard: [[{ text: label, url: miniAppUrl(productId) }]] };
 }
 
 async function makeTelegramImageUrl(imageUrl: string) {
@@ -82,7 +99,7 @@ export async function sendTelegramProduct(product: { id: string; uniqueId?: stri
   }
   const message = await sendTelegramMessage(
     priceEntryPrompt({ uniqueId: product.uniqueId || product.id, name: productName }),
-    { inline_keyboard: [[{ text: "Enter / Edit Price", url: env.TELEGRAM_MINI_APP_SHORT_NAME ? `https://t.me/${env.TELEGRAM_BOT_USERNAME || "yehager_price_manager_bot"}/${env.TELEGRAM_MINI_APP_SHORT_NAME}?startapp=${encodeURIComponent(createPriceFormToken(product.id))}` : `https://t.me/${env.TELEGRAM_BOT_USERNAME || "yehager_price_manager_bot"}?start=price_${product.id}` }]] },
+    priceEntryKeyboard(product.id),
     regionTopic.telegramTopicId,
   );
   return { message, topicId: regionTopic.telegramTopicId };
@@ -132,6 +149,27 @@ export async function processTelegramPriceMessage(text: string) {
   if (!product) return { uniqueId, status: "unmatched" as const };
   const entries = parsePriceLines(text);
   if (!entries.size) return { uniqueId, status: "no_prices" as const };
+  const prices = {
+    men: entries.get("men") ?? entries.get("man") ?? 0,
+    woman: entries.get("woman") ?? entries.get("women") ?? 0,
+    boy: entries.get("boy") ?? 0,
+    girl: entries.get("girl") ?? 0,
+  };
+  if (Object.values(prices).some((price) => !Number.isFinite(price) || price <= 0)) return { uniqueId, status: "no_prices" as const };
+  return updateEstimatedPrices(product.id, prices, { recordSubmission: true });
+}
+
+export async function updateEstimatedPrices(
+  productId: string,
+  prices: EstimatedPrices,
+  options: { recordSubmission?: boolean } = {},
+) {
+  const values = Object.values(prices);
+  if (values.some((price) => !Number.isFinite(price) || price <= 0)) {
+    return { status: "invalid_prices" as const };
+  }
+  const [product] = await db.select().from(products).where(eq(products.id, productId)).limit(1);
+  if (!product) return { status: "unmatched" as const };
   const rules = await db.select().from(globalPricingRules).where(eq(globalPricingRules.isActive, true));
   const ruleByKey = new Map(rules.map((rule) => [rule.ruleKey, Number(rule.markupAmountEtb)]));
   const roles = Array.isArray(product.familyRoles) ? product.familyRoles.map((role) => ({ ...role })) : [];
@@ -139,24 +177,45 @@ export async function processTelegramPriceMessage(text: string) {
   const nextRoles = roles.map((role) => {
     const customer = customerPriceKey(role);
     const key = roleRuleKey(role);
-    const aliases = [customer, `${customer}_outfit`, key, normalizeKey(role.label || "")];
-    const entered = aliases.map((alias) => entries.get(alias)).find((value) => value !== undefined);
+    const entered = prices[customer as keyof EstimatedPrices];
     if (!entered) return role;
     const markup = ruleByKey.get(customer) ?? ruleByKey.get(`${customer}_outfit`) ?? ruleByKey.get(key) ?? 0;
     updated += 1;
     return { ...role, designerPriceEtb: entered, markupAmountEtb: markup, sellingPriceEtb: entered + markup, pricingRuleKey: key, enteredPrice: entered, currency: "ETB" as const };
   });
-  if (!updated) return { uniqueId, status: "no_matching_roles" as const };
   const submittedAt = new Date();
-  const [row] = await db.update(products).set({ familyRoles: nextRoles, priceStatus: "pending_approval", telegramStatus: "submitted", priceSubmissionCount: Number(product.priceSubmissionCount ?? 0) + 1, lastPriceSubmittedAt: submittedAt, priceVersion: Number(product.priceVersion ?? 0) + 1, updatedAt: submittedAt }).where(eq(products.id, product.id)).returning();
-  return { uniqueId, status: "submitted" as const, product: row, updated };
+  const recordSubmission = options.recordSubmission ?? false;
+  const [row] = await db.update(products).set({
+    familyRoles: nextRoles,
+    estimatedPrices: prices,
+    priceStatus: "pending_approval",
+    telegramStatus: "submitted",
+    priceSubmissionCount: recordSubmission ? Number(product.priceSubmissionCount ?? 0) + 1 : Number(product.priceSubmissionCount ?? 0),
+    lastPriceSubmittedAt: recordSubmission ? submittedAt : product.lastPriceSubmittedAt,
+    priceVersion: Number(product.priceVersion ?? 0) + 1,
+    updatedAt: submittedAt,
+  }).where(eq(products.id, product.id)).returning();
+  return { uniqueId: product.uniqueId || product.id, status: "submitted" as const, product: row, updated };
 }
 
 export function approvalKeyboard(productId: string) {
-  return { inline_keyboard: [[{ text: "Edit Price", callback_data: `price:edit:${productId}` }]] };
+  return priceEntryKeyboard(productId, "Edit Price");
 }
 
-export function priceSummary(product: { uniqueId?: string | null; familyRoles?: unknown[] | null }) {
+export function priceSummary(product: { uniqueId?: string | null; familyRoles?: unknown[] | null; estimatedPrices?: EstimatedPrices | null }) {
   const roles = Array.isArray(product.familyRoles) ? product.familyRoles as Array<{ label?: string; designerPriceEtb?: number; markupAmountEtb?: number; sellingPriceEtb?: number }> : [];
-  return [`<b>Product ${product.uniqueId || ""}</b>`, ...roles.filter((role) => role.sellingPriceEtb !== undefined).map((role) => `${role.label}: ${role.designerPriceEtb} ETB + ${role.markupAmountEtb} ETB = <b>${role.sellingPriceEtb} ETB</b>`)].join("\n");
+  const firstRoleFor = (customerType: string) => roles.find((role) => (role as { customerType?: string }).customerType === customerType && role.sellingPriceEtb !== undefined);
+  const estimates = product.estimatedPrices;
+  const summaryRows = estimates ? [
+    ["Men", estimates.men, firstRoleFor("man")],
+    ["Woman", estimates.woman, firstRoleFor("woman")],
+    ["Boy", estimates.boy, firstRoleFor("boy")],
+    ["Girl", estimates.girl, firstRoleFor("girl")],
+  ] as const : [];
+  return [
+    `<b>Product ${product.uniqueId || ""}</b>`,
+    ...summaryRows.map(([label, estimate, role]) => role
+      ? `${label}: ${estimate} ETB + ${Number(role.markupAmountEtb ?? 0)} ETB = <b>${Number(role.sellingPriceEtb ?? estimate)} ETB</b>`
+      : `${label}: <b>${estimate} ETB</b>`),
+  ].join("\n");
 }

@@ -5,7 +5,8 @@ import type { AppBindings } from "../../types/hono.js";
 import { env } from "../../config/env.js";
 import { db } from "../../lib/db/drizzle.js";
 import { products } from "../../lib/db/schema.js";
-import { answerTelegramCallbackQuery, approvalKeyboard, createPriceFormToken, editTelegramMessage, priceSummary, processTelegramPriceMessage, sendTelegramMessage } from "../../services/telegram-pricing-service.js";
+import { logger } from "../../lib/logger.js";
+import { answerTelegramCallbackQuery, approvalKeyboard, createPriceFormToken, editTelegramMessage, priceEntryKeyboard, priceSummary, processTelegramPriceMessage, sendTelegramMessage, updateEstimatedPrices } from "../../services/telegram-pricing-service.js";
 
 export const telegramRouter = new Hono<AppBindings>();
 
@@ -33,15 +34,59 @@ function validWebAppInitData(initData: string) {
   return receivedHash.length === calculated.length && timingSafeEqual(Buffer.from(receivedHash), Buffer.from(calculated));
 }
 
+type PriceFormBody = {
+  productId?: string;
+  token?: string;
+  initData?: string;
+  prices?: Record<string, number>;
+};
+
+function validPriceFormSession(body: PriceFormBody | null) {
+  return Boolean(body?.productId && (validPriceFormToken(body.productId, body.token || "") || validWebAppInitData(body.initData || "")));
+}
+
+telegramRouter.post("/price-form", async (c) => {
+  const body = await c.req.json().catch(() => null) as PriceFormBody | null;
+  if (!validPriceFormSession(body) || !body?.productId) return c.json({ error: "Invalid Telegram form session" }, 401);
+  const [product] = await db.select().from(products).where(eq(products.id, body.productId)).limit(1);
+  if (!product) return c.json({ error: "Product not found" }, 404);
+  return c.json({
+    data: {
+      productId: product.id,
+      productName: product.name,
+      uniqueId: product.uniqueId,
+      prices: product.estimatedPrices ?? { men: 0, woman: 0, boy: 0, girl: 0 },
+      status: product.priceStatus,
+    },
+  });
+});
+
 telegramRouter.post("/price-submit", async (c) => {
-  const body = await c.req.json().catch(() => null) as { productId?: string; initData?: string; prices?: Record<string, number> } | null;
-  if (!body?.productId || (!validPriceFormToken(body.productId, String((body as { token?: string }).token || "")) && !validWebAppInitData(body.initData || ""))) return c.json({ error: "Invalid Telegram form session" }, 401);
+  const body = await c.req.json().catch(() => null) as PriceFormBody | null;
+  if (!validPriceFormSession(body) || !body?.productId) return c.json({ error: "Invalid Telegram form session" }, 401);
   const [product] = await db.select().from(products).where(eq(products.id, body.productId)).limit(1);
   if (!product?.uniqueId) return c.json({ error: "Product not found" }, 404);
   const prices = body.prices || {};
-  const result = await processTelegramPriceMessage(`${product.uniqueId}\nMen: ${Number(prices.men)} ETB\nWoman: ${Number(prices.woman)} ETB\nBoy: ${Number(prices.boy)} ETB\nGirl: ${Number(prices.girl)} ETB`);
+  const result = await updateEstimatedPrices(product.id, {
+    men: Number(prices.men),
+    woman: Number(prices.woman),
+    boy: Number(prices.boy),
+    girl: Number(prices.girl),
+  }, { recordSubmission: true });
   if (!result || result.status !== "submitted") return c.json({ error: "All four prices are required" }, 422);
-  return c.json({ ok: true, status: "submitted" });
+  let telegramUpdated = false;
+  try {
+    const submittedText = `${priceSummary(result.product)}\n\n<b>✅ PRICE SUBMITTED</b>\nPending admin approval.`;
+    if (result.product.telegramMessageId) {
+      await editTelegramMessage(result.product.telegramMessageId, submittedText, approvalKeyboard(result.product.id));
+    } else {
+      await sendTelegramMessage(submittedText, approvalKeyboard(result.product.id), result.product.telegramTopicId);
+    }
+    telegramUpdated = true;
+  } catch (error) {
+    logger.error({ error, productId: product.id }, "telegram_price_submission_message_update_failed");
+  }
+  return c.json({ ok: true, status: "submitted", telegramUpdated });
 });
 
 telegramRouter.post("/webhook", async (c) => {
@@ -79,7 +124,7 @@ telegramRouter.post("/webhook", async (c) => {
       await answerTelegramCallbackQuery(update.callback_query.id);
       await sendTelegramMessage(
         `<b>${product.uniqueId}</b>\nEnter only these four prices:\n<code>${product.uniqueId}\nMen: 0 ETB\nWoman: 0 ETB\nBoy: 0 ETB\nGirl: 0 ETB</code>`,
-        { force_reply: true, selective: true },
+        priceEntryKeyboard(product.id, "Open Price Form"),
         product.telegramTopicId,
       );
     } else if (product && (action === "approve" || action === "reject")) {

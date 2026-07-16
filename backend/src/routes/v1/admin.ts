@@ -49,7 +49,7 @@ import { refreshStripeReceiptForOrder } from "../../services/payments-service.js
 import type { AppBindings } from "../../types/hono.js";
 3
 import { logger } from "../../lib/logger.js";
-import { editTelegramMessage, priceSummary, sendTelegramProduct } from "../../services/telegram-pricing-service.js";
+import { approvalKeyboard, editTelegramMessage, priceSummary, sendTelegramProduct, updateEstimatedPrices } from "../../services/telegram-pricing-service.js";
 
 const listQuerySchema = z.object({
   limit: z.coerce.number().int().positive().max(200).optional(),
@@ -104,6 +104,15 @@ const productPatchSchema = z.object({
   designerCostUsd: z.coerce.number().nonnegative().optional(),
   taxPercent: z.coerce.number().nonnegative().optional(),
   otherCostUsd: z.coerce.number().nonnegative().optional(),
+});
+const estimatedPricesSchema = z.object({
+  men: z.coerce.number().positive(),
+  woman: z.coerce.number().positive(),
+  boy: z.coerce.number().positive(),
+  girl: z.coerce.number().positive(),
+});
+const estimatedPriceDecisionParamSchema = productParamSchema.extend({
+  decision: z.enum(["approve", "decline"]),
 });
 
 async function normalizeProductPrice(amount: number, currency: "USD" | "ETB") {
@@ -1574,6 +1583,124 @@ adminRouter.patch(
 
     const data = await getProductDetailForAdmin(productId);
     return c.json({ data: data ?? row });
+  },
+);
+
+adminRouter.patch(
+  "/products/:productId/estimated-prices",
+  requirePermission(PERMISSIONS.PRODUCTS_EDIT),
+  zValidator("param", productParamSchema),
+  zValidator("json", estimatedPricesSchema),
+  async (c) => {
+    const authUser = c.get("authUser");
+    const { productId } = c.req.valid("param");
+    const prices = c.req.valid("json");
+    const result = await updateEstimatedPrices(productId, prices, { recordSubmission: false });
+    if (result.status === "unmatched") throw new HTTPException(404, { message: "Product not found" });
+    if (result.status !== "submitted") throw new HTTPException(400, { message: "The product does not have matching pricing roles" });
+
+    try {
+      if (result.product.telegramMessageId) {
+        await editTelegramMessage(
+          result.product.telegramMessageId,
+          `${priceSummary(result.product)}\n\n<b>✅ PRICE SUBMITTED</b>\nPending admin approval.`,
+          approvalKeyboard(result.product.id),
+        );
+      }
+    } catch (error) {
+      logger.error({ error, productId }, "telegram_estimated_price_admin_edit_sync_failed");
+    }
+
+    await db.insert(auditLogs).values({
+      action: "product_estimated_prices_updated",
+      category: "inventory",
+      severity: "info",
+      entityType: "product",
+      entityId: productId,
+      performedBy: authUser?.email ?? "admin",
+      details: "Admin updated Telegram estimated prices",
+      metadata: prices,
+    });
+    return c.json({ data: await getProductDetailForAdmin(productId) });
+  },
+);
+
+adminRouter.post(
+  "/products/:productId/estimated-prices/:decision",
+  requirePermission(PERMISSIONS.PRODUCTS_EDIT),
+  zValidator("param", estimatedPriceDecisionParamSchema),
+  async (c) => {
+    const authUser = c.get("authUser");
+    const { productId, decision } = c.req.valid("param");
+    const [product] = await db.select().from(products).where(eq(products.id, productId)).limit(1);
+    if (!product) throw new HTTPException(404, { message: "Product not found" });
+    const estimates = product.estimatedPrices;
+    if (!estimates || Object.values(estimates).some((price) => !Number.isFinite(Number(price)) || Number(price) <= 0)) {
+      throw new HTTPException(400, { message: "All four estimated prices are required before making a decision" });
+    }
+
+    let updated = product;
+    if (decision === "approve") {
+      const approvedAt = new Date();
+      const roles = Array.isArray(product.familyRoles) ? product.familyRoles : [];
+      const approvedRoles = await Promise.all(roles.map(async (role) => {
+        const sellingPriceEtb = Number(role.sellingPriceEtb ?? 0);
+        if (sellingPriceEtb <= 0) return role;
+        const normalized = await normalizeProductPrice(sellingPriceEtb, "ETB");
+        return {
+          ...role,
+          price: normalized.priceUsd,
+          currency: "ETB" as const,
+          enteredPrice: sellingPriceEtb,
+          exchangeRate: normalized.exchangeRate,
+        };
+      }));
+      const approvedRole = approvedRoles.find((role) => role.customerType === "woman" && Number(role.sellingPriceEtb) > 0)
+        ?? approvedRoles.find((role) => Number(role.sellingPriceEtb) > 0);
+      const approvedEtb = Number(approvedRole?.sellingPriceEtb ?? estimates.woman);
+      const normalized = await normalizeProductPrice(approvedEtb, "ETB");
+      [updated] = await db.update(products).set({
+        familyRoles: approvedRoles,
+        priceUsd: normalized.priceUsd.toFixed(2),
+        baseCurrency: "ETB",
+        basePriceAmount: approvedEtb.toFixed(2),
+        baseExchangeRate: normalized.exchangeRate.toFixed(4),
+        priceStatus: "approved",
+        telegramStatus: "approved",
+        lastPriceApprovedAt: approvedAt,
+        updatedAt: approvedAt,
+      }).where(eq(products.id, productId)).returning();
+    } else {
+      [updated] = await db.update(products).set({
+        priceStatus: "rejected",
+        telegramStatus: "rejected",
+        updatedAt: new Date(),
+      }).where(eq(products.id, productId)).returning();
+    }
+
+    try {
+      if (updated.telegramMessageId) {
+        await editTelegramMessage(
+          updated.telegramMessageId,
+          `${priceSummary(updated)}\n\n<b>${decision === "approve" ? "✅ PRICE DATA APPROVED" : "🔴 PRICE DECLINED — PLEASE ENTER AGAIN"}</b>`,
+          decision === "approve" ? { inline_keyboard: [] } : approvalKeyboard(updated.id),
+        );
+      }
+    } catch (error) {
+      logger.error({ error, productId, decision }, "telegram_estimated_price_decision_sync_failed");
+    }
+
+    await db.insert(auditLogs).values({
+      action: decision === "approve" ? "product_estimated_prices_approved" : "product_estimated_prices_declined",
+      category: "inventory",
+      severity: decision === "approve" ? "info" : "warning",
+      entityType: "product",
+      entityId: productId,
+      performedBy: authUser?.email ?? "admin",
+      details: decision === "approve" ? "Admin approved Telegram estimated prices" : "Admin declined Telegram estimated prices",
+      metadata: { estimates, priceVersion: product.priceVersion },
+    });
+    return c.json({ data: await getProductDetailForAdmin(productId) });
   },
 );
 

@@ -229,6 +229,12 @@ export const products = pgTable(
     lastPriceSubmittedAt: timestamp("last_price_submitted_at", { withTimezone: true }),
     lastPriceApprovedAt: timestamp("last_price_approved_at", { withTimezone: true }),
     priceVersion: integer("price_version").default(0).notNull(),
+    estimatedPrices: jsonb("estimated_prices").$type<{
+      men: number;
+      woman: number;
+      boy: number;
+      girl: number;
+    }>(),
     baseCurrency: text("base_currency").default("USD").notNull(),
     basePriceAmount: numeric("base_price_amount", { precision: 12, scale: 2 }),
     baseExchangeRate: numeric("base_exchange_rate", { precision: 12, scale: 4 }),

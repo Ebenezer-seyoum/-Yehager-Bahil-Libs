@@ -20,6 +20,7 @@ import {
   Eye,
   EyeOff,
   Send,
+  BadgeDollarSign,
 } from "lucide-react";
 import {
   dashboardConfirm,
@@ -54,6 +55,13 @@ type Product = {
     designerCostUsd?: string | number | null;
     taxPercent?: string | number | null;
     otherCostUsd?: string | number | null;
+    currency?: "USD" | "ETB";
+    enteredPrice?: string | number | null;
+    exchangeRate?: string | number | null;
+    designerPriceEtb?: string | number | null;
+    markupAmountEtb?: string | number | null;
+    sellingPriceEtb?: string | number | null;
+    pricingRuleKey?: string | null;
   }> | null;
   gender: "male" | "female" | "unisex";
   images?: string[];
@@ -71,6 +79,12 @@ type Product = {
   priceVersion?: number | null;
   lastPriceSubmittedAt?: string | null;
   lastPriceApprovedAt?: string | null;
+  estimatedPrices?: {
+    men: number;
+    woman: number;
+    boy: number;
+    girl: number;
+  } | null;
 };
 
 type ProductPatch = Partial<Product> & {
@@ -111,7 +125,7 @@ function roleKey(role: { label?: string; customerType?: DraftRole["customerType"
   return `${customerType}:${outfitOption}`;
 }
 
-type TabKey = "info" | "pricing" | "garment" | "storefront" | "telegram" | "images";
+type TabKey = "info" | "pricing" | "estimated" | "garment" | "storefront" | "telegram" | "images";
 
 const TABS: { key: TabKey; label: string; icon: React.ReactNode }[] = [
   {
@@ -123,6 +137,11 @@ const TABS: { key: TabKey; label: string; icon: React.ReactNode }[] = [
     key: "pricing",
     label: "Pricing & Cost",
     icon: <DollarSign className="h-4 w-4" />,
+  },
+  {
+    key: "estimated",
+    label: "Estimated Prices",
+    icon: <BadgeDollarSign className="h-4 w-4" />,
   },
   {
     key: "garment",
@@ -180,6 +199,28 @@ function parseRequiredNumber(value: string, label: string) {
   if (!Number.isFinite(parsed) || parsed < 0)
     throw new Error(`${label} must be a valid non-negative number.`);
   return parsed;
+}
+
+type EstimateKey = "men" | "woman" | "boy" | "girl";
+type EstimateDraft = Record<EstimateKey, string>;
+
+const ESTIMATE_FIELDS: Array<{ key: EstimateKey; label: string; customerType: "man" | "woman" | "boy" | "girl" }> = [
+  { key: "men", label: "Men", customerType: "man" },
+  { key: "woman", label: "Woman", customerType: "woman" },
+  { key: "boy", label: "Boy", customerType: "boy" },
+  { key: "girl", label: "Girl", customerType: "girl" },
+];
+
+function estimateDraftFromProduct(product: Product): EstimateDraft {
+  const stored = product.estimatedPrices;
+  const roleEstimate = (customerType: "man" | "woman" | "boy" | "girl") =>
+    product.familyRoles?.find((role) => role.customerType === customerType && Number(role.designerPriceEtb) > 0)?.designerPriceEtb;
+  return {
+    men: String(stored?.men || roleEstimate("man") || ""),
+    woman: String(stored?.woman || roleEstimate("woman") || ""),
+    boy: String(stored?.boy || roleEstimate("boy") || ""),
+    girl: String(stored?.girl || roleEstimate("girl") || ""),
+  };
 }
 
 function roleProductionCost(role: {
@@ -338,6 +379,7 @@ export function AdminProductDetailPanel({
   );
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(draftFromProduct(initialProduct));
+  const [estimateDraft, setEstimateDraft] = useState<EstimateDraft>(estimateDraftFromProduct(initialProduct));
   const [activeTab, setActiveTab] = useState<TabKey>("info");
 
   const images = product.images?.filter(Boolean) ?? [];
@@ -471,6 +513,7 @@ export function AdminProductDetailPanel({
       }
       setProduct(freshProduct);
       setDraft(draftFromProduct(freshProduct));
+      setEstimateDraft(estimateDraftFromProduct(freshProduct));
       setSelectedImage(freshProduct.images?.[0] ?? "");
       showResult("success", successMessage);
       router.refresh();
@@ -666,6 +709,84 @@ export function AdminProductDetailPanel({
       );
     } finally {
       setUploading(false);
+    }
+  }
+
+  async function saveEstimatedPrices() {
+    if (!canEdit) return;
+    let prices: Record<EstimateKey, number>;
+    try {
+      prices = {
+        men: parseRequiredNumber(estimateDraft.men, "Men estimated price"),
+        woman: parseRequiredNumber(estimateDraft.woman, "Woman estimated price"),
+        boy: parseRequiredNumber(estimateDraft.boy, "Boy estimated price"),
+        girl: parseRequiredNumber(estimateDraft.girl, "Girl estimated price"),
+      };
+      if (Object.values(prices).some((price) => price <= 0)) throw new Error("Every estimated price must be greater than zero.");
+    } catch (error) {
+      showResult("error", error instanceof Error ? error.message : "Estimated prices are invalid.");
+      return;
+    }
+    const confirmed = await dashboardConfirm({
+      title: "Save estimated prices?",
+      text: "This will update the pending estimates and the original Telegram post.",
+      confirmButtonText: "Save Estimates",
+      cancelButtonText: "Cancel",
+      tone: "success",
+      icon: "question",
+    });
+    if (!confirmed) return;
+    setBusy("estimated-save");
+    try {
+      const response = await fetch(`/api/backend/admin/products/${product.id}/estimated-prices`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(prices),
+      });
+      if (!response.ok) throw new Error(await responseErrorMessage(response, "Estimated price update failed"));
+      const payload = (await response.json()) as { data?: Product };
+      const freshProduct = payload.data ?? await loadFreshProduct();
+      setProduct(freshProduct);
+      setDraft(draftFromProduct(freshProduct));
+      setEstimateDraft(estimateDraftFromProduct(freshProduct));
+      showResult("success", "Estimated prices and the Telegram post were updated.");
+      router.refresh();
+    } catch (error) {
+      showResult("error", error instanceof Error ? error.message : "Estimated price update failed");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function decideEstimatedPrices(decision: "approve" | "decline") {
+    if (!canEdit) return;
+    const approved = decision === "approve";
+    const confirmed = await dashboardConfirm({
+      title: approved ? "Approve estimated prices?" : "Decline estimated prices?",
+      text: approved
+        ? "Approved estimates will become the active product and storefront prices."
+        : "The Telegram post will request a new price submission.",
+      confirmButtonText: approved ? "Approve Prices" : "Decline Prices",
+      cancelButtonText: "Cancel",
+      tone: approved ? "success" : "danger",
+      icon: "warning",
+    });
+    if (!confirmed) return;
+    setBusy(`estimated-${decision}`);
+    try {
+      const response = await fetch(`/api/backend/admin/products/${product.id}/estimated-prices/${decision}`, { method: "POST" });
+      if (!response.ok) throw new Error(await responseErrorMessage(response, `Price ${decision} failed`));
+      const payload = (await response.json()) as { data?: Product };
+      const freshProduct = payload.data ?? await loadFreshProduct();
+      setProduct(freshProduct);
+      setDraft(draftFromProduct(freshProduct));
+      setEstimateDraft(estimateDraftFromProduct(freshProduct));
+      showResult("success", approved ? "Estimated prices approved and published." : "Estimated prices declined. Telegram now requests another submission.");
+      router.refresh();
+    } catch (error) {
+      showResult("error", error instanceof Error ? error.message : `Price ${decision} failed`);
+    } finally {
+      setBusy(null);
     }
   }
 
@@ -1250,6 +1371,60 @@ export function AdminProductDetailPanel({
     );
   }
 
+  function renderEstimatedPrices() {
+    const status = product.priceStatus ?? "draft";
+    const canDecide = status === "pending_approval" || status === "submitted";
+    const statusTone = status === "approved"
+      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+      : status === "rejected"
+        ? "border-rose-200 bg-rose-50 text-rose-700"
+        : canDecide
+          ? "border-amber-200 bg-amber-50 text-amber-700"
+          : "border-slate-200 bg-slate-50 text-slate-600";
+    return (
+      <div className="space-y-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h3 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-indigo-700"><BadgeDollarSign className="h-4 w-4" /> Estimated Prices</h3>
+            <p className="mt-2 text-xs font-semibold text-slate-500">Prices submitted from Telegram remain estimates until an administrator approves them.</p>
+          </div>
+          <span className={cn("rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-widest", statusTone)}>{status.replaceAll("_", " ")}</span>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          {ESTIMATE_FIELDS.map((field) => {
+            const role = product.familyRoles?.find((item) => item.customerType === field.customerType && Number(item.designerPriceEtb) > 0);
+            const sellingEstimate = Number(role?.sellingPriceEtb ?? (Number(estimateDraft[field.key]) || 0));
+            return (
+              <div key={field.key} className="rounded-2xl border border-indigo-100 bg-indigo-50/30 p-5">
+                <label className="block">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-indigo-700">{field.label} estimate (ETB)</span>
+                  <input type="number" min="0.01" step="0.01" disabled={!canEdit || Boolean(busy)} value={estimateDraft[field.key]} onChange={(event) => setEstimateDraft((current) => ({ ...current, [field.key]: event.target.value }))} placeholder="0.00" className="mt-2 h-12 w-full rounded-xl border border-indigo-200 bg-white px-4 text-lg font-black text-slate-900 outline-none focus:border-indigo-500 disabled:bg-slate-100" />
+                </label>
+                <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                  <div className="rounded-xl bg-white p-3"><p className="font-bold text-slate-400">Markup</p><p className="mt-1 font-black text-slate-800">{Number(role?.markupAmountEtb ?? 0).toLocaleString()} ETB</p></div>
+                  <div className="rounded-xl bg-white p-3"><p className="font-bold text-slate-400">Estimated selling</p><p className="mt-1 font-black text-emerald-700">{sellingEstimate.toLocaleString()} ETB</p></div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <ReadOnlyField label="Submitted" value={product.lastPriceSubmittedAt ? new Date(product.lastPriceSubmittedAt).toLocaleString() : "Not submitted"} />
+          <ReadOnlyField label="Submission count" value={String(product.priceSubmissionCount ?? 0)} />
+          <ReadOnlyField label="Price version" value={String(product.priceVersion ?? 0)} />
+          <ReadOnlyField label="Telegram status" value={(product.telegramStatus ?? "not sent").replaceAll("_", " ")} />
+        </div>
+        {canEdit ? <div className="flex flex-wrap justify-end gap-2">
+          <button type="button" disabled={Boolean(busy)} onClick={() => void saveEstimatedPrices()} className="rounded-xl border border-indigo-200 bg-white px-4 py-2 text-xs font-black text-indigo-700 disabled:opacity-50">{busy === "estimated-save" ? "Saving…" : "Save Changes"}</button>
+          {canDecide ? <>
+            <button type="button" disabled={Boolean(busy)} onClick={() => void decideEstimatedPrices("decline")} className="rounded-xl bg-rose-600 px-4 py-2 text-xs font-black text-white disabled:opacity-50">{busy === "estimated-decline" ? "Declining…" : "Decline"}</button>
+            <button type="button" disabled={Boolean(busy)} onClick={() => void decideEstimatedPrices("approve")} className="rounded-xl bg-emerald-700 px-4 py-2 text-xs font-black text-white disabled:opacity-50">{busy === "estimated-approve" ? "Approving…" : "Approve"}</button>
+          </> : null}
+        </div> : null}
+      </div>
+    );
+  }
+
   function renderTelegramPricing() {
     const statusLabel = (value?: string | null) => value ? value.replaceAll("_", " ") : "Not set";
     const toggleTelegram = async () => {
@@ -1269,6 +1444,7 @@ export function AdminProductDetailPanel({
         const freshProduct = await loadFreshProduct(payload.data);
         setProduct(freshProduct);
         setDraft(draftFromProduct(freshProduct));
+        setEstimateDraft(estimateDraftFromProduct(freshProduct));
         showResult("success", "Product resent to Telegram successfully.");
       } catch (error) { showResult("error", error instanceof Error ? error.message : "Telegram resend failed"); }
       finally { setBusy(null); }
@@ -1280,7 +1456,7 @@ export function AdminProductDetailPanel({
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><ReadOnlyField label="Region Topic" value={`${product.region}${product.subcategory ? ` / ${product.subcategory}` : ""}`} /><ReadOnlyField label="Telegram Status" value={statusLabel(product.telegramStatus)} /><ReadOnlyField label="Topic ID" value={product.telegramTopicId || "Not created"} /><ReadOnlyField label="Message ID" value={product.telegramMessageId || "Not sent"} /></div>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><ReadOnlyField label="Price Status" value={statusLabel(product.priceStatus)} /><ReadOnlyField label="Submission Count" value={String(product.priceSubmissionCount ?? 0)} /><ReadOnlyField label="Price Version" value={String(product.priceVersion ?? 0)} /><ReadOnlyField label="Last Submitted" value={product.lastPriceSubmittedAt ? new Date(product.lastPriceSubmittedAt).toLocaleString() : "Not submitted"} /></div>
         <div className="grid gap-3 sm:grid-cols-2"><ReadOnlyField label="Last Approved" value={product.lastPriceApprovedAt ? new Date(product.lastPriceApprovedAt).toLocaleString() : "Not approved"} /><ReadOnlyField label="Product ID" value={displayUniqueId} /></div>
-        {(product.priceStatus === "pending_approval" || product.priceStatus === "submitted") && canEdit ? <div className="flex justify-end gap-2"><button type="button" onClick={() => void patchProduct({ priceStatus: "rejected" }, "Price rejected. Telegram now requests a new price.")} className="rounded-xl bg-rose-600 px-4 py-2 text-xs font-black text-white">Reject Price</button><button type="button" onClick={() => void patchProduct({ priceStatus: "approved" }, "Price approved and product price updated.")} className="rounded-xl bg-emerald-700 px-4 py-2 text-xs font-black text-white">Approve Price</button></div> : null}
+        {(product.priceStatus === "pending_approval" || product.priceStatus === "submitted") ? <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs font-bold text-amber-800">Review, edit, approve, or decline this submission in the Estimated Prices section.</p> : null}
       </div>
     );
   }
@@ -1288,6 +1464,7 @@ export function AdminProductDetailPanel({
   const tabRenderers: Record<TabKey, () => React.ReactNode> = {
     info: renderProductInfo,
     pricing: renderPricing,
+    estimated: renderEstimatedPrices,
     garment: renderGarmentSpecs,
     storefront: renderStorefrontControls,
     telegram: renderTelegramPricing,
