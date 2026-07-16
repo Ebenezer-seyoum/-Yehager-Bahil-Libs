@@ -138,35 +138,35 @@ async function makeTelegramImageUrl(imageUrl: string) {
 export async function composeTelegramCollage(imageBuffers: Buffer[]) {
   const images = imageBuffers.slice(0, 4);
   if (!images.length) throw new Error("At least one image is required for a Telegram collage");
-  const size = 1200;
+  const width = 1200;
+  const height = 1440;
   const gap = 8;
-  const half = (size - gap) / 2;
+  const primaryWidth = 852;
+  const secondaryWidth = width - primaryWidth - gap;
   const layouts = images.length === 1
-    ? [{ left: 0, top: 0, width: size, height: size }]
-    : images.length === 2
-      ? [
-          { left: 0, top: 0, width: half, height: size },
-          { left: half + gap, top: 0, width: half, height: size },
-        ]
-      : images.length === 3
-        ? [
-            { left: 0, top: 0, width: size, height: half },
-            { left: 0, top: half + gap, width: half, height: half },
-            { left: half + gap, top: half + gap, width: half, height: half },
-          ]
-        : [
-            { left: 0, top: 0, width: half, height: half },
-            { left: half + gap, top: 0, width: half, height: half },
-            { left: 0, top: half + gap, width: half, height: half },
-            { left: half + gap, top: half + gap, width: half, height: half },
-          ];
+    ? [{ left: 0, top: 0, width, height }]
+    : [
+        { left: 0, top: 0, width: primaryWidth, height },
+        ...Array.from({ length: images.length - 1 }, (_, index) => {
+          const secondaryCount = images.length - 1;
+          const availableHeight = height - gap * (secondaryCount - 1);
+          const rowHeight = Math.floor(availableHeight / secondaryCount);
+          const top = index * (rowHeight + gap);
+          return {
+            left: primaryWidth + gap,
+            top,
+            width: secondaryWidth,
+            height: index === secondaryCount - 1 ? height - top : rowHeight,
+          };
+        }),
+      ];
   const tiles = await Promise.all(images.map((image, index) => sharp(image)
     .rotate()
     .resize(Math.round(layouts[index].width), Math.round(layouts[index].height), { fit: "cover", position: "attention" })
     .jpeg({ quality: 88, mozjpeg: true })
     .toBuffer()));
   return sharp({
-    create: { width: size, height: size, channels: 3, background: "#132536" },
+    create: { width, height, channels: 3, background: "#132536" },
   }).composite(tiles.map((input, index) => ({
     input,
     left: Math.round(layouts[index].left),
