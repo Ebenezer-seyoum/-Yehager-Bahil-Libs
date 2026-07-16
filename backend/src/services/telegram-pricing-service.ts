@@ -128,9 +128,61 @@ function cleanProductName(name: string, uniqueId: string) {
   return name.replace(new RegExp(`\\s*[-–—]\\s*${uniqueId.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&")}\\s*$`, "i"), "").trim();
 }
 
+function escapeTelegramHtml(value: string) {
+  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function formatEtb(value: number) {
+  return `${value.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 2 })} ETB`;
+}
+
 function priceEntryPrompt(product: { uniqueId?: string | null; name: string }) {
   const uniqueId = product.uniqueId || "PRODUCT-ID";
-  return `<b>${uniqueId}</b>\n${cleanProductName(product.name, uniqueId)}\n\nEnter only these four prices:\n<code>${uniqueId}\nMen: 0 ETB\nWoman: 0 ETB\nBoy: 0 ETB\nGirl: 0 ETB</code>`;
+  return [
+    "🧵 <b>YEHAGER PRICE MANAGER</b>",
+    "",
+    `<b>${escapeTelegramHtml(uniqueId)}</b>`,
+    escapeTelegramHtml(cleanProductName(product.name, uniqueId)),
+    "",
+    "<b>DESIGNER PRICE SUBMISSION</b>",
+    "Prices have not been submitted.",
+    "",
+    "Use the button below to enter the four estimated prices.",
+  ].join("\n");
+}
+
+type TelegramPriceState = "submitted" | "approved" | "declined";
+
+export function designerEstimateCaption(product: {
+  uniqueId?: string | null;
+  name?: string | null;
+  estimatedPrices?: EstimatedPrices | null;
+}, state: TelegramPriceState = "submitted") {
+  const uniqueId = product.uniqueId || "PRODUCT-ID";
+  const prices = product.estimatedPrices;
+  const heading = state === "approved" ? "✅ PRICE DATA APPROVED" : state === "declined" ? "🔴 PRICE DECLINED" : "✅ PRICE SUBMITTED";
+  const status = state === "approved"
+    ? "Approved by admin"
+    : state === "declined"
+      ? "Please review and submit the four estimates again"
+      : "Pending admin approval";
+  const rows = prices ? [
+    `<b>Men</b>      <code>${formatEtb(Number(prices.men))}</code>`,
+    `<b>Woman</b>  <code>${formatEtb(Number(prices.woman))}</code>`,
+    `<b>Boy</b>       <code>${formatEtb(Number(prices.boy))}</code>`,
+    `<b>Girl</b>       <code>${formatEtb(Number(prices.girl))}</code>`,
+  ] : ["No designer estimates are available."];
+  return [
+    `<b>${heading}</b>`,
+    "",
+    `<b>${escapeTelegramHtml(uniqueId)}</b>`,
+    product.name ? escapeTelegramHtml(cleanProductName(product.name, uniqueId)) : "",
+    "",
+    "<b>DESIGNER ESTIMATED PRICES</b>",
+    ...rows,
+    "",
+    `<b>Status:</b> ${status}`,
+  ].filter((line, index, lines) => line !== "" || lines[index - 1] !== "").join("\n");
 }
 
 export async function getOrCreateRegionTopic(regionName: string) {
@@ -142,34 +194,44 @@ export async function getOrCreateRegionTopic(regionName: string) {
   return row;
 }
 
-export async function sendTelegramProduct(product: { id: string; uniqueId?: string | null; name: string; region: string; images?: string[] | null }) {
+export async function sendTelegramProduct(
+  product: { id: string; uniqueId?: string | null; name: string; region: string; images?: string[] | null },
+  options: { caption?: string; replyMarkup?: unknown } = {},
+) {
   const regionTopic = await getOrCreateRegionTopic(product.region);
   const productName = cleanProductName(product.name, product.uniqueId || product.id);
-  const images = (product.images ?? []).filter(Boolean).slice(0, 10);
-  if (images.length) {
-    const telegramImages = await Promise.all(images.map(makeTelegramImageUrl));
-    await telegram("sendMediaGroup", {
+  const caption = options.caption ?? priceEntryPrompt({ uniqueId: product.uniqueId || product.id, name: productName });
+  const replyMarkup = options.replyMarkup ?? priceEntryKeyboard(product.id);
+  const primaryImage = (product.images ?? []).find(Boolean);
+  const message = primaryImage
+    ? await telegram<{ message_id: number }>("sendPhoto", {
       chat_id: env.TELEGRAM_GROUP_ID,
       message_thread_id: Number(regionTopic.telegramTopicId),
-      media: telegramImages.map((url, index) => ({ type: "photo", media: url, caption: index === 0 ? `<b>${product.uniqueId || product.id}</b>\n${productName}` : undefined, parse_mode: "HTML" })),
-    });
-  }
-  const message = await sendTelegramMessage(
-    priceEntryPrompt({ uniqueId: product.uniqueId || product.id, name: productName }),
-    priceEntryKeyboard(product.id),
-    regionTopic.telegramTopicId,
-  );
+      photo: await makeTelegramImageUrl(primaryImage),
+      caption,
+      parse_mode: "HTML",
+      reply_markup: replyMarkup,
+    })
+    : await sendTelegramMessage(caption, replyMarkup, regionTopic.telegramTopicId);
   return { message, topicId: regionTopic.telegramTopicId };
 }
 
 export async function editTelegramMessage(messageId: string | number, text: string, replyMarkup?: unknown) {
-  return telegram("editMessageText", {
+  const common = {
     chat_id: env.TELEGRAM_GROUP_ID,
     message_id: Number(messageId),
-    text,
     parse_mode: "HTML",
     ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
-  });
+  };
+  try {
+    return await telegram("editMessageCaption", { ...common, caption: text });
+  } catch (captionError) {
+    try {
+      return await telegram("editMessageText", { ...common, text });
+    } catch {
+      throw captionError;
+    }
+  }
 }
 
 function normalizeKey(value: string) {
@@ -322,27 +384,9 @@ export async function updateEstimatedPrices(
 }
 
 export function approvalKeyboard(productId: string) {
-  return priceEntryKeyboard(productId, "Edit Price");
+  return priceEntryKeyboard(productId, "Edit Submitted Prices");
 }
 
 export function priceSummary(product: { uniqueId?: string | null; familyRoles?: unknown[] | null; estimatedPrices?: EstimatedPrices | null }) {
-  const roles = Array.isArray(product.familyRoles) ? product.familyRoles as Array<{ label?: string; customerType?: string; outfitOption?: string; designerPriceEtb?: number; markupAmountEtb?: number; sellingPriceEtb?: number }> : [];
-  const firstRoleFor = (customerType: string) => {
-    const primaryOption = customerType === "man" || customerType === "boy" ? "full_set" : "standard";
-    return roles.find((role) => role.customerType === customerType && role.outfitOption === primaryOption && role.sellingPriceEtb !== undefined)
-      ?? roles.find((role) => role.customerType === customerType && role.sellingPriceEtb !== undefined);
-  };
-  const estimates = product.estimatedPrices;
-  const summaryRows = estimates ? [
-    ["Men", estimates.men, firstRoleFor("man")],
-    ["Woman", estimates.woman, firstRoleFor("woman")],
-    ["Boy", estimates.boy, firstRoleFor("boy")],
-    ["Girl", estimates.girl, firstRoleFor("girl")],
-  ] as const : [];
-  return [
-    `<b>Product ${product.uniqueId || ""}</b>`,
-    ...summaryRows.map(([label, estimate, role]) => role
-      ? `${label}: ${estimate} ETB + ${Number(role.markupAmountEtb ?? 0)} ETB = <b>${Number(role.sellingPriceEtb ?? estimate)} ETB</b>`
-      : `${label}: <b>${estimate} ETB</b>`),
-  ].join("\n");
+  return designerEstimateCaption(product, "submitted");
 }

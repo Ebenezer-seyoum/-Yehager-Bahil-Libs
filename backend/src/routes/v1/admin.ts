@@ -49,7 +49,7 @@ import { refreshStripeReceiptForOrder } from "../../services/payments-service.js
 import type { AppBindings } from "../../types/hono.js";
 3
 import { logger } from "../../lib/logger.js";
-import { approvalKeyboard, calculateProductFamilyRoles, editTelegramMessage, priceSummary, sendTelegramProduct, updateEstimatedPrices } from "../../services/telegram-pricing-service.js";
+import { approvalKeyboard, calculateProductFamilyRoles, designerEstimateCaption, editTelegramMessage, sendTelegramProduct, updateEstimatedPrices } from "../../services/telegram-pricing-service.js";
 import {
   GLOBAL_PRICING_RULE_DEFINITIONS,
   GLOBAL_PRICING_RULE_KEYS,
@@ -1781,7 +1781,11 @@ adminRouter.patch(
       const rejected = body.priceStatus === "rejected";
       if (approved || rejected) {
         try {
-          await editTelegramMessage(row.telegramMessageId, `${priceSummary(row)}\n\n<b>${approved ? "✅ PRICE APPROVED" : "🔴 PRICE REJECTED — PLEASE ENTER AGAIN"}</b>`);
+          await editTelegramMessage(
+            row.telegramMessageId,
+            designerEstimateCaption(row, approved ? "approved" : "declined"),
+            approved ? { inline_keyboard: [] } : approvalKeyboard(row.id),
+          );
           await db.update(products).set({ telegramStatus: approved ? "approved" : "rejected", updatedAt: new Date() }).where(eq(products.id, row.id));
         } catch {
           // Telegram availability must not prevent an admin price decision from being saved.
@@ -1869,7 +1873,7 @@ adminRouter.patch(
       if (result.product.telegramMessageId) {
         await editTelegramMessage(
           result.product.telegramMessageId,
-          `${priceSummary(result.product)}\n\n<b>✅ PRICE SUBMITTED</b>\nPending admin approval.`,
+          designerEstimateCaption(result.product, "submitted"),
           approvalKeyboard(result.product.id),
         );
       }
@@ -1951,7 +1955,7 @@ adminRouter.post(
       if (updated.telegramMessageId) {
         await editTelegramMessage(
           updated.telegramMessageId,
-          `${priceSummary(updated)}\n\n<b>${decision === "approve" ? "✅ PRICE DATA APPROVED" : "🔴 PRICE DECLINED — PLEASE ENTER AGAIN"}</b>`,
+          designerEstimateCaption(updated, decision === "approve" ? "approved" : "declined"),
           decision === "approve" ? { inline_keyboard: [] } : approvalKeyboard(updated.id),
         );
       }
