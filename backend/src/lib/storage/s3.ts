@@ -66,3 +66,18 @@ export async function getSignedReadUrl(key: string, expiresIn = 3600) {
     { expiresIn },
   );
 }
+
+export function getObjectKeyFromPublicUrl(fileUrl: string) {
+  try {
+    const publicBase = new URL(env.AWS_S3_PUBLIC_BASE_URL);
+    const parsed = new URL(fileUrl);
+    if (parsed.origin !== publicBase.origin) return null;
+
+    const basePath = publicBase.pathname.replace(/\/+$/, "");
+    if (!parsed.pathname.startsWith(`${basePath}/`)) return null;
+
+    return decodeURIComponent(parsed.pathname.slice(basePath.length + 1));
+  } catch {
+    return null;
+  }
+}

@@ -1,12 +1,15 @@
 import nodemailer from "nodemailer";
 import { Resend } from "resend";
 import { env } from "../config/env.js";
+import { getObjectKeyFromPublicUrl, getSignedReadUrl } from "../lib/storage/s3.js";
 
 type MailChannel = "notifications" | "support" | "team";
 
 export type MailAttachment = {
   filename: string;
-  path: string;
+  path?: string;
+  content?: Buffer;
+  contentType?: string;
 };
 
 type MailPayload = {
@@ -447,6 +450,25 @@ export async function sendTransactionalEmail(payload: MailPayload) {
   const credentials = smtpCredentials(channel);
   const from = fromAddress(channel, credentials.user);
   const replyTo = payload.replyTo ?? defaultReplyTo(channel);
+  const attachments = payload.attachments?.length
+    ? await Promise.all(payload.attachments.map(async (attachment) => {
+        if (attachment.content) return attachment;
+        if (!attachment.path) throw new Error(`Attachment ${attachment.filename} has no source`);
+
+        const objectKey = getObjectKeyFromPublicUrl(attachment.path);
+        const downloadUrl = objectKey ? await getSignedReadUrl(objectKey) : attachment.path;
+        const response = await fetch(downloadUrl);
+        if (!response.ok) {
+          throw new Error(`Could not download attachment ${attachment.filename} (${response.status})`);
+        }
+
+        return {
+          filename: attachment.filename,
+          content: Buffer.from(await response.arrayBuffer()),
+          contentType: response.headers.get("content-type") || attachment.contentType,
+        };
+      }))
+    : undefined;
 
   if (resend) {
     await resend.emails.send({
@@ -457,7 +479,7 @@ export async function sendTransactionalEmail(payload: MailPayload) {
       html: payload.html,
       replyTo,
       headers: payload.headers,
-      attachments: payload.attachments,
+      attachments,
     });
   } else {
     const transporter = smtpTransporter(channel);
@@ -473,7 +495,7 @@ export async function sendTransactionalEmail(payload: MailPayload) {
       inReplyTo: payload.inReplyTo,
       references: payload.references,
       headers: payload.headers,
-      attachments: payload.attachments,
+      attachments,
     });
   }
 
@@ -1055,7 +1077,6 @@ export async function sendSupportTicketCreatedCustomerEmail(payload: SupportTick
       ${detailsList([
         ["Subject", payload.subject],
       ])}
-      ${actionButton("View My Support Requests", supportUrl)}
       `,
     ),
   });
@@ -1100,7 +1121,6 @@ export async function sendSupportReplyEmail(
           </div>`
         : ""
       }
-      ${actionButton("View My Support Requests", supportUrl)}
       `,
     ),
   });

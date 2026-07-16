@@ -342,7 +342,7 @@ supportRouter.post(
   const inReplyTo = previousEmailMessageIds.at(-1);
   const outboundMessageId = `<support-${ticket.ticketNumber}-${Date.now()}@yehagerbahillibs.com>`;
 
-  await sendSupportReplyEmail({
+  const emailResult = await sendSupportReplyEmail({
     to: ticket.customerEmail,
     customerName: ticket.customerName,
     customerEmail: ticket.customerEmail,
@@ -354,6 +354,9 @@ supportRouter.post(
     inReplyTo,
     references: previousEmailMessageIds,
   });
+  if (!emailResult.sent && !emailResult.skipped) {
+    throw new HTTPException(502, { message: "The message could not be sent because an attachment could not be delivered." });
+  }
 
   // 2. Query admin name
   let adminName = "Admin Customer Support";

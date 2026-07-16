@@ -118,6 +118,7 @@ export default function SupportInboxPage() {
   const [successToast, setSuccessToast] = useState(null);
 
   const fileInputRef = useRef(null);
+  const selectedTicketIndex = tickets.findIndex((ticket) => ticket.id === selectedTicketId);
 
   // 1. Fetch tickets and KPIs
   const fetchData = async ({ quiet = false } = {}) => {
@@ -302,6 +303,29 @@ export default function SupportInboxPage() {
       setReplySubmitting(false);
     }
   };
+
+  const openAdjacentTicket = (offset) => {
+    if (selectedTicketIndex < 0) return;
+    const nextTicket = tickets[selectedTicketIndex + offset];
+    if (nextTicket) void handleOpenTicket(nextTicket.id);
+  };
+
+  useEffect(() => {
+    if (!selectedTicketId) return undefined;
+    const handleInboxShortcut = (event) => {
+      if (["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement?.tagName)) return;
+      if (event.key.toLowerCase() === "j") {
+        event.preventDefault();
+        openAdjacentTicket(1);
+      }
+      if (event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        openAdjacentTicket(-1);
+      }
+    };
+    window.addEventListener("keydown", handleInboxShortcut);
+    return () => window.removeEventListener("keydown", handleInboxShortcut);
+  }, [selectedTicketId, selectedTicketIndex, tickets]);
 
   const handleFileSelection = async (event) => {
     if (!canReplySupport) return;
@@ -501,14 +525,14 @@ export default function SupportInboxPage() {
                 onClick={() => handleOpenTicket(t.id)}
                 className={`flex items-center gap-4 border-b border-slate-100 bg-white px-5 py-4 transition hover:bg-slate-50 cursor-pointer ${
                   t.unreadByAdmin
-                    ? "border-l-4 border-l-blue-600 bg-blue-50/30 font-semibold"
+                    ? "border-l-4 border-l-emerald-500 bg-emerald-400 text-slate-950 font-semibold shadow-sm"
                     : ""
                 }`}
               >
                 <div>
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-1.5">
-                      {t.unreadByAdmin ? <span className="h-2 w-2 rounded-full bg-blue-600" aria-label="Unread message" /> : null}
+                      {t.unreadByAdmin ? <span className="h-2 w-2 rounded-full bg-emerald-800" aria-label="Unread message" /> : null}
                     </div>
                   </div>
 
@@ -558,6 +582,31 @@ export default function SupportInboxPage() {
             }}
           />
           <DashboardModalBody className="p-0">
+            <div className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-2">
+              <span className="text-[11px] font-semibold text-slate-500">
+                {selectedTicketIndex >= 0 ? `Message ${selectedTicketIndex + 1} of ${tickets.length}` : "Message"}
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => openAdjacentTicket(-1)}
+                  disabled={selectedTicketIndex <= 0}
+                  className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  aria-label="Previous message"
+                >
+                  ← Previous
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openAdjacentTicket(1)}
+                  disabled={selectedTicketIndex < 0 || selectedTicketIndex >= tickets.length - 1}
+                  className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  aria-label="Next message"
+                >
+                  Next →
+                </button>
+              </div>
+            </div>
 
             {ticketLoading ? (
               <div className="flex flex-1 items-center justify-center">
