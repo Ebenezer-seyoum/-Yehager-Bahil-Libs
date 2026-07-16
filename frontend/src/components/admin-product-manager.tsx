@@ -24,7 +24,18 @@ type Product = {
   isFeatured?: boolean;
   hasNewPriceSubmission?: boolean;
   priceSubmissionAlertId?: string | null;
+  priceStatus?: string | null;
+  telegramStatus?: string | null;
 };
+
+function pricingStatus(product: Product) {
+  const status = String(product.priceStatus ?? "draft").toLowerCase();
+  if (["approved", "published"].includes(status)) return { label: "Approved", className: "border-emerald-200 bg-emerald-50 text-emerald-700" };
+  if (["submitted", "pending_approval"].includes(status)) return { label: "Pending Approval", className: "border-amber-200 bg-amber-50 text-amber-700" };
+  if (status === "rejected") return { label: "Declined", className: "border-rose-200 bg-rose-50 text-rose-700" };
+  if (["waiting_price", "sent"].includes(status) || product.telegramStatus === "waiting_price") return { label: "Waiting for Price", className: "border-blue-200 bg-blue-50 text-blue-700" };
+  return { label: "Price Not Set", className: "border-slate-200 bg-slate-50 text-slate-600" };
+}
 
 function formatCurrency(value: string | number | null | undefined) {
   const amount = Number(value);
@@ -108,6 +119,7 @@ export function AdminProductManager({
             {filteredProducts.map((product, index) => {
               const image = product.images?.[0];
               const hasNewPrice = newPriceProductIds.includes(product.id);
+              const priceState = pricingStatus(product);
               return (
                 <tr 
                   key={product.id} 
@@ -149,12 +161,13 @@ export function AdminProductManager({
                     </div>
                   </td>
                   <td className="px-6 py-5">
-                    <span className={cn(
-                      "inline-flex items-center rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-widest border",
-                      product.isActive ? "bg-emerald-50 text-emerald-700 border-emerald-100" : "bg-slate-50 text-slate-500 border-slate-100"
-                    )}>
-                      {product.isActive ? "Active" : "Hidden"}
-                    </span>
+                    <div className="flex flex-col items-start gap-1.5">
+                      <span className={cn("inline-flex items-center rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-widest", priceState.className)}>{priceState.label}</span>
+                      <span className={cn(
+                        "text-[9px] font-black uppercase tracking-widest",
+                        product.isActive ? "text-emerald-600" : "text-slate-400",
+                      )}>{product.isActive ? "Catalog Active" : "Catalog Hidden"}</span>
+                    </div>
                   </td>
                   <td className="px-6 py-5">
                     <DashboardTableActions>

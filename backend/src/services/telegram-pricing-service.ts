@@ -1,5 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { createHmac, timingSafeEqual } from "node:crypto";
+import sharp from "sharp";
 import { db } from "../lib/db/drizzle.js";
 import { globalPricingRules, products, systemAlerts, telegramRegionTopics } from "../lib/db/schema.js";
 import { env } from "../config/env.js";
@@ -29,6 +30,30 @@ async function telegram<T>(method: string, body: Record<string, unknown>) {
   });
   const payload = (await response.json()) as TelegramResponse<T>;
   if (!response.ok || !payload.ok) throw new Error(payload.description || `Telegram ${method} failed`);
+  return payload.result as T;
+}
+
+async function telegramPhotoUpload<T>(body: {
+  chatId: string;
+  topicId: string;
+  photo: Buffer;
+  caption: string;
+  replyMarkup: unknown;
+}) {
+  if (!env.TELEGRAM_BOT_TOKEN) throw new Error("Telegram bot token is not configured");
+  const form = new FormData();
+  form.set("chat_id", body.chatId);
+  form.set("message_thread_id", body.topicId);
+  form.set("caption", body.caption);
+  form.set("parse_mode", "HTML");
+  form.set("reply_markup", JSON.stringify(body.replyMarkup));
+  form.set("photo", new Blob([new Uint8Array(body.photo)], { type: "image/jpeg" }), "product-collage.jpg");
+  const response = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendPhoto`, {
+    method: "POST",
+    body: form,
+  });
+  const payload = (await response.json()) as TelegramResponse<T>;
+  if (!response.ok || !payload.ok) throw new Error(payload.description || "Telegram sendPhoto failed");
   return payload.result as T;
 }
 
@@ -110,6 +135,59 @@ async function makeTelegramImageUrl(imageUrl: string) {
   return getSignedReadUrl(key, 15 * 60);
 }
 
+export async function composeTelegramCollage(imageBuffers: Buffer[]) {
+  const images = imageBuffers.slice(0, 4);
+  if (!images.length) throw new Error("At least one image is required for a Telegram collage");
+  const size = 1200;
+  const gap = 8;
+  const half = (size - gap) / 2;
+  const layouts = images.length === 1
+    ? [{ left: 0, top: 0, width: size, height: size }]
+    : images.length === 2
+      ? [
+          { left: 0, top: 0, width: half, height: size },
+          { left: half + gap, top: 0, width: half, height: size },
+        ]
+      : images.length === 3
+        ? [
+            { left: 0, top: 0, width: size, height: half },
+            { left: 0, top: half + gap, width: half, height: half },
+            { left: half + gap, top: half + gap, width: half, height: half },
+          ]
+        : [
+            { left: 0, top: 0, width: half, height: half },
+            { left: half + gap, top: 0, width: half, height: half },
+            { left: 0, top: half + gap, width: half, height: half },
+            { left: half + gap, top: half + gap, width: half, height: half },
+          ];
+  const tiles = await Promise.all(images.map((image, index) => sharp(image)
+    .rotate()
+    .resize(Math.round(layouts[index].width), Math.round(layouts[index].height), { fit: "cover", position: "attention" })
+    .jpeg({ quality: 88, mozjpeg: true })
+    .toBuffer()));
+  return sharp({
+    create: { width: size, height: size, channels: 3, background: "#132536" },
+  }).composite(tiles.map((input, index) => ({
+    input,
+    left: Math.round(layouts[index].left),
+    top: Math.round(layouts[index].top),
+  }))).jpeg({ quality: 90, mozjpeg: true }).toBuffer();
+}
+
+async function telegramCollageFromUrls(imageUrls: string[]) {
+  const signedUrls = await Promise.all(imageUrls.slice(0, 4).map(makeTelegramImageUrl));
+  const downloads = await Promise.allSettled(signedUrls.map(async (url) => {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`Product image download failed with ${response.status}`);
+    return Buffer.from(await response.arrayBuffer());
+  }));
+  const buffers: Buffer[] = [];
+  for (const result of downloads) {
+    if (result.status === "fulfilled") buffers.push(Buffer.from(result.value));
+  }
+  return buffers.length ? composeTelegramCollage(buffers) : null;
+}
+
 export async function sendTelegramMessage(text: string, replyMarkup?: unknown, topicId?: string | null, chatId: string | number | null = env.TELEGRAM_GROUP_ID ?? null) {
   return telegram<{ message_id: number }>("sendMessage", {
     chat_id: chatId,
@@ -138,16 +216,17 @@ function formatEtb(value: number) {
 
 function priceEntryPrompt(product: { uniqueId?: string | null; name: string }) {
   const uniqueId = product.uniqueId || "PRODUCT-ID";
+  const title = cleanProductName(product.name, uniqueId).toLocaleUpperCase();
   return [
-    "🧵 <b>YEHAGER PRICE MANAGER</b>",
-    "",
-    `<b>${escapeTelegramHtml(uniqueId)}</b>`,
-    escapeTelegramHtml(cleanProductName(product.name, uniqueId)),
+    `<b>${escapeTelegramHtml(title)}</b>`,
+    `<code>${escapeTelegramHtml(uniqueId)}</code>`,
     "",
     "<b>DESIGNER PRICE SUBMISSION</b>",
     "Prices have not been submitted.",
     "",
     "Use the button below to enter the four estimated prices.",
+    "",
+    "#PriceNeeded",
   ].join("\n");
 }
 
@@ -159,6 +238,7 @@ export function designerEstimateCaption(product: {
   estimatedPrices?: EstimatedPrices | null;
 }, state: TelegramPriceState = "submitted") {
   const uniqueId = product.uniqueId || "PRODUCT-ID";
+  const title = product.name ? cleanProductName(product.name, uniqueId).toLocaleUpperCase() : "PRODUCT PRICE";
   const prices = product.estimatedPrices;
   const heading = state === "approved" ? "✅ PRICE DATA APPROVED" : state === "declined" ? "🔴 PRICE DECLINED" : "✅ PRICE SUBMITTED";
   const status = state === "approved"
@@ -166,6 +246,7 @@ export function designerEstimateCaption(product: {
     : state === "declined"
       ? "Please review and submit the four estimates again"
       : "Pending admin approval";
+  const hashtag = state === "approved" ? "#PriceApproved" : state === "declined" ? "#PriceDeclined" : "#PriceSubmitted";
   const rows = prices ? [
     `<b>Men</b>      <code>${formatEtb(Number(prices.men))}</code>`,
     `<b>Woman</b>  <code>${formatEtb(Number(prices.woman))}</code>`,
@@ -173,15 +254,15 @@ export function designerEstimateCaption(product: {
     `<b>Girl</b>       <code>${formatEtb(Number(prices.girl))}</code>`,
   ] : ["No designer estimates are available."];
   return [
-    `<b>${heading}</b>`,
-    "",
-    `<b>${escapeTelegramHtml(uniqueId)}</b>`,
-    product.name ? escapeTelegramHtml(cleanProductName(product.name, uniqueId)) : "",
+    `<b>${escapeTelegramHtml(title)}</b>`,
+    `<code>${escapeTelegramHtml(uniqueId)}</code>`,
     "",
     "<b>DESIGNER ESTIMATED PRICES</b>",
     ...rows,
     "",
+    `<b>${heading}</b>`,
     `<b>Status:</b> ${status}`,
+    hashtag,
   ].filter((line, index, lines) => line !== "" || lines[index - 1] !== "").join("\n");
 }
 
@@ -202,17 +283,32 @@ export async function sendTelegramProduct(
   const productName = cleanProductName(product.name, product.uniqueId || product.id);
   const caption = options.caption ?? priceEntryPrompt({ uniqueId: product.uniqueId || product.id, name: productName });
   const replyMarkup = options.replyMarkup ?? priceEntryKeyboard(product.id);
-  const primaryImage = (product.images ?? []).find(Boolean);
-  const message = primaryImage
-    ? await telegram<{ message_id: number }>("sendPhoto", {
-      chat_id: env.TELEGRAM_GROUP_ID,
-      message_thread_id: Number(regionTopic.telegramTopicId),
-      photo: await makeTelegramImageUrl(primaryImage),
-      caption,
-      parse_mode: "HTML",
-      reply_markup: replyMarkup,
-    })
-    : await sendTelegramMessage(caption, replyMarkup, regionTopic.telegramTopicId);
+  const productImages = (product.images ?? []).filter(Boolean).slice(0, 4);
+  let message: { message_id: number };
+  if (productImages.length && env.TELEGRAM_GROUP_ID) {
+    const collage = await telegramCollageFromUrls(productImages).catch((error) => {
+      logger.warn({ error, productId: product.id }, "telegram_product_collage_failed");
+      return null;
+    });
+    message = collage
+      ? await telegramPhotoUpload<{ message_id: number }>({
+          chatId: env.TELEGRAM_GROUP_ID,
+          topicId: regionTopic.telegramTopicId,
+          photo: collage,
+          caption,
+          replyMarkup,
+        })
+      : await telegram<{ message_id: number }>("sendPhoto", {
+          chat_id: env.TELEGRAM_GROUP_ID,
+          message_thread_id: Number(regionTopic.telegramTopicId),
+          photo: await makeTelegramImageUrl(productImages[0]),
+          caption,
+          parse_mode: "HTML",
+          reply_markup: replyMarkup,
+        });
+  } else {
+    message = await sendTelegramMessage(caption, replyMarkup, regionTopic.telegramTopicId);
+  }
   return { message, topicId: regionTopic.telegramTopicId };
 }
 

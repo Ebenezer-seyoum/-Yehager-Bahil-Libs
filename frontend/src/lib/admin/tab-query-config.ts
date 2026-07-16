@@ -71,6 +71,10 @@ function filterOrders(orders: Row[], tabId: string): Row[] {
 
 function filterProducts(products: Row[], tabId: string): Row[] {
   switch (tabId) {
+    case "approved-prices":
+      return products.filter((p) => ["approved", "published"].includes(norm(p.priceStatus)));
+    case "not-approved-prices":
+      return products.filter((p) => !["approved", "published"].includes(norm(p.priceStatus)));
     case "new-prices":
       return products.filter((p) => Boolean(p.hasNewPriceSubmission));
     case "active":

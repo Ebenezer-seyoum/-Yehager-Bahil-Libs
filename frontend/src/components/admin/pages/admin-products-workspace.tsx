@@ -16,6 +16,8 @@ export function AdminProductsWorkspace({ data, canCreate = false }: { data: Admi
 
   const products = useMemo(() => (data.products ?? []), [data.products]);
   const newPriceCount = products.filter((product) => Boolean(product.hasNewPriceSubmission)).length;
+  const approvedPriceCount = products.filter((product) => ["approved", "published"].includes(String(product.priceStatus ?? "").toLowerCase())).length;
+  const notApprovedPriceCount = products.length - approvedPriceCount;
 
   return (
     <AdminWorkspace
@@ -28,6 +30,8 @@ export function AdminProductsWorkspace({ data, canCreate = false }: { data: Admi
       defaultTab="all"
       tabs={[
         { id: "all", label: "All Items", icon: Package },
+        { id: "approved-prices", label: "Approved Prices", icon: Package, badgeCount: approvedPriceCount },
+        { id: "not-approved-prices", label: "Price Not Approved", icon: Package, badgeCount: notApprovedPriceCount },
         { id: "new-prices", label: "New Prices", icon: Package, badgeCount: newPriceCount },
         { id: "active", label: "Active", icon: Package },
         { id: "draft", label: "Drafts", icon: Package },
