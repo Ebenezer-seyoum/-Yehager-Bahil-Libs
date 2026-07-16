@@ -3,11 +3,8 @@ import { apiRequest } from "@/lib/api-client";
 
 export async function GET() {
   try {
-    // Trigger a background sync but don't await it — keep the session check fast
-    void apiRequest("/api/v1/users/me/sync", {
+    await apiRequest("/api/v1/users/me/sync", {
       method: "POST",
-    }).catch(() => {
-      /* ignore background sync errors to avoid blocking auth checks */
     });
 
     const session = await apiRequest<{ user: { sub?: string; email?: string; role?: string } }>("/api/v1/auth/session");

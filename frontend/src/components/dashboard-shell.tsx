@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import {
   ArrowLeftRight,
@@ -93,8 +93,9 @@ export function DashboardShell({
   };
 }) {
   const pathname = usePathname()!;
+  const router = useRouter();
   const searchParams = useSearchParams()!;
-  const { data: session } = useSession();
+  const { data: session, update: updateSession } = useSession();
   const isReportsRoute = pathname.startsWith("/admin/reports");
   const shellTitle = isReportsRoute ? "Reports Center" : title;
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -252,46 +253,54 @@ export function DashboardShell({
   useEffect(() => {
     if (!session?.user?.id) return;
 
-    const refreshAccess = () => {
-      fetch("/api/backend/session")
-        .then((response) => (response.ok ? response.json() : null))
-        .then((payload) => {
-          const nextPermissions = payload?.profile?.permissions;
-          const nextRoleStatus = payload?.profile?.roleStatus;
-          const nextAssignedRoleName = payload?.profile?.assignedRoleName;
-          const nextAssignedRoleActive = payload?.profile?.assignedRoleActive;
-          const nextEmployeeProfile = payload?.profile?.profile;
-          const nextProfileDisplayName = [
-            nextEmployeeProfile?.firstName,
-            nextEmployeeProfile?.fatherName,
-          ]
-            .map((part) => String(part ?? "").trim())
-            .filter(Boolean)
-            .join(" ");
-          const nextName = nextProfileDisplayName || payload?.profile?.displayName || payload?.profile?.name;
-          const nextAvatarUrl = payload?.profile?.avatarUrl;
-          if (Array.isArray(nextPermissions)) setRefreshedPermissions(nextPermissions);
-          if (nextRoleStatus === "assigned" || nextRoleStatus === "unassigned") setRefreshedRoleStatus(nextRoleStatus);
-          if (typeof nextAssignedRoleName === "string") setRefreshedAssignedRoleName(nextAssignedRoleName);
-          if (nextAssignedRoleName === null) setRefreshedAssignedRoleName(null);
-          if (typeof nextAssignedRoleActive === "boolean") setRefreshedAssignedRoleActive(nextAssignedRoleActive);
-          if (nextAssignedRoleActive === null) setRefreshedAssignedRoleActive(null);
-          if (typeof nextName === "string") setRefreshedName(nextName);
-          if (nextName === null) setRefreshedName(null);
-          if (typeof nextAvatarUrl === "string") setRefreshedAvatarUrl(nextAvatarUrl);
-          if (nextAvatarUrl === null) setRefreshedAvatarUrl(null);
-        })
-        .catch(() => undefined);
+    const refreshAccess = async () => {
+      try {
+        const response = await fetch("/api/backend/session", { cache: "no-store" });
+        const payload = response.ok ? await response.json() : null;
+        if (!payload) return;
+        const nextPermissions = payload?.profile?.permissions;
+        const nextRoleStatus = payload?.profile?.roleStatus;
+        const nextAssignedRoleName = payload?.profile?.assignedRoleName;
+        const nextAssignedRoleActive = payload?.profile?.assignedRoleActive;
+        const nextEmployeeProfile = payload?.profile?.profile;
+        const nextProfileDisplayName = [
+          nextEmployeeProfile?.firstName,
+          nextEmployeeProfile?.fatherName,
+        ]
+          .map((part) => String(part ?? "").trim())
+          .filter(Boolean)
+          .join(" ");
+        const nextName = nextProfileDisplayName || payload?.profile?.displayName || payload?.profile?.name;
+        const nextAvatarUrl = payload?.profile?.avatarUrl;
+        if (Array.isArray(nextPermissions)) setRefreshedPermissions(nextPermissions);
+        if (nextRoleStatus === "assigned" || nextRoleStatus === "unassigned") setRefreshedRoleStatus(nextRoleStatus);
+        if (typeof nextAssignedRoleName === "string") setRefreshedAssignedRoleName(nextAssignedRoleName);
+        if (nextAssignedRoleName === null) setRefreshedAssignedRoleName(null);
+        if (typeof nextAssignedRoleActive === "boolean") setRefreshedAssignedRoleActive(nextAssignedRoleActive);
+        if (nextAssignedRoleActive === null) setRefreshedAssignedRoleActive(null);
+        if (typeof nextName === "string") setRefreshedName(nextName);
+        if (nextName === null) setRefreshedName(null);
+        if (typeof nextAvatarUrl === "string") setRefreshedAvatarUrl(nextAvatarUrl);
+        if (nextAvatarUrl === null) setRefreshedAvatarUrl(null);
+
+        // Rebuild the NextAuth JWT and server-rendered layout after the
+        // backend returns the latest role assignment.
+        await updateSession();
+        router.refresh();
+      } catch {
+        // Permission polling is best-effort; existing access remains visible.
+      }
     };
 
-    refreshAccess();
-    const intervalId = window.setInterval(refreshAccess, 15000);
-    window.addEventListener("focus", refreshAccess);
+    const handleFocus = () => void refreshAccess();
+    void refreshAccess();
+    const intervalId = window.setInterval(() => void refreshAccess(), 15000);
+    window.addEventListener("focus", handleFocus);
     return () => {
       window.clearInterval(intervalId);
-      window.removeEventListener("focus", refreshAccess);
+      window.removeEventListener("focus", handleFocus);
     };
-  }, [session?.user?.id]);
+  }, [router, session?.user?.id, updateSession]);
 
   useEffect(() => {
     const onProfileUpdated = (event: Event) => {

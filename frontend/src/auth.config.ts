@@ -92,6 +92,24 @@ async function syncBackendUserForProvider(user: {
   return payload.data ?? null;
 }
 
+async function fetchCurrentBackendUser(user: {
+  id?: string | null;
+  email?: string | null;
+  name?: string | null;
+  role?: unknown;
+}) {
+  const token = await mintBackendBootstrapToken(user);
+  if (!token) return null;
+
+  const response = await fetch(`${requiredEnv("BACKEND_API_URL")}/api/v1/users/me`, {
+    headers: { Authorization: `Bearer ${token}` },
+    cache: "no-store",
+  });
+  if (!response.ok) return null;
+  const payload = (await response.json()) as { data?: BackendAuthUser | null };
+  return payload.data ?? null;
+}
+
 function applyBackendUserToToken(token: JWT, user: BackendAuthUser) {
   if (user.id) token.sub = user.id;
   if (user.email) token.email = user.email;
@@ -248,6 +266,26 @@ export const authConfig = {
             token.accountStatus = "active";
             token.mustChangePassword = false;
           }
+        }
+      }
+
+      // Employee role assignments and permissions can change while a JWT is
+      // already active. Re-read the backend profile whenever NextAuth builds
+      // the token so refreshes and server-rendered permission checks use the
+      // current assignment instead of login-time permissions.
+      if (!user && token.role === "employee" && token.sub && token.email) {
+        try {
+          const backendUser = await fetchCurrentBackendUser({
+            id: token.sub,
+            email: token.email,
+            name: token.name,
+            role: token.role,
+          });
+          if (backendUser?.id && backendUser.email && backendUser.role) {
+            applyBackendUserToToken(token, backendUser);
+          }
+        } catch (error) {
+          console.warn("[auth] employee permission refresh failed", error);
         }
       }
 
