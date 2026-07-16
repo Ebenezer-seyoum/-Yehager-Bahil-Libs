@@ -66,7 +66,9 @@ telegramRouter.post("/price-submit", async (c) => {
     boy: Number(prices.boy),
     girl: Number(prices.girl),
   }, { recordSubmission: true });
-  if (!result || result.status !== "submitted") return c.json({ error: "All four prices are required" }, 422);
+  if (!result || result.status !== "submitted") {
+    return c.json({ error: "message" in result ? result.message : "All four prices are required" }, 422);
+  }
   let telegramUpdated = false;
   try {
     const submittedText = `${priceSummary(result.product)}\n\n<b>✅ PRICE SUBMITTED</b>\nPending admin approval.`;

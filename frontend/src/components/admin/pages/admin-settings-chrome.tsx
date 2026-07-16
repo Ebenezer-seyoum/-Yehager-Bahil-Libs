@@ -13,7 +13,8 @@ export function AdminSettingsChrome({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname()!;
   const searchParams = useSearchParams()!;
-  const activeTab = searchParams.get("tab") ?? meta.defaultTab;
+  const pricingPage = pathname.endsWith("/pricing-rules");
+  const activeTab = pricingPage ? "pricing" : (searchParams.get("tab") ?? meta.defaultTab);
   // KPIs removed from settings chrome
 
   const setActiveTab = useCallback(
@@ -22,11 +23,15 @@ export function AdminSettingsChrome({ children }: { children: ReactNode }) {
         router.push("/admin/settings/pricing-rules");
         return;
       }
+      if (pricingPage) {
+        router.push(`/admin/settings?tab=${encodeURIComponent(tabId)}`);
+        return;
+      }
       const params = new URLSearchParams(searchParams.toString());
       params.set("tab", tabId);
       router.replace(`${pathname}?${params.toString()}`, { scroll: false });
     },
-    [pathname, router, searchParams],
+    [pathname, pricingPage, router, searchParams],
   );
 
   return (

@@ -4,6 +4,10 @@ import { db } from "../lib/db/drizzle.js";
 import { globalPricingRules, products, telegramRegionTopics } from "../lib/db/schema.js";
 import { env } from "../config/env.js";
 import { getSignedReadUrl } from "../lib/storage/s3.js";
+import {
+  calculateRolePricing,
+  resolveGlobalPricingRuleValues,
+} from "./global-pricing-rules.js";
 
 type TelegramResponse<T> = { ok: boolean; result?: T; description?: string };
 
@@ -174,12 +178,6 @@ function customerPriceKey(role: { customerType?: string }) {
   return role.customerType === "man" ? "men" : role.customerType === "boy" ? "boy" : role.customerType === "girl" ? "girl" : "woman";
 }
 
-function roleRuleKey(role: { customerType?: string; outfitOption?: string }) {
-  const customer = customerPriceKey(role);
-  const outfit = role.outfitOption === "top_only" ? "top" : role.outfitOption === "pants_only" ? "pants" : role.outfitOption === "full_set" ? "full_set" : "outfit";
-  return `${customer}_${outfit}`;
-}
-
 function parsePriceLines(text: string) {
   const entries = new Map<string, number>();
   for (const line of text.split(/\r?\n/)) {
@@ -222,15 +220,19 @@ export async function updateEstimatedPrices(
   const [product] = await db.select().from(products).where(eq(products.id, productId)).limit(1);
   if (!product) return { status: "unmatched" as const };
   const rules = await db.select().from(globalPricingRules).where(eq(globalPricingRules.isActive, true));
-  const ruleByKey = new Map(rules.map((rule) => [rule.ruleKey, Number(rule.markupAmountEtb)]));
+  const pricingRules = resolveGlobalPricingRuleValues(rules);
   const roles = Array.isArray(product.familyRoles) ? product.familyRoles.map((role) => ({ ...role })) : [];
-  const primaryRoleTemplates = [
+  const roleTemplates = [
     { label: "Women's Traditional Outfit", customerType: "woman", outfitOption: "standard", gender: "female", description: "Complete traditional outfit" },
     { label: "Men's Traditional Full Set", customerType: "man", outfitOption: "full_set", gender: "male", description: "Traditional top and pants" },
+    { label: "Men's Traditional Top", customerType: "man", outfitOption: "top_only", gender: "male", description: "Traditional top garment" },
+    { label: "Men's Traditional Pants", customerType: "man", outfitOption: "pants_only", gender: "male", description: "Traditional pants" },
     { label: "Girls' Traditional Outfit", customerType: "girl", outfitOption: "standard", gender: "female", description: "Traditional outfit for girls" },
     { label: "Boys' Traditional Full Set", customerType: "boy", outfitOption: "full_set", gender: "male", description: "Traditional top and pants for boys" },
+    { label: "Boys' Traditional Top", customerType: "boy", outfitOption: "top_only", gender: "male", description: "Traditional top garment for boys" },
+    { label: "Boys' Traditional Pants", customerType: "boy", outfitOption: "pants_only", gender: "male", description: "Traditional pants for boys" },
   ] as const;
-  for (const template of primaryRoleTemplates) {
+  for (const template of roleTemplates) {
     const exists = roles.some(
       (role) => role.customerType === template.customerType && role.outfitOption === template.outfitOption,
     );
@@ -245,15 +247,26 @@ export async function updateEstimatedPrices(
     }
   }
   let updated = 0;
+  let pricingError = "";
   const nextRoles = roles.map((role) => {
     const customer = customerPriceKey(role);
-    const key = roleRuleKey(role);
     const entered = prices[customer as keyof EstimatedPrices];
     if (!entered) return role;
-    const markup = ruleByKey.get(customer) ?? ruleByKey.get(`${customer}_outfit`) ?? ruleByKey.get(key) ?? 0;
-    updated += 1;
-    return { ...role, designerPriceEtb: entered, markupAmountEtb: markup, sellingPriceEtb: entered + markup, pricingRuleKey: key, enteredPrice: entered, currency: "ETB" as const };
+    try {
+      const calculated = calculateRolePricing({
+        customerType: role.customerType ?? "woman",
+        outfitOption: role.outfitOption,
+        telegramEstimateEtb: entered,
+        rules: pricingRules,
+      });
+      updated += 1;
+      return { ...role, ...calculated, enteredPrice: entered, currency: "ETB" as const };
+    } catch (error) {
+      pricingError = error instanceof Error ? error.message : "Global pricing rules are invalid.";
+      return role;
+    }
   });
+  if (pricingError) return { status: "invalid_pricing_rules" as const, message: pricingError };
   const submittedAt = new Date();
   const recordSubmission = options.recordSubmission ?? false;
   const [row] = await db.update(products).set({
@@ -274,8 +287,12 @@ export function approvalKeyboard(productId: string) {
 }
 
 export function priceSummary(product: { uniqueId?: string | null; familyRoles?: unknown[] | null; estimatedPrices?: EstimatedPrices | null }) {
-  const roles = Array.isArray(product.familyRoles) ? product.familyRoles as Array<{ label?: string; designerPriceEtb?: number; markupAmountEtb?: number; sellingPriceEtb?: number }> : [];
-  const firstRoleFor = (customerType: string) => roles.find((role) => (role as { customerType?: string }).customerType === customerType && role.sellingPriceEtb !== undefined);
+  const roles = Array.isArray(product.familyRoles) ? product.familyRoles as Array<{ label?: string; customerType?: string; outfitOption?: string; designerPriceEtb?: number; markupAmountEtb?: number; sellingPriceEtb?: number }> : [];
+  const firstRoleFor = (customerType: string) => {
+    const primaryOption = customerType === "man" || customerType === "boy" ? "full_set" : "standard";
+    return roles.find((role) => role.customerType === customerType && role.outfitOption === primaryOption && role.sellingPriceEtb !== undefined)
+      ?? roles.find((role) => role.customerType === customerType && role.sellingPriceEtb !== undefined);
+  };
   const estimates = product.estimatedPrices;
   const summaryRows = estimates ? [
     ["Men", estimates.men, firstRoleFor("man")],

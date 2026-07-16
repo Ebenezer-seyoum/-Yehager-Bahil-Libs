@@ -332,7 +332,11 @@ function draftFromProduct(product: Product) {
         customerType: role.customerType,
         outfitOption: role.outfitOption,
         description: role.description,
-        designerCostUsd: String(role.designerCostUsd ?? product.profitCostSetting?.designerCostUsd ?? ""),
+        designerCostUsd: String(
+          currency === "ETB" && role.designerPriceEtb != null
+            ? role.designerPriceEtb
+            : role.designerCostUsd ?? product.profitCostSetting?.designerCostUsd ?? "",
+        ),
         taxPercent: String(role.taxPercent ?? product.profitCostSetting?.taxPercent ?? ""),
         otherCostUsd: String(role.otherCostUsd ?? product.profitCostSetting?.otherCostUsd ?? ""),
         currency,
@@ -1219,7 +1223,9 @@ export function AdminProductDetailPanel({
               ? (Number(value) > 0 ? formatRoleAmount(value, role.currency) : "Not set")
               : key === "taxPercent"
                 ? formatPercent(value)
-                : formatCurrency(value);
+                : role.currency === "ETB"
+                  ? formatRoleAmount(value, "ETB")
+                  : formatCurrency(value);
             return <ReadOnlyField key={key} label={label} value={display} />;
           })}
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">

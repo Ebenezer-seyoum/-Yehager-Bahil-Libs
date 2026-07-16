@@ -50,6 +50,10 @@ import type { AppBindings } from "../../types/hono.js";
 3
 import { logger } from "../../lib/logger.js";
 import { approvalKeyboard, editTelegramMessage, priceSummary, sendTelegramProduct, updateEstimatedPrices } from "../../services/telegram-pricing-service.js";
+import {
+  GLOBAL_PRICING_RULE_DEFINITIONS,
+  GLOBAL_PRICING_RULE_KEYS,
+} from "../../services/global-pricing-rules.js";
 
 const listQuerySchema = z.object({
   limit: z.coerce.number().int().positive().max(200).optional(),
@@ -1319,11 +1323,69 @@ const pricingRulePatchSchema = z.object({
   markupAmountEtb: z.coerce.number().nonnegative(),
   isActive: z.boolean().optional(),
 });
+const pricingRulesBulkSchema = z.object({
+  rules: z.array(z.object({
+    ruleKey: z.enum(GLOBAL_PRICING_RULE_KEYS),
+    markupAmountEtb: z.coerce.number().nonnegative(),
+  })).min(1),
+});
 
 adminRouter.get("/pricing-rules", requirePermission(PERMISSIONS.PRODUCTS_VIEW), async (c) => {
   const data = await db.query.globalPricingRules.findMany({ where: eq(globalPricingRules.isActive, true), orderBy: [asc(globalPricingRules.label)] });
-  return c.json({ data });
+  const ruleByKey = new Map(data.map((rule) => [rule.ruleKey, rule]));
+  return c.json({
+    data: GLOBAL_PRICING_RULE_DEFINITIONS.map((definition) => ruleByKey.get(definition.ruleKey) ?? {
+      ruleKey: definition.ruleKey,
+      label: definition.label,
+      markupAmountEtb: definition.defaultValue.toFixed(2),
+      isActive: true,
+    }),
+  });
 });
+
+adminRouter.put(
+  "/pricing-rules",
+  requirePermission(PERMISSIONS.PRODUCTS_EDIT),
+  zValidator("json", pricingRulesBulkSchema),
+  async (c) => {
+    const authUser = c.get("authUser");
+    const { rules } = c.req.valid("json");
+    const definitions = new Map(GLOBAL_PRICING_RULE_DEFINITIONS.map((rule) => [rule.ruleKey, rule]));
+    await db.transaction(async (tx) => {
+      for (const rule of rules) {
+        const definition = definitions.get(rule.ruleKey);
+        if (!definition) continue;
+        await tx.insert(globalPricingRules).values({
+          ruleKey: rule.ruleKey,
+          label: definition.label,
+          markupAmountEtb: rule.markupAmountEtb.toFixed(2),
+          isActive: true,
+          updatedBy: authUser?.email,
+        }).onConflictDoUpdate({
+          target: globalPricingRules.ruleKey,
+          set: {
+            label: definition.label,
+            markupAmountEtb: rule.markupAmountEtb.toFixed(2),
+            isActive: true,
+            updatedBy: authUser?.email,
+            updatedAt: new Date(),
+          },
+        });
+      }
+    });
+    await db.insert(auditLogs).values({
+      action: "global_pricing_rules_updated",
+      category: "inventory",
+      severity: "info",
+      entityType: "global_pricing_rules",
+      performedBy: authUser?.email ?? "admin",
+      details: "Updated global role pricing formulas",
+      metadata: Object.fromEntries(rules.map((rule) => [rule.ruleKey, rule.markupAmountEtb])),
+    });
+    const data = await db.query.globalPricingRules.findMany({ where: eq(globalPricingRules.isActive, true), orderBy: [asc(globalPricingRules.label)] });
+    return c.json({ data });
+  },
+);
 
 adminRouter.patch(
   "/pricing-rules/:ruleKey",
@@ -1597,7 +1659,9 @@ adminRouter.patch(
     const prices = c.req.valid("json");
     const result = await updateEstimatedPrices(productId, prices, { recordSubmission: false });
     if (result.status === "unmatched") throw new HTTPException(404, { message: "Product not found" });
-    if (result.status !== "submitted") throw new HTTPException(400, { message: "The product does not have matching pricing roles" });
+    if (result.status !== "submitted") {
+      throw new HTTPException(400, { message: "message" in result ? result.message : "The submitted prices or global pricing rules are invalid" });
+    }
 
     try {
       if (result.product.telegramMessageId) {
