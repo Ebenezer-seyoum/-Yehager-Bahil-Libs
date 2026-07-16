@@ -517,16 +517,16 @@ export default function SupportInboxPage() {
         </div>
       ) : (
         /* CARD VIEW */
-        <div className="flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="flex flex-col gap-3">
           {tickets.map((t) => {
             return (
               <div
                 key={t.id}
                 onClick={() => handleOpenTicket(t.id)}
-                className={`flex items-center gap-4 border-b border-slate-100 bg-white px-5 py-4 transition hover:bg-slate-50 cursor-pointer ${
+                className={`flex items-center gap-4 rounded-2xl border px-5 py-4 transition cursor-pointer hover:shadow-md ${
                   t.unreadByAdmin
                     ? "border-l-4 border-l-emerald-500 bg-emerald-400 text-slate-950 font-semibold shadow-sm"
-                    : ""
+                    : "border-slate-200 bg-white hover:bg-slate-50"
                 }`}
               >
                 <div>
