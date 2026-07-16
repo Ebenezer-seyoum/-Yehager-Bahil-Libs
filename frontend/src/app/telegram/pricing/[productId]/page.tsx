@@ -4,7 +4,18 @@ import { FormEvent, useEffect, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import Script from "next/script";
 
-declare global { interface Window { Telegram?: { WebApp?: { initData: string; ready(): void; close(): void } } } }
+declare global {
+  interface Window {
+    Telegram?: {
+      WebApp?: {
+        initData: string;
+        initDataUnsafe?: { start_param?: string };
+        ready(): void;
+        close(): void;
+      };
+    };
+  }
+}
 
 const fields = ["men", "woman", "boy", "girl"] as const;
 
@@ -12,7 +23,10 @@ export function TelegramPricingPage() {
   const params = useParams<{ productId: string }>();
   const searchParams = useSearchParams();
   const token = searchParams?.get("token") ?? searchParams?.get("startapp") ?? "";
-  const productId = params?.productId ?? token.split(".")[0] ?? "";
+  const [startParam, setStartParam] = useState("");
+  const [telegramReady, setTelegramReady] = useState(false);
+  const launchToken = token || startParam;
+  const productId = params?.productId || launchToken.split(".")[0] || "";
   const [prices, setPrices] = useState<Record<string, string>>({ men: "", woman: "", boy: "", girl: "" });
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
@@ -22,6 +36,8 @@ export function TelegramPricingPage() {
     const notifyTelegram = () => {
       const webApp = window.Telegram?.WebApp;
       if (webApp) {
+        setStartParam(webApp.initDataUnsafe?.start_param || "");
+        setTelegramReady(true);
         webApp.ready();
         return true;
       }
@@ -30,7 +46,10 @@ export function TelegramPricingPage() {
     if (notifyTelegram()) return;
     const timer = window.setInterval(() => {
       attempts += 1;
-      if (notifyTelegram() || attempts >= 20) window.clearInterval(timer);
+      if (notifyTelegram() || attempts >= 20) {
+        setTelegramReady(true);
+        window.clearInterval(timer);
+      }
     }, 250);
     return () => window.clearInterval(timer);
   }, []);
@@ -39,11 +58,14 @@ export function TelegramPricingPage() {
     event.preventDefault();
     setBusy(true);
     setMessage("");
-    void fetch("/api/backend/integrations/telegram/price-submit", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ productId, token, prices: Object.fromEntries(fields.map((key) => [key, Number(prices[key])])), initData: window.Telegram?.WebApp?.initData || "" }) })
-      .then(async (response) => { const data = await response.json(); if (!response.ok) throw new Error(data.error || "Submission failed"); setMessage("✅ Price submitted successfully"); window.Telegram?.WebApp?.close(); })
+    void fetch("/api/backend/integrations/telegram/price-submit", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ productId, token: launchToken, prices: Object.fromEntries(fields.map((key) => [key, Number(prices[key])])), initData: window.Telegram?.WebApp?.initData || "" }) })
+      .then(async (response) => { const data = await response.json(); if (!response.ok) throw new Error(data.error || "Submission failed"); window.Telegram?.WebApp?.close(); })
       .catch((error) => setMessage(error instanceof Error ? error.message : "Submission failed"))
       .finally(() => setBusy(false));
   }
+
+  if (!productId && !telegramReady) return <><Script src="https://telegram.org/js/telegram-web-app.js?57" strategy="afterInteractive" onLoad={() => window.Telegram?.WebApp?.ready()} /><main className="flex min-h-screen items-center justify-center bg-[#0d1b2a] px-6 text-center text-white"><p className="text-lg font-bold text-white">Loading price form…</p></main></>;
+  if (!productId) return <main className="flex min-h-screen items-center justify-center bg-[#0d1b2a] px-6 text-center text-white"><p className="max-w-md text-lg font-bold">This price form could not identify the product. Please reopen it from Telegram.</p></main>;
 
   return <>
     <Script src="https://telegram.org/js/telegram-web-app.js?57" strategy="afterInteractive" onLoad={() => window.Telegram?.WebApp?.ready()} />

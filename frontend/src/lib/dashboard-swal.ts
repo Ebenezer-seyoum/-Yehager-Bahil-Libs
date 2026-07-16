@@ -34,7 +34,7 @@ function noticeTitle(prefix: string, text?: string) {
 }
 
 export function dashboardSwalOptions(options: SweetAlertOptions = {}): SweetAlertOptions {
-  return {
+  const mergedOptions: SweetAlertOptions = {
     width: 448,
     background: "#ffffff",
     color: "#111827",
@@ -53,6 +53,8 @@ export function dashboardSwalOptions(options: SweetAlertOptions = {}): SweetAler
     },
     ...options,
   };
+  if (mergedOptions.target === undefined) delete mergedOptions.target;
+  return mergedOptions;
 }
 
 export async function dashboardConfirm({
