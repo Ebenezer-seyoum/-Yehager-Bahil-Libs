@@ -1,6 +1,5 @@
 import { and, eq } from "drizzle-orm";
 import { createHmac, timingSafeEqual } from "node:crypto";
-import sharp from "sharp";
 import { db } from "../lib/db/drizzle.js";
 import { globalPricingRules, products, systemAlerts, telegramRegionTopics } from "../lib/db/schema.js";
 import { env } from "../config/env.js";
@@ -30,30 +29,6 @@ async function telegram<T>(method: string, body: Record<string, unknown>) {
   });
   const payload = (await response.json()) as TelegramResponse<T>;
   if (!response.ok || !payload.ok) throw new Error(payload.description || `Telegram ${method} failed`);
-  return payload.result as T;
-}
-
-async function telegramPhotoUpload<T>(body: {
-  chatId: string;
-  topicId: string;
-  photo: Buffer;
-  caption: string;
-  replyMarkup: unknown;
-}) {
-  if (!env.TELEGRAM_BOT_TOKEN) throw new Error("Telegram bot token is not configured");
-  const form = new FormData();
-  form.set("chat_id", body.chatId);
-  form.set("message_thread_id", body.topicId);
-  form.set("caption", body.caption);
-  form.set("parse_mode", "HTML");
-  form.set("reply_markup", JSON.stringify(body.replyMarkup));
-  form.set("photo", new Blob([new Uint8Array(body.photo)], { type: "image/jpeg" }), "product-collage.jpg");
-  const response = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendPhoto`, {
-    method: "POST",
-    body: form,
-  });
-  const payload = (await response.json()) as TelegramResponse<T>;
-  if (!response.ok || !payload.ok) throw new Error(payload.description || "Telegram sendPhoto failed");
   return payload.result as T;
 }
 
@@ -135,57 +110,8 @@ async function makeTelegramImageUrl(imageUrl: string) {
   return getSignedReadUrl(key, 15 * 60);
 }
 
-export async function composeTelegramCollage(imageBuffers: Buffer[]) {
-  const images = imageBuffers.slice(0, 4);
-  if (!images.length) throw new Error("At least one image is required for a Telegram collage");
-  const width = 1200;
-  const height = 1440;
-  const gap = 8;
-  const primaryWidth = 852;
-  const secondaryWidth = width - primaryWidth - gap;
-  const layouts = images.length === 1
-    ? [{ left: 0, top: 0, width, height }]
-    : [
-        { left: 0, top: 0, width: primaryWidth, height },
-        ...Array.from({ length: images.length - 1 }, (_, index) => {
-          const secondaryCount = images.length - 1;
-          const availableHeight = height - gap * (secondaryCount - 1);
-          const rowHeight = Math.floor(availableHeight / secondaryCount);
-          const top = index * (rowHeight + gap);
-          return {
-            left: primaryWidth + gap,
-            top,
-            width: secondaryWidth,
-            height: index === secondaryCount - 1 ? height - top : rowHeight,
-          };
-        }),
-      ];
-  const tiles = await Promise.all(images.map((image, index) => sharp(image)
-    .rotate()
-    .resize(Math.round(layouts[index].width), Math.round(layouts[index].height), { fit: "cover", position: "attention" })
-    .jpeg({ quality: 88, mozjpeg: true })
-    .toBuffer()));
-  return sharp({
-    create: { width, height, channels: 3, background: "#132536" },
-  }).composite(tiles.map((input, index) => ({
-    input,
-    left: Math.round(layouts[index].left),
-    top: Math.round(layouts[index].top),
-  }))).jpeg({ quality: 90, mozjpeg: true }).toBuffer();
-}
-
-async function telegramCollageFromUrls(imageUrls: string[]) {
-  const signedUrls = await Promise.all(imageUrls.slice(0, 4).map(makeTelegramImageUrl));
-  const downloads = await Promise.allSettled(signedUrls.map(async (url) => {
-    const response = await fetch(url);
-    if (!response.ok) throw new Error(`Product image download failed with ${response.status}`);
-    return Buffer.from(await response.arrayBuffer());
-  }));
-  const buffers: Buffer[] = [];
-  for (const result of downloads) {
-    if (result.status === "fulfilled") buffers.push(Buffer.from(result.value));
-  }
-  return buffers.length ? composeTelegramCollage(buffers) : null;
+export function selectTelegramProductImage(imageUrls: string[]) {
+  return imageUrls.find((imageUrl) => imageUrl.trim().length > 0)?.trim() ?? null;
 }
 
 export async function sendTelegramMessage(text: string, replyMarkup?: unknown, topicId?: string | null, chatId: string | number | null = env.TELEGRAM_GROUP_ID ?? null) {
@@ -283,29 +209,17 @@ export async function sendTelegramProduct(
   const productName = cleanProductName(product.name, product.uniqueId || product.id);
   const caption = options.caption ?? priceEntryPrompt({ uniqueId: product.uniqueId || product.id, name: productName });
   const replyMarkup = options.replyMarkup ?? priceEntryKeyboard(product.id);
-  const productImages = (product.images ?? []).filter(Boolean).slice(0, 4);
+  const productImage = selectTelegramProductImage(product.images ?? []);
   let message: { message_id: number };
-  if (productImages.length && env.TELEGRAM_GROUP_ID) {
-    const collage = await telegramCollageFromUrls(productImages).catch((error) => {
-      logger.warn({ error, productId: product.id }, "telegram_product_collage_failed");
-      return null;
+  if (productImage && env.TELEGRAM_GROUP_ID) {
+    message = await telegram<{ message_id: number }>("sendPhoto", {
+      chat_id: env.TELEGRAM_GROUP_ID,
+      message_thread_id: Number(regionTopic.telegramTopicId),
+      photo: await makeTelegramImageUrl(productImage),
+      caption,
+      parse_mode: "HTML",
+      reply_markup: replyMarkup,
     });
-    message = collage
-      ? await telegramPhotoUpload<{ message_id: number }>({
-          chatId: env.TELEGRAM_GROUP_ID,
-          topicId: regionTopic.telegramTopicId,
-          photo: collage,
-          caption,
-          replyMarkup,
-        })
-      : await telegram<{ message_id: number }>("sendPhoto", {
-          chat_id: env.TELEGRAM_GROUP_ID,
-          message_thread_id: Number(regionTopic.telegramTopicId),
-          photo: await makeTelegramImageUrl(productImages[0]),
-          caption,
-          parse_mode: "HTML",
-          reply_markup: replyMarkup,
-        });
   } else {
     message = await sendTelegramMessage(caption, replyMarkup, regionTopic.telegramTopicId);
   }
@@ -373,7 +287,7 @@ export function calculateProductFamilyRoles(
   const nextRoles = roles.map((role) => {
     const customer = customerPriceKey(role);
     const entered = prices[customer as keyof EstimatedPrices];
-    if (!entered) return role;
+    if (!Number.isFinite(entered) || entered < 0) return role;
     try {
       const calculated = calculateRolePricing({
         customerType: role.customerType ?? "woman",
@@ -398,7 +312,7 @@ function parsePriceLines(text: string) {
     if (!match) continue;
     const key = normalizeKey(match[1]);
     const amount = Number(match[2].replace(/,/g, ""));
-    if (Number.isFinite(amount) && amount > 0) entries.set(key, amount);
+    if (Number.isFinite(amount) && amount >= 0) entries.set(key, amount);
   }
   return entries;
 }
@@ -411,13 +325,20 @@ export async function processTelegramPriceMessage(text: string) {
   if (!product) return { uniqueId, status: "unmatched" as const };
   const entries = parsePriceLines(text);
   if (!entries.size) return { uniqueId, status: "no_prices" as const };
+  const men = entries.get("men") ?? entries.get("man");
+  const woman = entries.get("woman") ?? entries.get("women");
+  const boy = entries.get("boy");
+  const girl = entries.get("girl");
+  if ([men, woman, boy, girl].some((price) => price === undefined)) {
+    return { uniqueId, status: "no_prices" as const };
+  }
   const prices = {
-    men: entries.get("men") ?? entries.get("man") ?? 0,
-    woman: entries.get("woman") ?? entries.get("women") ?? 0,
-    boy: entries.get("boy") ?? 0,
-    girl: entries.get("girl") ?? 0,
+    men: men as number,
+    woman: woman as number,
+    boy: boy as number,
+    girl: girl as number,
   };
-  if (Object.values(prices).some((price) => !Number.isFinite(price) || price <= 0)) return { uniqueId, status: "no_prices" as const };
+  if (Object.values(prices).some((price) => !Number.isFinite(price) || price < 0)) return { uniqueId, status: "no_prices" as const };
   return updateEstimatedPrices(product.id, prices, { recordSubmission: true });
 }
 
@@ -427,7 +348,7 @@ export async function updateEstimatedPrices(
   options: { recordSubmission?: boolean } = {},
 ) {
   const values = Object.values(prices);
-  if (values.some((price) => !Number.isFinite(price) || price <= 0)) {
+  if (values.some((price) => !Number.isFinite(price) || price < 0)) {
     return { status: "invalid_prices" as const };
   }
   const [product] = await db.select().from(products).where(eq(products.id, productId)).limit(1);

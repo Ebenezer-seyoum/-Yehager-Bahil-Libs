@@ -87,10 +87,10 @@ export function TelegramPricingPage() {
       setProductName(String(payload.data?.productName || payload.data?.uniqueId || ""));
       if (existing) {
         setPrices({
-          men: Number(existing.men) > 0 ? String(existing.men) : "",
-          woman: Number(existing.woman) > 0 ? String(existing.woman) : "",
-          boy: Number(existing.boy) > 0 ? String(existing.boy) : "",
-          girl: Number(existing.girl) > 0 ? String(existing.girl) : "",
+          men: Number(existing.men) >= 0 ? String(existing.men) : "",
+          woman: Number(existing.woman) >= 0 ? String(existing.woman) : "",
+          boy: Number(existing.boy) >= 0 ? String(existing.boy) : "",
+          girl: Number(existing.girl) >= 0 ? String(existing.girl) : "",
         });
       }
     }).catch((error) => {
@@ -115,7 +115,7 @@ export function TelegramPricingPage() {
 
   return <>
     <Script src="https://telegram.org/js/telegram-web-app.js?57" strategy="afterInteractive" onLoad={() => window.Telegram?.WebApp?.ready()} />
-    <main className="min-h-screen bg-[#0d1b2a] px-4 py-8 text-white sm:px-6 sm:py-12"><section className="mx-auto w-full max-w-2xl"><h1 className="text-center text-2xl font-black tracking-tight sm:text-3xl">Enter Product Prices</h1>{productName ? <p className="mb-8 mt-2 text-center text-sm font-bold text-slate-300">{productName}</p> : <div className="mb-8" />}<form onSubmit={submit} className="grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-6">{fields.map((field) => <label key={field} className="block"><span className="mb-2 block text-base font-black capitalize sm:text-lg">{field} (ETB)</span><input required min="0.01" step="0.01" type="number" inputMode="decimal" placeholder="0.00" value={prices[field]} onChange={(event) => setPrices((current) => ({ ...current, [field]: event.target.value }))} className="w-full rounded-2xl border-2 border-slate-300 bg-white px-4 py-4 text-xl font-black text-slate-900 outline-none focus:border-sky-400 sm:py-5" /></label>)}<button disabled={busy} className="mt-1 w-full rounded-2xl bg-emerald-500 px-4 py-4 text-xl font-black shadow-lg shadow-emerald-950 disabled:opacity-50 sm:col-span-2 sm:py-5">{busy ? "Submitting…" : "Submit Prices"}</button>{message ? <p className="rounded-2xl bg-emerald-950 p-4 text-center font-black text-emerald-300 sm:col-span-2">{message}</p> : null}</form></section></main>
+    <main className="min-h-screen bg-[#0d1b2a] px-4 py-8 text-white sm:px-6 sm:py-12"><section className="mx-auto w-full max-w-2xl"><h1 className="text-center text-2xl font-black tracking-tight sm:text-3xl">Enter Product Prices</h1>{productName ? <p className="mb-8 mt-2 text-center text-sm font-bold text-slate-300">{productName}</p> : <div className="mb-8" />}<form onSubmit={submit} className="grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-6">{fields.map((field) => <label key={field} className="block"><span className="mb-2 block text-base font-black capitalize sm:text-lg">{field} (ETB)</span><input required min="0" step="0.01" type="number" inputMode="decimal" placeholder="0.00" value={prices[field]} onChange={(event) => setPrices((current) => ({ ...current, [field]: event.target.value }))} className="w-full rounded-2xl border-2 border-slate-300 bg-white px-4 py-4 text-xl font-black text-slate-900 outline-none focus:border-sky-400 sm:py-5" /></label>)}<button disabled={busy} className="mt-1 w-full rounded-2xl bg-emerald-500 px-4 py-4 text-xl font-black shadow-lg shadow-emerald-950 disabled:opacity-50 sm:col-span-2 sm:py-5">{busy ? "Submitting…" : "Submit Prices"}</button>{message ? <p className="rounded-2xl bg-emerald-950 p-4 text-center font-black text-emerald-300 sm:col-span-2">{message}</p> : null}</form></section></main>
   </>;
 }
 

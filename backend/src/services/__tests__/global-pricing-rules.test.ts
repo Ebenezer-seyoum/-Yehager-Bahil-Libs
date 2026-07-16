@@ -36,8 +36,14 @@ describe("global role pricing rules", () => {
     expect(calculateRolePricing({ customerType: "girl", outfitOption: "standard", telegramEstimateEtb: 4000, rules }).sellingPriceEtb).toBe(10500);
   });
 
-  it("rejects a full estimate below the configured pants base", () => {
-    expect(() => calculateRolePricing({ customerType: "man", outfitOption: "top_only", telegramEstimateEtb: 1600, rules })).toThrow("at least 1,700 ETB");
+  it("accepts estimates below the configured pants base without negative derived costs", () => {
+    expect(calculateRolePricing({ customerType: "man", outfitOption: "top_only", telegramEstimateEtb: 1600, rules })).toMatchObject({ designerPriceEtb: 0, sellingPriceEtb: 4000 });
+    expect(calculateRolePricing({ customerType: "boy", outfitOption: "full_set", telegramEstimateEtb: 0, rules })).toMatchObject({ designerPriceEtb: 0, sellingPriceEtb: 6500 });
+  });
+
+  it("rejects negative and non-numeric estimates", () => {
+    expect(() => calculateRolePricing({ customerType: "boy", outfitOption: "full_set", telegramEstimateEtb: -1, rules })).toThrow("non-negative");
+    expect(() => calculateRolePricing({ customerType: "boy", outfitOption: "full_set", telegramEstimateEtb: Number.NaN, rules })).toThrow("non-negative");
   });
 
   it("applies region rules over tribe rules and global rules", () => {

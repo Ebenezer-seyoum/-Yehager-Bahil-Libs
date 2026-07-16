@@ -1578,7 +1578,7 @@ export function AdminProductDetailPanel({
               <div key={field.key} className="rounded-2xl border border-indigo-100 bg-indigo-50/30 p-5">
                 <label className="block">
                   <span className="text-[10px] font-black uppercase tracking-widest text-indigo-700">{field.label} estimate (ETB)</span>
-                  <input type="number" min="0.01" step="0.01" disabled={!canEdit || Boolean(busy)} value={estimateDraft[field.key]} onChange={(event) => setEstimateDraft((current) => ({ ...current, [field.key]: event.target.value }))} placeholder="0.00" className="mt-2 h-12 w-full rounded-xl border border-indigo-200 bg-white px-4 text-lg font-black text-slate-900 outline-none focus:border-indigo-500 disabled:bg-slate-100" />
+                  <input type="number" min="0" step="0.01" disabled={!canEdit || Boolean(busy)} value={estimateDraft[field.key]} onChange={(event) => setEstimateDraft((current) => ({ ...current, [field.key]: event.target.value }))} placeholder="0.00" className="mt-2 h-12 w-full rounded-xl border border-indigo-200 bg-white px-4 text-lg font-black text-slate-900 outline-none focus:border-indigo-500 disabled:bg-slate-100" />
                 </label>
                 <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
                   <div className="rounded-xl bg-white p-3"><p className="font-bold text-slate-400">Markup</p><p className="mt-1 font-black text-slate-800">{Number(role?.markupAmountEtb ?? 0).toLocaleString()} ETB</p></div>

@@ -90,8 +90,8 @@ export function calculateRolePricing(input: {
 }) {
   const { customerType, telegramEstimateEtb, rules } = input;
   const outfitOption = input.outfitOption ?? "standard";
-  if (!Number.isFinite(telegramEstimateEtb) || telegramEstimateEtb <= 0) {
-    throw new Error("Telegram estimate must be greater than zero.");
+  if (!Number.isFinite(telegramEstimateEtb) || telegramEstimateEtb < 0) {
+    throw new Error("Telegram estimate must be a valid non-negative number.");
   }
 
   if (customerType === "woman") {
@@ -105,9 +105,6 @@ export function calculateRolePricing(input: {
 
   const isMan = customerType === "man";
   const pantsBase = isMan ? rules.men_pants_base : rules.boy_pants_base;
-  if (telegramEstimateEtb < pantsBase) {
-    throw new Error(`${isMan ? "Men" : "Boys"} Telegram estimate must be at least ${pantsBase.toLocaleString()} ETB.`);
-  }
 
   if (outfitOption === "pants_only") {
     const addition = isMan ? rules.men_pants_addition : rules.boy_pants_addition;
@@ -119,7 +116,7 @@ export function calculateRolePricing(input: {
     };
   }
   if (outfitOption === "top_only") {
-    const designerPriceEtb = telegramEstimateEtb - pantsBase;
+    const designerPriceEtb = Math.max(telegramEstimateEtb - pantsBase, 0);
     const addition = isMan ? rules.men_top_addition : rules.boy_top_addition;
     return {
       designerPriceEtb,

@@ -113,10 +113,10 @@ const productPatchSchema = z.object({
   otherCostUsd: z.coerce.number().nonnegative().optional(),
 });
 const estimatedPricesSchema = z.object({
-  men: z.coerce.number().positive(),
-  woman: z.coerce.number().positive(),
-  boy: z.coerce.number().positive(),
-  girl: z.coerce.number().positive(),
+  men: z.coerce.number().finite().nonnegative(),
+  woman: z.coerce.number().finite().nonnegative(),
+  boy: z.coerce.number().finite().nonnegative(),
+  girl: z.coerce.number().finite().nonnegative(),
 });
 const estimatedPriceDecisionParamSchema = productParamSchema.extend({
   decision: z.enum(["approve", "decline"]),
