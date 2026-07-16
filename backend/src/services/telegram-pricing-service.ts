@@ -224,6 +224,26 @@ export async function updateEstimatedPrices(
   const rules = await db.select().from(globalPricingRules).where(eq(globalPricingRules.isActive, true));
   const ruleByKey = new Map(rules.map((rule) => [rule.ruleKey, Number(rule.markupAmountEtb)]));
   const roles = Array.isArray(product.familyRoles) ? product.familyRoles.map((role) => ({ ...role })) : [];
+  const primaryRoleTemplates = [
+    { label: "Women's Traditional Outfit", customerType: "woman", outfitOption: "standard", gender: "female", description: "Complete traditional outfit" },
+    { label: "Men's Traditional Full Set", customerType: "man", outfitOption: "full_set", gender: "male", description: "Traditional top and pants" },
+    { label: "Girls' Traditional Outfit", customerType: "girl", outfitOption: "standard", gender: "female", description: "Traditional outfit for girls" },
+    { label: "Boys' Traditional Full Set", customerType: "boy", outfitOption: "full_set", gender: "male", description: "Traditional top and pants for boys" },
+  ] as const;
+  for (const template of primaryRoleTemplates) {
+    const exists = roles.some(
+      (role) => role.customerType === template.customerType && role.outfitOption === template.outfitOption,
+    );
+    if (!exists) {
+      roles.push({
+        ...template,
+        price: Number(product.priceUsd),
+        currency: product.baseCurrency === "ETB" ? "ETB" : "USD",
+        enteredPrice: Number(product.basePriceAmount ?? product.priceUsd),
+        exchangeRate: Number(product.baseExchangeRate ?? 1),
+      });
+    }
+  }
   let updated = 0;
   const nextRoles = roles.map((role) => {
     const customer = customerPriceKey(role);

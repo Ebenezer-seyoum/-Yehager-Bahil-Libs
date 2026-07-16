@@ -29,6 +29,7 @@ import {
 import { REGIONS, TAXONOMY } from "@/lib/taxonomy";
 import { uploadFileToS3 } from "@/lib/uploads";
 import { friendlyErrorMessage } from "@/lib/friendly-errors";
+import { RolePricingAccordion } from "@/components/admin/role-pricing-accordion";
 
 type BulkProduct = {
   id: string;
@@ -95,6 +96,7 @@ type OutfitOptionDraft = {
 };
 
 const OPTION_PRICING_TEMPLATE: Array<Omit<OutfitOptionDraft, "price" | "currency" | "designerCostUsd" | "taxPercent" | "otherCostUsd">> = [
+  { label: "Women's Traditional Outfit", customerType: "woman", outfitOption: "standard", gender: "female", description: "Complete traditional outfit" },
   { label: "Men's Traditional Full Set", customerType: "man", outfitOption: "full_set", gender: "male", description: "Traditional top and pants" },
   { label: "Men's Traditional Top", customerType: "man", outfitOption: "top_only", gender: "male", description: "Traditional top garment" },
   { label: "Men's Traditional Pants", customerType: "man", outfitOption: "pants_only", gender: "male", description: "Traditional pants" },
@@ -107,8 +109,8 @@ const OPTION_PRICING_TEMPLATE: Array<Omit<OutfitOptionDraft, "price" | "currency
 const CUSTOMER_GROUPS = [
   { key: "woman", label: "Women" },
   { key: "man", label: "Men" },
-  { key: "girl", label: "Girls' Traditional Outfit" },
-  { key: "boy", label: "Boys' Traditional Outfits" },
+  { key: "girl", label: "Girls" },
+  { key: "boy", label: "Boys" },
 ] as const;
 
 function optionKey(role: Pick<OutfitOptionDraft, "customerType" | "outfitOption">) {
@@ -352,18 +354,7 @@ export function ProductCreateClient() {
   );
   const [middleText, setMiddleText] = useState("Traditional Family Outfit");
   const [description, setDescription] = useState("");
-  const [priceUsd, setPriceUsd] = useState("");
-  const [baseCurrency, setBaseCurrency] = useState<"USD" | "ETB">("USD");
-  const [designerCostUsd, setDesignerCostUsd] = useState("");
-  const [taxPercent, setTaxPercent] = useState("");
-  const [otherCostUsd, setOtherCostUsd] = useState("");
   const [outfitOptions, setOutfitOptions] = useState<OutfitOptionDraft[]>(() => initialOptionPricing());
-  const [openPricingGroups, setOpenPricingGroups] = useState<Record<string, boolean>>({
-    man: true,
-    woman: true,
-    boy: false,
-    girl: false,
-  });
   const [gender, setGender] = useState("female");
   const [fabricType, setFabricType] = useState("");
   const [embroideryStyle, setEmbroideryStyle] = useState("");
@@ -381,25 +372,28 @@ export function ProductCreateClient() {
 
   function buildFamilyRoles(base: {
     price: string;
+    currency: "USD" | "ETB";
     designerCostUsd: string;
     taxPercent: string;
     otherCostUsd: string;
     options: OutfitOptionDraft[];
   }) {
+    const pricedOptions = base.options.filter((option) => Number(option.price) > 0);
+    const hasWomanPrice = pricedOptions.some((option) => option.customerType === "woman");
     return [
-      {
+      ...(!hasWomanPrice ? [{
         label: "Women's Traditional Outfit",
         price: Number(base.price),
         gender: "female",
         customerType: "woman",
         outfitOption: "standard",
         description: "Complete traditional outfit",
-        currency: baseCurrency,
+        currency: base.currency,
         designerCostUsd: optionalNumber(base.designerCostUsd),
         taxPercent: optionalNumber(base.taxPercent),
         otherCostUsd: optionalNumber(base.otherCostUsd),
-      },
-      ...base.options.filter((option) => Number(option.price) > 0).map((option) => ({
+      }] : []),
+      ...pricedOptions.map((option) => ({
         label: option.label,
         price: Number(option.price),
         gender: option.gender,
@@ -420,46 +414,49 @@ export function ProductCreateClient() {
       (Number(option.designerCostUsd || 0) || 0) +
       price * ((Number(option.taxPercent || 0) || 0) / 100) +
       (Number(option.otherCostUsd || 0) || 0);
+    const profit = price - cost;
     return (
-      <div key={`${option.customerType}-${option.outfitOption}`} className="rounded-xl border border-slate-200 bg-white p-3">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <div>
-        <p className="text-xs font-black text-slate-900">{option.label}</p>
-            <p className="text-[10px] font-semibold text-slate-500">{option.description}</p>
-          </div>
-          <span className="rounded-full bg-blue-50 px-2.5 py-1 text-[10px] font-black uppercase text-blue-800">
-            Est. cost ${cost.toFixed(2)}
-          </span>
+      <div key={`${option.customerType}-${option.outfitOption}`} className="grid gap-3 rounded-2xl border border-amber-100 bg-amber-50/20 p-3 xl:grid-cols-[minmax(170px,1.2fr)_minmax(100px,.65fr)_repeat(4,minmax(125px,1fr))_minmax(130px,.8fr)]">
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Role</span>
+          <p className="mt-2 text-sm font-black text-slate-900">{option.label}</p>
+          <p className="mt-1 text-[10px] font-semibold text-slate-500">{option.description}</p>
         </div>
-        <label className="mb-3 block max-w-[180px]">
-          <span className="mb-1 block text-[9px] font-black uppercase text-slate-400">Price Currency</span>
+        <label className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-3">
+          <span className="mb-2 block text-[9px] font-black uppercase tracking-widest text-emerald-700">Currency</span>
           <select
             value={option.currency}
             onChange={(e) => updateOutfitOption(index, { currency: e.target.value as "USD" | "ETB" })}
-            className="h-9 w-full rounded-lg border border-slate-200 bg-slate-50 px-2 text-xs font-black outline-none focus:border-blue-500"
+            className="h-10 w-full rounded-lg border border-emerald-200 bg-white px-2 text-xs font-black outline-none focus:border-emerald-500"
           >
             <option value="USD">USD</option>
             <option value="ETB">ETB</option>
           </select>
         </label>
-        <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
-          {[
-            ["Selling Price", "price"],
-            ["Production Cost", "designerCostUsd"],
-            ["Tax %", "taxPercent"],
-            ["Other Cost", "otherCostUsd"],
-          ].map(([label, key]) => (
-            <label key={key}>
-              <span className="mb-1 block text-[9px] font-black uppercase text-slate-400">{label}</span>
-              <input
-                type="number"
-                value={String(option[key as keyof OutfitOptionDraft] ?? "")}
-                onChange={(e) => updateOutfitOption(index, { [key]: e.target.value } as Partial<OutfitOptionDraft>)}
-                className="h-10 w-full rounded-lg border border-slate-200 bg-slate-50 px-2 text-xs font-black outline-none focus:border-blue-500"
-                placeholder="0.00"
-              />
-            </label>
-          ))}
+        {[
+          ["Selling Price", "price"],
+          ["Designer Cost", "designerCostUsd"],
+          ["Tax %", "taxPercent"],
+          ["Other Cost", "otherCostUsd"],
+        ].map(([label, key]) => (
+          <label key={key} className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-3">
+            <span className="mb-2 block text-[9px] font-black uppercase tracking-widest text-emerald-700">{label}</span>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={String(option[key as keyof OutfitOptionDraft] ?? "")}
+              onChange={(e) => updateOutfitOption(index, { [key]: e.target.value } as Partial<OutfitOptionDraft>)}
+              className="h-10 w-full rounded-lg border border-emerald-200 bg-white px-2 text-sm font-black outline-none focus:border-emerald-500"
+              placeholder="0.00"
+            />
+          </label>
+        ))}
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Role Profit</span>
+          <p className={cn("mt-2 text-lg font-black", profit >= 0 ? "text-emerald-700" : "text-rose-600")}>
+            {option.currency} {profit.toFixed(2)}
+          </p>
         </div>
       </div>
     );
@@ -593,6 +590,17 @@ export function ProductCreateClient() {
       });
       return;
     }
+    const womanPricing = outfitOptions.find(
+      (option) => option.customerType === "woman" && option.outfitOption === "standard",
+    );
+    if (!womanPricing || Number(womanPricing.price) <= 0) {
+      setFormNotice({
+        tone: "error",
+        title: "Missing Women Price",
+        message: "Open Women pricing and enter a selling price greater than zero.",
+      });
+      return;
+    }
     const uploadedFiles = singleFiles.filter((file) =>
       file.type.startsWith("image/"),
     );
@@ -620,8 +628,7 @@ export function ProductCreateClient() {
       const nextNum = getNextIncrementNumber(region, subcategory);
       const uniqueId = buildProductUniqueId(region, subcategory, nextNum);
       const generatedName = buildProductName(region, subcategory, middleText, uniqueId);
-      const internalPrice = Number(priceUsd) > 0 ? Number(priceUsd) : 1;
-      const pricePending = Number(priceUsd) <= 0;
+      const internalPrice = Number(womanPricing.price);
 
       // 4. Create Product
       const payload = {
@@ -630,18 +637,19 @@ export function ProductCreateClient() {
         region,
         subcategory: subcategory || undefined,
         priceUsd: internalPrice,
-        baseCurrency,
+        baseCurrency: womanPricing.currency,
         groomPriceUsd: null,
         familyRoles: buildFamilyRoles({
           price: String(internalPrice),
-          designerCostUsd,
-          taxPercent,
-          otherCostUsd,
+          currency: womanPricing.currency,
+          designerCostUsd: womanPricing.designerCostUsd,
+          taxPercent: womanPricing.taxPercent,
+          otherCostUsd: womanPricing.otherCostUsd,
           options: outfitOptions,
         }),
-        designerCostUsd: optionalNumber(designerCostUsd),
-        taxPercent: optionalNumber(taxPercent),
-        otherCostUsd: optionalNumber(otherCostUsd),
+        designerCostUsd: optionalNumber(womanPricing.designerCostUsd),
+        taxPercent: optionalNumber(womanPricing.taxPercent),
+        otherCostUsd: optionalNumber(womanPricing.otherCostUsd),
         gender,
         fabricType: fabricType || undefined,
         embroideryStyle: embroideryStyle || undefined,
@@ -649,7 +657,7 @@ export function ProductCreateClient() {
         isActive,
         isFeatured,
         sendToTelegram,
-        priceStatus: pricePending ? "waiting_price" : "draft",
+        priceStatus: "draft",
         images: imageUrls,
         uniqueId,
     };
@@ -915,6 +923,7 @@ export function ProductCreateClient() {
           groomPriceUsd: null,
           familyRoles: buildFamilyRoles({
             price: prod.priceUsd,
+            currency: prod.baseCurrency,
             designerCostUsd: prod.designerCostUsd,
             taxPercent: prod.taxPercent,
             otherCostUsd: prod.otherCostUsd,
@@ -1398,89 +1407,6 @@ export function ProductCreateClient() {
           <aside className="lg:col-span-4 space-y-6">
             <section className="rounded-[2.5rem] border border-slate-200 bg-white p-6 shadow-sm">
               <h3 className="mb-6 flex items-center gap-2 text-sm font-black uppercase tracking-widest text-slate-400">
-                <DollarSign className="h-4 w-4" /> Pricing Config
-              </h3>
-              <div className="space-y-4">
-                <div className="rounded-2xl border-2 border-slate-100 bg-slate-50/50 p-4">
-                  <label className="mb-1 block text-[10px] font-black uppercase text-slate-400 tracking-widest">
-                    Base Price ({baseCurrency}) (optional)
-                  </label>
-                  <select
-                    value={baseCurrency}
-                    onChange={(e) => setBaseCurrency(e.target.value as "USD" | "ETB")}
-                    className="mb-2 w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-black outline-none"
-                  >
-                    <option value="USD">USD</option>
-                    <option value="ETB">ETB</option>
-                  </select>
-                  <input
-                    type="number"
-                    value={priceUsd}
-                    onChange={(e) => setPriceUsd(e.target.value)}
-                    className="w-full bg-transparent text-xl font-black outline-none"
-                    placeholder="Leave blank to price via Telegram"
-                  />
-                </div>
-                <div className="rounded-2xl border border-emerald-100 bg-emerald-50/60 p-4">
-                  <p className="mb-3 text-[10px] font-black uppercase tracking-widest text-emerald-700">
-                    Production Cost Setup
-                  </p>
-                  <p className="mb-3 text-xs font-semibold text-emerald-900">
-                    Optional. Blank cost fields are saved as 0 and can be updated later.
-                  </p>
-                  <div className="grid gap-3">
-                    <label>
-                      <span className="mb-1 block text-[10px] font-black uppercase text-slate-500">
-                        Designer Labor Cost
-                      </span>
-                      <input
-                        type="number"
-                        value={designerCostUsd}
-                        onChange={(e) => setDesignerCostUsd(e.target.value)}
-                        className="h-10 w-full rounded-xl border border-emerald-100 bg-white px-3 text-sm font-black outline-none"
-                        placeholder="0.00"
-                      />
-                    </label>
-                    <label>
-                      <span className="mb-1 block text-[10px] font-black uppercase text-slate-500">
-                        Production Tax Rate (%)
-                      </span>
-                      <input
-                        type="number"
-                        value={taxPercent}
-                        onChange={(e) => setTaxPercent(e.target.value)}
-                        className="h-10 w-full rounded-xl border border-emerald-100 bg-white px-3 text-sm font-black outline-none"
-                        placeholder="0"
-                      />
-                    </label>
-                    <label>
-                      <span className="mb-1 block text-[10px] font-black uppercase text-slate-500">
-                        Other Production Costs
-                      </span>
-                      <input
-                        type="number"
-                        value={otherCostUsd}
-                        onChange={(e) => setOtherCostUsd(e.target.value)}
-                        className="h-10 w-full rounded-xl border border-emerald-100 bg-white px-3 text-sm font-black outline-none"
-                        placeholder="0.00"
-                      />
-                    </label>
-                  </div>
-                  <div className="mt-3 rounded-xl bg-white/80 p-3 text-xs font-bold text-emerald-900">
-                    Estimated unit production cost: $
-                    {(
-                      (Number(designerCostUsd) || 0) +
-                      (Number(priceUsd) || 0) *
-                        ((Number(taxPercent) || 0) / 100) +
-                      (Number(otherCostUsd) || 0)
-                    ).toFixed(2)}
-                  </div>
-                </div>
-              </div>
-            </section>
-
-            <section className="rounded-[2.5rem] border border-slate-200 bg-white p-6 shadow-sm">
-              <h3 className="mb-6 flex items-center gap-2 text-sm font-black uppercase tracking-widest text-slate-400">
                 <ShieldCheck className="h-4 w-4" /> Storefront Controls
               </h3>
               <div className="space-y-4">
@@ -1552,47 +1478,27 @@ export function ProductCreateClient() {
                   <DollarSign className="h-4 w-4" /> Customer Option Pricing
                 </h3>
                 <p className="mt-2 text-xs font-bold text-slate-500">
-                  Men and boys may use three optional sub-options. Women and girls use the standard outfit price.
+                  Enter each role price here. Women is the product's primary selling price.
                 </p>
               </div>
             </div>
-            <div className="grid gap-4 lg:grid-cols-2">
-              {CUSTOMER_GROUPS.map((group) => {
-                const groupOptions =
-                  group.key === "woman"
-                    ? []
-                    : outfitOptions
-                        .map((option, index) => ({ option, index }))
-                        .filter(({ option }) => option.customerType === group.key);
-                const isOpen = openPricingGroups[group.key] ?? false;
-                return (
-                  <div key={group.key} className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
-                    <button
-                      type="button"
-                      onClick={() => setOpenPricingGroups((current) => ({ ...current, [group.key]: !isOpen }))}
-                      className="flex w-full items-center justify-between bg-white px-5 py-4 text-left"
-                    >
-                      <span className="text-sm font-black uppercase tracking-widest text-slate-900">{group.label}</span>
-                      <ChevronDown className={cn("h-4 w-4 text-slate-500 transition-transform", isOpen && "rotate-180")} />
-                    </button>
-                    {isOpen ? (
-                      <div className="space-y-4 border-t border-slate-200 p-4">
-                        {group.key === "woman" ? (
-                          <div className="rounded-xl border border-slate-200 bg-white p-4">
-                            <p className="text-sm font-black text-slate-900">Women's Traditional Outfit</p>
-                            <p className="mt-1 text-xs font-semibold text-slate-500">
-                              Uses the base price and production cost fields above.
-                            </p>
-                          </div>
-                        ) : (
-                          groupOptions.map(({ option, index }) => renderOptionInputs(option, index))
-                        )}
-                      </div>
-                    ) : null}
-                  </div>
-                );
+            <RolePricingAccordion
+              groups={CUSTOMER_GROUPS.map((group) => {
+                const groupOptions = outfitOptions
+                  .map((option, index) => ({ option, index }))
+                  .filter(({ option }) => option.customerType === group.key);
+                return {
+                  value: group.key,
+                  label: group.label,
+                  description: `${groupOptions.length} pricing role${groupOptions.length === 1 ? "" : "s"}`,
+                  content: (
+                    <div className="space-y-3">
+                      {groupOptions.map(({ option, index }) => renderOptionInputs(option, index))}
+                    </div>
+                  ),
+                };
               })}
-            </div>
+            />
           </section>
         </div>
       ) : (

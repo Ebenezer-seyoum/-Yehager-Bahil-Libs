@@ -29,6 +29,7 @@ import {
 } from "@/lib/dashboard-swal";
 import { uploadFileToS3 } from "@/lib/uploads";
 import { cn } from "@/lib/utils";
+import { RolePricingAccordion } from "@/components/admin/role-pricing-accordion";
 
 type Product = {
   id: string;
@@ -38,6 +39,8 @@ type Product = {
   subcategory?: string | null;
   uniqueId?: string | null;
   priceUsd: string | number;
+  baseCurrency?: "USD" | "ETB" | null;
+  basePriceAmount?: string | number | null;
   groomPriceUsd?: string | number | null;
   profitCostSetting?: {
     designerCostUsd?: string | number | null;
@@ -104,17 +107,18 @@ type DraftRole = {
   designerCostUsd: string;
   taxPercent: string;
   otherCostUsd: string;
+  currency: "USD" | "ETB";
 };
 
 const DETAIL_ROLE_TEMPLATES: DraftRole[] = [
-  { label: "Women's Traditional Outfit", gender: "female", customerType: "woman", outfitOption: "standard", description: "Traditional outfit for women", price: "", designerCostUsd: "", taxPercent: "", otherCostUsd: "" },
-  { label: "Men's Traditional Full Set", gender: "male", customerType: "man", outfitOption: "full_set", description: "Traditional top and pants", price: "", designerCostUsd: "", taxPercent: "", otherCostUsd: "" },
-  { label: "Men's Traditional Top", gender: "male", customerType: "man", outfitOption: "top_only", description: "Traditional top garment", price: "", designerCostUsd: "", taxPercent: "", otherCostUsd: "" },
-  { label: "Men's Traditional Pants", gender: "male", customerType: "man", outfitOption: "pants_only", description: "Traditional pants", price: "", designerCostUsd: "", taxPercent: "", otherCostUsd: "" },
-  { label: "Girls' Traditional Outfit", gender: "female", customerType: "girl", outfitOption: "standard", description: "Traditional outfit for girls", price: "", designerCostUsd: "", taxPercent: "", otherCostUsd: "" },
-  { label: "Boys' Traditional Full Set", gender: "male", customerType: "boy", outfitOption: "full_set", description: "Traditional top and pants for boys", price: "", designerCostUsd: "", taxPercent: "", otherCostUsd: "" },
-  { label: "Boys' Traditional Top", gender: "male", customerType: "boy", outfitOption: "top_only", description: "Traditional top garment for boys", price: "", designerCostUsd: "", taxPercent: "", otherCostUsd: "" },
-  { label: "Boys' Traditional Pants", gender: "male", customerType: "boy", outfitOption: "pants_only", description: "Traditional pants for boys", price: "", designerCostUsd: "", taxPercent: "", otherCostUsd: "" },
+  { label: "Women's Traditional Outfit", gender: "female", customerType: "woman", outfitOption: "standard", description: "Traditional outfit for women", price: "", designerCostUsd: "", taxPercent: "", otherCostUsd: "", currency: "USD" },
+  { label: "Men's Traditional Full Set", gender: "male", customerType: "man", outfitOption: "full_set", description: "Traditional top and pants", price: "", designerCostUsd: "", taxPercent: "", otherCostUsd: "", currency: "USD" },
+  { label: "Men's Traditional Top", gender: "male", customerType: "man", outfitOption: "top_only", description: "Traditional top garment", price: "", designerCostUsd: "", taxPercent: "", otherCostUsd: "", currency: "USD" },
+  { label: "Men's Traditional Pants", gender: "male", customerType: "man", outfitOption: "pants_only", description: "Traditional pants", price: "", designerCostUsd: "", taxPercent: "", otherCostUsd: "", currency: "USD" },
+  { label: "Girls' Traditional Outfit", gender: "female", customerType: "girl", outfitOption: "standard", description: "Traditional outfit for girls", price: "", designerCostUsd: "", taxPercent: "", otherCostUsd: "", currency: "USD" },
+  { label: "Boys' Traditional Full Set", gender: "male", customerType: "boy", outfitOption: "full_set", description: "Traditional top and pants for boys", price: "", designerCostUsd: "", taxPercent: "", otherCostUsd: "", currency: "USD" },
+  { label: "Boys' Traditional Top", gender: "male", customerType: "boy", outfitOption: "top_only", description: "Traditional top garment for boys", price: "", designerCostUsd: "", taxPercent: "", otherCostUsd: "", currency: "USD" },
+  { label: "Boys' Traditional Pants", gender: "male", customerType: "boy", outfitOption: "pants_only", description: "Traditional pants for boys", price: "", designerCostUsd: "", taxPercent: "", otherCostUsd: "", currency: "USD" },
 ];
 
 function roleKey(role: { label?: string; customerType?: DraftRole["customerType"]; outfitOption?: DraftRole["outfitOption"] }) {
@@ -201,6 +205,13 @@ function parseRequiredNumber(value: string, label: string) {
   return parsed;
 }
 
+function formatRoleAmount(value: string | number | null | undefined, currency: "USD" | "ETB" = "USD") {
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) return currency === "ETB" ? "0 ETB" : "$0.00";
+  if (currency === "ETB") return `${amount.toLocaleString("en-US", { maximumFractionDigits: 2 })} ETB`;
+  return formatCurrency(amount);
+}
+
 type EstimateKey = "men" | "woman" | "boy" | "girl";
 type EstimateDraft = Record<EstimateKey, string>;
 
@@ -264,7 +275,7 @@ async function responseErrorMessage(response: Response, fallback: string) {
 }
 
 function draftFromProduct(product: Product) {
-  const existingRoles = product.familyRoles?.length
+  const existingRoles: NonNullable<Product["familyRoles"]> = product.familyRoles?.length
     ? product.familyRoles
     : product.groomPriceUsd
       ? [
@@ -282,13 +293,18 @@ function draftFromProduct(product: Product) {
           },
         ]
       : [];
-  const sourceRoles = existingRoles.length ? existingRoles : DETAIL_ROLE_TEMPLATES;
+  const sourceRoles: NonNullable<Product["familyRoles"]> = existingRoles.length ? existingRoles : DETAIL_ROLE_TEMPLATES;
   const sourceByKey = new Map(sourceRoles.map((role) => [roleKey(role), role]));
   const normalizedRoles = DETAIL_ROLE_TEMPLATES.map((template) => {
-    const role = sourceByKey.get(roleKey(template)) ?? template;
-    return roleKey(template) === "woman:standard" && !role.price
-      ? { ...role, price: String(product.priceUsd ?? "") }
-      : role;
+    const role: NonNullable<Product["familyRoles"]>[number] = sourceByKey.get(roleKey(template)) ?? template;
+    if (roleKey(template) !== "woman:standard" || role.price) return role;
+    return {
+      ...role,
+      price: product.baseCurrency === "ETB"
+        ? String(product.basePriceAmount ?? product.priceUsd ?? "")
+        : String(product.priceUsd ?? ""),
+      currency: product.baseCurrency ?? "USD",
+    };
   });
   return {
     name: product.name ?? "",
@@ -303,18 +319,25 @@ function draftFromProduct(product: Product) {
     embroideryStyle: product.embroideryStyle ?? "",
     tailoringDays: String(product.tailoringDays ?? 30),
     imagesText: (product.images ?? []).join("\n"),
-    familyRoles: normalizedRoles.map((role) => ({
-      label: role.label,
-      icon: role.icon ?? "",
-      price: String(role.price ?? ""),
-      gender: role.gender ?? "unisex",
-      customerType: role.customerType,
-      outfitOption: role.outfitOption,
-      description: role.description,
-      designerCostUsd: String(role.designerCostUsd ?? product.profitCostSetting?.designerCostUsd ?? ""),
-      taxPercent: String(role.taxPercent ?? product.profitCostSetting?.taxPercent ?? ""),
-      otherCostUsd: String(role.otherCostUsd ?? product.profitCostSetting?.otherCostUsd ?? ""),
-    })) satisfies DraftRole[],
+    familyRoles: normalizedRoles.map((role) => {
+      const currency = role.currency ?? (roleKey(role) === "woman:standard" ? product.baseCurrency : undefined) ?? "USD";
+      const approvedAmount = currency === "ETB"
+        ? role.sellingPriceEtb ?? role.enteredPrice ?? (roleKey(role) === "woman:standard" ? product.basePriceAmount : undefined) ?? role.price
+        : role.price;
+      return {
+        label: role.label,
+        icon: role.icon ?? "",
+        price: String(approvedAmount ?? ""),
+        gender: role.gender ?? "unisex",
+        customerType: role.customerType,
+        outfitOption: role.outfitOption,
+        description: role.description,
+        designerCostUsd: String(role.designerCostUsd ?? product.profitCostSetting?.designerCostUsd ?? ""),
+        taxPercent: String(role.taxPercent ?? product.profitCostSetting?.taxPercent ?? ""),
+        otherCostUsd: String(role.otherCostUsd ?? product.profitCostSetting?.otherCostUsd ?? ""),
+        currency,
+      };
+    }) satisfies DraftRole[],
   };
 }
 
@@ -606,15 +629,21 @@ export function AdminProductDetailPanel({
     let designerCostUsd: number;
     let taxPercent: number;
     let otherCostUsd: number;
+    const womanRole = draft.familyRoles.find(
+      (role) => role.customerType === "woman" && role.outfitOption === "standard",
+    );
     try {
-      parseRequiredNumber(draft.priceUsd, "Base selling price");
+      if (!womanRole || Number(womanRole.price) <= 0) {
+        throw new Error("Women's selling price must be greater than zero.");
+      }
+      parseRequiredNumber(womanRole.price, "Women's selling price");
       designerCostUsd = parseRequiredNumber(
-        draft.designerCostUsd,
+        womanRole.designerCostUsd || "0",
         "Designer labor cost",
       );
-      taxPercent = parseRequiredNumber(draft.taxPercent, "Production tax rate");
+      taxPercent = parseRequiredNumber(womanRole.taxPercent || "0", "Production tax rate");
       otherCostUsd = parseRequiredNumber(
-        draft.otherCostUsd,
+        womanRole.otherCostUsd || "0",
         "Other production costs",
       );
       for (const role of draft.familyRoles) {
@@ -643,7 +672,8 @@ export function AdminProductDetailPanel({
       {
         name: draft.name,
         description: draft.description,
-        priceUsd: Number(draft.priceUsd),
+        priceUsd: Number(womanRole.price),
+        baseCurrency: womanRole.currency,
         groomPriceUsd: draft.groomPriceUsd ? Number(draft.groomPriceUsd) : null,
         designerCostUsd,
         taxPercent,
@@ -657,6 +687,7 @@ export function AdminProductDetailPanel({
               customerType: role.customerType,
               outfitOption: role.outfitOption,
               description: role.description,
+              currency: role.currency,
               designerCostUsd: Number(role.designerCostUsd || 0),
               taxPercent: Number(role.taxPercent || 0),
               otherCostUsd: Number(role.otherCostUsd || 0),
@@ -1103,6 +1134,135 @@ export function AdminProductDetailPanel({
     );
   }
 
+  function renderRolePricingAccordion() {
+    const roles = editing ? draft.familyRoles : draftFromProduct(product).familyRoles;
+    const groups = [
+      { key: "woman", label: "Women" },
+      { key: "man", label: "Men" },
+      { key: "girl", label: "Girls" },
+      { key: "boy", label: "Boys" },
+    ] as const;
+
+    function updateRole(index: number, patch: Partial<DraftRole>) {
+      setDraft((current) => {
+        const familyRoles = current.familyRoles.map((role, roleIndex) =>
+          roleIndex === index ? { ...role, ...patch } : role,
+        );
+        const updatedRole = familyRoles[index];
+        const isPrimary = updatedRole?.customerType === "woman" && updatedRole.outfitOption === "standard";
+        return {
+          ...current,
+          familyRoles,
+          ...(isPrimary
+            ? {
+                priceUsd: updatedRole.price,
+                designerCostUsd: updatedRole.designerCostUsd,
+                taxPercent: updatedRole.taxPercent,
+                otherCostUsd: updatedRole.otherCostUsd,
+              }
+            : {}),
+        };
+      });
+    }
+
+    function roleRow(role: DraftRole, index: number) {
+      const cost = roleProductionCost(role);
+      return (
+        <div
+          key={`${roleKey(role)}-${index}`}
+          className="grid gap-3 rounded-2xl border border-amber-100 bg-amber-50/20 p-3 xl:grid-cols-[minmax(170px,1.2fr)_minmax(100px,.65fr)_repeat(4,minmax(125px,1fr))_minmax(130px,.8fr)]"
+        >
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Role</span>
+            <p className="mt-2 text-sm font-black text-slate-900">{role.label}</p>
+            <p className="mt-1 text-[10px] font-semibold text-slate-500">{role.description}</p>
+          </div>
+          {editing ? (
+            <label className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-3">
+              <span className="mb-2 block text-[9px] font-black uppercase tracking-widest text-emerald-700">Currency</span>
+              <select
+                value={role.currency}
+                onChange={(event) => updateRole(index, { currency: event.target.value as DraftRole["currency"] })}
+                className="h-10 w-full rounded-lg border border-emerald-200 bg-white px-2 text-xs font-black outline-none focus:border-emerald-500"
+              >
+                <option value="USD">USD</option>
+                <option value="ETB">ETB</option>
+              </select>
+            </label>
+          ) : (
+            <ReadOnlyField label="Currency" value={role.currency} />
+          )}
+          {[
+            ["Selling Price", "price"],
+            ["Designer Cost", "designerCostUsd"],
+            ["Tax %", "taxPercent"],
+            ["Other Cost", "otherCostUsd"],
+          ].map(([label, key]) => {
+            const value = role[key as keyof DraftRole] as string;
+            if (editing) {
+              return (
+                <label key={key} className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-3">
+                  <span className="mb-2 block text-[9px] font-black uppercase tracking-widest text-emerald-700">{label}</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={value}
+                    onChange={(event) => updateRole(index, { [key]: event.target.value } as Partial<DraftRole>)}
+                    placeholder="0.00"
+                    className="h-10 w-full rounded-lg border border-emerald-200 bg-white px-2 text-sm font-black outline-none focus:border-emerald-500"
+                  />
+                </label>
+              );
+            }
+            const display = key === "price"
+              ? (Number(value) > 0 ? formatRoleAmount(value, role.currency) : "Not set")
+              : key === "taxPercent"
+                ? formatPercent(value)
+                : formatCurrency(value);
+            return <ReadOnlyField key={key} label={label} value={display} />;
+          })}
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Role Profit</span>
+            <p className={cn("mt-2 text-lg font-black", cost.profit >= 0 ? "text-emerald-700" : "text-rose-600")}>
+              {Number(role.price) > 0 ? formatRoleAmount(cost.profit, role.currency) : "Not set"}
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-5">
+        <div>
+          <h3 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-slate-500">
+            <DollarSign className="h-4 w-4" /> Pricing & Cost
+          </h3>
+          <p className="mt-2 text-xs font-semibold text-slate-500">
+            Approved Telegram prices are the official role selling prices shown here.
+          </p>
+        </div>
+        <RolePricingAccordion
+          groups={groups.map((group) => {
+            const groupRoles = roles
+              .map((role, index) => ({ role, index }))
+              .filter(({ role }) => role.customerType === group.key);
+            return {
+              value: group.key,
+              label: group.label,
+              description: `${groupRoles.length} pricing role${groupRoles.length === 1 ? "" : "s"}`,
+              content: (
+                <div className="space-y-3">
+                  {groupRoles.map(({ role, index }) => roleRow(role, index))}
+                </div>
+              ),
+            };
+          })}
+        />
+      </div>
+    );
+  }
+
   function renderGarmentSpecs() {
     return (
       <div className="space-y-5">
@@ -1463,7 +1623,7 @@ export function AdminProductDetailPanel({
 
   const tabRenderers: Record<TabKey, () => React.ReactNode> = {
     info: renderProductInfo,
-    pricing: renderPricing,
+    pricing: renderRolePricingAccordion,
     estimated: renderEstimatedPrices,
     garment: renderGarmentSpecs,
     storefront: renderStorefrontControls,

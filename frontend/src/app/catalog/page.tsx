@@ -52,6 +52,7 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
   if (activeGender !== "all") query.set("gender", activeGender);
   query.set("limit", "120");
 
+  
   const [productsRes, rateRes, sectionsRes] = await Promise.all([
     backendPublicRequest(`/api/v1/products?${query.toString()}`).catch(() => ({ data: [] })),
     backendPublicRequest("/api/v1/exchange-rate").catch(() => ({ data: null })),
