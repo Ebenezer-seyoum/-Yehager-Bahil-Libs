@@ -119,12 +119,18 @@ export function buildTelegramMediaGroup(imageUrls: string[], caption: string) {
   }));
 }
 
-async function sendTelegramMediaGroup(chatId: string, topicId: string, media: ReturnType<typeof buildTelegramMediaGroup>) {
+async function sendTelegramMediaGroup(
+  chatId: string,
+  topicId: string,
+  media: ReturnType<typeof buildTelegramMediaGroup>,
+  replyMarkup: unknown,
+) {
   if (!media.length) throw new Error("At least one image is required for a Telegram media group");
   return telegram<Array<{ message_id: number }>>("sendMediaGroup", {
     chat_id: chatId,
     message_thread_id: Number(topicId),
     media,
+    reply_markup: replyMarkup,
   });
 }
 
@@ -238,19 +244,10 @@ export async function sendTelegramProduct(
       });
     } else {
       const mediaGroup = buildTelegramMediaGroup(signedUrls, caption);
-      const messages = await sendTelegramMediaGroup(env.TELEGRAM_GROUP_ID, regionTopic.telegramTopicId, mediaGroup);
+      const messages = await sendTelegramMediaGroup(env.TELEGRAM_GROUP_ID, regionTopic.telegramTopicId, mediaGroup, replyMarkup);
       const firstMessage = messages[0];
       if (!firstMessage) throw new Error("Telegram returned no messages for the product media group");
       message = firstMessage;
-      try {
-        await telegram("editMessageReplyMarkup", {
-          chat_id: env.TELEGRAM_GROUP_ID,
-          message_id: firstMessage.message_id,
-          reply_markup: replyMarkup,
-        });
-      } catch (error) {
-        logger.warn({ error, productId: product.id, messageId: firstMessage.message_id }, "telegram_product_media_group_button_failed");
-      }
     }
   } else {
     message = await sendTelegramMessage(caption, replyMarkup, regionTopic.telegramTopicId);
