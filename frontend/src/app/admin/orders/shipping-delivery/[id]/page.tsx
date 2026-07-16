@@ -25,5 +25,14 @@ export default async function AdminShippingDeliveryDetailPage({ params }: { para
 
   if (!order) redirect("/admin/orders/shipping-delivery");
 
-  return <AdminShippingDeliveryDetailWorkspace initialOrder={order} />;
+  const isAdmin = session.user.role === "admin";
+  return (
+    <AdminShippingDeliveryDetailWorkspace
+      initialOrder={order}
+      canEdit={isAdmin || can(session.user.permissions, "shipping.edit")}
+      canViewDocuments={isAdmin || can(session.user.permissions, "documents.view")}
+      canViewNotes={isAdmin || can(session.user.permissions, "order_notes.view")}
+      canAddDeliveryNote={isAdmin || can(session.user.permissions, "order_notes.delivery.create")}
+    />
+  );
 }

@@ -726,7 +726,14 @@ export function OrderDetailPage({
   const deliveryStage = isDeliveryStageOrder(order);
   const sessionUser = session?.user as { id?: string | null; role?: string | null; permissions?: string[] | null } | undefined;
   const userPermissions = sessionUser?.permissions ?? [];
-  const canDeleteOrder = can(userPermissions, "orders.delete");
+  const isAdmin = sessionUser?.role === "admin";
+  const canDeleteOrder = isAdmin || can(userPermissions, "orders.delete");
+  const canUpdateOrderStatus =
+    isAdmin ||
+    can(userPermissions, "orders.edit") ||
+    can(userPermissions, "orders.status.update");
+  const canUpdatePaymentStatus =
+    isAdmin || can(userPermissions, "orders.edit") || can(userPermissions, "payments.verify");
   const stripeReceiptUrl = order.stripeReceiptUrl ?? order.stripe_receipt_url ?? null;
   const stripePaymentIntentId = order.stripePaymentIntentId ?? order.stripe_payment_intent_id ?? null;
   const stripeChargeId = order.stripeChargeId ?? order.stripe_charge_id ?? null;
@@ -998,6 +1005,8 @@ export function OrderDetailPage({
   }
 
   async function updateOrder(patch: Partial<Pick<OrderDetailData, "status" | "paymentStatus">>) {
+    if (patch.status && !canUpdateOrderStatus) return;
+    if (patch.paymentStatus && !canUpdatePaymentStatus) return;
     setBusy(true);
     try {
       const res = await fetch(`/api/backend/orders/${order.id}/admin-state`, {
@@ -1082,7 +1091,7 @@ export function OrderDetailPage({
           <div className="grid w-full gap-3 rounded-3xl border border-slate-200 bg-slate-50 p-4 sm:grid-cols-2 lg:w-[420px]">
             <div className="space-y-1.5">
               <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Main Status</span>
-              {deliveryStage ? (
+              {deliveryStage || !canUpdateOrderStatus ? (
                 <div className="flex min-h-10 items-center rounded-xl border border-slate-200 bg-white px-3">
                   {statusPill(order.status)}
                 </div>
@@ -1099,7 +1108,7 @@ export function OrderDetailPage({
             </div>
             <div className="space-y-1.5">
               <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Payment Status</span>
-              {deliveryStage ? (
+              {deliveryStage || !canUpdatePaymentStatus ? (
                 <div className="flex min-h-10 items-center rounded-xl border border-slate-200 bg-white px-3">
                   {statusPill(order.paymentStatus, PAYMENT_STYLES)}
                 </div>

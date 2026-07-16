@@ -1,7 +1,5 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
-import { Eye } from "lucide-react";
 import type { UploadedDesign } from "@/components/admin-uploaded-design-dialogs";
 import { DashboardActionButton, DashboardTableActions } from "@/components/admin/dashboard-action-button";
 
@@ -55,8 +53,7 @@ function needsReview(row: UploadedDesign) {
   return ["submitted", "in_review", "under_review", "needs_changes"].includes(String(row.status ?? "").toLowerCase());
 }
 
-export function AdminUploadedDesignsTable({ rows: initialRows, search, onFilteredCountChange }: { rows: UploadedDesign[]; search: string; onFilteredCountChange?: (count: number) => void }) {
-  const router = useRouter();
+export function AdminUploadedDesignsTable({ rows: initialRows, search, onFilteredCountChange, canReview = false }: { rows: UploadedDesign[]; search: string; onFilteredCountChange?: (count: number) => void; canReview?: boolean }) {
   const [rows, setRows] = useState(initialRows);
   const [statusFilter, setStatusFilter] = useState("all");
   const [fabricFilter, setFabricFilter] = useState("all");
@@ -66,7 +63,8 @@ export function AdminUploadedDesignsTable({ rows: initialRows, search, onFiltere
   const [viewedDesignIdsLocal, setViewedDesignIdsLocal] = useState<string[]>([]);
 
   useEffect(() => {
-    setRows(initialRows);
+    const timeoutId = window.setTimeout(() => setRows(initialRows), 0);
+    return () => window.clearTimeout(timeoutId);
   }, [initialRows]);
 
   useEffect(() => {
@@ -99,6 +97,7 @@ export function AdminUploadedDesignsTable({ rows: initialRows, search, onFiltere
   }, []);
 
   async function updateDesign(id: string, patch: { status: string }) {
+    if (!canReview) return;
     setBusyKey(id + "-status");
     try {
       const res = await fetch(`/api/backend/admin/uploaded-designs/${id}/review`, {
@@ -119,6 +118,7 @@ export function AdminUploadedDesignsTable({ rows: initialRows, search, onFiltere
   }
 
   async function updateDesignPayment(id: string, patch: { paymentStatus: string }) {
+    if (!canReview) return;
     setBusyKey(id + "-payment");
     try {
       let targetStatus = rows.find(r => r.id === id)?.status ?? "submitted";
@@ -239,6 +239,12 @@ export function AdminUploadedDesignsTable({ rows: initialRows, search, onFiltere
             <tbody>
               {filtered.map((row, index) => {
                 const highlightRow = needsReview(row) && !viewedDesignIdsLocal.includes(row.id);
+                const metadata = row as UploadedDesign & {
+                  familyGroupId?: unknown;
+                  eventId?: unknown;
+                  paymentStatus?: string | null;
+                };
+                const paymentStatus = metadata.paymentStatus ?? (row.status === "awaiting_payment" || row.status === "approved" ? "paid" : "pending");
                 return (
                 <tr key={row.id} className={`border-b border-slate-200 last:border-b-0 hover:bg-blue-50/70 ${highlightRow ? "border-l-4 border-l-blue-500 bg-blue-50/70" : index % 2 === 0 ? "bg-white" : "bg-slate-50/50"}`}>
                   <td className="px-4 py-5 align-middle">
@@ -259,7 +265,7 @@ export function AdminUploadedDesignsTable({ rows: initialRows, search, onFiltere
                   </td>
                   <td className="px-4 py-5 align-middle">
                     <span className="inline-flex rounded-full border border-primary/40 bg-primary/10 px-3 py-1 text-[10px] font-black text-primary uppercase">
-                      { (row as any).familyGroupId || (row as any).eventId ? "Group" : "Individual" }
+                      {metadata.familyGroupId || metadata.eventId ? "Group" : "Individual"}
                     </span>
                   </td>
                   <td className="px-4 py-5 align-middle">
@@ -267,7 +273,7 @@ export function AdminUploadedDesignsTable({ rows: initialRows, search, onFiltere
                     <p className="mt-0.5 text-xs text-slate-500">{row.userEmail ?? "Unregistered"}</p>
                   </td>
                   <td className="px-4 py-5 align-middle">
-                    <select
+                    {canReview ? <select
                       disabled={busyKey !== null}
                       value={row.status ?? "submitted"}
                       onChange={(e) => void updateDesign(row.id, { status: e.target.value })}
@@ -278,21 +284,21 @@ export function AdminUploadedDesignsTable({ rows: initialRows, search, onFiltere
                           {prettyLabel(opt)}
                         </option>
                       ))}
-                    </select>
+                    </select> : <span className={`inline-flex min-h-9 min-w-[150px] items-center rounded-full border px-4 text-sm font-bold capitalize ${statusClass(row.status)}`}>{normalizedStatus(row.status)}</span>}
                   </td>
                   <td className="px-4 py-5 align-middle">
-                    <select
+                    {canReview ? <select
                       disabled={busyKey !== null}
-                      value={(row as any).paymentStatus ?? (row.status === 'awaiting_payment' || row.status === 'approved' ? 'paid' : 'pending')}
+                      value={paymentStatus}
                       onChange={(e) => void updateDesignPayment(row.id, { paymentStatus: e.target.value })}
-                      className={`h-9 min-w-[170px] rounded-full border px-4 text-sm font-bold capitalize outline-none transition-all shadow-sm ${paymentClass((row as any).paymentStatus ?? (row.status === 'awaiting_payment' || row.status === 'approved' ? 'paid' : 'pending'))}`}
+                      className={`h-9 min-w-[170px] rounded-full border px-4 text-sm font-bold capitalize outline-none transition-all shadow-sm ${paymentClass(paymentStatus)}`}
                     >
                        {PAYMENT_OPTIONS.map((opt) => (
                          <option key={opt} value={opt}>
                             {prettyLabel(opt)}
                          </option>
                        ))}
-                    </select>
+                    </select> : <span className={`inline-flex min-h-9 min-w-[140px] items-center rounded-full border px-4 text-sm font-bold capitalize ${paymentClass(paymentStatus)}`}>{prettyLabel(paymentStatus)}</span>}
                   </td>
                   <td className="px-4 py-5 align-middle text-right">
                     <DashboardTableActions className="justify-end">

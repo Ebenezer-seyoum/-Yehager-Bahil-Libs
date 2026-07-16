@@ -3,6 +3,8 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/auth-options";
 import { apiRequest } from "@/lib/api-client";
 import { OrderDetailPage } from "@/components/admin/order-detail-page";
+import { can, canAny } from "@/lib/permissions";
+import { AccessRestricted } from "@/components/admin/access-restricted";
 
 function isCustomOrder(order) {
   if (order?.orderType === "custom_order" || order?.order_type === "custom_order" || order?.orderType === "custom_design_order") {
@@ -16,12 +18,16 @@ function isCustomOrder(order) {
   );
 }
 
-export default async function AdminOrderDetailPage({ params }) {
+export default async function AdminOrderDetailPage({ params, searchParams }) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) redirect("/signin?callbackUrl=/admin/orders");
   if (session.user.role !== "admin" && session.user.role !== "employee") redirect("/");
+  if (!canAny(session.user.permissions, ["orders.view", "returns.view"])) {
+    return <AccessRestricted requiredPermission="orders.view or returns.view" sectionName="Order Details" />;
+  }
 
   const { id } = await params;
+  const query = await searchParams;
 
   let order = null;
   try {
@@ -33,7 +39,13 @@ export default async function AdminOrderDetailPage({ params }) {
 
   if (!order) redirect("/admin/orders");
 
-  const backUrl = isCustomOrder(order) ? "/admin/custom-orders?tab=orders" : "/admin/catalog-orders";
+  const openedFromReturns = query?.from === "returns";
+  const returnsOnlyAccess = !can(session.user.permissions, "orders.view") && can(session.user.permissions, "returns.view");
+  const backUrl = openedFromReturns || returnsOnlyAccess
+    ? "/admin/orders/returns-refunds"
+    : isCustomOrder(order)
+      ? "/admin/custom-orders?tab=orders"
+      : "/admin/catalog-orders";
 
   return <OrderDetailPage initialOrder={order} backUrl={backUrl} />;
 }

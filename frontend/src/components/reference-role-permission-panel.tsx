@@ -14,7 +14,7 @@ import {
   dashboardModalPresets,
 } from "@/components/admin/dashboard-modal";
 import { TableHeadCell, TableHeadRow, TableHeader } from "@/components/admin/table-header";
-import { employeeNavigation } from "@/lib/dashboard-navigation";
+import { adminNavigation, canAccessNavigationItem } from "@/lib/dashboard-navigation";
 import { dashboardConfirm, dashboardError, dashboardLoading, dashboardSuccess } from "@/lib/dashboard-swal";
 import { isAssignableEmployeeRole } from "@/lib/admin/assignable-roles";
 
@@ -532,12 +532,8 @@ export function ReferenceRolePermissionPanel({
     return Array.from(new Set([...(fromRole ?? []), ...selectedPermissions]));
   }, [selectedPermissions, selectedRole]);
   const accessPreview = useMemo(() => {
-    const items = employeeNavigation.flatMap((group) => group.items);
-    return items.filter((item) =>
-      [item.permission, ...(item.alternativePermissions ?? [])].some((permission) =>
-        effectivePermissions.includes(permission),
-      ),
-    );
+    const items = adminNavigation.flatMap((group) => group.items);
+    return items.filter((item) => canAccessNavigationItem(effectivePermissions, item));
   }, [effectivePermissions]);
   return (
     <>

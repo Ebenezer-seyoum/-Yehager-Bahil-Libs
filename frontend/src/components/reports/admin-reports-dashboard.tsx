@@ -99,13 +99,11 @@ export function AdminReportsDashboard({
   reports: initialReports,
   initialCategory = "overview",
   initialReport,
-  basePath = "/admin/reports",
   canExport = true,
 }: {
   reports: ReportsPayload;
   initialCategory?: ReportCategoryKey;
   initialReport?: ReportKey;
-  basePath?: string;
   canExport?: boolean;
 }) {
   const router = useRouter();
@@ -147,9 +145,9 @@ export function AdminReportsDashboard({
       const params = new URLSearchParams();
       params.set("category", category);
       params.set("report", report);
-      router.replace(`${basePath}?${params.toString()}`, { scroll: false });
+      router.replace(`/admin/reports?${params.toString()}`, { scroll: false });
     },
-    [basePath, router],
+    [router],
   );
 
   const refreshFromBackend = useCallback(async (activeFilters: FilterValues) => {

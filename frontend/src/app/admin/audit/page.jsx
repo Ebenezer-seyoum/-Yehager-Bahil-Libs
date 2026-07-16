@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/auth-options";
 import { apiRequest } from "@/lib/api-client";
-import { can } from "@/lib/permissions";
+import { canAny } from "@/lib/permissions";
 import { AdminAuditWorkspace } from "@/components/admin/pages/admin-audit-workspace";
 import { AccessRestricted } from "@/components/admin/access-restricted";
 
@@ -10,8 +10,8 @@ export default async function AdminAuditPage() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) redirect("/signin?callbackUrl=/admin/audit");
   if (session.user.role !== "admin" && session.user.role !== "employee") redirect("/");
-  if (!can(session.user.permissions, "audit.view")) {
-    return <AccessRestricted requiredPermission="audit.view" sectionName="Audit" />;
+  if (!canAny(session.user.permissions, ["audit.view", "activity.view"])) {
+    return <AccessRestricted requiredPermission="audit.view or activity.view" sectionName="Audit" />;
   }
 
   let audit = [];

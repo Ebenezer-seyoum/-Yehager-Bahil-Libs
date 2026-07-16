@@ -151,7 +151,7 @@ function buildRows(mode: Mode, data: AdminWorkspaceData): OperationRow[] {
           amount: money(order.refundAmount ?? order.totalUsd ?? order.total ?? order.amount ?? order.grandTotal ?? order.totalAmount),
           reference: text(order.refundReason ?? order.returnReason ?? order.paymentMethod, "No reason recorded"),
           date: dateLabel(order.updatedAt ?? order.createdAt),
-          href: order.id ? `/admin/orders/${order.id}` : undefined,
+          href: order.id ? `/admin/orders/${order.id}?from=returns` : undefined,
           badgeTone: toneFor(status),
         };
       });

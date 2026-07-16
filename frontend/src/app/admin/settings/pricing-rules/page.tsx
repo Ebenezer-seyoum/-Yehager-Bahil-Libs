@@ -18,7 +18,9 @@ export default async function PricingRulesPage() {
   return (
     <Suspense fallback={<div className="p-6 text-sm text-muted-foreground">Loading pricing rules…</div>}>
       <AdminSettingsChrome>
-        <GlobalPricingRulesClient />
+        <GlobalPricingRulesClient
+          canEdit={session.user.role === "admin" || can(session.user.permissions, "settings.edit")}
+        />
       </AdminSettingsChrome>
     </Suspense>
   );

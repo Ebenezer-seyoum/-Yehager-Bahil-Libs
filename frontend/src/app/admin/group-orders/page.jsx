@@ -3,11 +3,16 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/auth-options";
 import { apiRequest } from "@/lib/api-client";
 import { AdminOrdersWorkspace } from "@/components/admin/pages/admin-orders-workspace";
+import { can } from "@/lib/permissions";
+import { AccessRestricted } from "@/components/admin/access-restricted";
 
 export default async function AdminGroupOrdersPage({ searchParams }) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) redirect("/signin?callbackUrl=/admin/group-orders");
   if (session.user.role !== "admin" && session.user.role !== "employee") redirect("/");
+  if (!can(session.user.permissions, "orders.view")) {
+    return <AccessRestricted requiredPermission="orders.view" sectionName="Group Orders" />;
+  }
 
   const selectedOrderId = typeof searchParams?.order === "string" ? searchParams.order : null;
 

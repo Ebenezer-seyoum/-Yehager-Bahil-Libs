@@ -1,8 +1,9 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import { zValidator } from "@hono/zod-validator";
+import { HTTPException } from "hono/http-exception";
 import { requireAuth } from "../../middleware/auth.js";
-import { requirePermission } from "../../middleware/permissions.js";
+import { requireAnyPermission, requirePermission } from "../../middleware/permissions.js";
 import { PERMISSIONS } from "../../lib/auth/permissions.js";
 import {
   createOrderNote,
@@ -22,10 +23,21 @@ import { systemAlerts } from "../../lib/db/schema.js";
 import { db } from "../../lib/db/drizzle.js";
 import { and, eq, sql } from "drizzle-orm";
 import type { AppBindings } from "../../types/hono.js";
+import { getUserByEmail } from "../../repositories/users-repository.js";
+import { getEffectivePermissionsForUser } from "../../services/permissions-service.js";
 
 const querySchema = z.object({
   limit: z.coerce.number().int().positive().max(200).optional(),
 });
+const ORDER_READ_PERMISSIONS = [
+  PERMISSIONS.ORDERS_VIEW,
+  PERMISSIONS.CUSTOMERS_VIEW,
+  PERMISSIONS.PAYMENTS_VIEW,
+  PERMISSIONS.TRANSACTIONS_VIEW,
+  PERMISSIONS.RETURNS_VIEW,
+  PERMISSIONS.SHIPPING_VIEW,
+  PERMISSIONS.DOCUMENTS_VIEW,
+];
 const checkoutIntentSchema = z.object({
   cartItemIds: z.array(z.string().uuid()).min(1),
   fulfillmentType: z.enum(["mail", "pickup"]).optional(),
@@ -141,13 +153,13 @@ ordersRouter.post("/me/:orderId/etb-proof", requireAuth, zValidator("json", etbP
   return c.json({ data });
 });
 
-ordersRouter.get("/", requireAuth, requirePermission(PERMISSIONS.ORDERS_VIEW), zValidator("query", querySchema), async (c) => {
+ordersRouter.get("/", requireAuth, requireAnyPermission(ORDER_READ_PERMISSIONS), zValidator("query", querySchema), async (c) => {
   const { limit } = c.req.valid("query");
   const data = await getOrdersForAdmin(limit ?? 100);
   return c.json({ data });
 });
 
-ordersRouter.get("/admin/:orderId", requireAuth, requirePermission(PERMISSIONS.ORDERS_VIEW), async (c) => {
+ordersRouter.get("/admin/:orderId", requireAuth, requireAnyPermission(ORDER_READ_PERMISSIONS), async (c) => {
   const orderId = c.req.param("orderId");
   const data = await getOrderDetailsForAdmin(orderId);
 
@@ -174,7 +186,17 @@ ordersRouter.get("/:orderId/notes", requireAuth, requirePermission(PERMISSIONS.O
   return c.json({ data });
 });
 
-ordersRouter.post("/:orderId/notes", requireAuth, requirePermission(PERMISSIONS.ORDERS_VIEW), zValidator("json", noteSchema), async (c) => {
+ordersRouter.post(
+  "/:orderId/notes",
+  requireAuth,
+  requireAnyPermission([
+    PERMISSIONS.ORDER_NOTES_ADMIN_CREATE,
+    PERMISSIONS.ORDER_NOTES_TAILOR_CREATE,
+    PERMISSIONS.ORDER_NOTES_DELIVERY_CREATE,
+    PERMISSIONS.ORDER_NOTES_MANAGE,
+  ]),
+  zValidator("json", noteSchema),
+  async (c) => {
   const authUser = c.get("authUser");
   const orderId = c.req.param("orderId");
   const body = c.req.valid("json");
@@ -185,9 +207,10 @@ ordersRouter.post("/:orderId/notes", requireAuth, requirePermission(PERMISSIONS.
     userEmail: authUser?.email,
   });
   return c.json({ data }, 201);
-});
+  },
+);
 
-ordersRouter.patch("/:orderId/notes/:noteId", requireAuth, requirePermission(PERMISSIONS.ORDERS_VIEW), zValidator("json", notePatchSchema), async (c) => {
+ordersRouter.patch("/:orderId/notes/:noteId", requireAuth, requirePermission(PERMISSIONS.ORDER_NOTES_MANAGE), zValidator("json", notePatchSchema), async (c) => {
   const authUser = c.get("authUser");
   const orderId = c.req.param("orderId");
   const noteId = c.req.param("noteId");
@@ -201,7 +224,7 @@ ordersRouter.patch("/:orderId/notes/:noteId", requireAuth, requirePermission(PER
   return c.json({ data });
 });
 
-ordersRouter.delete("/:orderId/notes/:noteId", requireAuth, requirePermission(PERMISSIONS.ORDERS_VIEW), async (c) => {
+ordersRouter.delete("/:orderId/notes/:noteId", requireAuth, requirePermission(PERMISSIONS.ORDER_NOTES_MANAGE), async (c) => {
   const authUser = c.get("authUser");
   const orderId = c.req.param("orderId");
   const noteId = c.req.param("noteId");
@@ -213,16 +236,68 @@ ordersRouter.delete("/:orderId/notes/:noteId", requireAuth, requirePermission(PE
   return c.json({ data });
 });
 
-ordersRouter.get("/:orderId", requireAuth, requirePermission(PERMISSIONS.ORDERS_VIEW), async (c) => {
+ordersRouter.get("/:orderId", requireAuth, requireAnyPermission(ORDER_READ_PERMISSIONS), async (c) => {
   const orderId = c.req.param("orderId");
   const data = await getOrderDetailsForAdmin(orderId);
   return c.json({ data });
 });
 
-ordersRouter.patch("/:orderId/admin-state", requireAuth, requirePermission(PERMISSIONS.ORDERS_EDIT), zValidator("json", adminUpdateSchema), async (c) => {
+ordersRouter.patch(
+  "/:orderId/admin-state",
+  requireAuth,
+  requireAnyPermission([
+    PERMISSIONS.ORDERS_EDIT,
+    PERMISSIONS.ORDERS_STATUS_UPDATE,
+    PERMISSIONS.PAYMENTS_VERIFY,
+    PERMISSIONS.SHIPPING_EDIT,
+  ]),
+  zValidator("json", adminUpdateSchema),
+  async (c) => {
   const authUser = c.get("authUser");
   const orderId = c.req.param("orderId");
   const body = c.req.valid("json");
+
+  if (authUser?.email) {
+    const currentUser = await getUserByEmail(authUser.email);
+    if (!currentUser) throw new HTTPException(403, { message: "Forbidden" });
+
+    if (currentUser.role !== "admin") {
+      const permissions = await getEffectivePermissionsForUser(currentUser.id);
+      const allowed = (permission: string) => permissions.includes(permission);
+      const changesOrderStatus = body.status !== undefined;
+      const changesPaymentStatus = body.paymentStatus !== undefined;
+      const changesDelivery =
+        body.fulfillmentType !== undefined ||
+        body.carrier !== undefined ||
+        body.deliveryStatus !== undefined ||
+        body.trackingNumber !== undefined ||
+        body.deliveryNote !== undefined;
+
+      if (
+        changesOrderStatus &&
+        !allowed(PERMISSIONS.ORDERS_EDIT) &&
+        !allowed(PERMISSIONS.ORDERS_STATUS_UPDATE) &&
+        !allowed(PERMISSIONS.SHIPPING_EDIT)
+      ) {
+        throw new HTTPException(403, { message: "Forbidden" });
+      }
+      if (
+        changesPaymentStatus &&
+        !allowed(PERMISSIONS.ORDERS_EDIT) &&
+        !allowed(PERMISSIONS.PAYMENTS_VERIFY)
+      ) {
+        throw new HTTPException(403, { message: "Forbidden" });
+      }
+      if (
+        changesDelivery &&
+        !allowed(PERMISSIONS.ORDERS_EDIT) &&
+        !allowed(PERMISSIONS.SHIPPING_EDIT)
+      ) {
+        throw new HTTPException(403, { message: "Forbidden" });
+      }
+    }
+  }
+
   const data = await updateOrderAdminState({
     orderId,
     performedBy: authUser?.email,
@@ -235,4 +310,5 @@ ordersRouter.patch("/:orderId/admin-state", requireAuth, requirePermission(PERMI
     deliveryNote: body.deliveryNote,
   });
   return c.json({ data });
-});
+  },
+);

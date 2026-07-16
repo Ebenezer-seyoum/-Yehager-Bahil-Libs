@@ -57,11 +57,13 @@ function RuleInput({
   description,
   value,
   onChange,
+  disabled,
 }: {
   label: string;
   description: string;
   value: string;
   onChange: (value: string) => void;
+  disabled: boolean;
 }) {
   return (
     <label className="block rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
@@ -77,8 +79,9 @@ function RuleInput({
           min="0"
           step="0.01"
           value={value}
+          disabled={disabled}
           onChange={(event) => onChange(event.target.value)}
-          className="h-full min-w-0 flex-1 bg-transparent px-4 text-base font-black text-slate-950 outline-none"
+          className="h-full min-w-0 flex-1 bg-transparent px-4 text-base font-black text-slate-950 outline-none disabled:cursor-not-allowed disabled:text-slate-500"
         />
         <span className="border-l border-slate-200 bg-slate-50 px-3 text-xs font-black text-slate-500">
           ETB
@@ -98,7 +101,7 @@ function FormulaResult({ label, formula, result }: { label: string; formula: str
   );
 }
 
-export function GlobalPricingRulesClient() {
+export function GlobalPricingRulesClient({ canEdit }: { canEdit: boolean }) {
   const [values, setValues] = useState<RuleValues>(INITIAL_VALUES);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -140,11 +143,13 @@ export function GlobalPricingRulesClient() {
   }, [loadRules]);
 
   function update(key: RuleKey, value: string) {
+    if (!canEdit) return;
     setValues((current) => ({ ...current, [key]: value }));
     setDirty(true);
   }
 
   async function saveRules() {
+    if (!canEdit) return;
     if ((scopeType !== "global" && !tribeName) || (scopeType === "region" && !regionName)) {
       setNotice({ tone: "error", message: "Choose the tribe and region before saving scoped pricing rules." });
       return;
@@ -190,6 +195,7 @@ export function GlobalPricingRulesClient() {
   }
 
   async function resetOverrides() {
+    if (!canEdit) return;
     if (scopeType === "global") return;
     setSaving(true);
     setNotice(null);
@@ -249,16 +255,16 @@ export function GlobalPricingRulesClient() {
               <RefreshCw className="h-4 w-4" />
               Refresh
             </button>
-            {scopeType !== "global" ? (
+            {canEdit && scopeType !== "global" ? (
               <button type="button" onClick={() => void resetOverrides()} disabled={loading || saving || !hasOverrides} className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-sm font-black text-slate-700 transition hover:bg-slate-50 disabled:opacity-50">
                 <RotateCcw className="h-4 w-4" />
                 Use Inherited Rules
               </button>
             ) : null}
-            <button type="button" onClick={() => void saveRules()} disabled={loading || saving || !scopeReady} className="inline-flex h-11 items-center gap-2 rounded-xl bg-blue-600 px-5 text-sm font-black text-white transition hover:bg-blue-700 disabled:opacity-60">
+            {canEdit ? <button type="button" onClick={() => void saveRules()} disabled={loading || saving || !scopeReady} className="inline-flex h-11 items-center gap-2 rounded-xl bg-blue-600 px-5 text-sm font-black text-white transition hover:bg-blue-700 disabled:opacity-60">
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
               {saving ? "Saving..." : "Save All Rules"}
-            </button>
+            </button> : null}
           </div>
         </div>
       </div>
@@ -307,7 +313,7 @@ export function GlobalPricingRulesClient() {
           </div>
         </div>
         <div className="mt-4 rounded-2xl border border-blue-100 bg-blue-50/70 px-4 py-3 text-sm font-bold text-blue-900">
-          Editing: {scopeType === "global" ? "all products" : scopeType === "tribe" ? tribeName || "select a tribe" : tribeName && regionName ? `${tribeName} / ${regionName}` : "select a tribe and region"}. Saving automatically recalculates approved products in this scope.
+          {canEdit ? "Editing" : "Viewing"}: {scopeType === "global" ? "all products" : scopeType === "tribe" ? tribeName || "select a tribe" : tribeName && regionName ? `${tribeName} / ${regionName}` : "select a tribe and region"}.{canEdit ? " Saving automatically recalculates approved products in this scope." : " Editing requires the settings.edit permission."}
         </div>
       </section>
 
@@ -325,10 +331,10 @@ export function GlobalPricingRulesClient() {
               description: "4 rules · Full set, pants, and top from one Telegram estimate",
               content: <div className="space-y-4">
                 <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                  <RuleInput label="Full-set addition" description="Added to the complete men's Telegram estimate." value={values.men_full_set_addition} onChange={(value) => update("men_full_set_addition", value)} />
-                  <RuleInput label="Pants base cost" description="The fixed designer component assigned to pants." value={values.men_pants_base} onChange={(value) => update("men_pants_base", value)} />
-                  <RuleInput label="Pants addition" description="Added to the pants base cost." value={values.men_pants_addition} onChange={(value) => update("men_pants_addition", value)} />
-                  <RuleInput label="Top addition" description="Added after deducting the pants base from the estimate." value={values.men_top_addition} onChange={(value) => update("men_top_addition", value)} />
+                  <RuleInput disabled={!canEdit} label="Full-set addition" description="Added to the complete men's Telegram estimate." value={values.men_full_set_addition} onChange={(value) => update("men_full_set_addition", value)} />
+                  <RuleInput disabled={!canEdit} label="Pants base cost" description="The fixed designer component assigned to pants." value={values.men_pants_base} onChange={(value) => update("men_pants_base", value)} />
+                  <RuleInput disabled={!canEdit} label="Pants addition" description="Added to the pants base cost." value={values.men_pants_addition} onChange={(value) => update("men_pants_addition", value)} />
+                  <RuleInput disabled={!canEdit} label="Top addition" description="Added after deducting the pants base from the estimate." value={values.men_top_addition} onChange={(value) => update("men_top_addition", value)} />
                 </div>
                 <div className="rounded-2xl border border-blue-100 bg-slate-50/70 p-4">
                   <p className="mb-3 flex items-center gap-2 text-xs font-black uppercase tracking-[0.18em] text-slate-500"><Calculator className="h-4 w-4" /> Example using an 8,000 ETB Telegram estimate</p>
@@ -345,7 +351,7 @@ export function GlobalPricingRulesClient() {
               label: "Women",
               description: "1 rule · One addition for the complete outfit",
               content: <div className="grid gap-4 lg:grid-cols-[minmax(280px,1fr)_minmax(280px,1fr)]">
-                <RuleInput label="Outfit addition" description="Added directly to the Telegram Woman estimate." value={values.woman_outfit_addition} onChange={(value) => update("woman_outfit_addition", value)} />
+                <RuleInput disabled={!canEdit} label="Outfit addition" description="Added directly to the Telegram Woman estimate." value={values.woman_outfit_addition} onChange={(value) => update("woman_outfit_addition", value)} />
                 <FormulaResult label="4,000 ETB example" formula={`4,000 + ${amount(values.woman_outfit_addition).toLocaleString()}`} result={womanEstimate + amount(values.woman_outfit_addition)} />
               </div>,
             },
@@ -355,10 +361,10 @@ export function GlobalPricingRulesClient() {
               description: "4 rules · Men's formula with a lower pants base",
               content: <div className="space-y-4">
                 <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                  <RuleInput label="Full-set addition" description="Added to the complete boys' Telegram estimate." value={values.boy_full_set_addition} onChange={(value) => update("boy_full_set_addition", value)} />
-                  <RuleInput label="Pants base cost" description="The fixed designer component assigned to boys' pants." value={values.boy_pants_base} onChange={(value) => update("boy_pants_base", value)} />
-                  <RuleInput label="Pants addition" description="Added to the boys' pants base cost." value={values.boy_pants_addition} onChange={(value) => update("boy_pants_addition", value)} />
-                  <RuleInput label="Top addition" description="Added after deducting the boys' pants base." value={values.boy_top_addition} onChange={(value) => update("boy_top_addition", value)} />
+                  <RuleInput disabled={!canEdit} label="Full-set addition" description="Added to the complete boys' Telegram estimate." value={values.boy_full_set_addition} onChange={(value) => update("boy_full_set_addition", value)} />
+                  <RuleInput disabled={!canEdit} label="Pants base cost" description="The fixed designer component assigned to boys' pants." value={values.boy_pants_base} onChange={(value) => update("boy_pants_base", value)} />
+                  <RuleInput disabled={!canEdit} label="Pants addition" description="Added to the boys' pants base cost." value={values.boy_pants_addition} onChange={(value) => update("boy_pants_addition", value)} />
+                  <RuleInput disabled={!canEdit} label="Top addition" description="Added after deducting the boys' pants base." value={values.boy_top_addition} onChange={(value) => update("boy_top_addition", value)} />
                 </div>
                 <div className="grid gap-3 md:grid-cols-3">
                   <FormulaResult label="Full set" formula={`8,000 + ${amount(values.boy_full_set_addition).toLocaleString()}`} result={boyEstimate + amount(values.boy_full_set_addition)} />
@@ -372,7 +378,7 @@ export function GlobalPricingRulesClient() {
               label: "Girls",
               description: "1 rule · One addition for the complete outfit",
               content: <div className="grid gap-4 lg:grid-cols-[minmax(280px,1fr)_minmax(280px,1fr)]">
-                <RuleInput label="Outfit addition" description="Added directly to the Telegram Girl estimate." value={values.girl_outfit_addition} onChange={(value) => update("girl_outfit_addition", value)} />
+                <RuleInput disabled={!canEdit} label="Outfit addition" description="Added directly to the Telegram Girl estimate." value={values.girl_outfit_addition} onChange={(value) => update("girl_outfit_addition", value)} />
                 <FormulaResult label="4,000 ETB example" formula={`4,000 + ${amount(values.girl_outfit_addition).toLocaleString()}`} result={girlEstimate + amount(values.girl_outfit_addition)} />
               </div>,
             },

@@ -89,10 +89,11 @@ const isImageAttachment = (url, type = "") =>
 export default function SupportInboxPage() {
   const { data: session } = useSession();
   const permissions = session?.user?.permissions ?? [];
-  const canViewSupport = can(permissions, "support.view");
-  const canReplySupport = can(permissions, "support.reply");
-  const canAssignSupport = can(permissions, "support.assign");
-  const canResolveSupport = can(permissions, "support.resolve");
+  const isAdmin = session?.user?.role === "admin";
+  const canViewSupport = isAdmin || can(permissions, "support.view");
+  const canReplySupport = isAdmin || can(permissions, "support.reply");
+  const canAssignSupport = isAdmin || can(permissions, "support.assign");
+  const canResolveSupport = isAdmin || can(permissions, "support.resolve");
   const [tickets, setTickets] = useState([]);
   const [admins, setAdmins] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -126,12 +127,9 @@ export default function SupportInboxPage() {
 
   const fileInputRef = useRef(null);
 
-  if (session?.user && !canViewSupport) {
-    return <AccessRestricted requiredPermission="support.view" sectionName="Support Inbox" />;
-  }
-
   // 1. Fetch tickets and KPIs
   const fetchData = async ({ quiet = false } = {}) => {
+    if (!canViewSupport) return;
     if (!quiet) setLoading(true);
     try {
       const tab = SUPPORT_TABS.find((item) => item.id === activeTab);
@@ -199,14 +197,18 @@ export default function SupportInboxPage() {
   };
 
   useEffect(() => {
-    fetchData();
-  }, [activeTab, searchQuery, filterPriority, filterCategory, filterAssignee, dateRange]);
+    if (!canViewSupport) return;
+    const timeoutId = window.setTimeout(() => void fetchData(), 0);
+    return () => window.clearTimeout(timeoutId);
+  }, [canViewSupport, activeTab, searchQuery, filterPriority, filterCategory, filterAssignee, dateRange]);
 
   useEffect(() => {
-    fetchAdmins();
-  }, []);
+    const timeoutId = window.setTimeout(() => void fetchAdmins(), 0);
+    return () => window.clearTimeout(timeoutId);
+  }, [canAssignSupport]);
 
   const handleSyncEmail = async ({ silent = false } = {}) => {
+    if (!canViewSupport) return;
     setSyncingEmail(true);
     try {
       const res = await fetch("/api/backend/admin/support/sync-email", { method: "POST" });
@@ -359,12 +361,13 @@ export default function SupportInboxPage() {
   };
 
   const handleFileSelection = async (event) => {
+    if (!canReplySupport) return;
     const files = Array.from(event.target.files || []);
     event.target.value = "";
     if (!files.length) return;
 
     for (const file of files) {
-      const id = `${file.name}-${file.size}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      const id = `${file.name}-${file.size}-${window.crypto.randomUUID()}`;
       const previewUrl = file.type.startsWith("image/") ? URL.createObjectURL(file) : null;
       setReplyAttachments((current) => [
         ...current,
@@ -400,6 +403,10 @@ export default function SupportInboxPage() {
     setSuccessToast({ msg, type });
     setTimeout(() => setSuccessToast(null), 3000);
   };
+
+  if (session?.user && !canViewSupport) {
+    return <AccessRestricted requiredPermission="support.view" sectionName="Support Inbox" />;
+  }
 
   return (
     <div className="min-h-screen bg-slate-50">

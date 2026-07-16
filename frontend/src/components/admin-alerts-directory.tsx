@@ -42,16 +42,19 @@ function formatDate(value?: string | null) {
 export function AdminAlertsDirectory({
   alerts,
   search,
+  canManage,
 }: {
   alerts: Alert[];
   search: string;
+  canManage: boolean;
 }) {
   const router = useRouter();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [localAlerts, setLocalAlerts] = useState(alerts);
 
   useEffect(() => {
-    setLocalAlerts(alerts);
+    const timeoutId = window.setTimeout(() => setLocalAlerts(alerts), 0);
+    return () => window.clearTimeout(timeoutId);
   }, [alerts]);
 
   const filtered = useMemo(() => {
@@ -65,6 +68,7 @@ export function AdminAlertsDirectory({
   }, [localAlerts, search]);
 
   async function resolveAlert(alertId: string) {
+    if (!canManage) return;
     setBusyId(alertId);
     try {
       const res = await fetch(`/api/backend/admin/alerts/${alertId}`, {
@@ -128,7 +132,7 @@ export function AdminAlertsDirectory({
                   </td>
                   <td className="px-4 py-4 text-sm text-muted-foreground">{formatDate(alert.createdAt)}</td>
                   <td className="px-4 py-4">
-                    {!alert.isResolved ? (
+                    {!alert.isResolved && canManage ? (
                       <DashboardTableActions>
                         <DashboardActionButton
                           action="approve"

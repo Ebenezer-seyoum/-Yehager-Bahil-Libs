@@ -26,8 +26,11 @@ import {
   UsersRound,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import type { NavigationGroup, NavigationItem } from "@/lib/dashboard-navigation";
-import { canAny } from "@/lib/permissions";
+import {
+  canAccessNavigationItem,
+  type NavigationGroup,
+  type NavigationItem,
+} from "@/lib/dashboard-navigation";
 
 type NotificationCounts = {
   orders?: number;
@@ -96,12 +99,11 @@ export function DashboardShell({
   const router = useRouter();
   const searchParams = useSearchParams()!;
   const { data: session, update: updateSession } = useSession();
-  const isReportsRoute =
-    pathname.startsWith("/admin/reports") || pathname.startsWith("/employee/reports");
-  const isEmployeeActivityRoute = pathname.startsWith("/employee/activity");
+  const isReportsRoute = pathname.startsWith("/admin/reports");
+  const isActivityRoute = pathname.startsWith("/admin/audit");
   const shellTitle = isReportsRoute
     ? "Reports Center"
-    : isEmployeeActivityRoute
+    : isActivityRoute
       ? "Activity Logs"
       : title;
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -121,8 +123,10 @@ export function DashboardShell({
     ((refreshedRoleStatus ?? accountProfile?.roleStatus ?? session.user.roleStatus) === "unassigned" ||
       (refreshedAssignedRoleActive ?? session.user.assignedRoleActive) === false ||
       permissions.length === 0);
-  const showPendingAccess = isUnassignedEmployee && pathname !== "/admin/profile" && pathname !== "/employee/settings";
+  const showPendingAccess = isUnassignedEmployee && pathname !== "/admin/profile";
   const isFullAdmin = session?.user?.role === "admin";
+  const hasAccess = (permission: string) => isFullAdmin || permissions.includes(permission);
+  const shellRoleLabel = session?.user?.role === "employee" ? "Employee" : "Admin";
   const assignedRoleLabel =
     session?.user?.role === "employee"
       ? refreshedAssignedRoleName ?? session.user.assignedRoleName ?? (isUnassignedEmployee ? "Access pending" : "Assigned employee")
@@ -132,20 +136,11 @@ export function DashboardShell({
       isFullAdmin
         ? navigation
         : isUnassignedEmployee
-        ? navigation
-            .map((group) => ({
-              ...group,
-              items: group.items.filter((item) => item.href === "/employee/settings"),
-            }))
-            .filter((group) => group.items.length > 0)
+        ? []
         : navigation
             .map((group) => ({
               ...group,
-              items: group.items.filter(
-                (item) =>
-                  item.href === "/employee/settings" ||
-                  canAny(permissions, [item.permission, ...(item.alternativePermissions ?? [])]),
-              ),
+              items: group.items.filter((item) => canAccessNavigationItem(permissions, item)),
             }))
             .filter((group) => group.items.length > 0),
     [isFullAdmin, isUnassignedEmployee, navigation, permissions],
@@ -153,7 +148,6 @@ export function DashboardShell({
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
   const [expandedNavItems, setExpandedNavItems] = useState<Record<string, boolean>>({
     "/admin/reports": true,
-    "/employee/reports": true,
   });
 
   function isReportChildActive(href: string) {
@@ -193,7 +187,7 @@ export function DashboardShell({
     }
     return true;
   }
-  const profileHref = session?.user?.role === "employee" ? "/employee/settings" : "/admin/settings";
+  const profileHref = session?.user?.role === "employee" ? "/admin/profile" : "/admin/settings";
   const adminTopBar = variant === "admin" || variant === "employee";
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const counts = notificationCounts ?? {};
@@ -230,7 +224,82 @@ export function DashboardShell({
   const visibleShippingDeliveryCount = activeShippingDeliveryIds.length > 0
     ? activeShippingDeliveryIds.filter((id) => !viewedShippingDeliveryIds.includes(id)).length
     : Math.max((counts.shippingDelivery ?? 0) - viewedShippingDeliveryIds.length, 0);
-  const totalNotifications = visibleOrderCount + visiblePaymentCount + visibleCustomDesignCount + visibleCustomOrderCount + visibleRefundIssueCount + visibleShippingDeliveryCount + visibleCatalogPriceCount;
+  const canViewAlerts = hasAccess("alerts.view");
+  const canViewProducts = hasAccess("products.view");
+  const canViewSupport = hasAccess("support.view");
+  const notificationItems = [
+    {
+      href: catalogPriceProductIds[0] ? `/admin/inventory/${catalogPriceProductIds[0]}` : "/admin/inventory?tab=new-prices",
+      label: "New catalog price submitted",
+      value: visibleCatalogPriceCount,
+      permissions: ["products.view"],
+      Icon: Boxes,
+      accent: "bg-emerald-400",
+      active: "border-emerald-400/30 bg-emerald-400/10 text-emerald-50",
+      badge: "bg-emerald-400 text-slate-950",
+    },
+    {
+      href: "/admin/payments",
+      label: "New payments received",
+      value: visiblePaymentCount,
+      permissions: ["payments.view"],
+      Icon: CreditCard,
+      accent: "bg-amber-400",
+      active: "border-amber-400/30 bg-amber-400/10 text-amber-50",
+      badge: "bg-amber-400 text-slate-950",
+    },
+    {
+      href: "/admin/custom-orders?tab=requests&filter=awaiting-review",
+      label: "Custom requests awaiting review",
+      value: visibleCustomDesignCount,
+      permissions: ["uploaded_designs.view"],
+      Icon: FileText,
+      accent: "bg-violet-400",
+      active: "border-violet-400/30 bg-violet-400/10 text-violet-50",
+      badge: "bg-violet-400 text-slate-950",
+    },
+    {
+      href: "/admin/custom-orders?tab=orders&filter=awaiting-review",
+      label: "Custom orders awaiting review",
+      value: visibleCustomOrderCount,
+      permissions: ["orders.view"],
+      Icon: ClipboardList,
+      accent: "bg-fuchsia-400",
+      active: "border-fuchsia-400/30 bg-fuchsia-400/10 text-fuchsia-50",
+      badge: "bg-fuchsia-400 text-slate-950",
+    },
+    {
+      href: "/admin/catalog-orders?filter=awaiting-review",
+      label: "Catalog orders awaiting review",
+      value: visibleOrderCount,
+      permissions: ["orders.view"],
+      Icon: ClipboardList,
+      accent: "bg-blue-400",
+      active: "border-blue-400/30 bg-blue-400/10 text-blue-50",
+      badge: "bg-blue-400 text-slate-950",
+    },
+    {
+      href: "/admin/orders/shipping-delivery",
+      label: "Orders ready for delivery",
+      value: visibleShippingDeliveryCount,
+      permissions: ["shipping.view"],
+      Icon: ClipboardList,
+      accent: "bg-cyan-400",
+      active: "border-cyan-400/30 bg-cyan-400/10 text-cyan-50",
+      badge: "bg-cyan-400 text-slate-950",
+    },
+    {
+      href: "/admin/orders/returns-refunds?filter=awaiting-review",
+      label: "Refund issues awaiting review",
+      value: visibleRefundIssueCount,
+      permissions: ["returns.view"],
+      Icon: ArrowLeftRight,
+      accent: "bg-rose-400",
+      active: "border-rose-400/30 bg-rose-400/10 text-rose-50",
+      badge: "bg-rose-400 text-white",
+    },
+  ].filter((item) => item.permissions.some(hasAccess));
+  const totalNotifications = notificationItems.reduce((total, item) => total + item.value, 0);
   const badgeForHref = (href: string) => {
     if (variant !== "admin") return 0;
     if (href === "/admin/orders" || href === "/admin/catalog-orders") return visibleOrderCount;
@@ -325,12 +394,13 @@ export function DashboardShell({
   }, []);
 
   useEffect(() => {
-    if (variant !== "admin") return;
-    setVisibleSupportCount(counts.support ?? 0);
-  }, [counts.support, variant]);
+    if (variant !== "admin" || !canViewSupport) return;
+    const timeoutId = window.setTimeout(() => setVisibleSupportCount(counts.support ?? 0), 0);
+    return () => window.clearTimeout(timeoutId);
+  }, [canViewSupport, counts.support, variant]);
 
   useEffect(() => {
-    if (variant !== "admin") return;
+    if (variant !== "admin" || !canViewAlerts || !canViewProducts) return;
     const refreshCatalogPriceNotifications = () => {
       fetch("/api/backend/admin/summary-counts", { cache: "no-store" })
         .then((response) => response.ok ? response.json() : null)
@@ -352,7 +422,7 @@ export function DashboardShell({
       window.clearInterval(intervalId);
       window.removeEventListener("focus", refreshCatalogPriceNotifications);
     };
-  }, [variant]);
+  }, [canViewAlerts, canViewProducts, variant]);
 
   useEffect(() => {
     if (variant !== "admin") return;
@@ -592,7 +662,7 @@ export function DashboardShell({
 
       <div className="border-t border-sidebar-border p-4">
         <div className="rounded-xl bg-sidebar-accent p-3">
-          <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">{variant}</p>
+          <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">{shellRoleLabel}</p>
           <p className="mt-1 truncate text-sm font-medium">{refreshedName ?? session?.user?.name ?? session?.user?.email ?? "Signed in"}</p>
           <p className="mt-1 truncate text-xs font-semibold text-sidebar-foreground/60">{assignedRoleLabel}</p>
         </div>
@@ -636,7 +706,7 @@ export function DashboardShell({
                     : "text-xs uppercase tracking-[0.2em] text-primary"
                 }
               >
-                {variant}
+                {shellRoleLabel}
               </p>
               <h1 className={adminTopBar ? "truncate text-lg font-bold tracking-tight text-white sm:text-xl" : "truncate text-lg font-semibold"}>{shellTitle}</h1>
             </div>
@@ -652,7 +722,7 @@ export function DashboardShell({
               Search anything...
             </div>
 
-            <div className="relative">
+            {canViewAlerts ? <div className="relative">
               <button
                 type="button"
                 onClick={() => setNotificationsOpen((value) => !value)}
@@ -661,7 +731,7 @@ export function DashboardShell({
                     ? "relative rounded-2xl border border-white/10 bg-sidebar-accent/80 p-2.5 shadow-inner shadow-black/20 transition hover:bg-sidebar-accent"
                     : "relative rounded-xl border border-border p-2.5"
                 }
-                aria-label="Admin notifications"
+                aria-label={`${shellRoleLabel} notifications`}
               >
                 <Bell className="h-4 w-4" />
                 {totalNotifications > 0 ? (
@@ -673,75 +743,11 @@ export function DashboardShell({
               {notificationsOpen ? (
                 <div className="absolute right-0 top-full z-40 mt-2 w-96 rounded-2xl border border-sidebar-border bg-sidebar p-2 text-sidebar-foreground shadow-2xl">
                   <div className="px-3 py-2">
-                    <p className="text-sm font-bold text-white">Admin notifications</p>
+                    <p className="text-sm font-bold text-white">{shellRoleLabel} notifications</p>
                     <p className="text-xs text-sidebar-foreground/65">Items that need attention now.</p>
                   </div>
                   <div className="my-1 h-px bg-sidebar-border" />
-                  {[
-                    {
-                      href: catalogPriceProductIds[0] ? `/admin/inventory/${catalogPriceProductIds[0]}` : "/admin/inventory?tab=new-prices",
-                      label: "New catalog price submitted",
-                      value: visibleCatalogPriceCount,
-                      Icon: Boxes,
-                      accent: "bg-emerald-400",
-                      active: "border-emerald-400/30 bg-emerald-400/10 text-emerald-50",
-                      badge: "bg-emerald-400 text-slate-950",
-                    },
-                    {
-                      href: "/admin/payments",
-                      label: "New payments received",
-                      value: visiblePaymentCount,
-                      Icon: CreditCard,
-                      accent: "bg-amber-400",
-                      active: "border-amber-400/30 bg-amber-400/10 text-amber-50",
-                      badge: "bg-amber-400 text-slate-950",
-                    },
-                    {
-                      href: "/admin/custom-orders?tab=requests&filter=awaiting-review",
-                      label: "Custom requests awaiting review",
-                      value: visibleCustomDesignCount,
-                      Icon: FileText,
-                      accent: "bg-violet-400",
-                      active: "border-violet-400/30 bg-violet-400/10 text-violet-50",
-                      badge: "bg-violet-400 text-slate-950",
-                    },
-                    {
-                      href: "/admin/custom-orders?tab=orders&filter=awaiting-review",
-                      label: "Custom orders awaiting review",
-                      value: visibleCustomOrderCount,
-                      Icon: ClipboardList,
-                      accent: "bg-fuchsia-400",
-                      active: "border-fuchsia-400/30 bg-fuchsia-400/10 text-fuchsia-50",
-                      badge: "bg-fuchsia-400 text-slate-950",
-                    },
-                    {
-                      href: "/admin/catalog-orders?filter=awaiting-review",
-                      label: "Catalog orders awaiting review",
-                      value: visibleOrderCount,
-                      Icon: ClipboardList,
-                      accent: "bg-blue-400",
-                      active: "border-blue-400/30 bg-blue-400/10 text-blue-50",
-                      badge: "bg-blue-400 text-slate-950",
-                    },
-                    {
-                      href: "/admin/orders/shipping-delivery",
-                      label: "Orders ready for delivery",
-                      value: visibleShippingDeliveryCount,
-                      Icon: ClipboardList,
-                      accent: "bg-cyan-400",
-                      active: "border-cyan-400/30 bg-cyan-400/10 text-cyan-50",
-                      badge: "bg-cyan-400 text-slate-950",
-                    },
-                    {
-                      href: "/admin/orders/returns-refunds?filter=awaiting-review",
-                      label: "Refund issues awaiting review",
-                      value: visibleRefundIssueCount,
-                      Icon: ArrowLeftRight,
-                      accent: "bg-rose-400",
-                      active: "border-rose-400/30 bg-rose-400/10 text-rose-50",
-                      badge: "bg-rose-400 text-white",
-                    },
-                  ].map((item) => (
+                  {notificationItems.map((item) => (
                     <Link
                       key={item.href}
                       href={item.href}
@@ -768,7 +774,7 @@ export function DashboardShell({
                   </Link>
                 </div>
               ) : null}
-            </div>
+            </div> : null}
 
             <div className="relative">
               <button

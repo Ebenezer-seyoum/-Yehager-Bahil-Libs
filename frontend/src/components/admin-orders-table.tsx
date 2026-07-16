@@ -4,6 +4,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { TableHeadCell, TableHeadRow, TableHeader } from "@/components/admin/table-header";
 import { ADMIN_TABLE_WRAPPER } from "@/lib/admin/admin-design-system";
 import { DashboardActionButton, DashboardTableActions } from "@/components/admin/dashboard-action-button";
@@ -30,6 +31,7 @@ import {
 } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import type { ComponentType, PropsWithChildren } from "react";
+import { can } from "@/lib/permissions";
 
 const TypedDialogContent = DialogContent as ComponentType<PropsWithChildren<{ className?: string }>>;
 const TypedDialogTitle = DialogTitle as ComponentType<PropsWithChildren<{ className?: string }>>;
@@ -236,6 +238,13 @@ export function AdminOrdersTable({
   onFilteredCountChange?: (count: number) => void;
 }) {
   const router = useRouter();
+  const { data: session } = useSession();
+  const permissions = session?.user?.permissions ?? [];
+  const isAdmin = session?.user?.role === "admin";
+  const canUpdateOrderStatus =
+    isAdmin || can(permissions, "orders.edit") || can(permissions, "orders.status.update");
+  const canUpdatePaymentStatus =
+    isAdmin || can(permissions, "orders.edit") || can(permissions, "payments.verify");
   const [orders, setOrders] = useState(initialOrders);
   const [search, setSearch] = useState("");
   const effectiveSearch = externalSearch ?? search;
@@ -321,6 +330,8 @@ export function AdminOrdersTable({
   }, [filteredOrders.length, onFilteredCountChange]);
 
   async function updateOrder(orderId: string, patch: Partial<Pick<Order, "status" | "paymentStatus">>) {
+    if (patch.status && !canUpdateOrderStatus) return;
+    if (patch.paymentStatus && !canUpdatePaymentStatus) return;
     const key = `${orderId}-${Object.keys(patch).join("-")}`;
     setBusyKey(key);
     setError(null);
@@ -434,7 +445,7 @@ export function AdminOrdersTable({
                         <p className="text-sm text-muted-foreground">{order.customerName ? order.userEmail : "Unregistered/Direct"}</p>
                       </td>
                       <td className="px-4 py-5 align-middle">
-                        {deliveryStage ? (
+                        {deliveryStage || !canUpdateOrderStatus ? (
                           <span className={`inline-flex rounded-full border px-4 py-2 text-sm font-bold capitalize ${STATUS_STYLES[order.status ?? "pending"] ?? STATUS_STYLES.pending}`}>
                             {prettyLabel(order.status)}
                           </span>
@@ -450,7 +461,7 @@ export function AdminOrdersTable({
                         )}
                       </td>
                       <td className="px-4 py-5 align-middle">
-                        {deliveryStage ? (
+                        {deliveryStage || !canUpdatePaymentStatus ? (
                           <span className={`inline-flex rounded-full border px-4 py-2 text-sm font-bold capitalize ${PAYMENT_STYLES[order.paymentStatus ?? "pending"] ?? PAYMENT_STYLES.pending}`}>
                             {prettyLabel(order.paymentStatus)}
                           </span>

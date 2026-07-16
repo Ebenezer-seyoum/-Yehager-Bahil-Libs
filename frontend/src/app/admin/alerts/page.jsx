@@ -26,5 +26,19 @@ export default async function AdminAlertsPage() {
     alerts = [];
   }
 
-  return <AdminAlertsWorkspace data={{ alerts }} />;
+  const isAdmin = session.user.role === "admin";
+  const has = (permission) => isAdmin || can(session.user.permissions, permission);
+  return (
+    <AdminAlertsWorkspace
+      data={{ alerts }}
+      canManage={has("alerts.manage")}
+      queueAccess={{
+        payments: has("payments.view"),
+        customRequests: has("uploaded_designs.view"),
+        customOrders: has("orders.view"),
+        catalogOrders: has("orders.view"),
+        returns: has("returns.view"),
+      }}
+    />
+  );
 }

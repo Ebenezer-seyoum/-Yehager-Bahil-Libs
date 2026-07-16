@@ -36,7 +36,13 @@ function formatUsd(value?: number | string | null) {
   return `$${n.toFixed(2)}`;
 }
 
-export function PaymentDetailClient({ order: initialOrder }: { order: Order }) {
+export function PaymentDetailClient({
+  order: initialOrder,
+  canVerify: hasVerifyPermission = false,
+}: {
+  order: Order;
+  canVerify?: boolean;
+}) {
   const router = useRouter();
   const [order, setOrder] = useState<Order>(initialOrder);
   const [busy, setBusy] = useState(false);
@@ -57,7 +63,9 @@ export function PaymentDetailClient({ order: initialOrder }: { order: Order }) {
   const totalEtb = order.totalEtb ?? order.total_etb;
   const isEtb = paymentMethod === "etb_bank_transfer" || paymentCurrency === "ETB";
   const proofUrl = stringValue(order.paymentProofUrl ?? order.payment_proof_url);
-  const canVerify = paymentStatus === "awaiting_verification" || paymentStatus === "pending";
+  const canVerify =
+    hasVerifyPermission &&
+    (paymentStatus === "awaiting_verification" || paymentStatus === "pending");
   const stripeReceiptUrl = stringValue(order.stripeReceiptUrl ?? order.stripe_receipt_url);
   const stripeSessionId = stringValue(order.stripeSessionId ?? order.stripe_session_id);
   const stripePaymentIntentId = stringValue(order.stripePaymentIntentId ?? order.stripe_payment_intent_id);
@@ -110,6 +118,7 @@ export function PaymentDetailClient({ order: initialOrder }: { order: Order }) {
   }
 
   async function updateStatus(status: "paid" | "failed") {
+    if (!hasVerifyPermission) return;
     const ok = await dashboardConfirm({
       title: status === "paid" ? "Verify Payment?" : "Reject Payment?",
       text: status === "paid" ? "Confirm that the bank transfer has been received." : "Reject this proof and mark as failed.",

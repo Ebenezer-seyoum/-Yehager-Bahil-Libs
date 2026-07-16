@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/auth-options";
 import { apiRequest } from "@/lib/api-client";
-import { can } from "@/lib/permissions";
+import { can, canAny } from "@/lib/permissions";
 import { AdminOperationsWorkspace } from "@/components/admin/pages/admin-operations-workspace";
 import { AccessRestricted } from "@/components/admin/access-restricted";
 
@@ -16,7 +16,7 @@ export default async function AdminBackupRestorePage() {
 
   let audit: Record<string, unknown>[] = [];
   try {
-    const response = can(session.user.permissions, "audit.view")
+    const response = canAny(session.user.permissions, ["audit.view", "activity.view"])
       ? await apiRequest<{ data?: Record<string, unknown>[] }>("/api/v1/admin/audit?limit=200")
       : null;
     audit = Array.isArray(response?.data) ? response.data : [];

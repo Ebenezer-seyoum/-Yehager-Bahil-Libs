@@ -94,6 +94,7 @@ function hasMeasurements(order: OrderRecord) {
 function DocumentRow({
   doc,
   badge,
+  canDownload,
 }: {
   doc: {
     label: string;
@@ -103,6 +104,7 @@ function DocumentRow({
     url?: string | null;
   };
   badge: "Generated" | "Uploaded";
+  canDownload: boolean;
 }) {
   const Icon = doc.icon;
   return (
@@ -128,9 +130,11 @@ function DocumentRow({
             <a href={doc.url} target="_blank" rel="noreferrer" className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-xs font-black text-slate-700 hover:bg-slate-100">
               <Eye className="h-3.5 w-3.5" /> Preview
             </a>
-            <a href={doc.url} download className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-slate-900 px-3 text-xs font-black text-white hover:bg-slate-800">
-              <Download className="h-3.5 w-3.5" /> Download
-            </a>
+            {canDownload ? (
+              <a href={doc.url} download className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-slate-900 px-3 text-xs font-black text-white hover:bg-slate-800">
+                <Download className="h-3.5 w-3.5" /> Download
+              </a>
+            ) : null}
           </>
         ) : (
           <span className="inline-flex min-h-9 items-center rounded-lg border border-slate-200 bg-slate-50 px-3 text-xs font-bold text-slate-500">
@@ -145,9 +149,16 @@ function DocumentRow({
 export function AdminDocumentDetailWorkspace({
   initialData,
   orderId,
+  capabilities,
 }: {
   initialData: AdminWorkspaceData;
   orderId: string;
+  capabilities: {
+    upload: boolean;
+    update: boolean;
+    delete: boolean;
+    download: boolean;
+  };
 }) {
   const router = useRouter();
   const [, startTransition] = useTransition();
@@ -216,7 +227,9 @@ export function AdminDocumentDetailWorkspace({
 
   const sections = [
     { id: "view-documents", label: "View Documents", icon: FileText },
-    { id: "upload-documents", label: "Upload Documents", icon: UploadCloud },
+    ...(capabilities.upload || capabilities.update
+      ? [{ id: "upload-documents", label: "Upload Documents", icon: UploadCloud }]
+      : []),
   ];
 
   return (
@@ -262,7 +275,7 @@ export function AdminDocumentDetailWorkspace({
               <p className="mb-2 text-[11px] font-black uppercase tracking-widest text-slate-500">Final Professional System Documents</p>
               <div className="space-y-2">
                 {systemDocs.map((doc) => (
-                  <DocumentRow key={doc.label} doc={doc} badge={["Order Item Image", "Measurement Sheet", "Invoice", bankTransfer ? "Payment Proof" : "Stripe Transaction Document"].includes(doc.label) ? "Generated" : "Uploaded"} />
+                  <DocumentRow key={doc.label} doc={doc} canDownload={capabilities.download} badge={["Order Item Image", "Measurement Sheet", "Invoice", bankTransfer ? "Payment Proof" : "Stripe Transaction Document"].includes(doc.label) ? "Generated" : "Uploaded"} />
                 ))}
               </div>
             </div>
@@ -270,7 +283,7 @@ export function AdminDocumentDetailWorkspace({
             <div>
               <p className="mb-2 text-[11px] font-black uppercase tracking-widest text-slate-500">{isPickup ? "Pickup Documents" : "EMS Shipping Documents"}</p>
               <div className="space-y-2">
-                {fulfillmentDocs.map((doc) => <DocumentRow key={doc.label} doc={doc} badge="Uploaded" />)}
+                {fulfillmentDocs.map((doc) => <DocumentRow key={doc.label} doc={doc} badge="Uploaded" canDownload={capabilities.download} />)}
               </div>
             </div>
           </div>
@@ -297,6 +310,7 @@ export function AdminDocumentDetailWorkspace({
             pickupProofUrl={order.pickupProofUrl ?? order.pickupSignedDocUrl}
             shippingDocuments={shippingDocuments}
             pickup={isPickup}
+            capabilities={capabilities}
           />
         </div>
       )}

@@ -54,29 +54,37 @@ export default async function AdminRolesPage() {
     return <AccessRestricted requiredPermission="roles.view" sectionName="Role and permission" />;
   }
 
+  const isAdmin = session.user.role === "admin";
+  const has = (permission: string) => isAdmin || can(session.user.permissions, permission);
+  const hasRoleManage = has("roles.manage");
+  const capabilities = {
+    create: hasRoleManage || has("roles.create"),
+    edit: hasRoleManage || has("roles.edit"),
+    delete: hasRoleManage || has("roles.delete"),
+    assign: hasRoleManage || has("roles.assign"),
+    viewActivity: has("audit.view") || has("activity.view"),
+  };
+
   let users: User[] = [];
   let permissions: Permission[] = [];
   let roles: Role[] = [];
   let audit: AuditLog[] = [];
-  try {
-    const [usersResponse, permissionsResponse, rolesResponse, auditResponse] = await Promise.all([
-      apiRequest<{ data: User[] }>("/api/v1/admin/users?limit=200"),
-      apiRequest<{ data: Permission[] }>("/api/v1/admin/permissions"),
-      apiRequest<{ data: Role[] }>("/api/v1/admin/roles"),
-      apiRequest<{ data: AuditLog[] }>("/api/v1/admin/audit?limit=200").catch(() => ({ data: [] })),
-    ]);
-    users = (usersResponse.data ?? []).filter((user) => user.role === "employee");
-    permissions = permissionsResponse.data ?? [];
-    roles = rolesResponse.data ?? [];
-    audit = (auditResponse.data ?? []).filter((log) =>
-      ["role_created", "role_permissions_updated", "employee_access_assigned", "user_permissions_updated", "user_role_updated"].includes(log.action),
-    );
-  } catch {
-    users = [];
-    permissions = [];
-    roles = [];
-    audit = [];
-  }
+  const [usersResponse, permissionsResponse, rolesResponse, auditResponse] = await Promise.all([
+    capabilities.assign
+      ? apiRequest<{ data: User[] }>("/api/v1/admin/users?limit=200").catch(() => ({ data: [] }))
+      : Promise.resolve({ data: [] as User[] }),
+    apiRequest<{ data: Permission[] }>("/api/v1/admin/permissions").catch(() => ({ data: [] })),
+    apiRequest<{ data: Role[] }>("/api/v1/admin/roles").catch(() => ({ data: [] })),
+    capabilities.viewActivity
+      ? apiRequest<{ data: AuditLog[] }>("/api/v1/admin/audit?limit=200").catch(() => ({ data: [] }))
+      : Promise.resolve({ data: [] as AuditLog[] }),
+  ]);
+  users = (usersResponse.data ?? []).filter((user) => user.role === "employee");
+  permissions = permissionsResponse.data ?? [];
+  roles = rolesResponse.data ?? [];
+  audit = (auditResponse.data ?? []).filter((log) =>
+    ["role_created", "role_permissions_updated", "employee_access_assigned", "user_permissions_updated", "user_role_updated"].includes(log.action),
+  );
 
   return (
     <AdminRolesWorkspace
@@ -85,6 +93,7 @@ export default async function AdminRolesPage() {
       roles={roles}
       permissions={permissions}
       audit={audit}
+      capabilities={capabilities}
     />
   );
 }

@@ -34,7 +34,7 @@ export async function middleware(req: NextRequest) {
 
   if (pathname.startsWith("/admin")) {
     const role = typeof token.role === "string" ? token.role : "customer";
-    if (role !== "admin") {
+    if (role !== "admin" && role !== "employee") {
       return NextResponse.redirect(new URL("/", req.url));
     }
   }

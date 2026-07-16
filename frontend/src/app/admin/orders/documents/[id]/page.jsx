@@ -3,6 +3,8 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/auth-options";
 import { apiRequest } from "@/lib/api-client";
 import { AdminDocumentDetailWorkspace } from "@/components/admin/pages/admin-document-detail-workspace";
+import { can } from "@/lib/permissions";
+import { AccessRestricted } from "@/components/admin/access-restricted";
 
 export const metadata = {
   title: "Document Details — Admin Dashboard",
@@ -13,6 +15,9 @@ export default async function AdminDocumentDetailPage({ params }) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) redirect("/signin?callbackUrl=/admin/orders/documents");
   if (session.user.role !== "admin" && session.user.role !== "employee") redirect("/");
+  if (!can(session.user.permissions, "documents.view")) {
+    return <AccessRestricted requiredPermission="documents.view" sectionName="Order Documents" />;
+  }
 
   const { id } = await params;
 
@@ -26,5 +31,17 @@ export default async function AdminDocumentDetailPage({ params }) {
 
   if (!order) redirect("/admin/orders/documents");
 
-  return <AdminDocumentDetailWorkspace initialData={{ orders: [order] }} orderId={id} />;
+  const isAdmin = session.user.role === "admin";
+  return (
+    <AdminDocumentDetailWorkspace
+      initialData={{ orders: [order] }}
+      orderId={id}
+      capabilities={{
+        upload: isAdmin || can(session.user.permissions, "documents.upload"),
+        update: isAdmin || can(session.user.permissions, "documents.update"),
+        delete: isAdmin || can(session.user.permissions, "documents.delete"),
+        download: isAdmin || can(session.user.permissions, "documents.download"),
+      }}
+    />
+  );
 }

@@ -5,94 +5,126 @@ import { apiRequest } from "@/lib/api-client";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/auth-options";
 
-type AdminProfilePayload = {
+type DashboardProfilePayload = {
   name?: string | null;
   displayName?: string | null;
   avatarUrl?: string | null;
+  assignedRoleName?: string | null;
+  assignedRoleActive?: boolean | null;
+  roleStatus?: "unassigned" | "assigned" | null;
+  permissions?: string[] | null;
+  profile?: {
+    firstName?: string | null;
+    fatherName?: string | null;
+  } | null;
 };
 
-async function getAdminNotificationCounts() {
-  try {
-    const [response, supportResponse] = await Promise.all([
-      apiRequest<{
-      data?: {
-        payment: number;
-        custom_request: number;
-        custom_order: number;
-        catalog_order: number;
-        refund_issue: number;
-        shipping_delivery: number;
-        catalog_price_submission: number;
-        total: number;
-        paymentIds?: string[];
-        customRequestIds?: string[];
-        customOrderIds?: string[];
-        catalogOrderIds?: string[];
-        refundIssueIds?: string[];
-        shippingDeliveryIds?: string[];
-        catalogPriceProductIds?: string[];
-      };
-      }>("/api/v1/admin/summary-counts"),
-      apiRequest<{ count?: number }>("/api/v1/admin/support/unread-count").catch(() => ({ count: 0 })),
-    ]);
-    const counts = response?.data;
-    
-    return {
-      orders: counts?.catalog_order ?? 0,
-      orderIds: counts?.catalogOrderIds ?? [],
-      payments: counts?.payment ?? 0,
-      paymentIds: counts?.paymentIds ?? [],
-      customDesigns: counts?.custom_request ?? counts?.custom_order ?? 0,
-      customDesignIds: counts?.customRequestIds ?? [],
-      customOrders: counts?.custom_order ?? 0,
-      customOrderIds: counts?.customOrderIds ?? [],
-      refundIssues: counts?.refund_issue ?? 0,
-      refundIssueIds: counts?.refundIssueIds ?? [],
-      shippingDelivery: counts?.shipping_delivery ?? 0,
-      shippingDeliveryIds: counts?.shippingDeliveryIds ?? [],
-      catalogPrices: counts?.catalog_price_submission ?? 0,
-      catalogPriceProductIds: counts?.catalogPriceProductIds ?? [],
-      total: counts?.total ?? 0,
-      alerts: 0,
-      support: supportResponse?.count ?? 0,
-    };
-  } catch {
-    return { orders: 0, orderIds: [], payments: 0, paymentIds: [], customDesigns: 0, customDesignIds: [], customOrders: 0, customOrderIds: [], refundIssues: 0, refundIssueIds: [], shippingDelivery: 0, shippingDeliveryIds: [], catalogPrices: 0, catalogPriceProductIds: [], total: 0, alerts: 0, support: 0 };
-  }
+type SummaryCounts = {
+  payment: number;
+  custom_request: number;
+  custom_order: number;
+  catalog_order: number;
+  refund_issue: number;
+  shipping_delivery: number;
+  catalog_price_submission: number;
+  total: number;
+  paymentIds?: string[];
+  customRequestIds?: string[];
+  customOrderIds?: string[];
+  catalogOrderIds?: string[];
+  refundIssueIds?: string[];
+  shippingDeliveryIds?: string[];
+  catalogPriceProductIds?: string[];
+};
+
+async function getDashboardNotificationCounts(
+  canViewAlerts: boolean,
+  canViewSupport: boolean,
+) {
+  const [summaryResponse, supportResponse] = await Promise.all([
+    canViewAlerts
+      ? apiRequest<{ data?: SummaryCounts }>("/api/v1/admin/summary-counts").catch(() => null)
+      : Promise.resolve(null),
+    canViewSupport
+      ? apiRequest<{ count?: number }>("/api/v1/admin/support/unread-count").catch(() => null)
+      : Promise.resolve(null),
+  ]);
+  const counts = summaryResponse?.data;
+
+  return {
+    orders: counts?.catalog_order ?? 0,
+    orderIds: counts?.catalogOrderIds ?? [],
+    payments: counts?.payment ?? 0,
+    paymentIds: counts?.paymentIds ?? [],
+    customDesigns: counts?.custom_request ?? counts?.custom_order ?? 0,
+    customDesignIds: counts?.customRequestIds ?? [],
+    customOrders: counts?.custom_order ?? 0,
+    customOrderIds: counts?.customOrderIds ?? [],
+    refundIssues: counts?.refund_issue ?? 0,
+    refundIssueIds: counts?.refundIssueIds ?? [],
+    shippingDelivery: counts?.shipping_delivery ?? 0,
+    shippingDeliveryIds: counts?.shippingDeliveryIds ?? [],
+    catalogPrices: counts?.catalog_price_submission ?? 0,
+    catalogPriceProductIds: counts?.catalogPriceProductIds ?? [],
+    total: counts?.total ?? 0,
+    alerts: 0,
+    support: supportResponse?.count ?? 0,
+  };
 }
 
-async function getAdminProfile() {
+async function getDashboardProfile() {
   try {
-    const response = await apiRequest<{ data: AdminProfilePayload | null }>("/api/v1/users/me");
+    const response = await apiRequest<{ data: DashboardProfilePayload | null }>(
+      "/api/v1/users/me",
+    );
     return response.data ?? null;
   } catch {
     return null;
   }
 }
 
+function dashboardDisplayName(profile: DashboardProfilePayload | null) {
+  const employeeName = [profile?.profile?.firstName, profile?.profile?.fatherName]
+    .map((part) => String(part ?? "").trim())
+    .filter(Boolean)
+    .join(" ");
+  return employeeName || profile?.displayName || profile?.name || null;
+}
+
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions);
-  const [notificationCounts, profile] = await Promise.all([
-    session?.user?.role === "admin" ? getAdminNotificationCounts() : Promise.resolve({}),
-    getAdminProfile(),
-  ]);
+  const profile = await getDashboardProfile();
+  const permissions = profile?.permissions ?? session?.user?.permissions ?? [];
+  const isAdmin = session?.user?.role === "admin";
+  const isEmployee = session?.user?.role === "employee";
+  const notificationCounts = await getDashboardNotificationCounts(
+    isAdmin || permissions.includes("alerts.view"),
+    isAdmin || permissions.includes("support.view"),
+  );
 
   return (
     <Suspense
       fallback={
         <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">
-          Loading admin…
+          Loading dashboard…
         </div>
       }
     >
       <DashboardShell
         navigation={adminNavigation}
-        title="Admin workspace"
+        title={isEmployee ? "Employee workspace" : "Admin workspace"}
+        subtitle={
+          isEmployee ? "Shared dashboard access based on your assigned role." : undefined
+        }
         variant="admin"
         notificationCounts={notificationCounts}
         accountProfile={{
-          displayName: profile?.displayName ?? profile?.name ?? null,
+          displayName: dashboardDisplayName(profile),
           avatarUrl: profile?.avatarUrl ?? null,
+          assignedRoleName: profile?.assignedRoleName ?? null,
+          assignedRoleActive: profile?.assignedRoleActive ?? null,
+          roleStatus: profile?.roleStatus ?? null,
+          permissions: profile?.permissions ?? null,
         }}
       >
         {children}

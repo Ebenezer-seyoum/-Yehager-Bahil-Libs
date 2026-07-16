@@ -23,8 +23,6 @@ import {
   Trash2,
   type LucideIcon,
 } from "lucide-react";
-import { useSession } from "next-auth/react";
-import { can } from "@/lib/permissions";
 import { AdminDetailHeader } from "@/components/admin/admin-detail-layout";
 import { dashboardError, dashboardSuccess, dashboardConfirm } from "@/lib/dashboard-swal";
 
@@ -411,19 +409,18 @@ function ReviewModal({
 export function UploadedDesignDetailPage({
   initialDesign,
   backUrl = "/admin/custom-orders?tab=requests",
+  canReview: hasReviewPermission = false,
 }: {
   initialDesign: UploadedDesignDetailData;
   backUrl?: string;
+  canReview?: boolean;
 }) {
   const router = useRouter();
   const design = initialDesign;
-  const { data: session } = useSession();
   const [busy, setBusy] = useState(false);
   const [modal, setModal] = useState<"approve" | "decline" | null>(null);
   const isGroup = Boolean(design.familyGroupId || design.eventId);
-  const sessionUser = session?.user as { id?: string | null; role?: string | null; permissions?: string[] | null } | undefined;
-  const userPermissions = sessionUser?.permissions ?? [];
-  const canDeleteDesign = can(userPermissions, "uploaded_designs.review");
+  const canDeleteDesign = hasReviewPermission;
 
   async function handleDeleteDesign() {
     const confirmed = await dashboardConfirm({
@@ -455,7 +452,9 @@ export function UploadedDesignDetailPage({
     }
   }
 
-  const canReview = ["submitted", "in_review"].includes(String(design.status ?? "submitted").toLowerCase());
+  const canReview =
+    hasReviewPermission &&
+    ["submitted", "in_review"].includes(String(design.status ?? "submitted").toLowerCase());
   const primaryImage = design.frontImageUrl || design.sideImageUrl || design.backImageUrl || design.detailImageUrl;
   const images = useMemo(
     () =>

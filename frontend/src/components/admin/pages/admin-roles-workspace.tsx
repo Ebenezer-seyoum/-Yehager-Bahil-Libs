@@ -200,12 +200,20 @@ export function AdminRolesWorkspace({
   roles,
   permissions,
   audit,
+  capabilities,
 }: {
   data: AdminWorkspaceData;
   users: User[];
   roles: Role[];
   permissions: Permission[];
   audit: AuditLog[];
+  capabilities: {
+    create: boolean;
+    edit: boolean;
+    delete: boolean;
+    assign: boolean;
+    viewActivity: boolean;
+  };
 }) {
   const router = useRouter();
   const [isRefreshing, startTransition] = useTransition();
@@ -217,7 +225,7 @@ export function AdminRolesWorkspace({
   const [roleQuery, setRoleQuery] = useState("");
   const [matrixQuery, setMatrixQuery] = useState("");
   const [selectedRoleId, setSelectedRoleId] = useState(sortedRoles[0]?.id ?? "new");
-  const [detailMode, setDetailMode] = useState<DetailMode>("edit");
+  const [detailMode, setDetailMode] = useState<DetailMode>(capabilities.edit ? "edit" : "view");
   const [form, setForm] = useState<RoleFormState>(() => roleToForm(sortedRoles[0]));
   const [selectedPermissions, setSelectedPermissions] = useState<string[]>(() => sortedRoles[0]?.permissions ?? []);
   const [busy, setBusy] = useState(false);
@@ -229,7 +237,14 @@ export function AdminRolesWorkspace({
   const matrixSearchNeedle = matrixQuery.trim().toLowerCase();
   const selectedRole = roleItems.find((role) => role.id === selectedRoleId);
   const isCreating = detailMode === "create" || selectedRoleId === "new" || !selectedRole;
-  const readOnly = detailMode === "view";
+  const readOnly = detailMode === "view" || (isCreating ? !capabilities.create : !capabilities.edit);
+  const visibleTabs = ADMIN_ROLE_TABS.filter((tab) =>
+    tab.id === "employee-access"
+      ? capabilities.assign
+      : tab.id === "activity"
+        ? capabilities.viewActivity
+        : true,
+  );
   const matrixRows = useMemo(() => groupPermissions(permissions), [permissions]);
 
   const filteredRoles = useMemo(() => {
@@ -311,13 +326,14 @@ export function AdminRolesWorkspace({
   function openRole(role: Role, mode: DetailMode) {
     setActiveTab("roles");
     setSelectedRoleId(role.id);
-    setDetailMode(mode);
+    setDetailMode(mode === "edit" && !capabilities.edit ? "view" : mode);
     setForm(roleToForm(role));
     setSelectedPermissions(role.permissions ?? []);
     setMessage(null);
   }
 
   function startNewRole() {
+    if (!capabilities.create) return;
     setActiveTab("roles");
     setSelectedRoleId("new");
     setDetailMode("create");
@@ -343,6 +359,7 @@ export function AdminRolesWorkspace({
   }
 
   async function saveChanges() {
+    if ((isCreating && !capabilities.create) || (!isCreating && !capabilities.edit)) return;
     const name = form.name.trim();
     if (!name) {
       setMessage({ tone: "error", text: "Role name is required." });
@@ -404,6 +421,7 @@ export function AdminRolesWorkspace({
   }
 
   async function deleteSelectedRole() {
+    if (!capabilities.delete) return;
     if (!selectedRole || isCreating) return;
     if (selectedRole.isSystem) {
       await dashboardError("Delete Failed", "System roles cannot be deleted.");
@@ -454,6 +472,7 @@ export function AdminRolesWorkspace({
   }
 
   async function saveEmployeeRole(user: User, nextRoleId: string) {
+    if (!capabilities.assign) return false;
     const nextRole = nextRoleId ? roleItems.find((role) => role.id === nextRoleId && isAssignableEmployeeRole(role)) : null;
     if (nextRoleId && !nextRole) {
       await dashboardError("Role Unavailable", "The selected role no longer exists. Refresh the page and try again.");
@@ -497,6 +516,7 @@ export function AdminRolesWorkspace({
   }
 
   async function deleteEmployeeRole(user: User) {
+    if (!capabilities.assign) return false;
     const confirmed = await dashboardConfirm({
       title: "Are you sure?",
       text: "This employee role assignment will be deleted. The employee will move to access pending.",
@@ -555,7 +575,7 @@ export function AdminRolesWorkspace({
           subtitle="Manage employee roles, dashboard access, assigned users, and permission coverage."
           onRefresh={refreshPage}
           isRefreshing={isRefreshing}
-          primaryAction={
+          primaryAction={capabilities.create ? (
             <button
               type="button"
               onClick={addRoleAndFocus}
@@ -564,10 +584,10 @@ export function AdminRolesWorkspace({
               <Plus className="h-4 w-4" />
               Add Role
             </button>
-          }
+          ) : undefined}
         />
 
-        <AdminTabs tabs={ADMIN_ROLE_TABS} activeTab={activeTab} onChange={(tab) => setActiveTab(tab as ActiveTab)} />
+        <AdminTabs tabs={visibleTabs} activeTab={activeTab} onChange={(tab) => setActiveTab(tab as ActiveTab)} />
 
         {activeTab !== "roles" ? (
           <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -602,14 +622,14 @@ export function AdminRolesWorkspace({
             <aside className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
               <div className="flex min-h-[70px] items-center justify-between border-b border-slate-200 px-5">
                 <h2 className="text-lg font-bold">Roles</h2>
-                <button
+                {capabilities.create ? <button
                   type="button"
                   onClick={addRoleAndFocus}
                   className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-slate-700 text-white transition hover:bg-slate-950"
                   aria-label="Add role"
                 >
                   <Plus className="h-4 w-4" />
-                </button>
+                </button> : null}
               </div>
               <div className="border-b border-slate-100 p-4">
                 <label className="relative block">
@@ -623,7 +643,7 @@ export function AdminRolesWorkspace({
                 </label>
               </div>
               <div className="max-h-[650px] overflow-y-auto px-4 py-4">
-                {isCreating ? (
+                {isCreating && capabilities.create ? (
                   <button
                     type="button"
                     onClick={addRoleAndFocus}
@@ -644,7 +664,7 @@ export function AdminRolesWorkspace({
                     <button
                       key={role.id}
                       type="button"
-                      onClick={() => openRole(role, "edit")}
+                      onClick={() => openRole(role, capabilities.edit ? "edit" : "view")}
                       className={cn(
                         "block w-full border-b border-slate-200 px-4 py-4 text-left transition hover:bg-slate-50",
                         active && "border-l-4 border-l-violet-600 bg-violet-50/60",
@@ -674,7 +694,8 @@ export function AdminRolesWorkspace({
               busy={busy}
               detailMode={detailMode}
               form={form}
-              canDeleteRole={Boolean(selectedRole && !isCreating && !selectedRole.isSystem)}
+              canDeleteRole={Boolean(capabilities.delete && selectedRole && !isCreating && !selectedRole.isSystem)}
+              canEditRole={capabilities.edit}
               matrixQuery={matrixQuery}
               matrixRows={filteredMatrixRows}
               readOnly={readOnly}
@@ -724,6 +745,7 @@ function RecordsBadge({ count }: { count: number }) {
 function RoleEditor({
   busy,
   canDeleteRole,
+  canEditRole,
   deleteSelectedRole,
   detailMode,
   form,
@@ -741,6 +763,7 @@ function RoleEditor({
 }: {
   busy: boolean;
   canDeleteRole: boolean;
+  canEditRole: boolean;
   deleteSelectedRole: () => Promise<void>;
   detailMode: DetailMode;
   form: RoleFormState;
@@ -769,13 +792,13 @@ function RoleEditor({
           <div className="flex items-center gap-2">
             {readOnly ? (
               <>
-                <button
+                {canEditRole ? <button
                   type="button"
                   onClick={() => setDetailMode("edit")}
                   className="inline-flex h-10 items-center rounded-xl bg-blue-600 px-4 text-sm font-bold text-white transition hover:bg-blue-700"
                 >
                   Edit Role
-                </button>
+                </button> : null}
                 {canDeleteRole ? (
                   <button
                     type="button"

@@ -20,9 +20,15 @@ function orderNeedsReview(row: Record<string, unknown>) {
 export function AdminCustomOrdersWorkspace({
   data,
   initialTab,
+  canViewRequests,
+  canViewOrders,
+  canReviewRequests,
 }: {
   data: AdminWorkspaceData;
   initialTab?: string | null;
+  canViewRequests: boolean;
+  canViewOrders: boolean;
+  canReviewRequests: boolean;
 }) {
   const requests = (data.uploadedDesigns ?? []) as Parameters<typeof AdminUploadedDesignsTable>[0]["rows"];
   const orders = (data.orders ?? []) as Parameters<typeof AdminOrdersTable>[0]["initialOrders"];
@@ -46,8 +52,10 @@ export function AdminCustomOrdersWorkspace({
         return [];
       }
     };
-    setViewedDesignIds(readList("admin-viewed-custom-design-notifications"));
-    setViewedOrderIds(readList("admin-viewed-order-notifications"));
+    const timeoutId = window.setTimeout(() => {
+      setViewedDesignIds(readList("admin-viewed-custom-design-notifications"));
+      setViewedOrderIds(readList("admin-viewed-order-notifications"));
+    }, 0);
 
     const onDesignViewed = (event: Event) => {
       const id = (event as CustomEvent<string>).detail;
@@ -62,6 +70,7 @@ export function AdminCustomOrdersWorkspace({
     window.addEventListener("admin-custom-design-viewed", onDesignViewed);
     window.addEventListener("admin-order-viewed", onOrderViewed);
     return () => {
+      window.clearTimeout(timeoutId);
       window.removeEventListener("admin-custom-design-viewed", onDesignViewed);
       window.removeEventListener("admin-order-viewed", onOrderViewed);
     };
@@ -114,8 +123,8 @@ export function AdminCustomOrdersWorkspace({
       subtitle="Manage uploaded design requests and real custom orders after checkout."
       defaultTab={initialTab === "orders" ? "orders" : "requests"}
       tabs={[
-        { id: "requests", label: "Requests", icon: FileText, badgeCount: requestBadge },
-        { id: "orders", label: "Orders", icon: ClipboardList, badgeCount: orderBadge },
+        ...(canViewRequests ? [{ id: "requests", label: "Requests", icon: FileText, badgeCount: requestBadge }] : []),
+        ...(canViewOrders ? [{ id: "orders", label: "Orders", icon: ClipboardList, badgeCount: orderBadge }] : []),
       ]}
       filterActions={({ activeTab, search }) => (
         <div className="flex items-center gap-3 w-full">
@@ -137,6 +146,7 @@ export function AdminCustomOrdersWorkspace({
             rows={(filteredData.uploadedDesigns ?? []) as Parameters<typeof AdminUploadedDesignsTable>[0]["rows"]}
             search={search}
             onFilteredCountChange={setDisplayedRecordsCount}
+            canReview={canReviewRequests}
           />
         )
       }

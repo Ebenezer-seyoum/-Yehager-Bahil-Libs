@@ -19,31 +19,22 @@ export default async function AdminAnalyticsPage() {
     return <AccessRestricted requiredPermission="dashboard.view" sectionName="Analytics" />;
   }
 
-  let orders = [];
-  let products = [];
-  let users = [];
-
-  try {
-    const [ordersResult, productsResult, usersResult] = await Promise.allSettled([
-      apiRequest("/api/v1/orders?limit=200"),
-      apiRequest("/api/v1/admin/products?limit=200"),
-      apiRequest("/api/v1/admin/users?limit=200"),
-    ]);
-    
-    orders = ordersResult.status === "fulfilled" 
-      ? (Array.isArray(ordersResult.value?.data) ? ordersResult.value.data : (Array.isArray(ordersResult.value) ? ordersResult.value : []))
-      : [];
-    products = productsResult.status === "fulfilled" 
-      ? (Array.isArray(productsResult.value?.data) ? productsResult.value.data : (Array.isArray(productsResult.value) ? productsResult.value : []))
-      : [];
-    users = usersResult.status === "fulfilled" 
-      ? (Array.isArray(usersResult.value?.data) ? usersResult.value.data : (Array.isArray(usersResult.value) ? usersResult.value : []))
-      : [];
-  } catch {
-    orders = [];
-    products = [];
-    users = [];
-  }
+  const isAdmin = session.user.role === "admin";
+  const has = (permission) => isAdmin || can(session.user.permissions, permission);
+  const loadList = async (enabled, path) => {
+    if (!enabled) return [];
+    try {
+      const response = await apiRequest(path);
+      return Array.isArray(response?.data) ? response.data : [];
+    } catch {
+      return [];
+    }
+  };
+  const [orders, products, users] = await Promise.all([
+    loadList(has("orders.view") || has("payments.view"), "/api/v1/orders?limit=200"),
+    loadList(has("products.view"), "/api/v1/admin/products?limit=200"),
+    loadList(has("customers.view"), "/api/v1/admin/customers?limit=200"),
+  ]);
 
   return <AdminAnalyticsWorkspace orders={orders} products={products} users={users} />;
 }

@@ -1,8 +1,3 @@
-import {
-  buildAdminReportNavChildren,
-  buildEmployeeReportNavChildren,
-} from "@/lib/reports/admin-report-navigation";
-
 export type NavigationIcon =
   | "dashboard"
   | "users"
@@ -67,7 +62,13 @@ export const adminNavigation: readonly NavigationGroup[] = [
     label: "Order Management",
     items: [
       { href: "/admin/catalog-orders", label: "Catalog Orders", icon: "orders", permission: "orders.view" },
-      { href: "/admin/custom-orders", label: "Custom Orders", icon: "documents", permission: "uploaded_designs.view" },
+      {
+        href: "/admin/custom-orders",
+        label: "Custom Orders",
+        icon: "documents",
+        permission: "uploaded_designs.view",
+        alternativePermissions: ["orders.view"],
+      },
       { href: "/admin/orders/documents", label: "Order Documents", icon: "documents", permission: "documents.view" },
       { href: "/admin/orders/returns-refunds", label: "Returns & Refunds", icon: "orders", permission: "returns.view" },
       { href: "/admin/orders/shipping-delivery", label: "Shipping & Delivery", icon: "orders", permission: "shipping.view" },
@@ -86,13 +87,7 @@ export const adminNavigation: readonly NavigationGroup[] = [
   {
     label: "Reports",
     items: [
-      {
-        href: "/admin/reports",
-        label: "Reports Center",
-        icon: "reports",
-        permission: "reports.view",
-        children: buildAdminReportNavChildren(),
-      },
+      { href: "/admin/reports", label: "Reports Center", icon: "reports", permission: "reports.view" },
     ],
   },
   {
@@ -107,50 +102,33 @@ export const adminNavigation: readonly NavigationGroup[] = [
       { href: "/admin/settings", label: "Settings", icon: "settings", permission: "settings.view" },
       { href: "/admin/alerts", label: "Alerts", icon: "alerts", permission: "alerts.view" },
       { href: "/admin/system/backup-restore", label: "Backup & Restore", icon: "settings", permission: "backup.view" },
-      { href: "/admin/audit", label: "Activity Logs", icon: "audit", permission: "audit.view" },
+      {
+        href: "/admin/audit",
+        label: "Activity Logs",
+        icon: "audit",
+        permission: "audit.view",
+        alternativePermissions: ["activity.view"],
+      },
     ],
   },
 ] as const;
 
-export const employeeNavigation: readonly NavigationGroup[] = [
-  {
-    label: "Overview",
-    items: [{ href: "/employee", label: "Dashboard", icon: "dashboard", permission: "dashboard.view" }],
-  },
-  {
-    label: "Catalog",
-    items: [{ href: "/employee/products", label: "Product Management", icon: "products", permission: "products.view" }],
-  },
-  {
-    label: "Operations",
-    items: [{ href: "/employee/orders", label: "Orders", icon: "orders", permission: "orders.view" }],
-  },
-  {
-    label: "Reports",
-    items: [
-      {
-        href: "/employee/reports",
-        label: "Reports Center",
-        icon: "reports",
-        permission: "reports.view",
-        children: buildEmployeeReportNavChildren(),
-      },
-    ],
-  },
-  {
-    label: "Activity",
-    items: [
-      {
-        href: "/employee/activity",
-        label: "Activity Logs",
-        icon: "audit",
-        permission: "activity.view",
-        alternativePermissions: ["audit.view"],
-      },
-    ],
-  },
-  {
-    label: "Settings",
-    items: [{ href: "/employee/settings", label: "Profile Settings", icon: "settings", permission: "dashboard.view" }],
-  },
-] as const;
+export function navigationItemPermissions(item: NavigationItem) {
+  return [item.permission, ...(item.alternativePermissions ?? [])];
+}
+
+export function canAccessNavigationItem(
+  permissions: string[] | null | undefined,
+  item: NavigationItem,
+) {
+  const granted = new Set(permissions ?? []);
+  return navigationItemPermissions(item).some((permission) => granted.has(permission));
+}
+
+export function getFirstPermittedAdminRoute(permissions: string[] | null | undefined) {
+  for (const group of adminNavigation) {
+    const item = group.items.find((candidate) => canAccessNavigationItem(permissions, candidate));
+    if (item) return item.href;
+  }
+  return "/employee/access-pending";
+}

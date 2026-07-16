@@ -139,7 +139,19 @@ function DetailField({ label, value }: { label: string; value: unknown }) {
   );
 }
 
-export function AdminShippingDeliveryDetailWorkspace({ initialOrder }: { initialOrder: Order }) {
+export function AdminShippingDeliveryDetailWorkspace({
+  initialOrder,
+  canEdit,
+  canViewDocuments,
+  canViewNotes,
+  canAddDeliveryNote,
+}: {
+  initialOrder: Order;
+  canEdit: boolean;
+  canViewDocuments: boolean;
+  canViewNotes: boolean;
+  canAddDeliveryNote: boolean;
+}) {
   const router = useRouter();
   const [order, setOrder] = useState(initialOrder);
   const [activeSection, setActiveSection] = useState("summary");
@@ -164,6 +176,7 @@ export function AdminShippingDeliveryDetailWorkspace({ initialOrder }: { initial
   }, [order.id]);
 
   useEffect(() => {
+    if (!canViewNotes) return;
     const orderId = String(order.id ?? "");
     if (!orderId) return;
     fetch(`/api/backend/orders/${orderId}/notes`)
@@ -173,9 +186,10 @@ export function AdminShippingDeliveryDetailWorkspace({ initialOrder }: { initial
         setDeliveryNotes(rows.filter((note: OrderNote) => norm(note.noteType ?? note.note_type) === "delivery"));
       })
       .catch((error) => console.error("Could not load delivery notes:", error));
-  }, [order.id]);
+  }, [canViewNotes, order.id]);
 
   async function createDeliveryNote(note: string) {
+    if (!canAddDeliveryNote) return;
     const trimmed = note.trim();
     if (trimmed.length < 3) return;
     const res = await fetch(`/api/backend/orders/${order.id}/notes`, {
@@ -189,6 +203,7 @@ export function AdminShippingDeliveryDetailWorkspace({ initialOrder }: { initial
   }
 
   async function updateDeliveryStatus(next: string, note?: string) {
+    if (!canEdit) return;
     setBusy(true);
     setError("");
     try {
@@ -226,6 +241,7 @@ export function AdminShippingDeliveryDetailWorkspace({ initialOrder }: { initial
   }
 
   async function changeFulfillmentStatus(next: string, actionLabel = titleCase(next)) {
+    if (!canEdit) return;
     const confirmed = await dashboardConfirm({
       title: actionLabel,
       text: `This will update fulfillment status to ${titleCase(next)} and add a delivery note to this order.`,
@@ -239,6 +255,7 @@ export function AdminShippingDeliveryDetailWorkspace({ initialOrder }: { initial
   }
 
   async function sendToProvider() {
+    if (!canEdit) return;
     const confirmed = await dashboardConfirm({
       title: "Request EMS",
       text: `This will assign the order to ${provider} and save an EMS delivery note.`,
@@ -256,7 +273,7 @@ export function AdminShippingDeliveryDetailWorkspace({ initialOrder }: { initial
     { id: "recipient", label: pickup ? "Pickup Details" : "Recipient Details", icon: pickup ? MapPin : UserRound },
     { id: "assignment", label: pickup ? "Pickup Actions" : "Provider Assignment", icon: Send },
     { id: "progress", label: "Fulfillment Progress", icon: Truck },
-    { id: "documents", label: "Documents", icon: FileText },
+    ...(canViewDocuments ? [{ id: "documents", label: "Documents", icon: FileText }] : []),
     { id: "timeline", label: "Fulfillment Timeline", icon: ClipboardList },
   ];
 
@@ -300,7 +317,7 @@ export function AdminShippingDeliveryDetailWorkspace({ initialOrder }: { initial
           iconTheme="bg-orange-50 text-orange-600 border-orange-100"
           category="Shipping & Delivery"
           title={`Fulfillment #${order.orderNumber ?? String(order.id).slice(0, 8)}`}
-          subtitle="Manage packing, provider assignment, store pickup, and final delivery state."
+          subtitle={canEdit ? "Manage packing, provider assignment, store pickup, and final delivery state." : "View packing, provider assignment, store pickup, and delivery progress."}
           onRefresh={() => router.refresh()}
           onBack={() => router.push("/admin/orders/shipping-delivery")}
           backLabel="Back to Shipping"
@@ -324,7 +341,11 @@ export function AdminShippingDeliveryDetailWorkspace({ initialOrder }: { initial
             </div>
           </div>
           <div className="flex flex-col gap-3 rounded-3xl border border-slate-200 bg-slate-50 p-4 lg:w-[360px]">
-            {pickup ? (
+            {!canEdit ? (
+              <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm font-bold text-blue-800">
+                View-only access. Shipping updates require the <span className="font-mono">shipping.edit</span> permission.
+              </div>
+            ) : pickup ? (
               <>
                 <button disabled={busy} onClick={() => void changeFulfillmentStatus("packed", "Mark Packed")} className="h-11 rounded-xl bg-slate-950 px-4 text-sm font-black text-white disabled:opacity-60">Mark Packed</button>
                 <button disabled={busy} onClick={() => void changeFulfillmentStatus("ready_for_pickup", "Ready For Pickup")} className="h-11 rounded-xl bg-blue-600 px-4 text-sm font-black text-white disabled:opacity-60">Ready For Pickup</button>
@@ -374,7 +395,7 @@ export function AdminShippingDeliveryDetailWorkspace({ initialOrder }: { initial
               <h3 className="text-lg font-black text-slate-950">Store Pickup Actions</h3>
               <p className="mt-2 text-sm font-semibold text-slate-600">Move packed order to the 3rd floor pickup desk, then verify customer order ID or QR before handover.</p>
             </div>
-          ) : (
+          ) : canEdit ? (
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
               <label className="space-y-1.5">
                 <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Provider</span>
@@ -397,8 +418,14 @@ export function AdminShippingDeliveryDetailWorkspace({ initialOrder }: { initial
                 </button>
               </div>
             </div>
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              <DetailField label="Provider" value={provider} />
+              <DetailField label="Package Weight" value={`${packageWeight} kg`} />
+              <DetailField label="Tracking Number" value={trackingNumber || "Pending EMS tracking"} />
+            </div>
           )}
-          <label className="block space-y-1.5">
+          {canEdit ? <label className="block space-y-1.5">
             <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Delivery Internal Note</span>
             <textarea
               value={deliveryNote}
@@ -407,12 +434,12 @@ export function AdminShippingDeliveryDetailWorkspace({ initialOrder }: { initial
               placeholder={pickup ? "Pickup verification note" : "EMS request or tracking note"}
               className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-semibold text-slate-900"
             />
-          </label>
+          </label> : null}
           {error ? <p className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-bold text-rose-700">{error}</p> : null}
           <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4 text-sm font-semibold text-blue-900">
             Mail flow: Request EMS sets main status to fulfilled. Tracking or EMS handoff sets main status to shipped. Delivered closes the order. Pickup flow is staff verified at the office.
           </div>
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+          {canViewNotes ? <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
             <p className="text-sm font-black text-slate-950">Delivery Notes</p>
             <div className="mt-3 space-y-2">
               {deliveryNotes.length ? deliveryNotes.map((note) => (
@@ -422,13 +449,13 @@ export function AdminShippingDeliveryDetailWorkspace({ initialOrder }: { initial
                 </div>
               )) : <p className="text-sm font-semibold text-slate-500">No delivery notes recorded yet.</p>}
             </div>
-          </div>
+          </div> : null}
         </div>
       ) : null}
 
       {activeSection === "progress" ? (
         <div className="space-y-4">
-          <HorizontalSteps steps={pickup ? PICKUP_STATES : MAIL_STATES} current={fulfillmentStatus} onSelect={(step) => void changeFulfillmentStatus(step)} />
+          <HorizontalSteps steps={pickup ? PICKUP_STATES : MAIL_STATES} current={fulfillmentStatus} interactive={canEdit} onSelect={(step) => void changeFulfillmentStatus(step)} />
           <div className="grid gap-3 sm:grid-cols-3">
             <DetailField label="Current Progress" value={titleCase(fulfillmentStatus)} />
             <DetailField label="Last Updated" value={dateTime(order.deliveryStatusChangedAt ?? order.delivery_status_changed_at ?? order.updatedAt)} />
@@ -489,7 +516,7 @@ function Badge({ label, tone }: { label: string; tone: "green" | "blue" | "yello
   );
 }
 
-function HorizontalSteps<T extends readonly string[]>({ steps, current, onSelect }: { steps: T; current: string; onSelect: (step: T[number]) => void }) {
+function HorizontalSteps<T extends readonly string[]>({ steps, current, interactive, onSelect }: { steps: T; current: string; interactive: boolean; onSelect: (step: T[number]) => void }) {
   const currentIdx = Math.max(steps.findIndex((step) => step === current), 0);
   return (
     <div className="overflow-x-auto rounded-3xl border border-slate-200 bg-slate-50 p-5">
@@ -497,7 +524,7 @@ function HorizontalSteps<T extends readonly string[]>({ steps, current, onSelect
         {steps.map((step, idx) => {
           const done = idx <= currentIdx;
           return (
-            <button key={step} type="button" onClick={() => onSelect(step)} className="flex w-36 flex-col items-center gap-2 text-center">
+            <button key={step} type="button" disabled={!interactive} onClick={() => onSelect(step)} className="flex w-36 flex-col items-center gap-2 text-center disabled:cursor-default">
               <span className={cn("flex h-10 w-10 items-center justify-center rounded-full border-2 text-sm font-black", done ? "border-emerald-600 bg-emerald-600 text-white" : "border-slate-300 bg-white text-slate-400", current === step && "ring-4 ring-emerald-100")}>
                 {done ? <CheckCircle2 className="h-5 w-5" /> : idx + 1}
               </span>

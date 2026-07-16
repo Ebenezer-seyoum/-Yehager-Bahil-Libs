@@ -25,6 +25,7 @@ type AnyRow = Record<string, any>;
 export function AdminDashboardWorkspace({ data }: { data: AdminWorkspaceData }) {
   const { data: session } = useSession();
   const permissions = session?.user?.permissions ?? [];
+  const isAdmin = session?.user?.role === "admin";
 
   const [open, setOpen] = useState(false);
   const [modalTitle, setModalTitle] = useState("");
@@ -37,7 +38,7 @@ export function AdminDashboardWorkspace({ data }: { data: AdminWorkspaceData }) 
 
   function cardAllowed(permissionKey?: string) {
     if (!permissionKey) return true;
-    return can(permissions, permissionKey);
+    return isAdmin || can(permissions, permissionKey);
   }
 
   function openModal(payload: {
@@ -180,7 +181,7 @@ export function AdminDashboardWorkspace({ data }: { data: AdminWorkspaceData }) 
                 value: String(totalOrders),
                 rows: orders,
                 columns: ["id", "status", "totalUsd", "paymentStatus", "createdAt"],
-                fullPage: "/admin/orders",
+                fullPage: "/admin/catalog-orders",
                 rangeLabel,
               }),
           }),
@@ -198,7 +199,7 @@ export function AdminDashboardWorkspace({ data }: { data: AdminWorkspaceData }) 
                 value: String(pendingOrders.length),
                 rows: pendingOrders,
                 columns: ["id", "customerName", "totalUsd", "createdAt"],
-                fullPage: "/admin/orders?tab=pending",
+                fullPage: "/admin/catalog-orders?tab=pending",
                 rangeLabel,
               }),
           }),
@@ -216,7 +217,7 @@ export function AdminDashboardWorkspace({ data }: { data: AdminWorkspaceData }) 
                 value: String(deliveredOrders.length),
                 rows: deliveredOrders,
                 columns: ["id", "customerName", "status", "deliveredAt", "createdAt"],
-                fullPage: "/admin/orders?tab=delivered",
+                fullPage: "/admin/catalog-orders?tab=delivered",
                 rangeLabel,
               }),
           }),
@@ -252,7 +253,7 @@ export function AdminDashboardWorkspace({ data }: { data: AdminWorkspaceData }) 
                 value: String(totalClothes),
                 rows: products,
                 columns: ["id", "name", "status", "stock", "createdAt"],
-                fullPage: "/admin/products",
+                fullPage: "/admin/inventory",
                 rangeLabel,
               }),
           }),
@@ -288,7 +289,7 @@ export function AdminDashboardWorkspace({ data }: { data: AdminWorkspaceData }) 
                 value: String(supportIssues.length),
                 rows: supportIssues,
                 columns: ["ticketNumber", "subject", "category", "priority", "status", "lastMessageAt"],
-                fullPage: "/admin/support",
+                fullPage: "/admin/support-inbox",
                 rangeLabel,
               }),
           }),

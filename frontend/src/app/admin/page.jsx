@@ -20,27 +20,25 @@ export default async function AdminPage() {
     );
   }
 
-  let orders = [];
-  let alerts = [];
-  let products = [];
-  let users = [];
-  try {
-    const [ordersResponse, alertsResponse, productsResponse, usersResponse] = await Promise.all([
-      apiRequest("/api/v1/orders?limit=200"),
-      apiRequest("/api/v1/admin/alerts?limit=200"),
-      apiRequest("/api/v1/admin/products?limit=200"),
-      apiRequest("/api/v1/admin/users?limit=200"),
-    ]);
-    orders = Array.isArray(ordersResponse?.data) ? ordersResponse.data : [];
-    alerts = Array.isArray(alertsResponse?.data) ? alertsResponse.data : [];
-    products = Array.isArray(productsResponse?.data) ? productsResponse.data : [];
-    users = Array.isArray(usersResponse?.data) ? usersResponse.data : [];
-  } catch {
-    orders = [];
-    alerts = [];
-    products = [];
-    users = [];
-  }
+  const isAdmin = session.user.role === "admin";
+  const has = (permission) => isAdmin || can(session.user.permissions, permission);
+  const loadList = async (enabled, path) => {
+    if (!enabled) return [];
+    try {
+      const response = await apiRequest(path);
+      return Array.isArray(response?.data) ? response.data : [];
+    } catch {
+      return [];
+    }
+  };
+
+  const [orders, alerts, products, users, support] = await Promise.all([
+    loadList(has("orders.view") || has("payments.view"), "/api/v1/orders?limit=200"),
+    loadList(has("alerts.view"), "/api/v1/admin/alerts?limit=200"),
+    loadList(has("products.view"), "/api/v1/admin/products?limit=200"),
+    loadList(has("customers.view"), "/api/v1/admin/customers?limit=200"),
+    loadList(has("support.view"), "/api/v1/admin/support/tickets?limit=100"),
+  ]);
 
   return (
     <AdminDashboardWorkspace
@@ -49,6 +47,7 @@ export default async function AdminPage() {
         alerts,
         products,
         users,
+        support,
       }}
     />
   );

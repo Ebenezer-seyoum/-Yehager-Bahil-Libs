@@ -38,6 +38,7 @@ export function AdminOrderDocuments({
   pickupProofUrl,
   shippingDocuments,
   pickup = false,
+  capabilities,
 }: {
   orderId: string;
   pickupIdUrl?: string | null;
@@ -45,16 +46,21 @@ export function AdminOrderDocuments({
   pickupProofUrl?: string | null;
   shippingDocuments?: ShippingDocument[] | null;
   pickup?: boolean;
+  capabilities?: {
+    upload: boolean;
+    update: boolean;
+    delete: boolean;
+    download: boolean;
+  };
 }) {
   const router = useRouter();
   const { data: session } = useSession();
   const permissions = session?.user?.permissions ?? [];
-  const canUpload = can(permissions, "documents.upload");
-  const canUpdate = can(permissions, "documents.update") || canUpload;
-  const canDelete = can(permissions, "documents.delete");
-  const canDownload =
-    can(permissions, "documents.download") ||
-    can(permissions, "documents.view");
+  const isAdmin = session?.user?.role === "admin";
+  const canUpload = capabilities?.upload ?? (isAdmin || can(permissions, "documents.upload"));
+  const canUpdate = capabilities?.update ?? (isAdmin || can(permissions, "documents.update") || canUpload);
+  const canDelete = capabilities?.delete ?? (isAdmin || can(permissions, "documents.delete"));
+  const canDownload = capabilities?.download ?? (isAdmin || can(permissions, "documents.download"));
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -65,6 +71,7 @@ export function AdminOrderDocuments({
   }
 
   async function uploadFile(item: UploadRow, file: File) {
+    if ((!item.url && !canUpload) || (item.url && !canUpdate)) return;
     setBusyKey(item.key);
     setError(null);
     try {
@@ -92,6 +99,7 @@ export function AdminOrderDocuments({
   }
 
   async function removeShippingDocument(index: number) {
+    if (!canDelete) return;
     setBusyKey(`remove-${index}`);
     setError(null);
     try {

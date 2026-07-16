@@ -611,7 +611,7 @@ adminRouter.get(
   },
 );
 
-adminRouter.get("/users", requirePermission(PERMISSIONS.EMPLOYEES_VIEW), zValidator("query", listQuerySchema), async (c) => {
+adminRouter.get("/users", requireAnyPermission([PERMISSIONS.EMPLOYEES_VIEW, PERMISSIONS.ROLES_ASSIGN, PERMISSIONS.ROLES_MANAGE, PERMISSIONS.SUPPORT_ASSIGN]), zValidator("query", listQuerySchema), async (c) => {
   const { limit } = c.req.valid("query");
   const data = await listUsersForAdmin(limit ?? 200);
   return c.json({ data });
@@ -740,7 +740,7 @@ adminRouter.get("/roles", requirePermission(PERMISSIONS.ROLES_VIEW), async (c) =
 
 adminRouter.post(
   "/roles",
-  requirePermission(PERMISSIONS.ROLES_CREATE),
+  requireAnyPermission([PERMISSIONS.ROLES_CREATE, PERMISSIONS.ROLES_MANAGE]),
   zValidator("json", createRoleSchema),
   async (c) => {
     const authUser = c.get("authUser");
@@ -780,7 +780,7 @@ adminRouter.get("/permissions", requirePermission(PERMISSIONS.ROLES_VIEW), async
 
 adminRouter.patch(
   "/roles/:roleId",
-  requirePermission(PERMISSIONS.ROLES_EDIT),
+  requireAnyPermission([PERMISSIONS.ROLES_EDIT, PERMISSIONS.ROLES_MANAGE]),
   zValidator("param", roleIdParamSchema),
   zValidator("json", roleUpdateSchema),
   async (c) => {
@@ -807,7 +807,7 @@ adminRouter.patch(
 
 adminRouter.delete(
   "/roles/:roleId",
-  requirePermission(PERMISSIONS.ROLES_DELETE),
+  requireAnyPermission([PERMISSIONS.ROLES_DELETE, PERMISSIONS.ROLES_MANAGE]),
   zValidator("param", roleIdParamSchema),
   async (c) => {
     const authUser = c.get("authUser");
@@ -1073,7 +1073,7 @@ adminRouter.patch(
 
 adminRouter.put(
   "/roles/:roleId/permissions",
-  requirePermission(PERMISSIONS.ROLES_MANAGE),
+  requireAnyPermission([PERMISSIONS.ROLES_CREATE, PERMISSIONS.ROLES_EDIT, PERMISSIONS.ROLES_MANAGE]),
   zValidator("param", roleIdParamSchema),
   zValidator("json", rolePermissionsPatchSchema),
   async (c) => {
@@ -1167,7 +1167,7 @@ adminRouter.put(
 
 adminRouter.put(
   "/users/:userId/access",
-  requirePermission(PERMISSIONS.EMPLOYEES_ASSIGN),
+  requireAnyPermission([PERMISSIONS.ROLES_ASSIGN, PERMISSIONS.ROLES_MANAGE]),
   zValidator("param", userParamSchema),
   zValidator("json", employeeAccessPatchSchema),
   async (c) => {
@@ -1494,13 +1494,13 @@ async function recalculateProductsForPricingScope(scope: PricingRuleScope) {
   return { affected: affected.length, updated, skipped, failed };
 }
 
-adminRouter.get("/pricing-rules", requirePermission(PERMISSIONS.PRODUCTS_VIEW), zValidator("query", pricingRuleScopeSchema), async (c) => {
+adminRouter.get("/pricing-rules", requirePermission(PERMISSIONS.SETTINGS_VIEW), zValidator("query", pricingRuleScopeSchema), async (c) => {
   return c.json(await pricingRulesPayload(pricingScope(c.req.valid("query"))));
 });
 
 adminRouter.put(
   "/pricing-rules",
-  requirePermission(PERMISSIONS.PRODUCTS_EDIT),
+  requirePermission(PERMISSIONS.SETTINGS_EDIT),
   zValidator("json", pricingRulesBulkSchema),
   async (c) => {
     const authUser = c.get("authUser");
@@ -1551,7 +1551,7 @@ adminRouter.put(
 
 adminRouter.patch(
   "/pricing-rules/:ruleKey",
-  requirePermission(PERMISSIONS.PRODUCTS_EDIT),
+  requirePermission(PERMISSIONS.SETTINGS_EDIT),
   zValidator("json", pricingRulePatchSchema),
   async (c) => {
     const authUser = c.get("authUser");
@@ -1604,7 +1604,7 @@ adminRouter.get(
 
 adminRouter.delete(
   "/pricing-rules",
-  requirePermission(PERMISSIONS.PRODUCTS_EDIT),
+  requirePermission(PERMISSIONS.SETTINGS_EDIT),
   zValidator("query", pricingRuleScopeSchema),
   async (c) => {
     const authUser = c.get("authUser");
@@ -2044,7 +2044,7 @@ adminRouter.delete(
 
 adminRouter.post(
   "/orders/:orderId/documents",
-  requirePermission(PERMISSIONS.DOCUMENTS_UPLOAD),
+  requireAnyPermission([PERMISSIONS.DOCUMENTS_UPLOAD, PERMISSIONS.DOCUMENTS_UPDATE]),
   zValidator("param", orderParamSchema),
   zValidator("json", documentSchema),
   async (c) => {
