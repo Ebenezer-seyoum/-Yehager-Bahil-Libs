@@ -7,6 +7,7 @@ import { getPageTheme, PAGE_HEADER_CONFIG, THEME_STYLES } from "@/lib/admin/page
 import type { AdminPageId } from "@/lib/admin/types";
 import type { DateRangeKey } from "@/lib/reports/utils";
 import { cn } from "@/lib/utils";
+import { hardRefreshPage } from "@/lib/hard-refresh";
 import { ExportButton } from "./export-button";
 
 export function AdminPageHeader({
@@ -83,7 +84,7 @@ export function AdminPageHeader({
             {onRefresh ? (
               <button
                 type="button"
-                onClick={onRefresh}
+                onClick={() => hardRefreshPage()}
                 disabled={isRefreshing}
                 className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-sm font-bold text-slate-900 shadow-sm transition hover:bg-slate-50 disabled:opacity-60 group"
               >

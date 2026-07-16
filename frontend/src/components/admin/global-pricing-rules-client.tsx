@@ -9,6 +9,7 @@ import {
   Save,
 } from "lucide-react";
 import { RolePricingAccordion } from "@/components/admin/role-pricing-accordion";
+import { hardRefreshPage, UNSAVED_REFRESH_WARNING } from "@/lib/hard-refresh";
 
 const RULES = {
   woman_outfit_addition: 6500,
@@ -107,6 +108,7 @@ export function GlobalPricingRulesClient() {
   const [regionName, setRegionName] = useState("");
   const [tribes, setTribes] = useState<ApiTribe[]>([]);
   const [hasOverrides, setHasOverrides] = useState(false);
+  const [dirty, setDirty] = useState(false);
 
   const loadRules = useCallback(async () => {
     setLoading(true);
@@ -125,6 +127,7 @@ export function GlobalPricingRulesClient() {
         if (rule.ruleKey in next) next[rule.ruleKey as RuleKey] = String(rule.markupAmountEtb);
       }
       setValues(next);
+      setDirty(false);
     } catch (error) {
       setNotice({ tone: "error", message: error instanceof Error ? error.message : "Pricing rules could not be loaded." });
     } finally {
@@ -138,6 +141,7 @@ export function GlobalPricingRulesClient() {
 
   function update(key: RuleKey, value: string) {
     setValues((current) => ({ ...current, [key]: value }));
+    setDirty(true);
   }
 
   async function saveRules() {
@@ -241,8 +245,8 @@ export function GlobalPricingRulesClient() {
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button type="button" onClick={() => void loadRules()} disabled={loading || saving} className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-5 text-sm font-black text-slate-700 transition hover:bg-slate-100 disabled:opacity-60">
-              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+            <button type="button" onClick={() => hardRefreshPage(dirty ? UNSAVED_REFRESH_WARNING : undefined)} disabled={saving} className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-5 text-sm font-black text-slate-700 transition hover:bg-slate-100 disabled:opacity-60">
+              <RefreshCw className="h-4 w-4" />
               Refresh
             </button>
             {scopeType !== "global" ? (

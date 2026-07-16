@@ -1,7 +1,6 @@
 "use client";
 
-import { useCallback, useState, useTransition, useMemo, type ComponentType, type ReactNode } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useMemo, type ComponentType, type ReactNode } from "react";
 import {
   BarChart2, TrendingUp, Users, ShoppingBag, DollarSign, Package,
   CheckCircle2, Clock, XCircle, Truck, Target, Zap, Globe,
@@ -9,6 +8,7 @@ import {
   ArrowUpRight, ArrowDownRight
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { hardRefreshPage } from "@/lib/hard-refresh";
 
 /* ─────────────────────────────────────────────────────────────
    Types & Helpers
@@ -199,31 +199,11 @@ export function AdminAnalyticsWorkspace({
   products: Product[];
   users: User[];
 }) {
-  const router = useRouter();
-  const [isRefreshing, startTransition] = useTransition();
   const [range, setRange] = useState<DateRange>("all");
 
-  const [orders, setOrders] = useState<Order[]>(initialOrders ?? []);
-  const [products, setProducts] = useState<Product[]>(initialProducts ?? []);
-  const [users, setUsers] = useState<User[]>(initialUsers ?? []);
-
-  /* ── Client refresh ── */
-  const refresh = useCallback(() => {
-    startTransition(async () => {
-      try {
-        const [ordersRes, productsRes, usersRes] = await Promise.allSettled([
-          fetch("/api/backend/orders?limit=200").then((r) => { if (!r.ok) throw new Error(); return r.json(); }),
-          fetch("/api/backend/admin/products?limit=200").then((r) => { if (!r.ok) throw new Error(); return r.json(); }),
-          fetch("/api/backend/admin/users?limit=200").then((r) => { if (!r.ok) throw new Error(); return r.json(); }),
-        ]);
-        if (ordersRes.status === "fulfilled") setOrders(Array.isArray(ordersRes.value?.data) ? ordersRes.value.data : (Array.isArray(ordersRes.value) ? ordersRes.value : []));
-        if (productsRes.status === "fulfilled") setProducts(Array.isArray(productsRes.value?.data) ? productsRes.value.data : (Array.isArray(productsRes.value) ? productsRes.value : []));
-        if (usersRes.status === "fulfilled") setUsers(Array.isArray(usersRes.value?.data) ? usersRes.value.data : (Array.isArray(usersRes.value) ? usersRes.value : []));
-      } catch {
-        router.refresh();
-      }
-    });
-  }, [router]);
+  const orders = initialOrders ?? [];
+  const products = initialProducts ?? [];
+  const users = initialUsers ?? [];
 
   /* ── Date cutoff ── */
   const cutoff = useMemo(() => {
@@ -388,11 +368,10 @@ export function AdminAnalyticsWorkspace({
             {/* Refresh button */}
             <button
               type="button"
-              onClick={refresh}
-              disabled={isRefreshing}
+              onClick={() => hardRefreshPage()}
               className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-sm font-bold text-slate-900 shadow-sm hover:bg-slate-50 transition-all disabled:opacity-60 group"
             >
-              <RefreshCw className={cn("h-4 w-4 text-slate-400 group-hover:rotate-180 transition-transform duration-500", isRefreshing && "animate-spin")} />
+              <RefreshCw className="h-4 w-4 text-slate-400 group-hover:rotate-180 transition-transform duration-500" />
               Refresh
             </button>
           </div>

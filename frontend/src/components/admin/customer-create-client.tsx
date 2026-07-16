@@ -2,6 +2,7 @@
 
 import { useMemo, useState, type ComponentType, type PropsWithChildren } from "react";
 import { useRouter } from "next/navigation";
+import { hardRefreshPage, UNSAVED_REFRESH_WARNING } from "@/lib/hard-refresh";
 import { 
   ArrowLeft, 
   RefreshCw, 
@@ -161,7 +162,7 @@ export function CustomerCreateClient() {
           </div>
           <div className="flex flex-col items-end gap-3">
              <div className="flex items-center gap-2">
-                <button onClick={() => router.refresh()} className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-sm font-bold text-slate-900 shadow-sm hover:bg-slate-50 group transition-all">
+                <button onClick={() => hardRefreshPage(UNSAVED_REFRESH_WARNING)} className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-sm font-bold text-slate-900 shadow-sm hover:bg-slate-50 group transition-all">
                   <RefreshCw className="h-4 w-4 text-slate-400 group-hover:rotate-180 transition-transform duration-500" /> Refresh
                 </button>
                 <button onClick={() => router.back()} className="inline-flex h-11 items-center gap-2 rounded-xl bg-slate-900 px-5 text-sm font-bold text-white shadow-lg hover:bg-slate-800 transition-all">

@@ -1,16 +1,14 @@
 "use client";
 
 import { RefreshCw, LogOut } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { hardRefreshPage } from "@/lib/hard-refresh";
 
 export function EmployeeAccessActions() {
-  const router = useRouter();
-
   return (
     <div className="mt-8 grid w-full gap-3 sm:grid-cols-2">
       <button
         type="button"
-        onClick={() => router.refresh()}
+        onClick={() => hardRefreshPage()}
         className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 text-sm font-bold text-white transition hover:bg-slate-800"
       >
         <RefreshCw className="h-4 w-4" />

@@ -1,11 +1,10 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { hardRefreshPage } from "@/lib/hard-refresh";
 
 export function RefreshLink() {
-  const router = useRouter();
   return (
-    <button type="button" onClick={() => router.refresh()} className="rounded-md border border-border px-3 py-1.5 text-xs hover:bg-secondary">
+    <button type="button" onClick={() => hardRefreshPage()} className="rounded-md border border-border px-3 py-1.5 text-xs hover:bg-secondary">
       Refresh dashboard
     </button>
   );

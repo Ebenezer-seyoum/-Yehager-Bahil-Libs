@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 import { RefreshCw, ArrowLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { hardRefreshPage } from "@/lib/hard-refresh";
 
 export type DetailSectionItem = {
   id: string;
@@ -20,6 +21,7 @@ export function AdminDetailHeader({
   onRefresh,
   onBack,
   backLabel = "Back",
+  refreshConfirmMessage,
 }: {
   icon: LucideIcon;
   iconTheme?: string;
@@ -29,6 +31,7 @@ export function AdminDetailHeader({
   onRefresh: () => void;
   onBack: () => void;
   backLabel?: string;
+  refreshConfirmMessage?: string;
 }) {
   return (
     <div className="mb-6 rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm relative overflow-hidden">
@@ -50,7 +53,7 @@ export function AdminDetailHeader({
 
         <div className="flex flex-row gap-3 shrink-0 items-center">
           <button
-            onClick={onRefresh}
+            onClick={() => hardRefreshPage(refreshConfirmMessage)}
             className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-5 py-2.5 text-sm font-bold text-slate-700 shadow-sm hover:bg-slate-100 transition-all group"
           >
             <RefreshCw className="h-4 w-4 text-slate-600 group-hover:rotate-180 transition-transform duration-500" />

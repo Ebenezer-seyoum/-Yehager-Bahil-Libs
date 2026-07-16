@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { LayoutDashboard, RefreshCw, ShieldAlert } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { hardRefreshPage } from "@/lib/hard-refresh";
 
 export function AccessRestricted({
   requiredPermission,
@@ -13,7 +13,6 @@ export function AccessRestricted({
   sectionName: string;
   description?: string;
 }) {
-  const router = useRouter();
 
   return (
     <div className="flex min-h-[70vh] items-center justify-center bg-slate-50 p-4">
@@ -43,7 +42,7 @@ export function AccessRestricted({
             </Link>
             <button
               type="button"
-              onClick={() => router.refresh()}
+              onClick={() => hardRefreshPage()}
               className="inline-flex h-12 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-sm font-bold text-slate-700 transition hover:bg-slate-50"
             >
               <RefreshCw className="h-4 w-4" />

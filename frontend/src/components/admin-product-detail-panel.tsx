@@ -29,6 +29,7 @@ import {
 } from "@/lib/dashboard-swal";
 import { uploadFileToS3 } from "@/lib/uploads";
 import { cn } from "@/lib/utils";
+import { hardRefreshPage, UNSAVED_REFRESH_WARNING } from "@/lib/hard-refresh";
 import { RolePricingAccordion } from "@/components/admin/role-pricing-accordion";
 
 type Product = {
@@ -1687,10 +1688,7 @@ export function AdminProductDetailPanel({
             <div className="h-8 w-px bg-slate-200 hidden lg:block"></div>
             <div className="flex items-center gap-3">
               <button
-                onClick={() => {
-                  router.refresh();
-                  showResult("success", "Product details reloaded.");
-                }}
+                onClick={() => hardRefreshPage(editing ? UNSAVED_REFRESH_WARNING : undefined)}
                 className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-bold text-slate-600 shadow-sm hover:bg-slate-50 transition-all active:scale-95 group"
               >
                 <RefreshCw className="h-4 w-4 group-hover:rotate-180 transition-transform duration-500" />

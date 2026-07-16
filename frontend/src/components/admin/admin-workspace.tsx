@@ -10,6 +10,7 @@ import type { AdminPageId, AdminTabConfig, AdminWorkspaceData } from "@/lib/admi
 import type { DateRangeKey } from "@/lib/reports/utils";
 import { rowsInDateRange } from "@/lib/reports/utils";
 import { cn } from "@/lib/utils";
+import { hardRefreshPage } from "@/lib/hard-refresh";
 import { AdminPageHeader } from "./admin-page-header";
 import { AdminTabs } from "./admin-tabs";
 import { FilterBar } from "./filter-bar";
@@ -84,7 +85,7 @@ export function AdminWorkspace({
   const router = useRouter();
   const pathname = usePathname()!;
   const searchParams = useSearchParams()!;
-  const [isRefreshing, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
   const [data, setData] = useState(initialData ?? ({} as AdminWorkspaceData));
   const [search, setSearch] = useState("");
   const [dateRange, setDateRange] = useState<DateRangeKey>("Last 30 Days");
@@ -121,13 +122,6 @@ export function AdminWorkspace({
   const showKpis = !hideKpis && !hideKpisOnTabs?.includes(activeTab);
   const showFilters = !hideFilters && !hideFiltersOnTabs?.includes(activeTab);
   const refreshIntervalMs = autoRefreshMs === undefined ? 30000 : autoRefreshMs;
-
-  const refresh = useCallback(() => {
-    startTransition(() => {
-      router.refresh();
-      setData(initialData);
-    });
-  }, [initialData, router]);
 
   useEffect(() => {
     if (!refreshIntervalMs || refreshIntervalMs < 10000) return;
@@ -188,8 +182,7 @@ export function AdminWorkspace({
       {/* 1. Page Header */}
       <AdminPageHeader
         pageId={pageId}
-        onRefresh={refresh}
-        isRefreshing={isRefreshing}
+        onRefresh={() => hardRefreshPage()}
         showExport={showExport}
         onExport={onExport}
         showDateRange={showDateRange}

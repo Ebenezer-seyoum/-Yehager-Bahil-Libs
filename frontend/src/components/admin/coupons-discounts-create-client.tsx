@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { BadgePercent, Check, Package, TicketPercent, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { AdminDetailHeader } from "@/components/admin/admin-detail-layout";
+import { UNSAVED_REFRESH_WARNING } from "@/lib/hard-refresh";
 import { TableHeadCell, TableHeadRow, TableHeader } from "@/components/admin/table-header";
 import { dashboardError, dashboardSuccess } from "@/lib/dashboard-swal";
 import { cn } from "@/lib/utils";
@@ -450,6 +451,7 @@ export function CouponsDiscountsCreateClient({ products }: { products: Row[] }) 
         title="Create Promotion"
         subtitle="Create checkout coupons or product discounts from one setup page."
         onRefresh={() => router.refresh()}
+        refreshConfirmMessage={UNSAVED_REFRESH_WARNING}
         onBack={() => router.push("/admin/finance/coupons-discounts")}
         backLabel="Back to list"
       />

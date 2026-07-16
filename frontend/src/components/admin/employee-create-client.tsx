@@ -2,6 +2,7 @@
 
 import { useMemo, useRef, useState, useEffect, type ComponentType, type PropsWithChildren } from "react";
 import { useRouter } from "next/navigation";
+import { hardRefreshPage, UNSAVED_REFRESH_WARNING } from "@/lib/hard-refresh";
 import { 
   ArrowLeft, 
   RefreshCw, 
@@ -245,7 +246,7 @@ export function EmployeeCreateClient({ roles }: { roles: Role[] }) {
           <div className="flex flex-col gap-3 shrink-0 items-end">
             <div className="flex flex-wrap items-center gap-2">
               <button
-                onClick={() => router.refresh()}
+                onClick={() => hardRefreshPage(UNSAVED_REFRESH_WARNING)}
                 className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-sm font-bold text-slate-900 shadow-sm transition hover:bg-slate-50 group"
               >
                 <RefreshCw className="h-4 w-4 text-slate-400 group-hover:rotate-180 transition-transform duration-500" />
