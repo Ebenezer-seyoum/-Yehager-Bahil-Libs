@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
+import Script from "next/script";
 
 declare global { interface Window { Telegram?: { WebApp?: { initData: string; ready(): void; close(): void } } } }
 
@@ -28,7 +29,10 @@ export function TelegramPricingPage() {
       .finally(() => setBusy(false));
   }
 
-  return <main className="min-h-screen bg-[#0d1b2a] p-4 text-white"><form onSubmit={submit} className="mx-auto grid max-w-md grid-cols-2 gap-4 pt-4">{fields.map((field) => <label key={field} className="block"><span className="mb-2 block text-sm font-black capitalize">{field} (ETB)</span><input required min="0.01" step="0.01" type="number" inputMode="decimal" placeholder="0.00" value={prices[field]} onChange={(event) => setPrices((current) => ({ ...current, [field]: event.target.value }))} className="w-full rounded-2xl border-2 border-slate-300 bg-white px-4 py-4 text-xl font-black text-slate-900 outline-none focus:border-sky-400" /></label>)}<button disabled={busy} className="col-span-2 mt-3 w-full rounded-2xl bg-emerald-500 px-4 py-4 text-xl font-black shadow-lg shadow-emerald-950 disabled:opacity-50">{busy ? "Submitting…" : "Submit Prices"}</button>{message ? <p className="col-span-2 rounded-2xl bg-emerald-950 p-4 text-center font-black text-emerald-300">{message}</p> : null}</form></main>;
+  return <>
+    <Script src="https://telegram.org/js/telegram-web-app.js?57" strategy="beforeInteractive" />
+    <main className="min-h-screen bg-[#0d1b2a] px-4 py-8 text-white sm:px-6 sm:py-12"><section className="mx-auto w-full max-w-2xl"><h1 className="mb-8 text-center text-2xl font-black tracking-tight sm:text-3xl">Enter Product Prices</h1><form onSubmit={submit} className="grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-6">{fields.map((field) => <label key={field} className="block"><span className="mb-2 block text-base font-black capitalize sm:text-lg">{field} (ETB)</span><input required min="0.01" step="0.01" type="number" inputMode="decimal" placeholder="0.00" value={prices[field]} onChange={(event) => setPrices((current) => ({ ...current, [field]: event.target.value }))} className="w-full rounded-2xl border-2 border-slate-300 bg-white px-4 py-4 text-xl font-black text-slate-900 outline-none focus:border-sky-400 sm:py-5" /></label>)}<button disabled={busy} className="mt-1 w-full rounded-2xl bg-emerald-500 px-4 py-4 text-xl font-black shadow-lg shadow-emerald-950 disabled:opacity-50 sm:col-span-2 sm:py-5">{busy ? "Submitting…" : "Submit Prices"}</button>{message ? <p className="rounded-2xl bg-emerald-950 p-4 text-center font-black text-emerald-300 sm:col-span-2">{message}</p> : null}</form></section></main>
+  </>;
 }
 
 export default TelegramPricingPage;

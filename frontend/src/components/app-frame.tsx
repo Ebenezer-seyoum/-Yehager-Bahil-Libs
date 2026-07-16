@@ -11,6 +11,7 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
     pathname === "/forgot-password" ||
     pathname === "/change-password-required" ||
     pathname.startsWith("/reset-password") ||
+    pathname.startsWith("/telegram/pricing") ||
     pathname.startsWith("/admin") ||
     pathname.startsWith("/employee");
 
