@@ -19,6 +19,21 @@ declare global {
 
 const fields = ["men", "woman", "boy", "girl"] as const;
 
+function productIdFromLaunchToken(token: string) {
+  if (!token) return "";
+  if (token.includes(".")) return token.split(".")[0] || "";
+  try {
+    if (typeof atob !== "function") return "";
+    const normalized = token.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(token.length / 4) * 4, "=");
+    const decoded = atob(normalized);
+    if (decoded.length !== 36) return "";
+    const hex = Array.from(decoded.slice(0, 16), (character) => character.charCodeAt(0).toString(16).padStart(2, "0")).join("");
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+  } catch {
+    return "";
+  }
+}
+
 export function TelegramPricingPage() {
   const params = useParams<{ productId: string }>();
   const searchParams = useSearchParams();
@@ -26,7 +41,7 @@ export function TelegramPricingPage() {
   const [startParam, setStartParam] = useState("");
   const [telegramReady, setTelegramReady] = useState(false);
   const launchToken = token || startParam;
-  const productId = params?.productId || launchToken.split(".")[0] || "";
+  const productId = params?.productId || productIdFromLaunchToken(launchToken);
   const [prices, setPrices] = useState<Record<string, string>>({ men: "", woman: "", boy: "", girl: "" });
   const [message, setMessage] = useState("");
   const [productName, setProductName] = useState("");

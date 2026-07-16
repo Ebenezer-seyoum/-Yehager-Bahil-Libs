@@ -6,19 +6,12 @@ import { env } from "../../config/env.js";
 import { db } from "../../lib/db/drizzle.js";
 import { products } from "../../lib/db/schema.js";
 import { logger } from "../../lib/logger.js";
-import { answerTelegramCallbackQuery, approvalKeyboard, createPriceFormToken, editTelegramMessage, priceEntryKeyboard, priceSummary, processTelegramPriceMessage, sendTelegramMessage, updateEstimatedPrices } from "../../services/telegram-pricing-service.js";
+import { answerTelegramCallbackQuery, approvalKeyboard, createPriceFormToken, editTelegramMessage, priceEntryKeyboard, priceSummary, processTelegramPriceMessage, sendTelegramMessage, updateEstimatedPrices, verifyPriceFormToken } from "../../services/telegram-pricing-service.js";
 
 export const telegramRouter = new Hono<AppBindings>();
 
 function validPriceFormToken(productId: string, token: string) {
-  if (!token) return false;
-  const [tokenProductId, expiresText, receivedSignature] = token.split(".");
-  if (tokenProductId !== productId) return false;
-  const expiresAt = Number(expiresText);
-  if (!Number.isFinite(expiresAt) || expiresAt < Date.now() / 1000 || !receivedSignature) return false;
-  const expectedToken = createPriceFormToken(productId, expiresAt);
-  const expectedSignature = expectedToken.split(".")[2];
-  return receivedSignature.length === expectedSignature.length && timingSafeEqual(Buffer.from(receivedSignature), Buffer.from(expectedSignature));
+  return verifyPriceFormToken(productId, token);
 }
 
 function validWebAppInitData(initData: string) {

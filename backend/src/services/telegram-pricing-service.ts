@@ -1,5 +1,5 @@
 import { and, eq } from "drizzle-orm";
-import { createHmac } from "node:crypto";
+import { createHmac, timingSafeEqual } from "node:crypto";
 import { db } from "../lib/db/drizzle.js";
 import { globalPricingRules, products, telegramRegionTopics } from "../lib/db/schema.js";
 import { env } from "../config/env.js";
@@ -26,11 +26,62 @@ async function telegram<T>(method: string, body: Record<string, unknown>) {
   return payload.result as T;
 }
 
+function priceFormSecret() {
+  return env.TELEGRAM_WEBHOOK_SECRET || env.TELEGRAM_BOT_TOKEN || "";
+}
+
+function uuidBytes(productId: string) {
+  const hex = productId.replace(/-/g, "");
+  if (!/^[a-f0-9]{32}$/i.test(hex)) throw new Error("Invalid product ID for Telegram price form");
+  return Buffer.from(hex, "hex");
+}
+
+function uuidFromBytes(bytes: Buffer) {
+  const hex = bytes.toString("hex");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
 export function createPriceFormToken(productId: string, expiresAt = Math.floor(Date.now() / 1000) + 30 * 86400) {
-  const payload = `${productId}.${expiresAt}`;
+  const payload = Buffer.alloc(20);
+  uuidBytes(productId).copy(payload, 0);
+  payload.writeUInt32BE(expiresAt, 16);
   const secret = env.TELEGRAM_WEBHOOK_SECRET || env.TELEGRAM_BOT_TOKEN || "";
-  const signature = createHmac("sha256", secret).update(payload).digest("hex");
-  return `${productId}.${expiresAt}.${signature}`;
+  const signature = createHmac("sha256", secret).update(payload).digest().subarray(0, 16);
+  return Buffer.concat([payload, signature]).toString("base64url");
+}
+
+export function productIdFromPriceFormToken(token: string) {
+  try {
+    if (token.includes(".")) return token.split(".")[0] || null;
+    const decoded = Buffer.from(token, "base64url");
+    if (decoded.length !== 36) return null;
+    return uuidFromBytes(decoded.subarray(0, 16));
+  } catch {
+    return null;
+  }
+}
+
+export function verifyPriceFormToken(productId: string, token: string) {
+  if (!token) return false;
+  if (token.includes(".")) {
+    const [tokenProductId, expiresText, receivedSignature] = token.split(".");
+    const expiresAt = Number(expiresText);
+    if (tokenProductId !== productId || !Number.isFinite(expiresAt) || expiresAt < Date.now() / 1000 || !receivedSignature) return false;
+    const expectedSignature = createHmac("sha256", priceFormSecret()).update(`${productId}.${expiresAt}`).digest("hex");
+    return receivedSignature.length === expectedSignature.length && timingSafeEqual(Buffer.from(receivedSignature), Buffer.from(expectedSignature));
+  }
+  try {
+    const decoded = Buffer.from(token, "base64url");
+    if (decoded.length !== 36) return false;
+    const payload = decoded.subarray(0, 20);
+    const receivedSignature = decoded.subarray(20);
+    if (uuidFromBytes(payload.subarray(0, 16)) !== productId) return false;
+    if (payload.readUInt32BE(16) < Date.now() / 1000) return false;
+    const expectedSignature = createHmac("sha256", priceFormSecret()).update(payload).digest().subarray(0, 16);
+    return timingSafeEqual(receivedSignature, expectedSignature);
+  } catch {
+    return false;
+  }
 }
 
 function miniAppUrl(productId: string) {
