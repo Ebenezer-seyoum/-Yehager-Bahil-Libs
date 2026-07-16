@@ -1,6 +1,5 @@
 import { and, eq } from "drizzle-orm";
 import { createHmac, timingSafeEqual } from "node:crypto";
-import sharp from "sharp";
 import { db } from "../lib/db/drizzle.js";
 import { globalPricingRules, products, systemAlerts, telegramRegionTopics } from "../lib/db/schema.js";
 import { env } from "../config/env.js";
@@ -30,30 +29,6 @@ async function telegram<T>(method: string, body: Record<string, unknown>) {
   });
   const payload = (await response.json()) as TelegramResponse<T>;
   if (!response.ok || !payload.ok) throw new Error(payload.description || `Telegram ${method} failed`);
-  return payload.result as T;
-}
-
-async function telegramPhotoUpload<T>(body: {
-  chatId: string;
-  topicId: string;
-  photo: Buffer;
-  caption: string;
-  replyMarkup: unknown;
-}) {
-  if (!env.TELEGRAM_BOT_TOKEN) throw new Error("Telegram bot token is not configured");
-  const form = new FormData();
-  form.set("chat_id", body.chatId);
-  form.set("message_thread_id", body.topicId);
-  form.set("caption", body.caption);
-  form.set("parse_mode", "HTML");
-  form.set("reply_markup", JSON.stringify(body.replyMarkup));
-  form.set("photo", new Blob([new Uint8Array(body.photo)], { type: "image/jpeg" }), "product-collage.jpg");
-  const response = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendPhoto`, {
-    method: "POST",
-    body: form,
-  });
-  const payload = (await response.json()) as TelegramResponse<T>;
-  if (!response.ok || !payload.ok) throw new Error(payload.description || "Telegram sendPhoto failed");
   return payload.result as T;
 }
 
@@ -135,57 +110,22 @@ async function makeTelegramImageUrl(imageUrl: string) {
   return getSignedReadUrl(key, 15 * 60);
 }
 
-export async function composeTelegramCollage(imageBuffers: Buffer[]) {
-  const images = imageBuffers.slice(0, 4);
-  if (!images.length) throw new Error("At least one image is required for a Telegram collage");
-  const width = 1200;
-  const height = 1440;
-  const gap = 8;
-  const primaryWidth = 852;
-  const secondaryWidth = width - primaryWidth - gap;
-  const layouts = images.length === 1
-    ? [{ left: 0, top: 0, width, height }]
-    : [
-        { left: 0, top: 0, width: primaryWidth, height },
-        ...Array.from({ length: images.length - 1 }, (_, index) => {
-          const secondaryCount = images.length - 1;
-          const availableHeight = height - gap * (secondaryCount - 1);
-          const rowHeight = Math.floor(availableHeight / secondaryCount);
-          const top = index * (rowHeight + gap);
-          return {
-            left: primaryWidth + gap,
-            top,
-            width: secondaryWidth,
-            height: index === secondaryCount - 1 ? height - top : rowHeight,
-          };
-        }),
-      ];
-  const tiles = await Promise.all(images.map((image, index) => sharp(image)
-    .rotate()
-    .resize(Math.round(layouts[index].width), Math.round(layouts[index].height), { fit: "cover", position: "attention" })
-    .jpeg({ quality: 88, mozjpeg: true })
-    .toBuffer()));
-  return sharp({
-    create: { width, height, channels: 3, background: "#132536" },
-  }).composite(tiles.map((input, index) => ({
-    input,
-    left: Math.round(layouts[index].left),
-    top: Math.round(layouts[index].top),
-  }))).jpeg({ quality: 90, mozjpeg: true }).toBuffer();
+export function buildTelegramMediaGroup(imageUrls: string[], caption: string) {
+  const images = imageUrls.filter(Boolean).slice(0, 4);
+  return images.map((media, index) => ({
+    type: "photo" as const,
+    media,
+    ...(index === 0 ? { caption, parse_mode: "HTML" as const } : {}),
+  }));
 }
 
-async function telegramCollageFromUrls(imageUrls: string[]) {
-  const signedUrls = await Promise.all(imageUrls.slice(0, 4).map(makeTelegramImageUrl));
-  const downloads = await Promise.allSettled(signedUrls.map(async (url) => {
-    const response = await fetch(url);
-    if (!response.ok) throw new Error(`Product image download failed with ${response.status}`);
-    return Buffer.from(await response.arrayBuffer());
-  }));
-  const buffers: Buffer[] = [];
-  for (const result of downloads) {
-    if (result.status === "fulfilled") buffers.push(Buffer.from(result.value));
-  }
-  return buffers.length ? composeTelegramCollage(buffers) : null;
+async function sendTelegramMediaGroup(chatId: string, topicId: string, media: ReturnType<typeof buildTelegramMediaGroup>) {
+  if (!media.length) throw new Error("At least one image is required for a Telegram media group");
+  return telegram<Array<{ message_id: number }>>("sendMediaGroup", {
+    chat_id: chatId,
+    message_thread_id: Number(topicId),
+    media,
+  });
 }
 
 export async function sendTelegramMessage(text: string, replyMarkup?: unknown, topicId?: string | null, chatId: string | number | null = env.TELEGRAM_GROUP_ID ?? null) {
@@ -286,26 +226,32 @@ export async function sendTelegramProduct(
   const productImages = (product.images ?? []).filter(Boolean).slice(0, 4);
   let message: { message_id: number };
   if (productImages.length && env.TELEGRAM_GROUP_ID) {
-    const collage = await telegramCollageFromUrls(productImages).catch((error) => {
-      logger.warn({ error, productId: product.id }, "telegram_product_collage_failed");
-      return null;
-    });
-    message = collage
-      ? await telegramPhotoUpload<{ message_id: number }>({
-          chatId: env.TELEGRAM_GROUP_ID,
-          topicId: regionTopic.telegramTopicId,
-          photo: collage,
-          caption,
-          replyMarkup,
-        })
-      : await telegram<{ message_id: number }>("sendPhoto", {
+    const signedUrls = await Promise.all(productImages.map(makeTelegramImageUrl));
+    if (signedUrls.length === 1) {
+      message = await telegram<{ message_id: number }>("sendPhoto", {
+        chat_id: env.TELEGRAM_GROUP_ID,
+        message_thread_id: Number(regionTopic.telegramTopicId),
+        photo: signedUrls[0],
+        caption,
+        parse_mode: "HTML",
+        reply_markup: replyMarkup,
+      });
+    } else {
+      const mediaGroup = buildTelegramMediaGroup(signedUrls, caption);
+      const messages = await sendTelegramMediaGroup(env.TELEGRAM_GROUP_ID, regionTopic.telegramTopicId, mediaGroup);
+      const firstMessage = messages[0];
+      if (!firstMessage) throw new Error("Telegram returned no messages for the product media group");
+      message = firstMessage;
+      try {
+        await telegram("editMessageReplyMarkup", {
           chat_id: env.TELEGRAM_GROUP_ID,
-          message_thread_id: Number(regionTopic.telegramTopicId),
-          photo: await makeTelegramImageUrl(productImages[0]),
-          caption,
-          parse_mode: "HTML",
+          message_id: firstMessage.message_id,
           reply_markup: replyMarkup,
         });
+      } catch (error) {
+        logger.warn({ error, productId: product.id, messageId: firstMessage.message_id }, "telegram_product_media_group_button_failed");
+      }
+    }
   } else {
     message = await sendTelegramMessage(caption, replyMarkup, regionTopic.telegramTopicId);
   }
