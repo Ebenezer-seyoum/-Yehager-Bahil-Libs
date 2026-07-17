@@ -55,10 +55,10 @@ export function AdminRevenueCharts({ orders }: { orders: Order[] }) {
 
   return (
     <div className="grid gap-6 lg:grid-cols-2">
-      <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
+      <div className="min-w-0 rounded-xl border border-border bg-card p-5 shadow-sm">
         <h2 className="font-heading text-xl font-semibold text-slate-950">Revenue</h2>
         <p className="mt-1 text-sm text-slate-700">Paid order value over the last 14 days.</p>
-        <div className="mt-4 h-56">
+        <div className="mt-4 h-56 min-h-56 min-w-0 w-full">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={data}>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
@@ -76,10 +76,10 @@ export function AdminRevenueCharts({ orders }: { orders: Order[] }) {
         </div>
       </div>
 
-      <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
+      <div className="min-w-0 rounded-xl border border-border bg-card p-5 shadow-sm">
         <h2 className="font-heading text-xl font-semibold text-slate-950">Orders</h2>
         <p className="mt-1 text-sm text-slate-700">Daily order volume over the last 14 days.</p>
-        <div className="mt-4 h-56">
+        <div className="mt-4 h-56 min-h-56 min-w-0 w-full">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={data}>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
