@@ -34,6 +34,14 @@ type PasswordLinkPayload = {
   accountType?: "customer" | "employee" | "admin";
 };
 
+type AccountActivityPayload = {
+  to?: string | null;
+  name?: string | null;
+  accountType?: "customer" | "employee" | "admin";
+  changedBy?: string | null;
+  changeType?: "changed" | "reset" | "admin_reset";
+};
+
 type CustomDesignPayload = {
   to?: string | null;
   customerName?: string | null;
@@ -49,9 +57,26 @@ type CustomDesignPayload = {
   gender?: string | null;
   measurementSnapshot?: Record<string, unknown> | null;
   memberPricing?: Array<Record<string, unknown>>;
+  quotedPriceEtb?: string | number | null;
+  groupOrderUrl?: string | null;
 };
 
+export type OrderEmailEvent =
+  | "payment_verification_pending"
+  | "payment_pending"
+  | "payment_confirmed"
+  | "payment_failed"
+  | "payment_refunded"
+  | "order_confirmed"
+  | "order_in_production"
+  | "order_shipped"
+  | "order_ready_for_pickup"
+  | "order_delivered"
+  | "order_cancelled"
+  | "order_status_updated";
+
 type OrderStatusPayload = {
+  event?: OrderEmailEvent;
   to?: string | null;
   customerName?: string | null;
   orderNumber?: string | null;
@@ -261,7 +286,7 @@ function actionButton(label: string, href: string) {
 }
 
 function logoMarkUrl() {
-  return env.EMAIL_LOGO_MARK_URL || appLink("/images/email-logo-mark.png");
+  return appLink("/images/email-logo-mark.png");
 }
 
 function emailAddress(value: string | undefined, fallback: string) {
@@ -286,9 +311,9 @@ function designImageGrid(imageUrls: string[] = []) {
   const cells = images.map((url, index) => `
     <td style="width:${Math.floor(100 / images.length)}%;padding:4px;vertical-align:top;text-align:center">
       <a href="${escapeHtml(url)}" style="display:block;text-decoration:none" target="_blank" rel="noopener noreferrer">
-        <img src="${escapeHtml(url)}" alt="${escapeHtml(labels[index])} — click to view full size" width="120" height="92" style="display:block;width:100%;height:92px;object-fit:cover;margin:0 auto;border:1px solid #4d3714;border-radius:6px" />
+        <img src="${escapeHtml(url)}" alt="${escapeHtml(labels[index])} — click to view full size" width="120" height="150" style="display:block;width:100%;height:150px;object-fit:cover;margin:0 auto;border:1px solid #695126;border-radius:6px;background:#14110c" />
       </a>
-      <p style="margin:6px 0 0;color:#d6a43d;font-size:11px;font-weight:800;line-height:1.2">${escapeHtml(labels[index])}</p>
+      <p style="margin:6px 0 0;color:#fff7df;font-size:11px;font-weight:800;line-height:1.15">${escapeHtml(labels[index])}</p>
     </td>`).join("");
   return `<div style="margin:20px 0"><p style="margin:0 0 8px;color:#d6a43d;font-size:16px;font-weight:900">🖼️ Uploaded Design Images</p><table role="presentation" style="width:100%;border-collapse:collapse;table-layout:fixed"><tr>${cells}</tr></table></div>`;
 }
@@ -321,6 +346,17 @@ function compactMeasurementGrid(entries: Array<[string, unknown]>) {
   return `<table role="presentation" style="width:100%;border-collapse:collapse;margin:10px 0 0;border-top:1px solid #3d321d">${rows.join("")}</table>`;
 }
 
+function compactMeasurementList(entries: Array<[string, unknown]>) {
+  const visible = entries.filter(([, value]) => value !== undefined && value !== null && String(value).trim() !== "");
+  if (!visible.length) return "";
+  const rows = visible.map(([key, value]) => `
+    <tr>
+      <td style="padding:2px 8px 2px 0;color:#a99d8a;font-size:11px;line-height:1.15;vertical-align:top">${escapeHtml(measurementLabel(key))}</td>
+      <td style="padding:2px 0;color:#fff7df;font-size:11px;font-weight:800;line-height:1.15;vertical-align:top;white-space:nowrap">${escapeHtml(measurementValue(key, value))}</td>
+    </tr>`).join("");
+  return `<table role="presentation" style="width:auto;border-collapse:collapse;margin:7px 0 0">${rows}</table>`;
+}
+
 function orderItemsSection(items: OrderEmailItem[] = [], totalUsd?: string | number | null) {
   if (!items.length) return "";
   const rows = items.map((item) => {
@@ -334,7 +370,7 @@ function orderItemsSection(items: OrderEmailItem[] = [], totalUsd?: string | num
       <td style="padding:10px 8px 10px 0;vertical-align:top;color:#c8b98b;font-size:12px;line-height:1.35">
         <strong style="display:block;color:#fff7df;font-size:15px;line-height:1.2">${escapeHtml(item.name || "Order item")}</strong>
         <span>${escapeHtml(item.itemNumber ? `Item ${item.itemNumber}` : "Item")} · Qty: ${escapeHtml(item.quantity ?? 1)}</span>
-        ${measurements.length ? compactMeasurementGrid(measurements) : ""}
+        ${measurements.length ? compactMeasurementList(measurements) : ""}
       </td>
       <td style="width:78px;padding:10px 0;vertical-align:top;text-align:right;color:#fff7df;font-size:16px;font-weight:900;white-space:nowrap">${item.priceUsd != null ? `$${Number(item.priceUsd).toFixed(2)}` : "—"}</td>
     </tr>`;
@@ -595,7 +631,7 @@ export async function sendCustomerVerificationCodeEmail(payload: VerificationCod
   return sendTransactionalEmailSafely({
     channel: "notifications",
     to: payload.to,
-    subject: "✅ Verify your Yehager Bahil account",
+    subject: "✉️ Verify Your Email Address | Yehager Bahil Libs",
     text: paragraph([
       `Hello ${name},`,
       `Your verification code is ${payload.code}.`,
@@ -625,7 +661,7 @@ export async function sendRegistrationEmail(payload: { to?: string | null; name?
   return sendTransactionalEmailSafely({
     channel: "notifications",
     to: payload.to,
-    subject: "🎉 Welcome to Yehager Bahil Libs — Your account is ready!",
+    subject: "🎉 Welcome to Yehager Bahil Libs — Your Account Is Ready",
     text: paragraph([
       `Hello ${name},`,
       "Welcome to Yehager Bahil Libs! Your account has been created successfully.",
@@ -657,7 +693,7 @@ export async function sendPasswordSetupEmail(payload: PasswordLinkPayload) {
   return sendTransactionalEmailSafely({
     channel: isStaff ? "team" : "notifications",
     to: payload.to,
-    subject: isStaff ? "🔐 Set up your Yehager Bahil staff account password" : "🔐 Set up your Yehager Bahil account password",
+    subject: isStaff ? "🔐 Set Up Your Staff Account Password | Yehager Bahil Libs" : "🔐 Set Up Your Account Password | Yehager Bahil Libs",
     text: paragraph([
       `Hello ${name},`,
       `An account has been created for you as ${payload.accountType ?? "user"} at Yehager Bahil Libs.`,
@@ -689,7 +725,7 @@ export async function sendPasswordResetEmail(payload: PasswordLinkPayload) {
   return sendTransactionalEmailSafely({
     channel: payload.accountType === "employee" || payload.accountType === "admin" ? "team" : "notifications",
     to: payload.to,
-    subject: "🔑 Reset your Yehager Bahil password",
+    subject: "🔑 Reset Your Password | Yehager Bahil Libs",
     text: paragraph([
       `Hello ${name},`,
       `Reset your password using this secure link: ${payload.link}`,
@@ -711,6 +747,72 @@ export async function sendPasswordResetEmail(payload: PasswordLinkPayload) {
   });
 }
 
+export async function sendPasswordChangedEmail(payload: AccountActivityPayload) {
+  const name = payload.name || "there";
+  const isStaff = payload.accountType === "employee" || payload.accountType === "admin";
+  const wasReset = payload.changeType === "reset" || payload.changeType === "admin_reset";
+  const subject = wasReset
+    ? "🔒 Password Reset Successfully | Yehager Bahil Libs"
+    : "🔒 Password Changed Successfully | Yehager Bahil Libs";
+  const actionLabel = wasReset ? "reset" : "changed";
+  return sendTransactionalEmailSafely({
+    channel: isStaff ? "team" : "notifications",
+    to: payload.to,
+    subject,
+    text: paragraph([
+      `Hello ${name},`,
+      `Your Yehager Bahil Libs account password was ${actionLabel} successfully.`,
+      payload.changeType === "admin_reset" && payload.changedBy ? `This reset was completed by ${payload.changedBy}.` : null,
+      "If you did not make or authorize this change, contact support immediately.",
+    ]),
+    html: htmlShell(
+      wasReset ? "Password Reset Successfully 🔒" : "Password Changed Successfully 🔒",
+      `
+      <p>Hello <strong>${escapeHtml(name)}</strong>,</p>
+      <div style="margin:20px 0;padding:16px;background:#0d1f0d;border:1px solid #2a6e2a;border-radius:8px">
+        <p style="margin:0 0 6px;color:#5ecf5e;font-size:14px;font-weight:800">✅ Security Update Completed</p>
+        <p style="margin:0;color:#9ecf9e;font-size:13px">Your Yehager Bahil Libs account password was ${escapeHtml(actionLabel)} successfully.</p>
+      </div>
+      ${payload.changeType === "admin_reset" && payload.changedBy ? `<p style="color:#c8b98b;font-size:13px">This reset was completed by <strong style="color:#fff7df">${escapeHtml(payload.changedBy)}</strong>.</p>` : ""}
+      <div style="margin:18px 0;padding:14px;background:#251313;border:1px solid #6e2a2a;border-radius:8px">
+        <p style="margin:0;color:#e1aaaa;font-size:13px"><strong style="color:#ff8a8a">Did not authorize this change?</strong> Contact our support team immediately so we can protect your account.</p>
+      </div>
+      `,
+    ),
+  });
+}
+
+export async function sendAccountUpdatedEmail(payload: AccountActivityPayload) {
+  const name = payload.name || "there";
+  const isStaff = payload.accountType === "employee" || payload.accountType === "admin";
+  const signInUrl = appLink("/signin");
+  return sendTransactionalEmailSafely({
+    channel: isStaff ? "team" : "notifications",
+    to: payload.to,
+    subject: "📝 Account Information Updated Successfully | Yehager Bahil Libs",
+    text: paragraph([
+      `Hello ${name},`,
+      "Your Yehager Bahil Libs account information was updated successfully.",
+      payload.changedBy ? `Updated by: ${payload.changedBy}` : null,
+      "If you did not authorize this update, contact support immediately.",
+      `Review your account: ${signInUrl}`,
+    ]),
+    html: htmlShell(
+      "Account Information Updated 📝",
+      `
+      <p>Hello <strong>${escapeHtml(name)}</strong>,</p>
+      <div style="margin:20px 0;padding:16px;background:#141d2b;border:1px solid #375678;border-radius:8px">
+        <p style="margin:0 0 6px;color:#9fc4ff;font-size:14px;font-weight:800">✅ Account Update Completed</p>
+        <p style="margin:0;color:#c4d4ec;font-size:13px">Your Yehager Bahil Libs account information was updated successfully.</p>
+      </div>
+      ${payload.changedBy ? `<p style="color:#c8b98b;font-size:13px">Updated by: <strong style="color:#fff7df">${escapeHtml(payload.changedBy)}</strong></p>` : ""}
+      <p style="color:#c8b98b;font-size:13px">If you did not authorize this update, please contact our support team immediately.</p>
+      ${actionButton("Review My Account", signInUrl)}
+      `,
+    ),
+  });
+}
+
 // ─── Account status emails ────────────────────────────────────────────────────
 
 export async function sendAccountStatusChangedEmail(payload: AccountStatusPayload) {
@@ -721,7 +823,7 @@ export async function sendAccountStatusChangedEmail(payload: AccountStatusPayloa
   return sendTransactionalEmailSafely({
     channel: isStaff ? "team" : "notifications",
     to: payload.to,
-    subject: isActive ? "✅ Your Yehager Bahil account is now active" : "⚠️ Your Yehager Bahil account has been deactivated",
+    subject: isActive ? "✅ Account Activated Successfully | Yehager Bahil Libs" : "⏸️ Account Deactivated — Access Paused | Yehager Bahil Libs",
     text: paragraph([
       `Hello ${payload.name || "there"},`,
       isActive
@@ -757,10 +859,11 @@ export async function sendAccountStatusChangedEmail(payload: AccountStatusPayloa
 export async function sendAdminAccountStatusChangedEmail(payload: AccountStatusPayload) {
   const adminUrl = payload.role === "customer" ? appLink("/admin/customers") : appLink("/admin/users");
   const status = String(payload.status ?? "updated").toLowerCase();
+  const isActive = status === "active";
   return sendTransactionalEmailSafely({
     channel: "team",
     to: internalNotificationRecipients(),
-    subject: `Account ${status}: ${payload.email ?? payload.name ?? "user"}`,
+    subject: `🔄 Account ${isActive ? "Activated" : "Deactivated"} — ${payload.email ?? payload.name ?? "User"} | Yehager Bahil Libs`,
     text: paragraph([
       `Account status changed to ${status}.`,
       payload.email ? `Account: ${payload.email}` : null,
@@ -791,8 +894,8 @@ export async function sendEmployeeRoleAssignedEmail(payload: EmployeeRoleAssigne
     channel: "team",
     to: payload.to,
     subject: payload.roleName
-      ? `🎯 Your role has been updated: ${payload.roleName}`
-      : "🎯 Your access and permissions have been updated",
+      ? `🎯 Role and Access Updated — ${payload.roleName} | Yehager Bahil Libs`
+      : "🎯 Role and Access Updated | Yehager Bahil Libs",
     text: paragraph([
       `Hello ${name},`,
       payload.roleName
@@ -829,14 +932,121 @@ export async function sendEmployeeRoleAssignedEmail(payload: EmployeeRoleAssigne
 
 // ─── Order emails ─────────────────────────────────────────────────────────────
 
+function inferOrderEmailEvent(payload: OrderStatusPayload): OrderEmailEvent {
+  const payment = String(payload.paymentStatus ?? "").toLowerCase();
+  const status = String(payload.status ?? "").toLowerCase();
+  if (payment === "awaiting_verification") return "payment_verification_pending";
+  if (payment === "refunded") return "payment_refunded";
+  if (["failed", "declined", "rejected"].includes(payment)) return "payment_failed";
+  if (status === "shipped") return "order_shipped";
+  if (status === "delivered" || status === "picked_up") return "order_delivered";
+  if (status === "ready_for_pickup") return "order_ready_for_pickup";
+  if (["tailoring", "processing", "quality_check"].includes(status)) return "order_in_production";
+  if (status === "cancelled") return "order_cancelled";
+  if (payment === "paid") return "payment_confirmed";
+  if (["pending", "unpaid"].includes(payment)) return "payment_pending";
+  if (status === "pending") return "order_confirmed";
+  return "order_status_updated";
+}
+
+function orderEmailPresentation(event: OrderEmailEvent, orderNumber?: string | null) {
+  const reference = orderNumber ? `Order #${orderNumber}` : "Your Order";
+  const suffix = " | Yehager Bahil Libs";
+  const presentations: Record<OrderEmailEvent, { subject: string; title: string; message: string; tone: "green" | "amber" | "red" | "blue" }> = {
+    payment_verification_pending: {
+      subject: `⏳ ETB Payment Verification Pending — ${reference}${suffix}`,
+      title: `⏳ ETB Payment Verification Pending — #${orderNumber ?? ""}`,
+      message: "Your payment proof has been received and is waiting for verification.",
+      tone: "amber",
+    },
+    payment_pending: {
+      subject: `⏳ Payment Pending — ${reference}${suffix}`,
+      title: `⏳ Payment Pending — #${orderNumber ?? ""}`,
+      message: "Payment is still required before production can begin.",
+      tone: "amber",
+    },
+    payment_confirmed: {
+      subject: `✅ Payment Confirmed — ${reference}${suffix}`,
+      title: `✅ Payment Confirmed — #${orderNumber ?? ""}`,
+      message: "Your payment has been confirmed successfully.",
+      tone: "green",
+    },
+    payment_failed: {
+      subject: `⚠️ Payment Failed — ${reference}${suffix}`,
+      title: `⚠️ Payment Could Not Be Confirmed — #${orderNumber ?? ""}`,
+      message: "We could not confirm your payment. Please review the payment details or contact support.",
+      tone: "red",
+    },
+    payment_refunded: {
+      subject: `💵 Payment Refunded — ${reference}${suffix}`,
+      title: `💵 Payment Refunded — #${orderNumber ?? ""}`,
+      message: "The payment for this order has been marked as refunded.",
+      tone: "blue",
+    },
+    order_confirmed: {
+      subject: `✅ Order Confirmed — ${reference}${suffix}`,
+      title: `✅ Order Confirmed — #${orderNumber ?? ""}`,
+      message: "Your order has been received and confirmed.",
+      tone: "green",
+    },
+    order_in_production: {
+      subject: `✂️ Order in Production — ${reference}${suffix}`,
+      title: `✂️ Your Order Is in Production — #${orderNumber ?? ""}`,
+      message: "Our tailoring team has started working on your order.",
+      tone: "blue",
+    },
+    order_shipped: {
+      subject: `🚚 Order Shipped — ${reference}${suffix}`,
+      title: `🚚 Your Order Has Shipped — #${orderNumber ?? ""}`,
+      message: "Your order has left our facility and is on its way.",
+      tone: "blue",
+    },
+    order_ready_for_pickup: {
+      subject: `📦 Order Ready for Pickup — ${reference}${suffix}`,
+      title: `📦 Your Order Is Ready for Pickup — #${orderNumber ?? ""}`,
+      message: "Your completed order is ready for pickup.",
+      tone: "green",
+    },
+    order_delivered: {
+      subject: `🎉 Order Delivered — ${reference}${suffix}`,
+      title: `🎉 Your Order Has Been Delivered — #${orderNumber ?? ""}`,
+      message: "Your order has been delivered successfully. Thank you for choosing us.",
+      tone: "green",
+    },
+    order_cancelled: {
+      subject: `❌ Order Cancelled — ${reference}${suffix}`,
+      title: `❌ Order Cancelled — #${orderNumber ?? ""}`,
+      message: "This order has been cancelled. Contact support if you need assistance.",
+      tone: "red",
+    },
+    order_status_updated: {
+      subject: `📦 Order Status Updated — ${reference}${suffix}`,
+      title: `📦 Order Status Updated — #${orderNumber ?? ""}`,
+      message: "The status of your order has been updated.",
+      tone: "blue",
+    },
+  };
+  return presentations[event];
+}
+
+function orderEventBanner(presentation: ReturnType<typeof orderEmailPresentation>) {
+  const colors = {
+    green: { background: "#1f7a2e", border: "#3fa653", heading: "#ffffff", body: "#d7f2dc" },
+    amber: { background: "#3d2e00", border: "#b8860b", heading: "#ffd166", body: "#e8cc7a" },
+    red: { background: "#321010", border: "#9b3434", heading: "#ff8a8a", body: "#e7b0b0" },
+    blue: { background: "#151f32", border: "#3b5c8a", heading: "#9fc4ff", body: "#c4d4ec" },
+  }[presentation.tone];
+  return `<div style="margin:0 0 20px;padding:18px;background:${colors.background};border:1px solid ${colors.border};border-radius:8px;text-align:center"><p style="margin:0 0 6px;color:${colors.heading};font-size:18px;font-weight:900">${escapeHtml(presentation.title)}</p><p style="margin:0;color:${colors.body};font-size:13px;line-height:1.5">${escapeHtml(presentation.message)}</p></div>`;
+}
+
 export async function sendOrderStatusEmail(payload: OrderStatusPayload) {
   const orderUrl = payload.orderNumber ? appLink("/my-orders") : appLink("/dashboard");
   const statusLabel = String(payload.status ?? "updated").replaceAll("_", " ");
   const deliveryStatusLabel = payload.deliveryStatus ? payload.deliveryStatus.replaceAll("_", " ") : null;
-  const isNewOrder = payload.status === "pending" && payload.paymentStatus === "pending";
-  const isEtbAwaiting = payload.paymentStatus === "awaiting_verification";
-  const normalizedPayment = String(payload.paymentStatus ?? "").toLowerCase();
-  const normalizedStatus = String(payload.status ?? "").toLowerCase();
+  const event = payload.event ?? inferOrderEmailEvent(payload);
+  const presentation = orderEmailPresentation(event, payload.orderNumber);
+  const isNewOrder = event === "order_confirmed";
+  const isEtbAwaiting = event === "payment_verification_pending";
 
   const trackingUrl =
     payload.carrier === "Ethiopian Mail Service"
@@ -847,29 +1057,10 @@ export async function sendOrderStatusEmail(payload: OrderStatusPayload) {
           ? "https://www.ups.com/track"
           : null;
 
-  const orderReference = payload.orderNumber ? `#${payload.orderNumber}` : "";
-  const subject = normalizedPayment === "awaiting_verification"
-    ? `⏳ ETB Payment Verification Pending — Order ${orderReference}`
-    : ["failed", "declined", "rejected"].includes(normalizedPayment)
-      ? `⚠️ Payment Failed — Order ${orderReference}`
-      : normalizedPayment === "paid"
-        ? `✅ Payment Confirmed — Order ${orderReference}`
-        : isNewOrder
-          ? `✅ Order Confirmed — ${orderReference} | Yehager Bahil Libs`
-          : normalizedStatus === "preparing"
-            ? `✂️ Order in Production — ${orderReference}`
-            : normalizedStatus === "shipped"
-              ? `🚚 Order Shipped — ${orderReference}`
-              : normalizedStatus === "delivered"
-                ? `🎉 Order Delivered — ${orderReference}`
-                : normalizedStatus === "ready_for_pickup"
-                  ? `📦 Order Ready for Pickup — ${orderReference}`
-                  : `📦 Order Status Updated — ${orderReference}`;
-
   return sendTransactionalEmailSafely({
     channel: "notifications",
     to: payload.to,
-    subject: subject.trim(),
+    subject: presentation.subject,
     text: paragraph([
       `Hello ${payload.customerName || "Customer"},`,
       `Your order ${payload.orderNumber ?? ""} status is now: ${statusLabel}.`.trim(),
@@ -882,28 +1073,16 @@ export async function sendOrderStatusEmail(payload: OrderStatusPayload) {
       `View your orders: ${orderUrl}`,
     ]),
     html: htmlShell(
-      isEtbAwaiting
-        ? `⏳ ETB Payment Verification Pending — #${escapeHtml(payload.orderNumber ?? "")}`
-        : normalizedPayment === "paid"
-          ? `✅ Payment Confirmed — #${escapeHtml(payload.orderNumber ?? "")}`
-          : isNewOrder
-            ? `✅ Order Confirmed — #${escapeHtml(payload.orderNumber ?? "")}`
-            : `📦 Order Status Updated — #${escapeHtml(payload.orderNumber ?? "")}`,
+      presentation.title,
       `
       <p>Hello <strong>${escapeHtml(payload.customerName || "Customer")}</strong>,</p>
+
+      ${orderEventBanner(presentation)}
 
       ${orderItemsSection(payload.orderItems, payload.totalUsd)}
       ${designImageGrid(payload.imageUrls)}
       ${designSpecificationsSection(payload)}
       ${memberPricingSection(payload.memberPricing)}
-
-      ${isNewOrder || isEtbAwaiting
-        ? `<div style="margin:0 0 20px;padding:18px;background:${isEtbAwaiting ? "#3d2e00" : "#0d1f0d"};border:1px solid ${isEtbAwaiting ? "#b8860b" : "#2a6e2a"};border-radius:8px;text-align:center">
-            <p style="margin:0 0 6px;color:${isEtbAwaiting ? "#ffd166" : "#5ecf5e"};font-size:18px;font-weight:900">${isEtbAwaiting ? "⏳ Order Received!" : "✅ Order Confirmed!"}</p>
-            <p style="margin:0;color:${isEtbAwaiting ? "#e8cc7a" : "#9ecf9e"};font-size:13px">${isEtbAwaiting ? "Your custom garment is pending payment verification" : "Your custom garment is being prepared"}</p>
-          </div>`
-        : ""
-      }
 
       ${detailsList([
         ["Order Number", payload.orderNumber],
@@ -937,7 +1116,7 @@ export async function sendAdminOrderCreatedEmail(payload: AdminOrderPayload) {
   return sendTransactionalEmailSafely({
     channel: "team",
     to: internalNotificationRecipients(),
-    subject: `✅ New Order Created${payload.orderNumber ? ` — ${payload.orderNumber}` : ""}`,
+    subject: `✅ New Order Created${payload.orderNumber ? ` — Order #${payload.orderNumber}` : ""} | Yehager Bahil Libs`,
     text: paragraph([
       `A new order was created${payload.orderNumber ? `: ${payload.orderNumber}` : "."}`,
       payload.customerEmail ? `Customer: ${payload.customerEmail}` : null,
@@ -964,7 +1143,7 @@ export async function sendAdminOrderStatusChangedEmail(payload: AdminOrderStatus
   return sendTransactionalEmailSafely({
     channel: "team",
     to: internalNotificationRecipients(),
-    subject: `📦 Order Status Updated${payload.orderNumber ? ` — ${payload.orderNumber}` : ""}`,
+    subject: `📦 Order Status Updated${payload.orderNumber ? ` — Order #${payload.orderNumber}` : ""} | Yehager Bahil Libs`,
     text: paragraph([
       `Order ${payload.orderNumber ?? ""} status changed to ${statusLabel}.`.trim(),
       payload.previousStatus ? `Previous status: ${payload.previousStatus.replaceAll("_", " ")}` : null,
@@ -998,7 +1177,7 @@ export async function sendAdminPaymentReceivedEmail(payload: AdminOrderPayload) 
   return sendTransactionalEmailSafely({
     channel: "team",
     to: internalNotificationRecipients(),
-    subject: `💳 Payment Confirmed${payload.orderNumber ? ` — ${payload.orderNumber}` : ""}`,
+    subject: `💳 Payment Confirmed${payload.orderNumber ? ` — Order #${payload.orderNumber}` : ""} | Yehager Bahil Libs`,
     text: paragraph([
       `Payment was confirmed${payload.orderNumber ? ` for ${payload.orderNumber}` : ""}.`,
       payload.customerEmail ? `Customer: ${payload.customerEmail}` : null,
@@ -1025,7 +1204,7 @@ export async function sendCustomDesignSubmittedAdminEmail(payload: CustomDesignP
   return sendTransactionalEmailSafely({
     channel: "team",
     to: internalNotificationRecipients(),
-    subject: `✨ Custom Design Request Received${payload.submissionNumber ? ` — ${payload.submissionNumber}` : ""}`,
+    subject: `✨ Custom Design Request Received${payload.submissionNumber ? ` — #${payload.submissionNumber}` : ""} | Yehager Bahil Libs`,
     text: paragraph([
       `A customer submitted a custom design${payload.submissionNumber ? ` (${payload.submissionNumber})` : ""}.`,
       payload.designTitle ? `Design: ${payload.designTitle}` : null,
@@ -1043,40 +1222,137 @@ export async function sendCustomDesignSubmittedAdminEmail(payload: CustomDesignP
   });
 }
 
+function formattedDesignPrice(value: string | number | null | undefined, currency: "USD" | "ETB") {
+  if (value === undefined || value === null || value === "") return "";
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) return "";
+  return currency === "USD"
+    ? `$${amount.toFixed(2)} USD`
+    : `${Math.round(amount).toLocaleString("en-US")} ETB`;
+}
+
+function customDesignApprovedEmailHtml(payload: CustomDesignPayload, cartUrl: string) {
+  const customerName = payload.customerName || "Customer";
+  const designTitle = payload.designTitle || "Custom Design";
+  const requestNumber = payload.submissionNumber ? `#${payload.submissionNumber}` : "Custom Design Request";
+  const deliveryLabel = payload.estimatedDeliveryLabel || "40–50 days";
+  const usdPrice = formattedDesignPrice(payload.quotedPriceUsd, "USD");
+  const etbPrice = formattedDesignPrice(payload.quotedPriceEtb, "ETB");
+  const contactEmail = emailAddress(env.SUPPORT_NOTIFICATION_EMAIL, "yehagerbahillibs@gmail.com");
+  const noteBlock = payload.reason
+    ? `<div style="margin:18px 0;padding:14px;background:#241d11;border-left:4px solid #b57a13;border-radius:0 7px 7px 0"><p style="margin:0 0 4px;color:#d6a43d;font-size:13px;font-weight:800">Admin Note</p><p style="margin:0;color:#c9bdad;font-size:13px;line-height:1.6">${escapeHtml(payload.reason)}</p></div>`
+    : "";
+  const groupOrderBlock = payload.groupOrderUrl
+    ? `
+      <div style="margin:24px 0;padding:18px 20px;background:#302600;border:1px solid #9a6c12;border-radius:9px">
+        <p style="margin:0 0 8px;color:#c88920;font-size:17px;font-weight:900">👥 Wedding or Group Order?</p>
+        <p style="margin:0 0 12px;color:#e5dac8;font-size:14px;line-height:1.65">Share this link with family members or guests so everyone can enter their own measurements and pay for their matching outfit:</p>
+        <div style="padding:10px 12px;background:#1c1d0d;border-radius:5px;word-break:break-all">
+          <a href="${escapeHtml(payload.groupOrderUrl)}" style="color:#c88920;text-decoration:none;font-size:12px;font-weight:800">${escapeHtml(payload.groupOrderUrl)}</a>
+        </div>
+      </div>`
+    : "";
+
+  return `
+    <div style="margin:0;padding:0;background:#11151b">
+      <div style="max-width:640px;margin:0 auto;padding:24px 14px;font-family:Georgia,'Times New Roman',serif;color:#f5efe6;line-height:1.55">
+        <div style="overflow:hidden;background:#1b1814;border:1px solid #40372e">
+          <div style="padding:28px 28px 24px;text-align:center;background:#17120e">
+            <img src="${escapeHtml(logoMarkUrl())}" alt="Yehager Bahil Libs" width="64" height="64" style="display:block;width:64px;height:64px;box-sizing:border-box;object-fit:contain;margin:0 auto 14px;padding:4px;border:2px solid #ffffff;border-radius:50%;background:#ffffff" />
+            <p style="margin:0;color:#c88920;font-size:30px;font-weight:900;line-height:1.15">Yehager Bahil Libs</p>
+            <p style="margin:8px 0 0;color:#9f947f;font-family:Arial,sans-serif;font-size:11px;font-weight:700;letter-spacing:.18em;text-transform:uppercase">Where Tradition Meets Your Perfect Fit</p>
+          </div>
+
+          <div style="padding:20px 24px;background:#2c8734;text-align:center">
+            <p style="margin:0;color:#ffffff;font-size:29px;font-weight:900;line-height:1.15">✅ Your Custom Design<br />is Approved!</p>
+            <p style="margin:8px 0 0;color:#c9e0ca;font-size:15px;line-height:1.35">Request ${escapeHtml(requestNumber)} · ${escapeHtml(designTitle)}</p>
+          </div>
+
+          <div style="padding:30px">
+            <p style="margin:0 0 24px;color:#f5efe6;font-size:18px">Dear <strong>${escapeHtml(customerName)}</strong>,</p>
+            <p style="margin:0 0 24px;color:#e3ddd4;font-size:18px;line-height:1.8">Great news! Our master tailors have carefully reviewed your uploaded design request and we are ready to bring your vision to life. Below are your full order details:</p>
+
+            <div style="margin:0 0 22px;padding:13px 16px;border:2px solid #23803a;border-radius:9px;text-align:center;background:#142219">
+              <p style="margin:0;color:#58b85f;font-size:21px;font-weight:900">✅ Status: Approved</p>
+            </div>
+
+            <div style="margin:0 0 22px;padding:18px 18px 16px;background:#211f1b;border-left:4px solid #b57a13;border-radius:0 8px 8px 0">
+              <p style="margin:0 0 12px;color:#ffffff;font-size:21px;font-weight:900">Your Custom Design Quote</p>
+              <table role="presentation" style="width:100%;border-collapse:collapse">
+                <tr>
+                  <td style="padding:8px 0;color:#9d958a;font-size:16px;border-bottom:1px solid #38332d">Outfit</td>
+                  <td style="padding:8px 0;color:#ffffff;font-size:16px;font-weight:900;text-align:right;border-bottom:1px solid #38332d">${escapeHtml(designTitle)}</td>
+                </tr>
+                ${payload.fabricType ? `<tr><td style="padding:8px 0;color:#9d958a;font-size:16px;border-bottom:1px solid #38332d">Fabric</td><td style="padding:8px 0;color:#ffffff;font-size:16px;font-weight:900;text-align:right;border-bottom:1px solid #38332d">${escapeHtml(payload.fabricType)}</td></tr>` : ""}
+                ${usdPrice ? `<tr><td style="padding:10px 0;color:#c3bbb0;font-size:17px;font-weight:800">Final Price (USD)</td><td style="padding:10px 0;color:#c88920;font-size:27px;font-weight:900;line-height:1.05;text-align:right">${escapeHtml(usdPrice)}</td></tr>` : ""}
+                ${etbPrice ? `<tr><td style="padding:8px 0;color:#9d958a;font-size:15px;border-bottom:1px solid #38332d">Also payable in ETB</td><td style="padding:8px 0;color:#dfb36d;font-size:20px;font-weight:900;text-align:right;border-bottom:1px solid #38332d">${escapeHtml(etbPrice)}</td></tr>` : ""}
+                <tr>
+                  <td style="padding:12px 0 4px;color:#aaa197;font-size:15px">⏱ Estimated<br />Completion &amp; Delivery</td>
+                  <td style="padding:12px 0 4px;color:#ffffff;font-size:17px;font-weight:900;text-align:right">${escapeHtml(deliveryLabel)}</td>
+                </tr>
+              </table>
+              <p style="margin:3px 0 0;color:#8f877d;font-size:12px">Counted from when your order and payment are confirmed.</p>
+            </div>
+
+            ${noteBlock}
+            ${designImageGrid(payload.imageUrls)}
+
+            <p style="margin:25px 0 10px;color:#ffffff;font-size:21px;font-weight:900;text-align:center">Ready to place your order?</p>
+            <a href="${escapeHtml(cartUrl)}" style="display:block;padding:15px 18px;background:#d18d27;border-radius:7px;color:#ffffff;text-align:center;text-decoration:none;font-size:21px;font-weight:900;line-height:1.15">🛍️ Complete Your Custom<br />Design Order →</a>
+            <p style="margin:9px 0 0;color:#aaa197;font-size:13px;text-align:center">Secure checkout · Pay in USD (Stripe) or ETB (Bank Transfer)</p>
+
+            ${groupOrderBlock}
+
+            <div style="margin:24px 0;padding:20px;background:#202532;border:1px solid #596174;border-radius:8px">
+              <p style="margin:0 0 12px;color:#a9baff;font-size:18px;font-weight:900">📋 How to complete your order:</p>
+              <ol style="margin:0;padding-left:24px;color:#eee9e2;font-size:15px;line-height:1.7">
+                <li style="margin-bottom:7px;padding-left:5px">Click the button above to open your personalized checkout page.</li>
+                <li style="margin-bottom:7px;padding-left:5px">Select who the outfit is for (Man, Woman, Boy, or Girl).</li>
+                <li style="margin-bottom:7px;padding-left:5px">Enter your measurements or choose a standard size.</li>
+                <li style="margin-bottom:7px;padding-left:5px">Complete payment via Stripe (USD) or ETB Bank Transfer.</li>
+                <li style="padding-left:5px">Our tailors begin crafting your garment within 3 business days.<br /><strong>Estimated completion: ${escapeHtml(deliveryLabel)}.</strong></li>
+              </ol>
+            </div>
+
+            <p style="margin:24px 0;color:#b8b0a6;font-size:16px;line-height:1.8">If you have any questions or need any changes before placing your order, please contact us at the details below before proceeding:</p>
+            <div style="margin:0 0 26px;padding:17px 20px;background:#2c2609;border:1px solid #a36f16;border-radius:8px">
+              <p style="margin:0 0 5px;color:#bd7419;font-size:17px;font-weight:900">📞 Questions? Contact Us Directly:</p>
+              <p style="margin:0;color:#bd7419;font-size:23px;font-weight:900"><a href="tel:${escapeHtml(env.PRODUCTION_PHONE)}" style="color:#bd7419;text-decoration:none">${escapeHtml(env.PRODUCTION_PHONE)}</a> (WhatsApp)</p>
+              <p style="margin:2px 0 0"><a href="mailto:${escapeHtml(contactEmail)}" style="color:#bd7419;text-decoration:none;font-size:14px">${escapeHtml(contactEmail)}</a></p>
+            </div>
+
+            <div style="padding:24px 8px 4px;text-align:center">
+              <p style="margin:0 0 3px;color:#bd7419;font-size:18px;font-style:italic">Thank you for choosing us.</p>
+              <p style="margin:0 0 8px;color:#958f88;font-size:15px">Wear your culture with pride.</p>
+              <p style="margin:0 0 8px"><a href="https://www.yehagerbahillibs.com/" style="color:#bd7419;text-decoration:none;font-size:16px">🌐 YehagerBahilLibs.com</a></p>
+              <p style="margin:0;color:#706a64;font-size:12px;line-height:1.45">© ${new Date().getFullYear()} Yehager Bahil Libs · Naomi Investments LLC ·<br />Minnesota, USA</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 export async function sendCustomDesignApprovedEmail(payload: CustomDesignPayload) {
   const cartUrl = appLink("/cart");
   return sendTransactionalEmailSafely({
     channel: "notifications",
     to: payload.to,
-    subject: `✅ Custom Design Approved — Quote Available${payload.submissionNumber ? ` — ${payload.submissionNumber}` : ""}`,
+    subject: `✅ Your Custom Design is Approved! Quote Inside${payload.submissionNumber ? ` — #${payload.submissionNumber}` : ""} | Yehager Bahil Libs`,
     text: paragraph([
-      `Hello ${payload.customerName || "Customer"},`,
-      `Your custom design ${payload.designTitle ? `"${payload.designTitle}" ` : ""}has been approved and added to your cart.`,
+      `Dear ${payload.customerName || "Customer"},`,
+      "Great news! Our master tailors have reviewed your uploaded design request and it has been approved.",
+      payload.submissionNumber ? `Request: #${payload.submissionNumber}` : null,
+      payload.designTitle ? `Outfit: ${payload.designTitle}` : null,
       payload.quotedPriceUsd ? `Quoted price: $${payload.quotedPriceUsd}` : null,
+      payload.quotedPriceEtb ? `Also payable in ETB: ${payload.quotedPriceEtb} ETB` : null,
       payload.estimatedDeliveryLabel ? `Estimated completion and delivery: ${payload.estimatedDeliveryLabel}` : null,
       payload.reason ? `Admin note: ${payload.reason}` : null,
-      `Pay from your cart when you are ready: ${cartUrl}`,
+      `Complete your custom design order: ${cartUrl}`,
+      payload.groupOrderUrl ? `Group order link: ${payload.groupOrderUrl}` : null,
     ]),
-    html: htmlShell(
-      "Custom Design Approved! ✅",
-      `
-      <p>Hello <strong>${escapeHtml(payload.customerName || "Customer")}</strong>,</p>
-      ${designImageGrid(payload.imageUrls)}
-      ${designSpecificationsSection(payload)}
-      ${memberPricingSection(payload.memberPricing)}
-      <div style="margin:20px 0;padding:16px;background:#0d1f0d;border:1px solid #2a6e2a;border-radius:8px">
-        <p style="margin:0 0 6px;color:#5ecf5e;font-size:14px;font-weight:800">✅ Your custom design has been approved!</p>
-        <p style="margin:0;color:#9ecf9e;font-size:13px">${payload.designTitle ? `<strong>"${escapeHtml(payload.designTitle)}"</strong> has` : "Your design has"} been approved and added to your cart. Complete your payment when ready.</p>
-      </div>
-      ${detailsList([
-        ["Submission", payload.submissionNumber],
-        ["Quoted price", payload.quotedPriceUsd ? `$${payload.quotedPriceUsd}` : null],
-        ["Estimated completion", payload.estimatedDeliveryLabel],
-        ["Admin note", payload.reason],
-      ])}
-      ${actionButton("Go to Cart and Pay", cartUrl)}
-      `,
-    ),
+    html: customDesignApprovedEmailHtml(payload, cartUrl),
   });
 }
 
@@ -1084,7 +1360,7 @@ export async function sendCustomDesignDeclinedEmail(payload: CustomDesignPayload
   return sendTransactionalEmailSafely({
     channel: "notifications",
     to: payload.to,
-    subject: `📝 Action Required: Custom Design Revision${payload.submissionNumber ? ` — ${payload.submissionNumber}` : ""}`,
+    subject: `📝 Action Required: Custom Design Revision${payload.submissionNumber ? ` — #${payload.submissionNumber}` : ""} | Yehager Bahil Libs`,
     text: paragraph([
       `Hello ${payload.customerName || "Customer"},`,
       `We reviewed your custom design ${payload.designTitle ? `"${payload.designTitle}" ` : ""}and cannot approve it at this time.`,

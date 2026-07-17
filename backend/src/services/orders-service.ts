@@ -23,6 +23,7 @@ import {
   numberToMoney,
 } from "./checkout-utils.js";
 import { sendAdminOrderCreatedEmail, sendAdminOrderStatusChangedEmail, sendAdminPaymentReceivedEmail, sendOrderStatusEmail } from "./email-service.js";
+import type { OrderEmailEvent } from "./email-service.js";
 import { calculateCouponDiscount, markCouponRedeemed } from "./discounts-service.js";
 import { awardCustomerCreditForPaidOrder } from "./customer-credits-service.js";
 import { hasPermission } from "./permissions-service.js";
@@ -133,6 +134,36 @@ function measurementRecord(row: typeof measurements.$inferSelect) {
     neck: row.neck,
     ...(row.measurementDetails ?? {}),
   };
+}
+
+function orderEmailEventForChange(
+  previous: { status?: string | null; paymentStatus?: string | null; deliveryStatus?: string | null },
+  next: { status?: string | null; paymentStatus?: string | null; deliveryStatus?: string | null },
+  requested: { status?: string; paymentStatus?: string; deliveryStatus?: string },
+): OrderEmailEvent {
+  if (requested.paymentStatus && next.paymentStatus !== previous.paymentStatus) {
+    if (next.paymentStatus === "awaiting_verification") return "payment_verification_pending";
+    if (next.paymentStatus === "paid") return "payment_confirmed";
+    if (next.paymentStatus === "failed") return "payment_failed";
+    if (next.paymentStatus === "refunded") return "payment_refunded";
+    return "payment_pending";
+  }
+  const status = String(next.status ?? "").toLowerCase();
+  const delivery = String(next.deliveryStatus ?? "").toLowerCase();
+  if (requested.status && next.status !== previous.status) {
+    if (status === "ready_for_pickup") return "order_ready_for_pickup";
+    if (status === "delivered" || status === "picked_up") return "order_delivered";
+    if (status === "shipped") return "order_shipped";
+    if (["processing", "tailoring", "quality_check"].includes(status)) return "order_in_production";
+    if (status === "cancelled") return "order_cancelled";
+  }
+  if (requested.deliveryStatus && next.deliveryStatus !== previous.deliveryStatus) {
+    if (["moved_to_pickup_desk", "ready_for_pickup", "customer_notified", "waiting_customer"].includes(delivery)) return "order_ready_for_pickup";
+    if (["delivered", "picked_up"].includes(delivery)) return "order_delivered";
+    if (["assigned_to_ems", "handed_to_ems", "in_transit", "at_hub", "out_for_delivery"].includes(delivery)) return "order_shipped";
+    if (delivery === "cancelled_pickup") return "order_cancelled";
+  }
+  return "order_status_updated";
 }
 
 async function orderDesignEmailDetails(order: { items?: unknown; totalUsd?: unknown; shippingAddress?: unknown; eventId?: string | null }) {
@@ -606,6 +637,7 @@ export async function updateOrderAdminState(payload: {
 
     await sendOrderStatusEmail({
       ...(await orderDesignEmailDetails(updated)),
+      event: orderEmailEventForChange(order, updated, payload),
       to: updated.userEmail,
       customerName: updated.customerName,
       orderNumber: updated.orderNumber,
@@ -867,6 +899,7 @@ export async function createCheckoutIntent(payload: {
   });
   await sendOrderStatusEmail({
     ...(await orderDesignEmailDetails(result.order)),
+    event: "order_confirmed",
     to: result.order.userEmail,
     customerName: result.order.customerName,
     orderNumber: result.order.orderNumber,
@@ -1011,6 +1044,7 @@ export async function submitEtbPaymentProof(payload: {
 
   await sendOrderStatusEmail({
     ...(await orderDesignEmailDetails(updated)),
+    event: "payment_verification_pending",
     to: updated.userEmail,
     customerName: updated.customerName,
     orderNumber: updated.orderNumber,

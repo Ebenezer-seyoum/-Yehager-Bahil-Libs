@@ -4,7 +4,8 @@ import { db } from "../lib/db/drizzle.js";
 import { auditLogs, cartItems, events, familyGroups, systemAlerts, uploadedDesigns, familyMembers, eventParticipants } from "../lib/db/schema.js";
 import { numberToMoney } from "./checkout-utils.js";
 import { getUserByEmail } from "../repositories/users-repository.js";
-import { sendCustomDesignApprovedEmail, sendCustomDesignDeclinedEmail, sendCustomDesignSubmittedAdminEmail } from "./email-service.js";
+import { getUsdEtbRate } from "../repositories/exchange-rates-repository.js";
+import { appLink, sendCustomDesignApprovedEmail, sendCustomDesignDeclinedEmail, sendCustomDesignSubmittedAdminEmail } from "./email-service.js";
 
 function makeSubmissionNumber(date = new Date(), randomPart = Math.floor(1000 + Math.random() * 9000)) {
   const yyyy = date.getUTCFullYear();
@@ -463,12 +464,18 @@ export async function reviewUploadedDesign(payload: {
 
       return { submission: updated, cartItem, memberPricing };
     });
+    const exchangeRate = await getUsdEtbRate(db);
+    const quotedPriceUsd = Number(result.submission.quotedPriceUsd ?? 0);
+    const quotedPriceEtb = exchangeRate && Number.isFinite(quotedPriceUsd)
+      ? numberToMoney(quotedPriceUsd * Number(exchangeRate.rate))
+      : null;
     await sendCustomDesignApprovedEmail({
       to: result.submission.userEmail,
       customerName: result.submission.customerName,
       submissionNumber: result.submission.submissionNumber,
       designTitle: result.submission.designTitle,
       quotedPriceUsd: result.submission.quotedPriceUsd,
+      quotedPriceEtb,
       estimatedDeliveryLabel: result.submission.estimatedDeliveryLabel,
       reason: result.submission.reviewReason,
       fabricType: result.submission.fabricType,
@@ -476,6 +483,7 @@ export async function reviewUploadedDesign(payload: {
       colorPreference: result.submission.colorPreference,
       measurementSnapshot: result.submission.measurementSnapshot,
       memberPricing: result.memberPricing as Array<Record<string, unknown>>,
+      groupOrderUrl: result.submission.familyGroupId ? appLink(`/family-group/${result.submission.familyGroupId}`) : null,
       imageUrls: [result.submission.frontImageUrl, result.submission.sideImageUrl, result.submission.backImageUrl, result.submission.detailImageUrl].filter((url): url is string => Boolean(url)),
     });
     return result;

@@ -47,11 +47,13 @@ import { assignAdditionalRoleToUser, ensureSystemRoleAssignment, replaceUserAddi
 import { updateUserPermissionsForAdmin } from "./permissions-service.js";
 import {
   resetPasswordLink,
+  sendAccountUpdatedEmail,
   sendAccountStatusChangedEmail,
   sendAdminAccountStatusChangedEmail,
   sendCustomerVerificationCodeEmail,
   sendEmployeeRoleAssignedEmail,
   sendPasswordResetEmail,
+  sendPasswordChangedEmail,
   sendPasswordSetupEmail,
   sendRegistrationEmail,
 } from "./email-service.js";
@@ -291,7 +293,13 @@ export async function updateCurrentUserProfile(payload: {
     }
   }
 
-  return getCurrentUserByEmail(updated.email);
+  const currentUser = await getCurrentUserByEmail(updated.email);
+  await sendAccountUpdatedEmail({
+    to: updated.email,
+    name: updated.name,
+    accountType: updated.role,
+  });
+  return currentUser;
 }
 
 export async function changeCurrentUserPassword(payload: {
@@ -312,6 +320,12 @@ export async function changeCurrentUserPassword(payload: {
   const updated = await updateOwnPassword({
     userId: user.id,
     passwordHash: await hashPassword(payload.newPassword),
+  });
+  await sendPasswordChangedEmail({
+    to: user.email,
+    name: user.name,
+    accountType: user.role,
+    changeType: "changed",
   });
   return withComputedUserState(updated);
 }
@@ -1134,6 +1148,13 @@ export async function updateUserProfileForAdminService(payload: {
     metadata: { previous_email: existing.email, current_email: updated.email },
   });
 
+  await sendAccountUpdatedEmail({
+    to: updated.email,
+    name: updated.name,
+    accountType: updated.role,
+    changedBy: payload.performedBy ?? "Administrator",
+  });
+
   return withComputedUserState(updated);
 }
 
@@ -1232,6 +1253,14 @@ export async function resetUserPasswordForAdmin(payload: {
     performedBy: payload.performedBy ?? "admin",
     details: "Admin reset user password",
     metadata: { email: updated.email },
+  });
+
+  await sendPasswordChangedEmail({
+    to: updated.email,
+    name: updated.name,
+    accountType: updated.role,
+    changedBy: payload.performedBy ?? "Administrator",
+    changeType: "admin_reset",
   });
 
   return withComputedUserState(updated);
@@ -1351,6 +1380,13 @@ export async function confirmPasswordResetWithToken(payload: { token: string; pa
       updatedAt: new Date(),
     })
     .where(eq(users.id, request.userId));
+
+  await sendPasswordChangedEmail({
+    to: updated.email,
+    name: updated.name,
+    accountType: updated.role,
+    changeType: "reset",
+  });
 
   return withComputedUserState(updated);
 }

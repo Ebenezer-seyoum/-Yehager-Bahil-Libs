@@ -284,6 +284,7 @@ export async function processStripeWebhook(payload: { body: string; signature?: 
           await awardCustomerCreditForPaidOrder(updatedOrder, "stripe");
         }
         await sendOrderStatusEmail({
+          event: "payment_confirmed",
           to: updatedOrder?.userEmail ?? order.userEmail,
           customerName: updatedOrder?.customerName ?? order.customerName,
           orderNumber: updatedOrder?.orderNumber ?? order.orderNumber,
