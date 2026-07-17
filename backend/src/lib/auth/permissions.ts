@@ -62,8 +62,6 @@ export const PERMISSIONS = {
   SETTINGS_VIEW: "settings.view",
   SETTINGS_EDIT: "settings.edit",
   SETTINGS_MANAGE: "settings.manage",
-  BACKUP_VIEW: "backup.view",
-  BACKUP_EDIT: "backup.edit",
   NOTIFICATIONS_VIEW: "notifications.view",
   ACTIVITY_VIEW: "activity.view",
   ALERTS_VIEW: "alerts.view",

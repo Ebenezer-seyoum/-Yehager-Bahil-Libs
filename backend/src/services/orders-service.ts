@@ -135,16 +135,36 @@ function measurementRecord(row: typeof measurements.$inferSelect) {
   };
 }
 
-function orderDesignEmailDetails(order: { items?: unknown }) {
+function orderDesignEmailDetails(order: { items?: unknown; totalUsd?: unknown; shippingAddress?: unknown }) {
   const itemRows = Array.isArray(order.items) ? order.items.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object") : [];
   const firstItem = itemRows[0] ?? {};
   const metadata = firstItem.item_metadata && typeof firstItem.item_metadata === "object" ? firstItem.item_metadata as Record<string, unknown> : {};
-  const imageUrls = [
-    metadata.front_image_url ?? metadata.frontImageUrl,
-    metadata.side_image_url ?? metadata.sideImageUrl,
-    metadata.back_image_url ?? metadata.backImageUrl,
-    metadata.detail_image_url ?? metadata.detailImageUrl,
-  ].filter((url): url is string => typeof url === "string" && url.length > 0);
+  const imageUrls = itemRows.flatMap((item) => {
+    const itemMetadata = item.item_metadata && typeof item.item_metadata === "object" ? item.item_metadata as Record<string, unknown> : {};
+    return [
+      itemMetadata.front_image_url ?? itemMetadata.frontImageUrl,
+      itemMetadata.side_image_url ?? itemMetadata.sideImageUrl,
+      itemMetadata.back_image_url ?? itemMetadata.backImageUrl,
+      itemMetadata.detail_image_url ?? itemMetadata.detailImageUrl,
+    ].filter((url): url is string => typeof url === "string" && url.length > 0);
+  }).filter((url, index, values) => values.indexOf(url) === index);
+  const orderItems = itemRows.map((item, index) => {
+    const itemMetadata = item.item_metadata && typeof item.item_metadata === "object" ? item.item_metadata as Record<string, unknown> : {};
+    const itemImage = itemMetadata.image_url ?? itemMetadata.imageUrl ?? itemMetadata.product_image_url ?? itemMetadata.productImageUrl ?? item.productImage ?? item.product_image;
+    const measurementSnapshot = item.measurement_snapshot && typeof item.measurement_snapshot === "object"
+      ? item.measurement_snapshot as Record<string, unknown>
+      : item.measurementSnapshot && typeof item.measurementSnapshot === "object"
+        ? item.measurementSnapshot as Record<string, unknown>
+        : undefined;
+    return {
+      name: typeof item.product_name === "string" ? item.product_name : typeof item.productName === "string" ? item.productName : typeof item.name === "string" ? item.name : "Order item",
+      itemNumber: typeof item.product_id === "string" ? item.product_id : typeof item.productId === "string" ? item.productId : typeof item.id === "string" ? item.id : `#${String(index + 1).padStart(3, "0")}`,
+      quantity: item.quantity ?? item.qty ?? 1,
+      priceUsd: item.price_usd ?? item.priceUsd ?? item.unit_price_usd ?? item.unitPriceUsd ?? item.total_usd ?? item.totalUsd ?? item.unitPrice,
+      imageUrl: typeof itemImage === "string" ? itemImage : typeof item.image_url === "string" ? item.image_url : typeof item.product_image_url === "string" ? item.product_image_url : undefined,
+      measurements: measurementSnapshot,
+    };
+  });
   return {
     designTitle: typeof metadata.design_title === "string" ? metadata.design_title : typeof firstItem.product_name === "string" ? firstItem.product_name : undefined,
     fabricType: typeof metadata.fabric_type === "string" ? metadata.fabric_type : undefined,
@@ -153,6 +173,9 @@ function orderDesignEmailDetails(order: { items?: unknown }) {
     gender: typeof metadata.gender === "string" ? metadata.gender : undefined,
     measurementSnapshot: firstItem.measurement_snapshot && typeof firstItem.measurement_snapshot === "object" ? firstItem.measurement_snapshot as Record<string, unknown> : undefined,
     imageUrls,
+    orderItems,
+    totalUsd: order.totalUsd,
+    shippingAddress: typeof order.shippingAddress === "string" ? order.shippingAddress : undefined,
     memberPricing: itemRows.flatMap((item) => {
       const itemMetadata = item.item_metadata && typeof item.item_metadata === "object" ? item.item_metadata as Record<string, unknown> : {};
       return Array.isArray(itemMetadata.member_pricing) ? itemMetadata.member_pricing as Array<Record<string, unknown>> : [];

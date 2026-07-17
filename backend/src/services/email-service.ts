@@ -69,8 +69,20 @@ type OrderStatusPayload = {
   measurementSnapshot?: Record<string, unknown> | null;
   imageUrls?: string[];
   memberPricing?: Array<Record<string, unknown>>;
+  orderItems?: Array<OrderEmailItem>;
+  totalUsd?: string | number | null;
+  shippingAddress?: string | null;
   /** Pass true to show the cancellation policy block (e.g. on new order confirmation). */
   showCancellationPolicy?: boolean;
+};
+
+type OrderEmailItem = {
+  name?: string | null;
+  itemNumber?: string | null;
+  quantity?: string | number | null;
+  priceUsd?: string | number | null;
+  imageUrl?: string | null;
+  measurements?: Record<string, unknown> | null;
 };
 
 type VerificationCodePayload = {
@@ -257,15 +269,18 @@ function emailAddress(value: string | undefined, fallback: string) {
   return match?.[1] ?? value ?? fallback;
 }
 
-function emailImage(url: string | null | undefined, alt: string, width = 560) {
-  if (!url || !/^https:\/\//i.test(url)) return "";
-  return `<div style="margin:20px 0;text-align:center"><img src="${escapeHtml(url)}" alt="${escapeHtml(alt)}" width="${width}" style="display:block;width:100%;max-width:${width}px;height:auto;margin:0 auto;border:0;border-radius:8px" /></div>`;
+function emailImageUrl(value: unknown) {
+  const url = String(value ?? "").trim();
+  if (/^https:\/\//i.test(url)) return url;
+  if (url.startsWith("/")) return appLink(url);
+  return "";
 }
 
 function designImageGrid(imageUrls: string[] = []) {
   const labels = ["Front View", "Side View", "Back View", "Detail / Close-Up"];
   const images = imageUrls
-    .filter((url): url is string => Boolean(url) && /^https:\/\//i.test(url))
+    .map((url) => emailImageUrl(url))
+    .filter(Boolean)
     .slice(0, 4);
   if (!images.length) return "";
   const cells = images.map((url, index) => `
@@ -304,6 +319,30 @@ function compactMeasurementGrid(entries: Array<[string, unknown]>) {
     rows.push(`<tr>${cells}${visible[index + 1] ? "" : '<td style="width:50%">&nbsp;</td>'}</tr>`);
   }
   return `<table role="presentation" style="width:100%;border-collapse:collapse;margin:10px 0 0;border-top:1px solid #3d321d">${rows.join("")}</table>`;
+}
+
+function orderItemsSection(items: OrderEmailItem[] = [], totalUsd?: string | number | null) {
+  if (!items.length) return "";
+  const rows = items.map((item) => {
+    const itemImageUrl = emailImageUrl(item.imageUrl);
+    const image = itemImageUrl
+      ? `<a href="${escapeHtml(itemImageUrl)}" target="_blank" rel="noopener noreferrer"><img src="${escapeHtml(itemImageUrl)}" alt="${escapeHtml(item.name || "Order item")}" width="64" height="78" style="display:block;width:64px;height:78px;object-fit:cover;border:1px solid #4d3714;border-radius:5px" /></a>`
+      : `<div style="width:64px;height:78px;border:1px solid #4d3714;border-radius:5px;color:#8f8067;font-size:10px;text-align:center;padding-top:28px;box-sizing:border-box">No image</div>`;
+    const measurements = Object.entries(item.measurements ?? {}).filter(([, value]) => value != null && String(value).trim() !== "");
+    return `<tr>
+      <td style="width:72px;padding:10px 8px 10px 0;vertical-align:top">${image}</td>
+      <td style="padding:10px 8px 10px 0;vertical-align:top;color:#c8b98b;font-size:12px;line-height:1.35">
+        <strong style="display:block;color:#fff7df;font-size:15px;line-height:1.2">${escapeHtml(item.name || "Order item")}</strong>
+        <span>${escapeHtml(item.itemNumber ? `Item ${item.itemNumber}` : "Item")} · Qty: ${escapeHtml(item.quantity ?? 1)}</span>
+        ${measurements.length ? compactMeasurementGrid(measurements) : ""}
+      </td>
+      <td style="width:78px;padding:10px 0;vertical-align:top;text-align:right;color:#fff7df;font-size:16px;font-weight:900;white-space:nowrap">${item.priceUsd != null ? `$${Number(item.priceUsd).toFixed(2)}` : "—"}</td>
+    </tr>`;
+  }).join("");
+  const totalRow = totalUsd != null
+    ? `<tr><td colspan="2" style="padding:12px 8px;color:#fff7df;font-size:16px;font-weight:900;border-top:1px solid #3d321d">Total</td><td style="padding:12px 0;color:#d6a43d;font-size:22px;font-weight:900;text-align:right;border-top:1px solid #3d321d;white-space:nowrap">$${Number(totalUsd).toFixed(2)}</td></tr>`
+    : "";
+  return `<div style="margin:20px 0"><p style="margin:0 0 8px;color:#d6a43d;font-size:16px;font-weight:900">🧵 Your Order Details</p><table role="presentation" style="width:100%;border-collapse:collapse;border-top:1px solid #3d321d"><tr><th colspan="2" style="padding:8px 8px 8px 0;text-align:left;color:#a99d8a;font-size:12px;text-transform:uppercase">Item / Measurements</th><th style="padding:8px 0;text-align:right;color:#a99d8a;font-size:12px;text-transform:uppercase">Price</th></tr>${rows}${totalRow}</table></div>`;
 }
 
 function designSpecificationsSection(payload: CustomDesignPayload) {
@@ -796,7 +835,8 @@ export async function sendOrderStatusEmail(payload: OrderStatusPayload) {
   const deliveryStatusLabel = payload.deliveryStatus ? payload.deliveryStatus.replaceAll("_", " ") : null;
   const isNewOrder = payload.status === "pending" && payload.paymentStatus === "pending";
   const isEtbAwaiting = payload.paymentStatus === "awaiting_verification";
-  const isEtbOrder = payload.paymentStatus === "awaiting_verification" || payload.status === "pending";
+  const normalizedPayment = String(payload.paymentStatus ?? "").toLowerCase();
+  const normalizedStatus = String(payload.status ?? "").toLowerCase();
 
   const trackingUrl =
     payload.carrier === "Ethiopian Mail Service"
@@ -807,17 +847,29 @@ export async function sendOrderStatusEmail(payload: OrderStatusPayload) {
           ? "https://www.ups.com/track"
           : null;
 
-  const subjectEmoji = isEtbAwaiting ? "⏳" : isNewOrder ? "✅" : "📦";
-  const subjectLabel = isEtbAwaiting
-    ? `ETB Payment Received — #${payload.orderNumber ?? ""} | Yehager Bahil Libs`
-    : isNewOrder
-      ? `Order Confirmed — #${payload.orderNumber ?? ""} | Yehager Bahil Libs`
-      : `Order ${payload.orderNumber ?? ""} status updated`.trim();
+  const orderReference = payload.orderNumber ? `#${payload.orderNumber}` : "";
+  const subject = normalizedPayment === "awaiting_verification"
+    ? `⏳ ETB Payment Verification Pending — Order ${orderReference}`
+    : ["failed", "declined", "rejected"].includes(normalizedPayment)
+      ? `⚠️ Payment Failed — Order ${orderReference}`
+      : normalizedPayment === "paid"
+        ? `✅ Payment Confirmed — Order ${orderReference}`
+        : isNewOrder
+          ? `✅ Order Confirmed — ${orderReference} | Yehager Bahil Libs`
+          : normalizedStatus === "preparing"
+            ? `✂️ Order in Production — ${orderReference}`
+            : normalizedStatus === "shipped"
+              ? `🚚 Order Shipped — ${orderReference}`
+              : normalizedStatus === "delivered"
+                ? `🎉 Order Delivered — ${orderReference}`
+                : normalizedStatus === "ready_for_pickup"
+                  ? `📦 Order Ready for Pickup — ${orderReference}`
+                  : `📦 Order Status Updated — ${orderReference}`;
 
   return sendTransactionalEmailSafely({
     channel: "notifications",
     to: payload.to,
-    subject: `${subjectEmoji} ${subjectLabel}`.trim(),
+    subject: subject.trim(),
     text: paragraph([
       `Hello ${payload.customerName || "Customer"},`,
       `Your order ${payload.orderNumber ?? ""} status is now: ${statusLabel}.`.trim(),
@@ -831,13 +883,16 @@ export async function sendOrderStatusEmail(payload: OrderStatusPayload) {
     ]),
     html: htmlShell(
       isEtbAwaiting
-        ? `Order Received! — #${escapeHtml(payload.orderNumber ?? "")}`
-        : isNewOrder
-          ? `✅ Order Confirmed! — #${escapeHtml(payload.orderNumber ?? "")}`
-          : `Order Updated — #${escapeHtml(payload.orderNumber ?? "")}`,
+        ? `⏳ ETB Payment Verification Pending — #${escapeHtml(payload.orderNumber ?? "")}`
+        : normalizedPayment === "paid"
+          ? `✅ Payment Confirmed — #${escapeHtml(payload.orderNumber ?? "")}`
+          : isNewOrder
+            ? `✅ Order Confirmed — #${escapeHtml(payload.orderNumber ?? "")}`
+            : `📦 Order Status Updated — #${escapeHtml(payload.orderNumber ?? "")}`,
       `
       <p>Hello <strong>${escapeHtml(payload.customerName || "Customer")}</strong>,</p>
 
+      ${orderItemsSection(payload.orderItems, payload.totalUsd)}
       ${designImageGrid(payload.imageUrls)}
       ${designSpecificationsSection(payload)}
       ${memberPricingSection(payload.memberPricing)}
@@ -858,6 +913,7 @@ export async function sendOrderStatusEmail(payload: OrderStatusPayload) {
         ["Delivery Provider", payload.carrier],
         ["Delivery Status", deliveryStatusLabel],
         ["Tracking Number", payload.trackingNumber],
+        ["Ships to", payload.shippingAddress],
       ])}
 
       ${isEtbAwaiting ? etbVerificationBlock() : ""}
@@ -881,7 +937,7 @@ export async function sendAdminOrderCreatedEmail(payload: AdminOrderPayload) {
   return sendTransactionalEmailSafely({
     channel: "team",
     to: internalNotificationRecipients(),
-    subject: `✅ New order created${payload.orderNumber ? `: ${payload.orderNumber}` : ""}`,
+    subject: `✅ New Order Created${payload.orderNumber ? ` — ${payload.orderNumber}` : ""}`,
     text: paragraph([
       `A new order was created${payload.orderNumber ? `: ${payload.orderNumber}` : "."}`,
       payload.customerEmail ? `Customer: ${payload.customerEmail}` : null,
@@ -908,7 +964,7 @@ export async function sendAdminOrderStatusChangedEmail(payload: AdminOrderStatus
   return sendTransactionalEmailSafely({
     channel: "team",
     to: internalNotificationRecipients(),
-    subject: `📦 Order status changed${payload.orderNumber ? `: ${payload.orderNumber}` : ""}`,
+    subject: `📦 Order Status Updated${payload.orderNumber ? ` — ${payload.orderNumber}` : ""}`,
     text: paragraph([
       `Order ${payload.orderNumber ?? ""} status changed to ${statusLabel}.`.trim(),
       payload.previousStatus ? `Previous status: ${payload.previousStatus.replaceAll("_", " ")}` : null,
@@ -942,7 +998,7 @@ export async function sendAdminPaymentReceivedEmail(payload: AdminOrderPayload) 
   return sendTransactionalEmailSafely({
     channel: "team",
     to: internalNotificationRecipients(),
-    subject: `💳 Payment confirmed${payload.orderNumber ? `: ${payload.orderNumber}` : ""}`,
+    subject: `💳 Payment Confirmed${payload.orderNumber ? ` — ${payload.orderNumber}` : ""}`,
     text: paragraph([
       `Payment was confirmed${payload.orderNumber ? ` for ${payload.orderNumber}` : ""}.`,
       payload.customerEmail ? `Customer: ${payload.customerEmail}` : null,
@@ -969,7 +1025,7 @@ export async function sendCustomDesignSubmittedAdminEmail(payload: CustomDesignP
   return sendTransactionalEmailSafely({
     channel: "team",
     to: internalNotificationRecipients(),
-    subject: `✨ New custom design submitted${payload.submissionNumber ? `: ${payload.submissionNumber}` : ""}`,
+    subject: `✨ Custom Design Request Received${payload.submissionNumber ? ` — ${payload.submissionNumber}` : ""}`,
     text: paragraph([
       `A customer submitted a custom design${payload.submissionNumber ? ` (${payload.submissionNumber})` : ""}.`,
       payload.designTitle ? `Design: ${payload.designTitle}` : null,
@@ -992,7 +1048,7 @@ export async function sendCustomDesignApprovedEmail(payload: CustomDesignPayload
   return sendTransactionalEmailSafely({
     channel: "notifications",
     to: payload.to,
-    subject: `✅ Custom design approved${payload.submissionNumber ? `: ${payload.submissionNumber}` : ""}`,
+    subject: `✅ Custom Design Approved — Quote Available${payload.submissionNumber ? ` — ${payload.submissionNumber}` : ""}`,
     text: paragraph([
       `Hello ${payload.customerName || "Customer"},`,
       `Your custom design ${payload.designTitle ? `"${payload.designTitle}" ` : ""}has been approved and added to your cart.`,
@@ -1028,7 +1084,7 @@ export async function sendCustomDesignDeclinedEmail(payload: CustomDesignPayload
   return sendTransactionalEmailSafely({
     channel: "notifications",
     to: payload.to,
-    subject: `📋 Custom design request update${payload.submissionNumber ? `: ${payload.submissionNumber}` : ""}`,
+    subject: `📝 Action Required: Custom Design Revision${payload.submissionNumber ? ` — ${payload.submissionNumber}` : ""}`,
     text: paragraph([
       `Hello ${payload.customerName || "Customer"},`,
       `We reviewed your custom design ${payload.designTitle ? `"${payload.designTitle}" ` : ""}and cannot approve it at this time.`,
