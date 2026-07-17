@@ -5,7 +5,7 @@ import { auditLogs, cartItems, events, familyGroups, systemAlerts, uploadedDesig
 import { numberToMoney } from "./checkout-utils.js";
 import { getUserByEmail } from "../repositories/users-repository.js";
 import { getUsdEtbRate } from "../repositories/exchange-rates-repository.js";
-import { appLink, sendCustomDesignApprovedEmail, sendCustomDesignDeclinedEmail, sendCustomDesignSubmittedAdminEmail } from "./email-service.js";
+import { appLink, sendCustomDesignApprovedEmail, sendCustomDesignDeclinedEmail, sendCustomDesignSubmittedAdminEmail, sendCustomDesignSubmittedCustomerEmail } from "./email-service.js";
 
 function makeSubmissionNumber(date = new Date(), randomPart = Math.floor(1000 + Math.random() * 9000)) {
   const yyyy = date.getUTCFullYear();
@@ -159,6 +159,20 @@ export async function createUploadedDesignSubmission(payload: {
     fabricType: submission.fabricType,
     embroideryStyle: submission.embroideryStyle,
     colorPreference: submission.colorPreference,
+    measurementSnapshot: submission.measurementSnapshot,
+    imageUrls: [submission.frontImageUrl, submission.sideImageUrl, submission.backImageUrl, submission.detailImageUrl].filter((url): url is string => Boolean(url)),
+  });
+  await sendCustomDesignSubmittedCustomerEmail({
+    to: submission.userEmail,
+    customerName: submission.customerName,
+    contactPhone: submission.contactPhone,
+    submittedAt: submission.createdAt,
+    submissionNumber: submission.submissionNumber,
+    designTitle: submission.designTitle,
+    fabricType: submission.fabricType,
+    embroideryStyle: submission.embroideryStyle,
+    colorPreference: submission.colorPreference,
+    gender: typeof submission.measurementSnapshot?.gender === "string" ? submission.measurementSnapshot.gender : null,
     measurementSnapshot: submission.measurementSnapshot,
     imageUrls: [submission.frontImageUrl, submission.sideImageUrl, submission.backImageUrl, submission.detailImageUrl].filter((url): url is string => Boolean(url)),
   });

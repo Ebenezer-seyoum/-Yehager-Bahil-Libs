@@ -288,8 +288,18 @@ export async function processStripeWebhook(payload: { body: string; signature?: 
           to: updatedOrder?.userEmail ?? order.userEmail,
           customerName: updatedOrder?.customerName ?? order.customerName,
           orderNumber: updatedOrder?.orderNumber ?? order.orderNumber,
+          orderDate: updatedOrder?.createdAt ?? order.createdAt,
+          orderType: updatedOrder?.orderType ?? order.orderType,
           status: updatedOrder?.status ?? nextOrderStatus,
           paymentStatus: updatedOrder?.paymentStatus ?? nextPayment,
+          paymentMethod: updatedOrder?.paymentMethod ?? order.paymentMethod,
+          paymentCurrency: updatedOrder?.paymentCurrency ?? order.paymentCurrency,
+          totalUsd: updatedOrder?.totalUsd ?? order.totalUsd,
+          totalEtb: updatedOrder?.totalEtb ?? order.totalEtb,
+          paymentReference: stripeReceipt.receipt.stripePaymentIntentId ?? stripeReceipt.receipt.stripeChargeId ?? session.id,
+          paymentDate: stripeReceipt.receipt.stripePaidAt,
+          paymentFailureReason: stripeReceipt.receipt.stripeFailureReason,
+          receiptUrl: stripeReceipt.receipt.stripeReceiptUrl,
           fulfillmentType: updatedOrder?.fulfillmentType ?? order.fulfillmentType,
         });
         await sendAdminPaymentReceivedEmail({

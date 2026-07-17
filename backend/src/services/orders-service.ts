@@ -161,22 +161,36 @@ function orderEmailEventForChange(
   if (requested.deliveryStatus && next.deliveryStatus !== previous.deliveryStatus) {
     if (["moved_to_pickup_desk", "ready_for_pickup", "customer_notified", "waiting_customer"].includes(delivery)) return "order_ready_for_pickup";
     if (["delivered", "picked_up"].includes(delivery)) return "order_delivered";
-    if (["assigned_to_ems", "handed_to_ems", "in_transit", "at_hub", "out_for_delivery"].includes(delivery)) return "order_shipped";
+    if (delivery === "out_for_delivery") return "order_out_for_delivery";
+    if (["assigned_to_ems", "handed_to_ems", "in_transit", "at_hub"].includes(delivery)) return "order_shipped";
     if (delivery === "cancelled_pickup") return "order_cancelled";
   }
   return "order_status_updated";
 }
 
-async function orderDesignEmailDetails(order: { items?: unknown; totalUsd?: unknown; shippingAddress?: unknown; eventId?: string | null }) {
+function emailString(...values: unknown[]) {
+  return values.find((value): value is string => typeof value === "string" && value.trim().length > 0)?.trim();
+}
+
+function customerItemNumber(value: unknown, index: number) {
+  const candidate = typeof value === "string" ? value.trim() : "";
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(candidate);
+  return candidate && !isUuid ? candidate : `#${String(index + 1).padStart(3, "0")}`;
+}
+
+async function orderDesignEmailDetails(order: Record<string, unknown> & { items?: unknown; eventId?: string | null }) {
   const rawItems = Array.isArray(order.items) ? order.items.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object") : [];
   const enrichedOrder = rawItems.length
     ? await enrichOrderMeasurements({ ...order, items: rawItems } as { items: Array<Record<string, unknown>>; eventId?: string | null })
     : order;
-  const itemRows = Array.isArray(enrichedOrder.items) ? enrichedOrder.items : rawItems;
+  const enrichedRecord = enrichedOrder as Record<string, unknown> & { items?: unknown; members?: unknown };
+  const itemRows = Array.isArray(enrichedRecord.items) ? enrichedRecord.items as Array<Record<string, unknown>> : rawItems;
   const firstItem = itemRows[0] ?? {};
-  const metadata = firstItem.item_metadata && typeof firstItem.item_metadata === "object" ? firstItem.item_metadata as Record<string, unknown> : {};
+  const firstMetadata = firstItem.item_metadata ?? firstItem.itemMetadata;
+  const metadata = firstMetadata && typeof firstMetadata === "object" ? firstMetadata as Record<string, unknown> : {};
   const imageUrls = itemRows.flatMap((item) => {
-    const itemMetadata = item.item_metadata && typeof item.item_metadata === "object" ? item.item_metadata as Record<string, unknown> : {};
+    const rawMetadata = item.item_metadata ?? item.itemMetadata;
+    const itemMetadata = rawMetadata && typeof rawMetadata === "object" ? rawMetadata as Record<string, unknown> : {};
     return imageList(
       itemMetadata.front_image_url ?? itemMetadata.frontImageUrl,
       itemMetadata.side_image_url ?? itemMetadata.sideImageUrl,
@@ -187,39 +201,100 @@ async function orderDesignEmailDetails(order: { items?: unknown; totalUsd?: unkn
     );
   }).filter((url, index, values) => values.indexOf(url) === index);
   const orderItems = itemRows.map((item, index) => {
-    const itemMetadata = item.item_metadata && typeof item.item_metadata === "object" ? item.item_metadata as Record<string, unknown> : {};
+    const rawMetadata = item.item_metadata ?? item.itemMetadata;
+    const itemMetadata = rawMetadata && typeof rawMetadata === "object" ? rawMetadata as Record<string, unknown> : {};
     const itemImage = itemMetadata.image_url ?? itemMetadata.imageUrl ?? itemMetadata.product_image_url ?? itemMetadata.productImageUrl ?? item.productImage ?? item.product_image;
+    const labeledCustomImages = [
+      ["Front View", emailString(itemMetadata.front_image_url, itemMetadata.frontImageUrl)],
+      ["Side View", emailString(itemMetadata.side_image_url, itemMetadata.sideImageUrl)],
+      ["Back View", emailString(itemMetadata.back_image_url, itemMetadata.backImageUrl)],
+      ["Detail / Close-Up", emailString(itemMetadata.detail_image_url, itemMetadata.detailImageUrl)],
+    ].filter((entry): entry is [string, string] => Boolean(entry[1]));
+    const customImages = imageList(
+      labeledCustomImages.map(([, url]) => url),
+      item.custom_design_images,
+      item.customDesignImages,
+    );
+    const productImages = imageList(item.product_images, item.productImages, itemImage, item.image_url, item.product_image_url);
+    const itemImages = customImages.length ? customImages : productImages;
     const measurementSnapshot = item.measurement_snapshot && typeof item.measurement_snapshot === "object"
       ? item.measurement_snapshot as Record<string, unknown>
       : item.measurementSnapshot && typeof item.measurementSnapshot === "object"
         ? item.measurementSnapshot as Record<string, unknown>
         : undefined;
     const rawQuantity = item.quantity ?? item.qty;
-    const rawPrice = item.price_usd ?? item.priceUsd ?? item.unit_price_usd ?? item.unitPriceUsd ?? item.total_usd ?? item.totalUsd ?? item.unitPrice;
+    const rawPrice = item.price_usd ?? item.priceUsd ?? item.line_total_usd ?? item.lineTotalUsd ?? item.unit_price_usd ?? item.unitPriceUsd ?? item.total_usd ?? item.totalUsd ?? item.unitPrice;
+    const itemType = emailString(item.item_type, item.itemType, itemMetadata.type, order.orderType) ?? "standard_order";
+    const memberName = emailString(itemMetadata.member_name, itemMetadata.memberName);
     return {
-      name: typeof item.product_name === "string" ? item.product_name : typeof item.productName === "string" ? item.productName : typeof item.name === "string" ? item.name : "Order item",
-      itemNumber: typeof item.product_id === "string" ? item.product_id : typeof item.productId === "string" ? item.productId : typeof item.id === "string" ? item.id : `#${String(index + 1).padStart(3, "0")}`,
+      name: emailString(itemMetadata.design_title, itemMetadata.designTitle, item.product_name, item.productName, item.name) ?? "Order item",
+      itemNumber: customerItemNumber(itemMetadata.item_number ?? itemMetadata.sku ?? item.product_code ?? item.productCode ?? item.product_id ?? item.productId ?? item.id, index),
       quantity: typeof rawQuantity === "string" || typeof rawQuantity === "number" ? rawQuantity : 1,
       priceUsd: typeof rawPrice === "string" || typeof rawPrice === "number" ? rawPrice : null,
       imageUrl: typeof itemImage === "string" ? itemImage : typeof item.image_url === "string" ? item.image_url : typeof item.product_image_url === "string" ? item.product_image_url : undefined,
+      imageUrls: itemImages,
+      imageLabels: customImages.length ? itemImages.map((url, imageIndex) => labeledCustomImages.find(([, labeledUrl]) => labeledUrl === url)?.[0] ?? `View ${imageIndex + 1}`) : undefined,
+      orderType: itemType,
+      memberName,
+      memberRole: emailString(itemMetadata.role_label, itemMetadata.member_gender, itemMetadata.memberGender),
+      isGroupOrder: itemType === "group_order" || Boolean(memberName),
       measurements: measurementSnapshot,
     };
   });
+  const memberPricing = itemRows.flatMap((item) => {
+    const rawMetadata = item.item_metadata ?? item.itemMetadata;
+    const itemMetadata = rawMetadata && typeof rawMetadata === "object" ? rawMetadata as Record<string, unknown> : {};
+    return Array.isArray(itemMetadata.member_pricing) ? itemMetadata.member_pricing as Array<Record<string, unknown>> : [];
+  });
+  const members = Array.isArray(enrichedRecord.members)
+    ? enrichedRecord.members.filter((member): member is Record<string, unknown> => Boolean(member) && typeof member === "object")
+    : [];
+  const relevantMembers = memberPricing.length
+    ? members.filter((member) => memberPricing.some((row) => row.member_id === member.id || String(row.member_name ?? "").toLowerCase() === String(member.name ?? "").toLowerCase()))
+    : members;
+  const groupMembers = relevantMembers.map((member) => {
+    const pricing = memberPricing.find((row) => row.member_id === member.id || String(row.member_name ?? "").toLowerCase() === String(member.name ?? "").toLowerCase());
+    const measurements = member.measurements && typeof member.measurements === "object" ? member.measurements as Record<string, unknown> : undefined;
+    return {
+      name: emailString(member.name),
+      recipientType: emailString(member.relation, member.gender),
+      priceUsd: pricing?.price_usd as string | number | null | undefined,
+      measurements,
+    };
+  });
   return {
-    designTitle: typeof metadata.design_title === "string" ? metadata.design_title : typeof firstItem.product_name === "string" ? firstItem.product_name : undefined,
-    fabricType: typeof metadata.fabric_type === "string" ? metadata.fabric_type : undefined,
-    embroideryStyle: typeof metadata.embroidery_style === "string" ? metadata.embroidery_style : undefined,
-    colorPreference: typeof metadata.color_preference === "string" ? metadata.color_preference : undefined,
+    designTitle: emailString(metadata.design_title, metadata.designTitle, firstItem.product_name, firstItem.productName),
+    fabricType: emailString(metadata.fabric_type, metadata.fabricType),
+    embroideryStyle: emailString(metadata.embroidery_style, metadata.embroideryStyle),
+    colorPreference: emailString(metadata.color_preference, metadata.colorPreference),
     gender: typeof metadata.gender === "string" ? metadata.gender : undefined,
-    measurementSnapshot: firstItem.measurement_snapshot && typeof firstItem.measurement_snapshot === "object" ? firstItem.measurement_snapshot as Record<string, unknown> : undefined,
+    measurementSnapshot: firstItem.measurement_snapshot && typeof firstItem.measurement_snapshot === "object"
+      ? firstItem.measurement_snapshot as Record<string, unknown>
+      : firstItem.measurementSnapshot && typeof firstItem.measurementSnapshot === "object"
+        ? firstItem.measurementSnapshot as Record<string, unknown>
+        : undefined,
     imageUrls,
     orderItems,
+    groupMembers,
     totalUsd: typeof order.totalUsd === "string" || typeof order.totalUsd === "number" ? order.totalUsd : null,
-    shippingAddress: typeof order.shippingAddress === "string" ? order.shippingAddress : undefined,
-    memberPricing: itemRows.flatMap((item) => {
-      const itemMetadata = item.item_metadata && typeof item.item_metadata === "object" ? item.item_metadata as Record<string, unknown> : {};
-      return Array.isArray(itemMetadata.member_pricing) ? itemMetadata.member_pricing as Array<Record<string, unknown>> : [];
-    }),
+    totalEtb: typeof order.totalEtb === "string" || typeof order.totalEtb === "number" ? order.totalEtb : null,
+    orderDate: order.createdAt instanceof Date || typeof order.createdAt === "string" ? order.createdAt : null,
+    orderType: emailString(order.orderType),
+    paymentMethod: emailString(order.paymentMethod),
+    paymentCurrency: emailString(order.paymentCurrency),
+    paymentReference: emailString(order.stripePaymentIntentId, order.stripeChargeId, order.stripeSessionId),
+    paymentDate: order.stripePaidAt instanceof Date || typeof order.stripePaidAt === "string"
+      ? order.stripePaidAt
+      : order.paymentProofUploadedAt instanceof Date || typeof order.paymentProofUploadedAt === "string"
+        ? order.paymentProofUploadedAt
+        : null,
+    paymentFailureReason: emailString(order.stripeFailureReason),
+    receiptUrl: emailString(order.stripeReceiptUrl),
+    shippingAddress: typeof order.shippingAddress === "string" || (order.shippingAddress && typeof order.shippingAddress === "object")
+      ? order.shippingAddress as string | Record<string, unknown>
+      : undefined,
+    pickupLocation: emailString(order.pickupLocation),
+    memberPricing,
   };
 }
 

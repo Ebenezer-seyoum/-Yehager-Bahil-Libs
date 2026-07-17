@@ -45,6 +45,8 @@ type AccountActivityPayload = {
 type CustomDesignPayload = {
   to?: string | null;
   customerName?: string | null;
+  contactPhone?: string | null;
+  submittedAt?: Date | string | null;
   submissionNumber?: string | null;
   designTitle?: string | null;
   quotedPriceUsd?: string | number | null;
@@ -70,6 +72,7 @@ export type OrderEmailEvent =
   | "order_confirmed"
   | "order_in_production"
   | "order_shipped"
+  | "order_out_for_delivery"
   | "order_ready_for_pickup"
   | "order_fulfilled"
   | "order_delivered"
@@ -82,9 +85,18 @@ type OrderStatusPayload = {
   to?: string | null;
   customerName?: string | null;
   orderNumber?: string | null;
+  orderDate?: Date | string | null;
+  orderType?: string | null;
   status?: string | null;
   deliveryStatus?: string | null;
   paymentStatus?: string | null;
+  paymentMethod?: string | null;
+  paymentCurrency?: string | null;
+  totalEtb?: string | number | null;
+  paymentReference?: string | null;
+  paymentDate?: Date | string | null;
+  paymentFailureReason?: string | null;
+  receiptUrl?: string | null;
   fulfillmentType?: string | null;
   carrier?: string | null;
   trackingNumber?: string | null;
@@ -97,8 +109,10 @@ type OrderStatusPayload = {
   imageUrls?: string[];
   memberPricing?: Array<Record<string, unknown>>;
   orderItems?: Array<OrderEmailItem>;
+  groupMembers?: Array<OrderEmailGroupMember>;
   totalUsd?: string | number | null;
-  shippingAddress?: string | null;
+  shippingAddress?: string | Record<string, unknown> | null;
+  pickupLocation?: string | null;
   /** Pass true to show the cancellation policy block (e.g. on new order confirmation). */
   showCancellationPolicy?: boolean;
 };
@@ -109,6 +123,19 @@ type OrderEmailItem = {
   quantity?: string | number | null;
   priceUsd?: string | number | null;
   imageUrl?: string | null;
+  imageUrls?: string[];
+  imageLabels?: string[];
+  orderType?: string | null;
+  memberName?: string | null;
+  memberRole?: string | null;
+  isGroupOrder?: boolean;
+  measurements?: Record<string, unknown> | null;
+};
+
+type OrderEmailGroupMember = {
+  name?: string | null;
+  recipientType?: string | null;
+  priceUsd?: string | number | null;
   measurements?: Record<string, unknown> | null;
 };
 
@@ -303,6 +330,56 @@ function emailImageUrl(value: unknown) {
   return "";
 }
 
+function formatEmailDate(value: Date | string | null | undefined) {
+  if (!value) return "";
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: "Africa/Addis_Ababa",
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function formatUsd(value: string | number | null | undefined) {
+  if (value === undefined || value === null || value === "") return "";
+  const amount = Number(value);
+  return Number.isFinite(amount) ? `$${amount.toFixed(2)}` : "";
+}
+
+function formatEtb(value: string | number | null | undefined) {
+  if (value === undefined || value === null || value === "") return "";
+  const amount = Number(value);
+  return Number.isFinite(amount) ? `${Math.round(amount).toLocaleString("en-US")} ETB` : "";
+}
+
+function humanizeValue(value: unknown) {
+  return String(value ?? "")
+    .replaceAll("_", " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function formatShippingAddress(value: string | Record<string, unknown> | null | undefined) {
+  if (!value) return "";
+  if (typeof value === "string") return value.trim();
+  const preferredKeys = ["fullName", "address1", "address2", "city", "state", "postalCode", "country"];
+  const preferredValues = preferredKeys
+    .map((key) => value[key])
+    .filter((entry) => typeof entry === "string" || typeof entry === "number")
+    .map((entry) => String(entry).trim())
+    .filter(Boolean);
+  if (preferredValues.length) return [...new Set(preferredValues)].join(", ");
+  return Object.values(value)
+    .filter((entry) => typeof entry === "string" || typeof entry === "number")
+    .map((entry) => String(entry).trim())
+    .filter(Boolean)
+    .join(", ");
+}
+
 function designImageGrid(imageUrls: string[] = []) {
   const labels = ["Front View", "Side View", "Back View", "Detail / Close-Up"];
   const images = imageUrls
@@ -333,8 +410,16 @@ function measurementValue(key: string, value: unknown) {
   return `${normalized}"`;
 }
 
+function visibleMeasurementEntries(entries: Array<[string, unknown]>) {
+  return entries.filter(([, value]) => {
+    if (value === undefined || value === null) return false;
+    if (typeof value === "object" || typeof value === "function") return false;
+    return String(value).trim() !== "";
+  });
+}
+
 function compactMeasurementGrid(entries: Array<[string, unknown]>) {
-  const visible = entries.filter(([, value]) => value !== undefined && value !== null && String(value).trim() !== "");
+  const visible = visibleMeasurementEntries(entries);
   if (!visible.length) return "";
   const rows = [];
   for (let index = 0; index < visible.length; index += 2) {
@@ -349,7 +434,7 @@ function compactMeasurementGrid(entries: Array<[string, unknown]>) {
 }
 
 function compactMeasurementList(entries: Array<[string, unknown]>) {
-  const visible = entries.filter(([, value]) => value !== undefined && value !== null && String(value).trim() !== "");
+  const visible = visibleMeasurementEntries(entries);
   if (!visible.length) return "";
   const rows = visible.map(([key, value]) => `
     <tr>
@@ -360,33 +445,113 @@ function compactMeasurementList(entries: Array<[string, unknown]>) {
 }
 
 function adaptiveMeasurementLayout(entries: Array<[string, unknown]>) {
-  const visible = entries.filter(([, value]) => value !== undefined && value !== null && String(value).trim() !== "");
+  const visible = visibleMeasurementEntries(entries);
   if (!visible.length) return "";
-  return visible.length >= 6 ? compactMeasurementGrid(visible) : compactMeasurementList(visible);
+  return visible.length > 6 ? compactMeasurementGrid(visible) : compactMeasurementList(visible);
 }
 
-function orderItemsSection(items: OrderEmailItem[] = [], totalUsd?: string | number | null) {
-  if (!items.length) return "";
-  const rows = items.map((item) => {
-    const itemImageUrl = emailImageUrl(item.imageUrl);
-    const image = itemImageUrl
-      ? `<a href="${escapeHtml(itemImageUrl)}" target="_blank" rel="noopener noreferrer"><img src="${escapeHtml(itemImageUrl)}" alt="${escapeHtml(item.name || "Order item")}" width="64" height="78" style="display:block;width:64px;height:78px;object-fit:cover;border:1px solid #4d3714;border-radius:5px" /></a>`
-      : `<div style="width:64px;height:78px;border:1px solid #4d3714;border-radius:5px;color:#8f8067;font-size:10px;text-align:center;padding-top:28px;box-sizing:border-box">No image</div>`;
-    const measurements = Object.entries(item.measurements ?? {}).filter(([, value]) => value != null && String(value).trim() !== "");
-    return `<tr>
-      <td style="width:72px;padding:10px 8px 10px 0;vertical-align:top">${image}</td>
-      <td style="padding:10px 8px 10px 0;vertical-align:top;color:#c8b98b;font-size:12px;line-height:1.35">
-        <strong style="display:block;color:#fff7df;font-size:15px;line-height:1.2">${escapeHtml(item.name || "Order item")}</strong>
-        <span>${escapeHtml(item.itemNumber ? `Item ${item.itemNumber}` : "Item")} · Qty: ${escapeHtml(item.quantity ?? 1)}</span>
-        ${measurements.length ? adaptiveMeasurementLayout(measurements) : ""}
-      </td>
-      <td style="width:78px;padding:10px 0;vertical-align:top;text-align:right;color:#fff7df;font-size:16px;font-weight:900;white-space:nowrap">${item.priceUsd != null ? `$${Number(item.priceUsd).toFixed(2)}` : "—"}</td>
-    </tr>`;
-  }).join("");
-  const totalRow = totalUsd != null
-    ? `<tr><td colspan="2" style="padding:12px 8px;color:#fff7df;font-size:16px;font-weight:900;border-top:1px solid #3d321d">Total</td><td style="padding:12px 0;color:#d6a43d;font-size:22px;font-weight:900;text-align:right;border-top:1px solid #3d321d;white-space:nowrap">$${Number(totalUsd).toFixed(2)}</td></tr>`
-    : "";
-  return `<div style="margin:20px 0"><p style="margin:0 0 8px;color:#d6a43d;font-size:16px;font-weight:900">🧵 Your Order Details</p><table role="presentation" style="width:100%;border-collapse:collapse;border-top:1px solid #3d321d"><tr><th colspan="2" style="padding:8px 8px 8px 0;text-align:left;color:#a99d8a;font-size:12px;text-transform:uppercase">Item / Measurements</th><th style="padding:8px 0;text-align:right;color:#a99d8a;font-size:12px;text-transform:uppercase">Price</th></tr>${rows}${totalRow}</table></div>`;
+function orderItemImageStrip(item: OrderEmailItem) {
+  const urls = [...new Set([...(item.imageUrls ?? []), item.imageUrl ?? ""].map(emailImageUrl).filter(Boolean))];
+  if (!urls.length) return "";
+  const labels = item.imageLabels ?? [];
+  const rows: string[] = [];
+  for (let start = 0; start < urls.length; start += 4) {
+    const rowUrls = urls.slice(start, start + 4);
+    const cells = rowUrls.map((url, offset) => {
+      const index = start + offset;
+      const label = labels[index] || (urls.length > 1 ? `View ${index + 1}` : "Product Image");
+      return `<td style="width:25%;padding:4px;vertical-align:top;text-align:center">
+        <a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" style="display:block;text-decoration:none">
+          <img src="${escapeHtml(url)}" alt="${escapeHtml(label)}" width="120" height="145" style="display:block;width:100%;height:145px;object-fit:cover;border:1px solid #695126;border-radius:6px;background:#14110c" />
+        </a>
+        <p style="margin:5px 0 0;color:#fff7df;font-size:11px;font-weight:800;line-height:1.15">${escapeHtml(label)}</p>
+      </td>`;
+    }).join("");
+    const emptyCells = Array.from({ length: 4 - rowUrls.length }, () => '<td style="width:25%;padding:4px">&nbsp;</td>').join("");
+    rows.push(`<tr>${cells}${emptyCells}</tr>`);
+  }
+  return `<div style="margin:16px 0 0"><p style="margin:0 0 7px;color:#d6a43d;font-size:14px;font-weight:900">🖼️ Order Item Images</p><table role="presentation" style="width:100%;border-collapse:collapse;table-layout:fixed">${rows.join("")}</table></div>`;
+}
+
+function groupMemberCard(member: OrderEmailGroupMember, index: number) {
+  const measurements = visibleMeasurementEntries(Object.entries(member.measurements ?? {}));
+  return `<div style="margin:10px 0 0;padding:13px 14px;background:#171510;border:1px solid #383125;border-radius:7px">
+    <table role="presentation" style="width:100%;border-collapse:collapse">
+      <tr>
+        <td style="padding:0;color:#fff7df;font-size:14px;font-weight:900">${index + 1}. ${escapeHtml(member.name || `Group Member ${index + 1}`)}</td>
+        <td style="padding:0;color:#d6a43d;font-size:13px;font-weight:900;text-align:right;white-space:nowrap">${escapeHtml(formatUsd(member.priceUsd))}</td>
+      </tr>
+      ${member.recipientType ? `<tr><td colspan="2" style="padding:3px 0 0;color:#a99d8a;font-size:11px">${escapeHtml(humanizeValue(member.recipientType))}</td></tr>` : ""}
+    </table>
+    ${measurements.length ? `<p style="margin:10px 0 2px;color:#d6a43d;font-size:12px;font-weight:900">📏 Measurements</p>${adaptiveMeasurementLayout(measurements)}` : ""}
+  </div>`;
+}
+
+function regularOrderItemCard(item: OrderEmailItem, index: number) {
+  const measurements = visibleMeasurementEntries(Object.entries(item.measurements ?? {}));
+  const itemNumber = item.itemNumber ? `Item ${item.itemNumber}` : `Item #${String(index + 1).padStart(3, "0")}`;
+  return `<div style="margin:0 0 16px;padding:17px;background:#211f1b;border-left:4px solid #b57a13;border-radius:0 8px 8px 0">
+    <p style="margin:0 0 9px;color:#fff7df;font-size:18px;font-weight:900;line-height:1.25">${escapeHtml(item.name || "Order Item")}</p>
+    <table role="presentation" style="width:100%;border-collapse:collapse">
+      <tr>
+        <td style="padding:3px 10px 3px 0;color:#a99d8a;font-size:12px;vertical-align:top">
+          <strong style="color:#d6a43d">Order Type:</strong> ${escapeHtml(humanizeValue(item.orderType || "Standard Order"))}<br />
+          ${escapeHtml(itemNumber)} · Qty: ${escapeHtml(item.quantity ?? 1)}
+        </td>
+        <td style="padding:3px 0;color:#d6a43d;font-size:18px;font-weight:900;text-align:right;vertical-align:top;white-space:nowrap">${escapeHtml(formatUsd(item.priceUsd))}</td>
+      </tr>
+    </table>
+    ${orderItemImageStrip(item)}
+    ${measurements.length ? `<div style="margin-top:14px"><p style="margin:0 0 5px;color:#d6a43d;font-size:14px;font-weight:900">📏 Measurements</p>${adaptiveMeasurementLayout(measurements)}</div>` : ""}
+  </div>`;
+}
+
+function orderItemsSection(
+  items: OrderEmailItem[] = [],
+  totalUsd?: string | number | null,
+  groupMembers: OrderEmailGroupMember[] = [],
+) {
+  if (!items.length && !groupMembers.length) return "";
+  const groupItems = items.filter((item) => item.isGroupOrder);
+  const regularItems = items.filter((item) => !item.isGroupOrder);
+  const regularCards = regularItems.map(regularOrderItemCard).join("");
+  let groupCard = "";
+
+  if (groupItems.length || groupMembers.length) {
+    const product = groupItems[0] ?? ({ name: "Group Order", orderType: "Group Order" } satisfies OrderEmailItem);
+    const itemMembers = groupItems.map((item) => ({
+      name: item.memberName,
+      recipientType: item.memberRole,
+      priceUsd: item.priceUsd,
+      measurements: item.measurements,
+    }));
+    const members = groupMembers.length
+      ? groupMembers.map((member) => {
+          const matchingItem = itemMembers.find((item) => item.name && item.name.toLowerCase() === String(member.name ?? "").toLowerCase());
+          return { ...member, priceUsd: member.priceUsd ?? matchingItem?.priceUsd, measurements: member.measurements ?? matchingItem?.measurements };
+        })
+      : itemMembers;
+    const sharedImages = {
+      ...product,
+      imageUrls: [...new Set(groupItems.flatMap((item) => item.imageUrls ?? []).concat(product.imageUrl ?? "").filter(Boolean))],
+    };
+    groupCard = `<div style="margin:0 0 16px;padding:17px;background:#211f1b;border-left:4px solid #b57a13;border-radius:0 8px 8px 0">
+      <p style="margin:0 0 8px;color:#fff7df;font-size:18px;font-weight:900;line-height:1.25">${escapeHtml(product.name || "Group Order")}</p>
+      <table role="presentation" style="width:100%;border-collapse:collapse"><tr>
+        <td style="color:#a99d8a;font-size:12px"><strong style="color:#d6a43d">Order Type:</strong> Group Order · ${members.length} ${members.length === 1 ? "member" : "members"}</td>
+        <td style="color:#d6a43d;font-size:18px;font-weight:900;text-align:right;white-space:nowrap">${escapeHtml(formatUsd(groupItems.reduce((sum, item) => sum + Number(item.priceUsd ?? 0), 0) || totalUsd))}</td>
+      </tr></table>
+      ${orderItemImageStrip(sharedImages)}
+      ${members.length ? `<div style="margin-top:15px"><p style="margin:0 0 7px;color:#d6a43d;font-size:14px;font-weight:900">👥 Group Member Measurements</p>${members.map(groupMemberCard).join("")}</div>` : ""}
+    </div>`;
+  }
+
+  const total = formatUsd(totalUsd);
+  return `<div style="margin:22px 0">
+    <p style="margin:0 0 9px;color:#d6a43d;font-size:18px;font-weight:900">🧵 Your Order Details</p>
+    ${regularCards}${groupCard}
+    ${total ? `<table role="presentation" style="width:100%;border-collapse:collapse;background:#17120e"><tr><td style="padding:13px 10px;color:#fff7df;font-size:17px;font-weight:900">Total</td><td style="padding:13px 10px;color:#d6a43d;font-size:23px;font-weight:900;text-align:right;white-space:nowrap">${escapeHtml(total)}</td></tr></table>` : ""}
+  </div>`;
 }
 
 function designSpecificationsSection(payload: CustomDesignPayload) {
@@ -417,7 +582,7 @@ export function appLink(path: string) {
 
 // ─── Order Journey Tracker ────────────────────────────────────────────────────
 
-function orderJourneyHtml() {
+function orderJourneyHtml(event: OrderEmailEvent, productionStage?: string | null) {
   const steps = [
     { emoji: "🔍", label: "Order Review", days: "1–2 days" },
     { emoji: "✂️", label: "Production", days: "20–35 days" },
@@ -425,17 +590,31 @@ function orderJourneyHtml() {
     { emoji: "🚚", label: "Shipping", days: "5–15 days" },
     { emoji: "🎉", label: "Delivery", days: "At your door" },
   ];
+  const normalizedStage = String(productionStage ?? "").toLowerCase();
+  const currentIndex = event === "order_delivered"
+    ? 4
+    : event === "order_shipped" || event === "order_out_for_delivery" || event === "order_ready_for_pickup" || event === "order_fulfilled"
+      ? 3
+      : event === "order_in_production" && normalizedStage === "quality_check"
+        ? 2
+        : event === "order_in_production"
+          ? 1
+          : 0;
 
   const cells = steps
     .map(
-      (step, i) => `
+      (step, i) => {
+        const active = i === currentIndex;
+        const complete = i < currentIndex;
+        return `
       <td style="text-align:center;padding:0 4px;vertical-align:top;width:${Math.floor(100 / (steps.length * 2 - 1))}%">
-        <div style="font-size:22px;margin-bottom:6px">${step.emoji}</div>
-        <div style="color:#fff7df;font-size:11px;font-weight:700;margin-bottom:2px">${escapeHtml(step.label)}</div>
-        <div style="color:#b8a46e;font-size:10px">${escapeHtml(step.days)}</div>
+        <div style="font-size:22px;margin-bottom:6px;${active ? "filter:none" : ""}">${step.emoji}</div>
+        <div style="color:${active ? "#d6a43d" : complete ? "#8fca91" : "#fff7df"};font-size:11px;font-weight:800;margin-bottom:2px">${escapeHtml(step.label)}</div>
+        <div style="color:${active ? "#fff7df" : "#b8a46e"};font-size:10px">${escapeHtml(step.days)}</div>
       </td>
       ${i < steps.length - 1 ? `<td style="text-align:center;vertical-align:middle;color:#d6a43d;font-size:16px;padding:0 2px">→</td>` : ""}
-    `,
+    `;
+      },
     )
     .join("");
 
@@ -521,101 +700,72 @@ function contactAndFooterHtml() {
   const year = new Date().getFullYear();
 
   return `
-    <style>
-      @media only screen and (max-width:620px) {
-        .email-footer-identity { display:block !important; width:100% !important; text-align:center !important; }
-        .email-footer-logo { margin:0 auto 12px !important; }
-      }
-    </style>
     <div style="margin-top:30px;color:#c8b98b;font-family:Arial,sans-serif">
-      <div style="padding:25px 0 20px;text-align:center">
-        <table role="presentation" style="width:100%;border-collapse:collapse"><tr>
-          <td style="width:31%;border-top:1px solid #5a431d"></td>
-          <td style="width:74px;padding:0 10px"><span style="display:inline-block;width:54px;height:54px;border:1px solid #d6a43d;border-radius:50%;color:#f8f1dc;font-size:27px;line-height:54px">🎧</span></td>
-          <td style="width:31%;border-top:1px solid #5a431d"></td>
-        </tr></table>
-        <p style="margin:12px 0 2px;color:#d6a43d;font-size:19px;font-weight:900;line-height:1.25">Questions? Contact Us Directly</p>
-        <p style="margin:0;color:#b8b0a5;font-size:16px;line-height:1.4">We’re here to help!</p>
+      <div style="padding:18px 18px 20px;background:#262109;border:1px solid #a36f16;border-radius:8px">
+        <p style="margin:0 0 10px;color:#b86a1d;font-size:18px;font-weight:900;line-height:1.25">📞 Questions? Contact Us Directly:</p>
+        <p style="margin:0 0 6px;color:#fff7df;font-family:Georgia,'Times New Roman',serif;font-size:18px;font-weight:900;line-height:1.35">Production Manager (Ethiopia)</p>
+        <p style="margin:0 0 6px;color:#b86a1d;font-size:20px;font-weight:900;line-height:1.35">☎ <a href="tel:${escapeHtml(env.PRODUCTION_PHONE)}" style="color:#b86a1d;text-decoration:none">${escapeHtml(env.PRODUCTION_PHONE)}</a> <span style="font-size:15px;font-weight:700">(WhatsApp)</span></p>
+        <p style="margin:0;color:#9f978c;font-size:13px;line-height:1.5;overflow-wrap:anywhere">✉ <a href="mailto:${escapeHtml(productionEmail)}" style="color:#b86a1d;text-decoration:none">${escapeHtml(productionEmail)}</a></p>
+
+        <div style="height:16px;line-height:16px">&nbsp;</div>
+
+        <p style="margin:0 0 5px;color:#fff7df;font-family:Georgia,'Times New Roman',serif;font-size:17px;font-weight:900">Customer Support</p>
+        <p style="margin:0;color:#9f978c;font-size:13px;line-height:1.5;overflow-wrap:anywhere">✉ <a href="mailto:${escapeHtml(supportEmail)}" style="color:#b86a1d;text-decoration:none">${escapeHtml(supportEmail)}</a></p>
       </div>
 
-      <div style="padding:14px 12px 18px">
-        <table role="presentation" style="width:100%;border-collapse:collapse"><tr>
-          <td style="width:68px;padding-right:14px;vertical-align:middle"><span style="display:block;width:54px;height:54px;border:1px solid #d6a43d;border-radius:50%;color:#f8f1dc;font-size:29px;line-height:54px;text-align:center">☎</span></td>
-          <td style="vertical-align:middle">
-            <p style="margin:0 0 7px;color:#fff7df;font-size:16px;font-weight:900;line-height:1.3">Production Manager (Ethiopia)</p>
-            <p style="margin:0 0 6px;color:#d6a43d;font-size:15px;font-weight:800;line-height:1.4"><a href="tel:${escapeHtml(env.PRODUCTION_PHONE)}" style="color:#d6a43d;text-decoration:none">${escapeHtml(env.PRODUCTION_PHONE)}</a> <span style="color:#c8b98b;font-weight:400">(WhatsApp)</span></p>
-            <p style="margin:0;color:#d6a43d;font-size:12px;line-height:1.45;overflow-wrap:anywhere">✉ <a href="mailto:${escapeHtml(productionEmail)}" style="color:#d6a43d;text-decoration:none">${escapeHtml(productionEmail)}</a></p>
-          </td>
-        </tr></table>
+      <div style="margin:32px -10px 0;padding:25px 12px 24px;background:#17120e;text-align:center">
+        <p style="margin:0 0 5px;color:#b86a1d;font-family:Georgia,'Times New Roman',serif;font-size:19px;font-style:italic;line-height:1.35">Thank you for choosing us.</p>
+        <p style="margin:0 0 13px;color:#9b958d;font-family:Georgia,'Times New Roman',serif;font-size:15px;line-height:1.4">Wear your culture with pride.</p>
+        <p style="margin:0 0 13px"><a href="https://www.yehagerbahillibs.com/" style="color:#b86a1d;text-decoration:none;font-size:16px;font-weight:800"><span style="color:#35a7de;font-size:21px;vertical-align:-2px">🌐</span> YehagerBahilLibs.com</a></p>
+        <table role="presentation" style="border-collapse:collapse;margin:0 auto 22px"><tr>${socialHtml}</tr></table>
+
+        <table role="presentation" style="width:100%;border-collapse:collapse">
+          <tr>
+            <td style="width:34%;text-align:center;vertical-align:middle">
+              <img src="${escapeHtml(logoMarkUrl())}" alt="Yehager Bahil Libs" width="76" height="76" style="display:block;width:76px;height:76px;object-fit:contain;margin:0 auto;padding:4px;border:2px solid #d6a43d;border-radius:50%;background:#fff" />
+            </td>
+            <td style="width:66%;padding:8px 0 8px 14px;color:#706b66;font-size:12px;line-height:1.55;text-align:left;vertical-align:middle">
+              <p style="margin:0;color:#c8b98b;font-size:12px">© ${year} Yehager Bahil Libs · Naomi Investments LLC</p>
+              <p style="margin:0">Minnesota, USA</p>
+            </td>
+          </tr>
+        </table>
       </div>
-
-      <table role="presentation" style="width:82%;border-collapse:collapse;margin:0 auto"><tr><td style="border-top:1px solid #5a431d;height:1px;line-height:1px">&nbsp;</td></tr></table>
-
-      <div style="padding:18px 12px 25px">
-        <table role="presentation" style="width:100%;border-collapse:collapse"><tr>
-          <td style="width:68px;padding-right:14px;vertical-align:middle"><span style="display:block;width:54px;height:54px;border:1px solid #d6a43d;border-radius:50%;color:#f8f1dc;font-size:25px;line-height:54px;text-align:center">✉</span></td>
-          <td style="vertical-align:middle">
-            <p style="margin:0 0 7px;color:#fff7df;font-size:16px;font-weight:900">Customer Support</p>
-            <p style="margin:0;color:#d6a43d;font-size:13px;line-height:1.45;overflow-wrap:anywhere"><a href="mailto:${escapeHtml(supportEmail)}" style="color:#d6a43d;text-decoration:none">${escapeHtml(supportEmail)}</a></p>
-          </td>
-        </tr></table>
-      </div>
-
-      <table role="presentation" style="width:82%;border-collapse:collapse;margin:0 auto"><tr><td style="border-top:1px solid #5a431d;height:1px;line-height:1px">&nbsp;</td></tr></table>
-
-      <div style="padding:25px 0 22px;text-align:center">
-        <span style="display:inline-block;width:54px;height:54px;border:1px solid #d6a43d;border-radius:50%;color:#f8f1dc;font-size:29px;line-height:54px">♡</span>
-        <p style="margin:12px 0 4px;color:#d6a43d;font-size:21px;font-weight:900;line-height:1.25">Thank you for choosing us.</p>
-        <p style="margin:0;color:#b8b0a5;font-size:16px;line-height:1.4">Wear your culture with pride.</p>
-      </div>
-
-      <table role="presentation" style="width:82%;border-collapse:collapse;margin:0 auto"><tr><td style="border-top:1px solid #5a431d;height:1px;line-height:1px">&nbsp;</td></tr></table>
-
-      <div style="padding:23px 0 22px;text-align:center">
-        <p style="margin:0 0 13px"><a href="https://www.yehagerbahillibs.com/" style="color:#35a7de;text-decoration:none;font-size:18px;font-weight:900"><span style="font-size:24px;vertical-align:-2px">🌐</span> YehagerBahilLibs.com</a></p>
-        <table role="presentation" style="border-collapse:collapse;margin:0 auto"><tr>${socialHtml}</tr></table>
-      </div>
-
-      <table role="presentation" style="width:82%;border-collapse:collapse;margin:0 auto"><tr><td style="border-top:1px solid #5a431d;height:1px;line-height:1px">&nbsp;</td></tr></table>
-
-      <table role="presentation" style="width:100%;border-collapse:collapse;margin-top:20px">
-        <tr>
-          <td class="email-footer-identity" style="width:35%;text-align:center;vertical-align:middle">
-            <img class="email-footer-logo" src="${escapeHtml(logoMarkUrl())}" alt="Yehager Bahil Libs" width="78" height="78" style="display:block;width:78px;height:78px;object-fit:contain;margin:0 auto;padding:4px;border:2px solid #d6a43d;border-radius:50%;background:#fff" />
-          </td>
-          <td class="email-footer-identity" style="width:65%;padding:10px 0 10px 16px;color:#706b66;font-size:12px;line-height:1.6;vertical-align:middle">
-            <p style="margin:0;color:#c8b98b;font-size:13px">© ${year} Yehager Bahil Libs · Naomi Investments LLC</p>
-            <p style="margin:0">Minnesota, USA</p>
-          </td>
-        </tr>
-      </table>
     </div>
   `;
 }
 
+function brandHeaderHtml() {
+  return `<div style="padding:28px 24px 24px;text-align:center;background:#17120e">
+    <img src="${escapeHtml(logoMarkUrl())}" alt="Yehager Bahil Libs" width="64" height="64" style="display:block;width:64px;height:64px;box-sizing:border-box;object-fit:contain;margin:0 auto 14px;padding:4px;border:2px solid #ffffff;border-radius:50%;background:#ffffff" />
+    <p style="margin:0;color:#c88920;font-family:Georgia,'Times New Roman',serif;font-size:30px;font-weight:900;line-height:1.15">Yehager Bahil Libs</p>
+    <p style="margin:8px 0 0;color:#9f947f;font-family:Arial,sans-serif;font-size:11px;font-weight:700;letter-spacing:.18em;text-transform:uppercase">Where Tradition Meets Your Perfect Fit</p>
+  </div>`;
+}
+
+function customerEmailFrame(body: string, includeFooter = true) {
+  return `<div style="margin:0;padding:0;background:#11151b">
+    <div style="max-width:640px;margin:0 auto;padding:24px 14px;font-family:Georgia,'Times New Roman',serif;color:#f5efe6;line-height:1.55">
+      <div style="overflow:hidden;background:#1b1814;border:1px solid #40372e">
+        ${brandHeaderHtml()}
+        ${body}
+        ${includeFooter ? `<div style="padding:0 30px 30px">${contactAndFooterHtml()}</div>` : ""}
+      </div>
+    </div>
+  </div>`;
+}
+
 function htmlShell(title: string, body: string) {
   return `
-    <div style="margin:0;padding:0;background:#120f09">
-      <div style="font-family:Arial,sans-serif;line-height:1.6;color:#f8f1dc;max-width:640px;margin:0 auto;padding:28px 18px">
-        <div style="background:#1b160d;border:1px solid #4d3714;border-radius:8px;padding:32px 28px">
-
-          <!-- Header -->
-          <div style="text-align:center;margin-bottom:22px">
-            <div style="text-align:center">
-              <img src="${escapeHtml(logoMarkUrl())}" alt="Yehager Bahil Libs" width="82" height="82" style="display:block;width:82px;height:82px;object-fit:contain;margin:0 auto;padding:6px;border:3px solid #fff;border-radius:50%;background:#fff;outline:none;text-decoration:none" />
-            </div>
-          </div>
-          <p style="margin:0 0 4px;text-align:center;color:#d6a43d;font-size:22px;font-weight:900;letter-spacing:.01em">Yehager Bahil Libs</p>
-          <p style="margin:0 0 20px;text-align:center;color:#a88b4a;font-size:11px;font-weight:700;letter-spacing:.18em;text-transform:uppercase">Where Tradition Meets Your Perfect Fit</p>
-
-          <!-- Title -->
+    <div style="margin:0;padding:0;background:#11151b">
+      <div style="font-family:Arial,sans-serif;line-height:1.6;color:#f8f1dc;max-width:640px;margin:0 auto;padding:24px 14px">
+        <div style="overflow:hidden;background:#1b1814;border:1px solid #40372e">
+          ${brandHeaderHtml()}
+          <div style="padding:30px">
           <h1 style="font-size:22px;line-height:1.25;margin:0 0 20px;color:#fff7df;border-bottom:1px solid #3d321d;padding-bottom:16px">${escapeHtml(title)}</h1>
-
-          <!-- Body -->
           ${body}
-
-          <!-- Contact and footer -->
           ${contactAndFooterHtml()}
+          </div>
         </div>
       </div>
     </div>
@@ -1013,9 +1163,11 @@ export async function sendEmployeeRoleAssignedEmail(payload: EmployeeRoleAssigne
 function inferOrderEmailEvent(payload: OrderStatusPayload): OrderEmailEvent {
   const payment = String(payload.paymentStatus ?? "").toLowerCase();
   const status = String(payload.status ?? "").toLowerCase();
+  const delivery = String(payload.deliveryStatus ?? "").toLowerCase();
   if (payment === "awaiting_verification") return "payment_verification_pending";
   if (payment === "refunded") return "payment_refunded";
   if (["failed", "declined", "rejected"].includes(payment)) return "payment_failed";
+  if (delivery === "out_for_delivery") return "order_out_for_delivery";
   if (status === "shipped") return "order_shipped";
   if (status === "delivered" || status === "picked_up") return "order_delivered";
   if (status === "ready_for_pickup") return "order_ready_for_pickup";
@@ -1032,23 +1184,25 @@ function orderEmailPresentation(event: OrderEmailEvent, orderNumber?: string | n
   const reference = orderNumber ? `Order #${orderNumber}` : "Your Order";
   const suffix = " | Yehager Bahil Libs";
   const normalizedProductionStage = String(productionStage ?? "").toLowerCase();
+  const updatedStatusLabel = humanizeValue(normalizedProductionStage || "Order Update");
+  const updatedStatusIcon = /failed|returned|cancelled/.test(normalizedProductionStage) ? "⚠️" : /packing|packed|pickup/.test(normalizedProductionStage) ? "📦" : "🔔";
   const production = normalizedProductionStage === "processing"
     ? {
-        subjectLabel: "🧵 Order in Production — Processing",
-        title: `🧵 Your Order Is Being Processed — #${orderNumber ?? ""}`,
+        subjectLabel: "⚙️ Order Processing",
+        title: `⚙️ Order Processing — #${orderNumber ?? ""}`,
         message: "Your order has entered processing. Our team is preparing the materials and production details before tailoring begins.",
         tone: "blue" as const,
       }
     : normalizedProductionStage === "quality_check"
       ? {
-          subjectLabel: "🔍 Order in Quality Check",
-          title: `🔍 Your Order Is in Quality Check — #${orderNumber ?? ""}`,
+          subjectLabel: "🔍 Quality Check in Progress",
+          title: `🔍 Quality Check in Progress — #${orderNumber ?? ""}`,
           message: "Your garment has been completed and is now being inspected carefully for quality, measurements, and finishing details.",
           tone: "blue" as const,
         }
       : {
-          subjectLabel: "✂️ Order in Production — Tailoring",
-          title: `✂️ Your Order Is Being Tailored — #${orderNumber ?? ""}`,
+          subjectLabel: "✂️ Tailoring in Progress",
+          title: `✂️ Tailoring in Progress — #${orderNumber ?? ""}`,
           message: "Your garment is now being handcrafted by our tailoring team according to your selected design and measurements.",
           tone: "blue" as const,
         };
@@ -1060,9 +1214,9 @@ function orderEmailPresentation(event: OrderEmailEvent, orderNumber?: string | n
       tone: "amber",
     },
     payment_pending: {
-      subject: `⏳ Payment Pending — ${reference}${suffix}`,
-      title: `⏳ Payment Pending — #${orderNumber ?? ""}`,
-      message: "Payment is still required before production can begin.",
+      subject: `⏳ Payment Required — ${reference}${suffix}`,
+      title: `⏳ Payment Required — #${orderNumber ?? ""}`,
+      message: "Your order has been received, but payment has not yet been completed. Please complete payment so we can begin processing.",
       tone: "amber",
     },
     payment_confirmed: {
@@ -1072,9 +1226,9 @@ function orderEmailPresentation(event: OrderEmailEvent, orderNumber?: string | n
       tone: "green",
     },
     payment_failed: {
-      subject: `⚠️ Payment Failed — ${reference}${suffix}`,
-      title: `⚠️ Payment Could Not Be Confirmed — #${orderNumber ?? ""}`,
-      message: "We could not confirm your payment. Please review the payment details or contact support.",
+      subject: `❌ Payment Rejected — Action Required — ${reference}${suffix}`,
+      title: `❌ Payment Rejected — #${orderNumber ?? ""}`,
+      message: "We could not verify your payment. Please review the reason below and submit a valid payment or payment proof.",
       tone: "red",
     },
     payment_refunded: {
@@ -1085,8 +1239,8 @@ function orderEmailPresentation(event: OrderEmailEvent, orderNumber?: string | n
     },
     order_confirmed: {
       subject: `✅ Order Confirmed — ${reference}${suffix}`,
-      title: `✅ Order Confirmed — #${orderNumber ?? ""}`,
-      message: "Your order has been received and confirmed.",
+      title: "✅ Order Confirmed!",
+      message: "Your custom garment is being prepared.",
       tone: "green",
     },
     order_in_production: {
@@ -1099,6 +1253,12 @@ function orderEmailPresentation(event: OrderEmailEvent, orderNumber?: string | n
       subject: `🚚 Order Shipped — ${reference}${suffix}`,
       title: `🚚 Your Order Has Shipped — #${orderNumber ?? ""}`,
       message: "Your order has left our facility and is on its way.",
+      tone: "blue",
+    },
+    order_out_for_delivery: {
+      subject: `🛵 Out for Delivery — ${reference}${suffix}`,
+      title: `🛵 Your Order Is Out for Delivery — #${orderNumber ?? ""}`,
+      message: "Your order is with the delivery team and is on its way to you today.",
       tone: "blue",
     },
     order_ready_for_pickup: {
@@ -1126,9 +1286,9 @@ function orderEmailPresentation(event: OrderEmailEvent, orderNumber?: string | n
       tone: "red",
     },
     order_status_updated: {
-      subject: `📦 Order Status Updated — ${reference}${suffix}`,
-      title: `📦 Order Status Updated — #${orderNumber ?? ""}`,
-      message: "The status of your order has been updated.",
+      subject: `${updatedStatusIcon} ${updatedStatusLabel} — ${reference}${suffix}`,
+      title: `${updatedStatusIcon} ${updatedStatusLabel} — #${orderNumber ?? ""}`,
+      message: `Your order has moved to ${updatedStatusLabel.toLowerCase()}.`,
       tone: "blue",
     },
   };
@@ -1142,7 +1302,151 @@ function orderEventBanner(presentation: ReturnType<typeof orderEmailPresentation
     red: { background: "#321010", border: "#9b3434", heading: "#ff8a8a", body: "#e7b0b0" },
     blue: { background: "#151f32", border: "#3b5c8a", heading: "#9fc4ff", body: "#c4d4ec" },
   }[presentation.tone];
-  return `<div style="margin:0 0 20px;padding:18px;background:${colors.background};border:1px solid ${colors.border};border-radius:8px;text-align:center"><p style="margin:0 0 6px;color:${colors.heading};font-size:18px;font-weight:900">${escapeHtml(presentation.title)}</p><p style="margin:0;color:${colors.body};font-size:13px;line-height:1.5">${escapeHtml(presentation.message)}</p></div>`;
+  return `<div style="padding:20px 24px;background:${colors.background};border-top:1px solid ${colors.border};border-bottom:1px solid ${colors.border};text-align:center"><p style="margin:0 0 6px;color:${colors.heading};font-size:25px;font-weight:900;line-height:1.2">${escapeHtml(presentation.title)}</p><p style="margin:0;color:${colors.body};font-size:15px;line-height:1.45">${escapeHtml(presentation.message)}</p></div>`;
+}
+
+function isPaymentEmailEvent(event: OrderEmailEvent) {
+  return ["payment_verification_pending", "payment_pending", "payment_confirmed", "payment_failed", "payment_refunded"].includes(event);
+}
+
+function paymentMethodLabel(value?: string | null) {
+  const method = String(value ?? "").toLowerCase();
+  if (method === "etb_bank_transfer" || method.includes("bank")) return "ETB Bank Transfer";
+  if (method === "stripe_usd" || method.includes("stripe")) return "Stripe (USD)";
+  return value ? humanizeValue(value) : "Payment Method";
+}
+
+function paymentDetailsCard(payload: OrderStatusPayload, event: OrderEmailEvent) {
+  const isEtb = paymentMethodLabel(payload.paymentMethod) === "ETB Bank Transfer" || String(payload.paymentCurrency ?? "").toUpperCase() === "ETB";
+  const amount = isEtb && payload.totalEtb != null ? formatEtb(payload.totalEtb) : formatUsd(payload.totalUsd);
+  const rows: Array<[string, unknown, string?]> = [
+    ["Order Number", payload.orderNumber ? `#${payload.orderNumber}` : null, "#c88920"],
+    ["Payment Status", humanizeValue(payload.paymentStatus || event.replace("payment_", ""))],
+    ["Payment Method", paymentMethodLabel(payload.paymentMethod)],
+    ["Amount", amount, "#c88920"],
+    ["Currency", payload.paymentCurrency || (isEtb ? "ETB" : "USD")],
+    ["Transaction / Transfer Reference", payload.paymentReference],
+    [event === "payment_confirmed" ? "Confirmed" : event === "payment_failed" ? "Rejected" : "Submitted", formatEmailDate(payload.paymentDate)],
+  ];
+  const renderedRows = rows.filter(([, value]) => value !== undefined && value !== null && value !== "").map(([label, value, color]) => `<tr>
+    <td style="width:43%;padding:8px 12px 8px 0;color:#9d958a;font-size:13px;border-bottom:1px solid #38332d;vertical-align:top">${escapeHtml(label)}</td>
+    <td style="padding:8px 0;color:${color ?? "#ffffff"};font-size:14px;font-weight:900;text-align:right;border-bottom:1px solid #38332d;vertical-align:top;overflow-wrap:anywhere">${escapeHtml(value)}</td>
+  </tr>`).join("");
+  const failure = event === "payment_failed" && payload.paymentFailureReason
+    ? `<div style="margin-top:14px;padding:12px;background:#321010;border:1px solid #9b3434;border-radius:6px"><p style="margin:0 0 4px;color:#ff8a8a;font-size:12px;font-weight:900">Reason</p><p style="margin:0;color:#e7b0b0;font-size:13px;line-height:1.5">${escapeHtml(payload.paymentFailureReason)}</p></div>`
+    : "";
+  return `<div style="padding:18px;background:#211f1b;border-left:4px solid #b57a13;border-radius:0 8px 8px 0">
+    <p style="margin:0 0 10px;color:#ffffff;font-size:19px;font-weight:900">Payment Details</p>
+    <table role="presentation" style="width:100%;border-collapse:collapse">${renderedRows}</table>
+    ${failure}
+  </div>`;
+}
+
+function paymentStatusEmailHtml(
+  payload: OrderStatusPayload,
+  event: OrderEmailEvent,
+  presentation: ReturnType<typeof orderEmailPresentation>,
+  orderUrl: string,
+) {
+  const action = event === "payment_pending"
+    ? actionButton("Complete Payment", orderUrl)
+    : event === "payment_failed"
+      ? actionButton(payload.paymentMethod?.toLowerCase().includes("etb") ? "Resubmit Payment Proof" : "Try Payment Again", orderUrl)
+      : event === "payment_confirmed" && payload.receiptUrl
+        ? actionButton("View Payment Receipt", payload.receiptUrl)
+        : "";
+  const statusNote = event === "payment_verification_pending"
+    ? "Your payment proof is safely recorded. You do not need to submit another payment while our team verifies it."
+    : event === "payment_confirmed"
+      ? "Your payment is complete. Your order is ready for its next production stage."
+      : event === "payment_failed"
+        ? "Please use the action below to submit valid payment information. If you need help, contact Customer Support."
+        : event === "payment_pending"
+          ? "Complete payment to secure your order and allow processing to begin."
+          : "The refund status for this payment has been updated.";
+  return customerEmailFrame(`
+    ${orderEventBanner(presentation)}
+    <div style="padding:30px">
+      <p style="margin:0 0 20px;color:#f5efe6;font-size:17px">Hello <strong>${escapeHtml(payload.customerName || "Customer")}</strong>,</p>
+      ${paymentDetailsCard(payload, event)}
+      <p style="margin:18px 0;color:#c9bdad;font-size:14px;line-height:1.65">${escapeHtml(statusNote)}</p>
+      ${action}
+    </div>
+  `);
+}
+
+function orderSummaryCard(payload: OrderStatusPayload) {
+  const rows: Array<[string, unknown, string?]> = [
+    ["Order Number", payload.orderNumber ? `#${payload.orderNumber}` : null, "#c88920"],
+    ["Order Date", formatEmailDate(payload.orderDate)],
+    ["Customer", payload.customerName || "Customer"],
+    ["Total Paid", formatUsd(payload.totalUsd)],
+  ];
+  return `<div style="margin:0 0 20px;padding:17px 18px;background:#211f1b;border-left:4px solid #b57a13;border-radius:0 8px 8px 0"><table role="presentation" style="width:100%;border-collapse:collapse">
+    ${rows.filter(([, value]) => value !== undefined && value !== null && value !== "").map(([label, value, color]) => `<tr><td style="width:38%;padding:5px 12px 5px 0;color:#918b83;font-size:14px;line-height:1.3;vertical-align:top">${escapeHtml(label)}</td><td style="padding:5px 0;color:${color ?? "#ffffff"};font-size:15px;font-weight:900;line-height:1.3;text-align:right;vertical-align:top">${escapeHtml(value)}</td></tr>`).join("")}
+  </table></div>`;
+}
+
+function orderPaymentMethodBlock(payload: OrderStatusPayload) {
+  const method = paymentMethodLabel(payload.paymentMethod);
+  const status = String(payload.paymentStatus ?? "pending").toLowerCase();
+  if (method === "ETB Bank Transfer" && status === "awaiting_verification") return etbVerificationBlock();
+  const paid = status === "paid";
+  const failed = ["failed", "rejected", "declined"].includes(status);
+  const colors = failed
+    ? { background: "#321010", border: "#9b3434", title: "#ff8a8a", body: "#e7b0b0", icon: "❌" }
+    : paid
+      ? { background: "#142219", border: "#23803a", title: "#58b85f", body: "#c9e0ca", icon: "✅" }
+      : { background: "#3d2e00", border: "#b8860b", title: "#ffd166", body: "#e8cc7a", icon: "⏳" };
+  const label = paid ? "Payment Confirmed" : failed ? "Payment Rejected" : "Payment Required";
+  const amount = method === "ETB Bank Transfer" && payload.totalEtb != null ? formatEtb(payload.totalEtb) : formatUsd(payload.totalUsd);
+  return `<div style="margin:20px 0;padding:16px;background:${colors.background};border:1px solid ${colors.border};border-radius:8px">
+    <p style="margin:0 0 5px;color:${colors.title};font-size:15px;font-weight:900">${colors.icon} ${escapeHtml(method)} — ${escapeHtml(label)}</p>
+    <p style="margin:0;color:${colors.body};font-size:13px;line-height:1.55">${amount ? `${escapeHtml(amount)} · ` : ""}${escapeHtml(humanizeValue(payload.paymentStatus || "pending"))}</p>
+  </div>`;
+}
+
+function orderAdjustmentBlock() {
+  return `<div style="margin:20px 0;padding:16px;background:#262109;border:1px solid #a36f16;border-radius:8px">
+    <p style="margin:0 0 7px;color:#b86a1d;font-size:17px;font-weight:900;line-height:1.3">📞 For Order Adjustments — Contact ONLY:</p>
+    <p style="margin:0 0 4px;color:#fff7df;font-size:17px;font-weight:900">Production Manager (Ethiopia)</p>
+    <p style="margin:0 0 8px;color:#b86a1d;font-size:20px;font-weight:900"><a href="tel:${escapeHtml(env.PRODUCTION_PHONE)}" style="color:#b86a1d;text-decoration:none">${escapeHtml(env.PRODUCTION_PHONE)}</a></p>
+    <p style="margin:0;color:#9f978c;font-size:13px;line-height:1.55">Contact the Production Manager only for order adjustments, measurement corrections, design clarification, and product-related questions.</p>
+  </div>`;
+}
+
+function orderStatusEmailHtml(
+  payload: OrderStatusPayload,
+  event: OrderEmailEvent,
+  presentation: ReturnType<typeof orderEmailPresentation>,
+  orderUrl: string,
+  trackingUrl: string | null,
+) {
+  const isNewOrder = event === "order_confirmed";
+  const destination = payload.fulfillmentType === "pickup"
+    ? payload.pickupLocation
+    : formatShippingAddress(payload.shippingAddress);
+  const deliveryDetails = detailsList([
+    [payload.fulfillmentType === "pickup" ? "Pickup at" : "Ships to", destination],
+    ["Delivery Provider", payload.carrier],
+    ["Delivery Status", payload.deliveryStatus ? humanizeValue(payload.deliveryStatus) : null],
+    ["Tracking Number", payload.trackingNumber],
+  ]);
+  return customerEmailFrame(`
+    ${orderEventBanner(presentation)}
+    <div style="padding:30px">
+      ${orderSummaryCard(payload)}
+      ${orderPaymentMethodBlock(payload)}
+      ${orderItemsSection(payload.orderItems, payload.totalUsd, payload.groupMembers)}
+      ${deliveryDetails}
+      ${trackingUrl && payload.trackingNumber ? actionButton("Track Shipment", trackingUrl) : ""}
+      ${orderAdjustmentBlock()}
+      ${isNewOrder && payload.showCancellationPolicy !== false ? cancellationPolicyBlock(payload.orderNumber, payload.customerName) : ""}
+      ${trackOnlineBox()}
+      ${event !== "order_cancelled" ? orderJourneyHtml(event, payload.productionStage ?? payload.status) : ""}
+      ${actionButton("View My Orders", orderUrl)}
+    </div>
+  `);
 }
 
 export async function sendOrderStatusEmail(payload: OrderStatusPayload) {
@@ -1150,9 +1454,11 @@ export async function sendOrderStatusEmail(payload: OrderStatusPayload) {
   const statusLabel = String(payload.status ?? "updated").replaceAll("_", " ");
   const deliveryStatusLabel = payload.deliveryStatus ? payload.deliveryStatus.replaceAll("_", " ") : null;
   const event = payload.event ?? inferOrderEmailEvent(payload);
-  const presentation = orderEmailPresentation(event, payload.orderNumber, payload.productionStage ?? payload.status);
-  const isNewOrder = event === "order_confirmed";
-  const isEtbAwaiting = event === "payment_verification_pending";
+  const presentation = orderEmailPresentation(
+    event,
+    payload.orderNumber,
+    payload.productionStage ?? (event === "order_status_updated" ? payload.deliveryStatus ?? payload.status : payload.status),
+  );
 
   const trackingUrl =
     payload.carrier === "Ethiopian Mail Service"
@@ -1167,53 +1473,29 @@ export async function sendOrderStatusEmail(payload: OrderStatusPayload) {
     channel: "notifications",
     to: payload.to,
     subject: presentation.subject,
-    text: paragraph([
-      `Hello ${payload.customerName || "Customer"},`,
-      `Your order ${payload.orderNumber ?? ""} status is now: ${statusLabel}.`.trim(),
-      payload.paymentStatus ? `Payment status: ${payload.paymentStatus.replaceAll("_", " ")}` : null,
-      payload.fulfillmentType ? `Delivery method: ${payload.fulfillmentType}` : null,
-      payload.carrier ? `Delivery provider: ${payload.carrier}` : null,
-      deliveryStatusLabel ? `Delivery status: ${deliveryStatusLabel}` : null,
-      payload.trackingNumber ? `Tracking number: ${payload.trackingNumber}` : null,
-      trackingUrl && payload.trackingNumber ? `Track shipment: ${trackingUrl}` : null,
-      `View your orders: ${orderUrl}`,
-    ]),
-    html: htmlShell(
-      presentation.title,
-      `
-      <p>Hello <strong>${escapeHtml(payload.customerName || "Customer")}</strong>,</p>
-
-      ${orderEventBanner(presentation)}
-
-      ${orderItemsSection(payload.orderItems, payload.totalUsd)}
-      ${designImageGrid(payload.imageUrls)}
-      ${designSpecificationsSection(payload)}
-      ${memberPricingSection(payload.memberPricing)}
-
-      ${detailsList([
-        ["Order Number", payload.orderNumber],
-        ["Order Status", statusLabel],
-        ["Payment Status", payload.paymentStatus?.replaceAll("_", " ")],
-        ["Delivery Method", payload.fulfillmentType],
-        ["Delivery Provider", payload.carrier],
-        ["Delivery Status", deliveryStatusLabel],
-        ["Tracking Number", payload.trackingNumber],
-        ["Ships to", payload.shippingAddress],
-      ])}
-
-      ${isEtbAwaiting ? etbVerificationBlock() : ""}
-
-      ${trackingUrl && payload.trackingNumber ? actionButton("Track Shipment", trackingUrl) : ""}
-
-      ${isNewOrder || isEtbAwaiting ? trackOnlineBox() : ""}
-
-      ${(isNewOrder || isEtbAwaiting) && (payload.showCancellationPolicy !== false) ? cancellationPolicyBlock(payload.orderNumber, payload.customerName) : ""}
-
-      ${isNewOrder || isEtbAwaiting ? orderJourneyHtml() : ""}
-
-      ${actionButton("View My Orders", orderUrl)}
-      `,
-    ),
+    text: isPaymentEmailEvent(event)
+      ? paragraph([
+          `Hello ${payload.customerName || "Customer"},`,
+          presentation.message,
+          payload.orderNumber ? `Order: #${payload.orderNumber}` : null,
+          `Payment method: ${paymentMethodLabel(payload.paymentMethod)}`,
+          payload.paymentStatus ? `Payment status: ${humanizeValue(payload.paymentStatus)}` : null,
+          payload.totalUsd != null ? `Amount: ${formatUsd(payload.totalUsd)}` : null,
+          `View your order: ${orderUrl}`,
+        ])
+      : paragraph([
+          `Hello ${payload.customerName || "Customer"},`,
+          presentation.message,
+          payload.orderNumber ? `Order: #${payload.orderNumber}` : null,
+          `Order status: ${humanizeValue(statusLabel)}`,
+          payload.paymentStatus ? `Payment status: ${humanizeValue(payload.paymentStatus)}` : null,
+          deliveryStatusLabel ? `Delivery status: ${humanizeValue(deliveryStatusLabel)}` : null,
+          payload.trackingNumber ? `Tracking number: ${payload.trackingNumber}` : null,
+          `View your orders: ${orderUrl}`,
+        ]),
+    html: isPaymentEmailEvent(event)
+      ? paymentStatusEmailHtml(payload, event, presentation, orderUrl)
+      : orderStatusEmailHtml(payload, event, presentation, orderUrl, trackingUrl),
   });
 }
 
@@ -1246,10 +1528,14 @@ export async function sendAdminOrderCreatedEmail(payload: AdminOrderPayload) {
 export async function sendAdminOrderStatusChangedEmail(payload: AdminOrderStatusPayload) {
   const orderUrl = payload.orderId ? appLink(`/admin/orders/${payload.orderId}`) : appLink("/admin/orders");
   const statusLabel = String(payload.status ?? "updated").replaceAll("_", " ");
+  const subjectStatus = payload.deliveryStatus && payload.previousStatus === payload.status
+    ? humanizeValue(payload.deliveryStatus)
+    : humanizeValue(statusLabel);
+  const subjectIcon = /deliver|ship|transit/.test(subjectStatus.toLowerCase()) ? "🚚" : /cancel|fail|return/.test(subjectStatus.toLowerCase()) ? "⚠️" : /tailor|production/.test(subjectStatus.toLowerCase()) ? "✂️" : "📦";
   return sendTransactionalEmailSafely({
     channel: "team",
     to: internalNotificationRecipients(),
-    subject: `📦 Order Status Updated${payload.orderNumber ? ` — Order #${payload.orderNumber}` : ""} | Yehager Bahil Libs`,
+    subject: `${subjectIcon} ${subjectStatus}${payload.orderNumber ? ` — Order #${payload.orderNumber}` : ""} | Yehager Bahil Libs`,
     text: paragraph([
       `Order ${payload.orderNumber ?? ""} status changed to ${statusLabel}.`.trim(),
       payload.previousStatus ? `Previous status: ${payload.previousStatus.replaceAll("_", " ")}` : null,
@@ -1262,7 +1548,7 @@ export async function sendAdminOrderStatusChangedEmail(payload: AdminOrderStatus
       `Open order: ${orderUrl}`,
     ]),
     html: htmlShell(
-      "Order Status Changed 📦",
+      `${subjectStatus} ${subjectIcon}`,
       `<p>An order status was updated and may require operational follow-up.</p>${detailsList([
         ["Order", payload.orderNumber],
         ["Customer", payload.customerName || payload.customerEmail],
@@ -1304,6 +1590,99 @@ export async function sendAdminPaymentReceivedEmail(payload: AdminOrderPayload) 
 }
 
 // ─── Custom design emails ─────────────────────────────────────────────────────
+
+function customDesignRequestDetails(payload: CustomDesignPayload) {
+  const rows: Array<[string, unknown]> = [
+    ["Outfit Type", payload.designTitle],
+    ["Fabric", payload.fabricType],
+    ["Embroidery Type", payload.embroideryStyle],
+    ["Color Theme", payload.colorPreference],
+  ];
+  return `<div style="margin:24px 0 0">
+    <p style="margin:0 0 7px;color:#c88920;font-size:20px;font-weight:900">🎨 Your Design Specifications</p>
+    <table role="presentation" style="width:100%;border-collapse:collapse;border-top:1px solid #433d35">
+      ${rows.filter(([, value]) => value !== undefined && value !== null && value !== "").map(([label, value]) => `<tr>
+        <td style="width:34%;padding:8px 10px 8px 0;color:#918b83;font-size:15px;vertical-align:top">${escapeHtml(label)}</td>
+        <td style="padding:8px 0;color:#ffffff;font-size:15px;font-weight:900;vertical-align:top">${escapeHtml(value)}</td>
+      </tr>`).join("")}
+    </table>
+  </div>`;
+}
+
+function customDesignSizingCard(payload: CustomDesignPayload) {
+  const entries = visibleMeasurementEntries(Object.entries(payload.measurementSnapshot ?? {}));
+  if (payload.gender && !entries.some(([key]) => key.toLowerCase() === "gender")) entries.push(["gender", payload.gender]);
+  if (!entries.length) return "";
+  const rows = entries.map(([key, value]) => `<tr>
+    <td style="padding:3px 12px 3px 0;color:#918b83;font-size:14px;line-height:1.25">${escapeHtml(measurementLabel(key))}</td>
+    <td style="padding:3px 0;color:#ffffff;font-size:14px;font-weight:900;line-height:1.25;white-space:nowrap">${escapeHtml(measurementValue(key, value))}</td>
+  </tr>`).join("");
+  return `<div style="margin:20px 0;padding:16px;background:#211f1b;border-radius:8px">
+    <p style="margin:0 0 7px;color:#ffffff;font-size:17px;font-weight:900">📏 Sizing</p>
+    <p style="margin:0 0 7px;color:#ffffff;font-size:15px;font-weight:900">📏 Custom Measurements (inches)</p>
+    <table role="presentation" style="width:auto;border-collapse:collapse">${rows}</table>
+  </div>`;
+}
+
+function customDesignNextSteps() {
+  return `<div style="margin:24px 0 0;padding:18px 20px;background:#15251a;border:1px solid #23803a;border-radius:8px">
+    <p style="margin:0 0 12px;color:#58b85f;font-size:20px;font-weight:900">📋 What Happens Next?</p>
+    <ol style="margin:0;padding-left:24px;color:#eee9e2;font-size:15px;line-height:1.72">
+      <li style="margin-bottom:9px;padding-left:4px"><strong>Design Review</strong> — Our tailors carefully review your uploaded images and specifications (1–2 business days).</li>
+      <li style="margin-bottom:9px;padding-left:4px"><strong>We may contact you</strong> — We may call or message you via WhatsApp to gather additional information and ensure we fully understand the design you are looking for.</li>
+      <li style="margin-bottom:9px;padding-left:4px"><strong>Price Quote</strong> — We send you a detailed price quote via WhatsApp or email.</li>
+      <li style="margin-bottom:9px;padding-left:4px"><strong>Production Begins</strong> — Once you approve the quote and payment is confirmed, our tailors begin crafting your garment (30–45 days).</li>
+      <li style="padding-left:4px"><strong>Worldwide Shipping</strong> — Your finished garment is shipped directly to you with tracking.</li>
+    </ol>
+  </div>`;
+}
+
+function customDesignSubmittedCustomerEmailHtml(payload: CustomDesignPayload) {
+  const requestNumber = payload.submissionNumber ? `#${payload.submissionNumber}` : "—";
+  const submittedAt = formatEmailDate(payload.submittedAt);
+  const summaryRows: Array<[string, unknown, boolean?]> = [
+    ["Request Number", requestNumber, true],
+    ["Submitted", submittedAt],
+    ["Customer", payload.customerName || "Customer"],
+    ["WhatsApp / Phone", payload.contactPhone],
+  ];
+  const summary = summaryRows.filter(([, value]) => value !== undefined && value !== null && value !== "").map(([label, value, gold]) => `<tr>
+    <td style="width:38%;padding:5px 12px 5px 0;color:#918b83;font-size:15px;line-height:1.25;vertical-align:top">${escapeHtml(label)}</td>
+    <td style="padding:5px 0;color:${gold ? "#c88920" : "#ffffff"};font-size:15px;font-weight:900;line-height:1.3;text-align:right;vertical-align:top">${escapeHtml(value)}</td>
+  </tr>`).join("");
+
+  return customerEmailFrame(`
+    <div style="padding:20px 24px;background:#9b673f;text-align:center">
+      <p style="margin:0;color:#ffffff;font-size:28px;font-weight:900;line-height:1.15">✨ Custom Design Request<br />Received!</p>
+      <p style="margin:8px 0 0;color:#e2d4c5;font-size:15px;line-height:1.35">Our team of master tailors will review your submission</p>
+    </div>
+    <div style="padding:30px">
+      <div style="padding:17px 18px;background:#211f1b;border-left:4px solid #b57a13;border-radius:0 8px 8px 0">
+        <table role="presentation" style="width:100%;border-collapse:collapse">${summary}</table>
+      </div>
+      ${customDesignRequestDetails(payload)}
+      ${designImageGrid(payload.imageUrls)}
+      ${customDesignSizingCard(payload)}
+      ${customDesignNextSteps()}
+    </div>
+  `);
+}
+
+export async function sendCustomDesignSubmittedCustomerEmail(payload: CustomDesignPayload) {
+  return sendTransactionalEmailSafely({
+    channel: "notifications",
+    to: payload.to,
+    subject: `✨ Custom Design Request Received${payload.submissionNumber ? ` — #${payload.submissionNumber}` : ""} | Yehager Bahil Libs`,
+    text: paragraph([
+      `Dear ${payload.customerName || "Customer"},`,
+      "Your custom design request has been received. Our master tailors will review your images and specifications within 1–2 business days.",
+      payload.submissionNumber ? `Request number: #${payload.submissionNumber}` : null,
+      payload.designTitle ? `Outfit type: ${payload.designTitle}` : null,
+      payload.contactPhone ? `WhatsApp / Phone: ${payload.contactPhone}` : null,
+    ]),
+    html: customDesignSubmittedCustomerEmailHtml(payload),
+  });
+}
 
 export async function sendCustomDesignSubmittedAdminEmail(payload: CustomDesignPayload & { customerEmail?: string | null }) {
   const adminUrl = appLink("/admin/custom-orders");
@@ -1358,16 +1737,7 @@ function customDesignApprovedEmailHtml(payload: CustomDesignPayload, cartUrl: st
       </div>`
     : "";
 
-  return `
-    <div style="margin:0;padding:0;background:#11151b">
-      <div style="max-width:640px;margin:0 auto;padding:24px 14px;font-family:Georgia,'Times New Roman',serif;color:#f5efe6;line-height:1.55">
-        <div style="overflow:hidden;background:#1b1814;border:1px solid #40372e">
-          <div style="padding:28px 28px 24px;text-align:center;background:#17120e">
-            <img src="${escapeHtml(logoMarkUrl())}" alt="Yehager Bahil Libs" width="64" height="64" style="display:block;width:64px;height:64px;box-sizing:border-box;object-fit:contain;margin:0 auto 14px;padding:4px;border:2px solid #ffffff;border-radius:50%;background:#ffffff" />
-            <p style="margin:0;color:#c88920;font-size:30px;font-weight:900;line-height:1.15">Yehager Bahil Libs</p>
-            <p style="margin:8px 0 0;color:#9f947f;font-family:Arial,sans-serif;font-size:11px;font-weight:700;letter-spacing:.18em;text-transform:uppercase">Where Tradition Meets Your Perfect Fit</p>
-          </div>
-
+  return customerEmailFrame(`
           <div style="padding:20px 24px;background:#2c8734;text-align:center">
             <p style="margin:0;color:#ffffff;font-size:29px;font-weight:900;line-height:1.15">✅ Your Custom Design<br />is Approved!</p>
             <p style="margin:8px 0 0;color:#c9e0ca;font-size:15px;line-height:1.35">Request ${escapeHtml(requestNumber)} · ${escapeHtml(designTitle)}</p>
@@ -1419,12 +1789,8 @@ function customDesignApprovedEmailHtml(payload: CustomDesignPayload, cartUrl: st
               </ol>
             </div>
 
-            ${contactAndFooterHtml()}
           </div>
-        </div>
-      </div>
-    </div>
-  `;
+  `);
 }
 
 export async function sendCustomDesignApprovedEmail(payload: CustomDesignPayload) {
