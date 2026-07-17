@@ -19,19 +19,21 @@ function isSupportedLanguage(code: string | null): code is string {
 }
 
 export function I18nProvider({ children }: { children: React.ReactNode }) {
-  const [language, setLanguageState] = useState(() => {
-    if (typeof window === "undefined") {
-      return DEFAULT_LANGUAGE;
-    }
-    const stored = window.localStorage.getItem(STORAGE_KEY);
-    if (isSupportedLanguage(stored)) return stored;
-    return DEFAULT_LANGUAGE;
-  });
+  // Keep the first client render identical to the server render. Reading
+  // localStorage here can produce different markup in production when a
+  // visitor already has a saved language preference, causing React hydration
+  // error #418.
+  const [language, setLanguageState] = useState(DEFAULT_LANGUAGE);
 
   const setLanguage = useCallback((code: string) => {
     if (!isSupportedLanguage(code)) return;
     setLanguageState(code);
     window.localStorage.setItem(STORAGE_KEY, code);
+  }, []);
+
+  useEffect(() => {
+    const stored = window.localStorage.getItem(STORAGE_KEY);
+    if (isSupportedLanguage(stored)) setLanguageState(stored);
   }, []);
 
   useEffect(() => {

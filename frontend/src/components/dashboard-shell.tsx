@@ -98,7 +98,7 @@ export function DashboardShell({
   const pathname = usePathname()!;
   const router = useRouter();
   const searchParams = useSearchParams()!;
-  const { data: session, update: updateSession } = useSession();
+  const { data: session } = useSession();
   const isReportsRoute = pathname.startsWith("/admin/reports");
   const isActivityRoute = pathname.startsWith("/admin/audit");
   const shellTitle = isReportsRoute
@@ -372,10 +372,9 @@ export function DashboardShell({
         if (typeof nextAvatarUrl === "string") setRefreshedAvatarUrl(nextAvatarUrl);
         if (nextAvatarUrl === null) setRefreshedAvatarUrl(null);
 
-        // Rebuild the NextAuth JWT and server-rendered layout after the
-        // backend returns the latest role assignment.
-        await updateSession();
-        router.refresh();
+        // Keep the shell responsive while polling profile permissions. Do not
+        // rebuild the NextAuth session and server-render the whole dashboard
+        // on every poll; that caused a visible reload loop in production.
       } catch {
         // Permission polling is best-effort; existing access remains visible.
       }
@@ -389,7 +388,7 @@ export function DashboardShell({
       window.clearInterval(intervalId);
       window.removeEventListener("focus", handleFocus);
     };
-  }, [router, session?.user?.id, updateSession]);
+  }, [router, session?.user?.id]);
 
   useEffect(() => {
     const onProfileUpdated = (event: Event) => {
