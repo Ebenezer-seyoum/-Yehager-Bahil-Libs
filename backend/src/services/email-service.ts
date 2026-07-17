@@ -261,7 +261,7 @@ function actionButton(label: string, href: string) {
 }
 
 function logoMarkUrl() {
-  return env.EMAIL_LOGO_MARK_URL || "https://www.yehagerbahillibs.com/images/email-logo-mark.png";
+  return env.EMAIL_LOGO_MARK_URL || appLink("/images/email-logo-mark.png");
 }
 
 function emailAddress(value: string | undefined, fallback: string) {

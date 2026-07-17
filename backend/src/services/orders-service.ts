@@ -135,8 +135,12 @@ function measurementRecord(row: typeof measurements.$inferSelect) {
   };
 }
 
-function orderDesignEmailDetails(order: { items?: unknown; totalUsd?: unknown; shippingAddress?: unknown }) {
-  const itemRows = Array.isArray(order.items) ? order.items.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object") : [];
+async function orderDesignEmailDetails(order: { items?: unknown; totalUsd?: unknown; shippingAddress?: unknown; eventId?: string | null }) {
+  const rawItems = Array.isArray(order.items) ? order.items.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object") : [];
+  const enrichedOrder = rawItems.length
+    ? await enrichOrderMeasurements({ ...order, items: rawItems } as { items: Array<Record<string, unknown>>; eventId?: string | null })
+    : order;
+  const itemRows = Array.isArray(enrichedOrder.items) ? enrichedOrder.items : rawItems;
   const firstItem = itemRows[0] ?? {};
   const metadata = firstItem.item_metadata && typeof firstItem.item_metadata === "object" ? firstItem.item_metadata as Record<string, unknown> : {};
   const imageUrls = itemRows.flatMap((item) => {
@@ -601,7 +605,7 @@ export async function updateOrderAdminState(payload: {
     }
 
     await sendOrderStatusEmail({
-      ...orderDesignEmailDetails(updated),
+      ...(await orderDesignEmailDetails(updated)),
       to: updated.userEmail,
       customerName: updated.customerName,
       orderNumber: updated.orderNumber,
@@ -862,7 +866,7 @@ export async function createCheckoutIntent(payload: {
     };
   });
   await sendOrderStatusEmail({
-    ...orderDesignEmailDetails(result.order),
+    ...(await orderDesignEmailDetails(result.order)),
     to: result.order.userEmail,
     customerName: result.order.customerName,
     orderNumber: result.order.orderNumber,
@@ -1006,7 +1010,7 @@ export async function submitEtbPaymentProof(payload: {
   });
 
   await sendOrderStatusEmail({
-    ...orderDesignEmailDetails(updated),
+    ...(await orderDesignEmailDetails(updated)),
     to: updated.userEmail,
     customerName: updated.customerName,
     orderNumber: updated.orderNumber,
