@@ -1091,7 +1091,7 @@ export async function sendSupportReplyEmail(
     references?: string | string[];
   },
 ) {
-  const supportUrl = appLink("/support");
+  const replyText = payload.reply?.trim() || "";
   return sendTransactionalEmailSafely({
     channel: "support",
     to: payload.to,
@@ -1100,28 +1100,7 @@ export async function sendSupportReplyEmail(
     inReplyTo: payload.inReplyTo,
     references: payload.references,
     attachments: payload.attachments,
-    text: paragraph([
-      `Hello ${payload.customerName || "Customer"},`,
-      "Our support team replied to your message.",
-      payload.subject ? "Subject: " + payload.subject : null,
-      payload.attachments?.length ? "Attachments: " + payload.attachments.map((attachment) => attachment.filename).join(", ") : null,
-      payload.reply,
-      `Open support: ${supportUrl}`,
-    ]),
-    html: htmlShell(
-      payload.subject?.trim() || "New Reply From Our Team",
-      `
-      <p>Hello <strong>${escapeHtml(payload.customerName || "Customer")}</strong>,</p>
-      <p>Our support team has replied to your message.</p>
-      ${payload.subject ? "<p style=\"margin:16px 0;color:#d6a43d;font-size:14px;font-weight:700\">Subject: " + escapeHtml(payload.subject) + "</p>" : ""}
-      ${payload.reply
-        ? `<div style="margin:20px 0;padding:16px;background:#1a1610;border:1px solid #5c4a14;border-radius:8px">
-            <p style="margin:0 0 6px;color:#d6a43d;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.08em">Reply from Support</p>
-            <p style="margin:0;color:#e8d9b0;font-size:13px;line-height:1.8;white-space:pre-line">${escapeHtml(payload.reply)}</p>
-          </div>`
-        : ""
-      }
-      `,
-    ),
+    text: replyText,
+    html: `<div style="white-space:pre-line">${escapeHtml(replyText)}</div>`,
   });
 }

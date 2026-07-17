@@ -79,7 +79,12 @@ export function ReportsFilterPanel({
   const fields = FILTER_FIELDS_BY_FAMILY[family];
 
   return (
-    <div className="flex flex-wrap items-end gap-5 px-6 py-4">
+    <div className="px-6 py-4">
+      <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-blue-100 bg-blue-50/60 px-4 py-3 text-sm text-blue-800">
+        <span>Results update automatically when you change a filter.</span>
+        <span className="hidden text-xs font-semibold text-blue-600 sm:inline">Live report</span>
+      </div>
+      <div className="flex flex-wrap items-end gap-5">
       {fields.includes("dateRange") ? (
         <SelectBox
           label="Date Range"
@@ -243,14 +248,15 @@ export function ReportsFilterPanel({
         />
       ) : null}
 
-      <button
+        <button
         type="button"
         onClick={onClear}
         className="mb-0 flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-sm font-bold text-slate-700 shadow-sm hover:bg-slate-50"
       >
         <RefreshCcw className="h-4.5 w-4.5" />
         Clear Filters
-      </button>
+        </button>
+      </div>
     </div>
   );
 }

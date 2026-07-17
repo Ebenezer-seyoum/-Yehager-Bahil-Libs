@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Grid2X2, List, Search } from "lucide-react";
 import { ReportsCategorySidebar, firstReportInCategory } from "@/components/reports/reports-category-sidebar";
@@ -128,6 +128,7 @@ export function AdminReportsDashboard({
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [hasGenerated, setHasGenerated] = useState(false);
+  const refreshRequestRef = useRef(0);
 
   const currentReportDef = getReport(selectedReport);
   const [filters, setFilters] = useState<FilterValues>(() => ({
@@ -151,6 +152,7 @@ export function AdminReportsDashboard({
   );
 
   const refreshFromBackend = useCallback(async (activeFilters: FilterValues) => {
+    const requestId = ++refreshRequestRef.current;
     setIsRefreshing(true);
     setFetchError(null);
     try {
@@ -159,15 +161,18 @@ export function AdminReportsDashboard({
         report: selectedReport,
         filters: activeFilters,
       });
+      // Ignore an older response if the user changed filters again while it was loading.
+      if (requestId !== refreshRequestRef.current) return;
       setReportsPayload(payload);
       setGeneratedAt(new Date());
       setHasGenerated(true);
     } catch (error) {
+      if (requestId !== refreshRequestRef.current) return;
       setFetchError(
         error instanceof Error ? error.message : "Failed to refresh report data",
       );
     } finally {
-      setIsRefreshing(false);
+      if (requestId === refreshRequestRef.current) setIsRefreshing(false);
     }
   }, [selectedCategory, selectedReport]);
 
@@ -182,6 +187,16 @@ export function AdminReportsDashboard({
       dateRange: globalDateRange,
     });
   }, [selectedReport, currentReportDef.filterFamily]);
+
+  // Reports are generated automatically. A short debounce keeps text filters responsive
+  // without sending a request for every keystroke.
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      void refreshFromBackend(filters);
+    }, 250);
+
+    return () => window.clearTimeout(timeout);
+  }, [filters, refreshFromBackend]);
 
   useEffect(() => {
     if (!FILTER_FIELDS_BY_FAMILY[currentReportDef.filterFamily].includes("dateRange")) {
@@ -312,7 +327,6 @@ export function AdminReportsDashboard({
       }
       return next;
     });
-    setHasGenerated(false);
   }
 
   function clearFilters() {
@@ -320,7 +334,6 @@ export function AdminReportsDashboard({
       ...defaultFiltersForFamily(currentReportDef.filterFamily),
       dateRange: globalDateRange,
     });
-    setHasGenerated(false);
   }
 
   function handleSelectCategory(category: ReportCategoryKey) {
@@ -328,14 +341,12 @@ export function AdminReportsDashboard({
     setSelectedCategory(category);
     setSelectedReport(report);
     syncUrl(category, report);
-    setHasGenerated(false);
   }
 
   function handleSelectReport(category: ReportCategoryKey, report: ReportKey) {
     setSelectedCategory(category);
     setSelectedReport(report);
     syncUrl(category, report);
-    setHasGenerated(false);
   }
 
   async function handleGenerateReport() {

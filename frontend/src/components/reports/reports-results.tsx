@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, Download, Eye, LayoutDashboard, Search } from "lucide-react";
+import { ChevronDown, Download, Eye, LayoutDashboard, RefreshCcw, Search } from "lucide-react";
 import {
   Bar,
   BarChart,
@@ -174,10 +174,9 @@ function AwaitingGeneratePanel() {
   return (
     <div className="rounded-b-2xl border-t border-slate-200 bg-white px-6 py-20 text-center">
       <LayoutDashboard className="mx-auto h-12 w-12 text-slate-300" />
-      <h3 className="mt-4 text-lg font-extrabold text-slate-900">Ready to generate</h3>
+      <h3 className="mt-4 text-lg font-extrabold text-slate-900">Preparing your report</h3>
       <p className="mx-auto mt-2 max-w-md text-sm text-slate-500">
-        Choose a report, apply your filters, then click Generate Report to load data from the
-        server.
+        Your selected report and filters are being loaded automatically.
       </p>
     </div>
   );
@@ -473,9 +472,9 @@ export function ReportsResults({
               onClick={() => void handleGenerate()}
               disabled={isLoading}
               className="flex h-11 items-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 px-5 text-sm font-bold text-white shadow-lg shadow-blue-200 hover:opacity-95 disabled:opacity-60"
-            >
-              <Download className="h-4.5 w-4.5" />
-              {isLoading ? "Generating…" : "Generate Report"}
+              >
+              <RefreshCcw className="h-4.5 w-4.5" />
+              {isLoading ? "Updating…" : "Refresh Report"}
             </button>
           </div>
         </div>
