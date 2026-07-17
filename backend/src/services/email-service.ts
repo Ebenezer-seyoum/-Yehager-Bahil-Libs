@@ -508,14 +508,14 @@ function trackOnlineBox() {
 function contactAndFooterHtml() {
   const supportEmail = emailAddress(env.SUPPORT_NOTIFICATION_EMAIL, "support@yehagerbahillibs.com");
   const socialLinks = [
-    ["Facebook", "https://www.facebook.com/profile.php?id=61559444502598", "f"],
-    ["Instagram", "https://www.instagram.com/yehagerbahillibs?igsh=dHZtOXc2b2gwbGk0", "◎"],
-    ["X (Twitter)", "https://x.com/yehagerbah54327", "𝕏"],
-    ["YouTube", "https://www.youtube.com/@YehagerbahilLibs", "▶"],
-    ["TikTok", "https://www.tiktok.com/@yehager.bahil.lib", "♪"],
+    ["Facebook", "https://www.facebook.com/profile.php?id=61559444502598", "facebook.png"],
+    ["Instagram", "https://www.instagram.com/yehagerbahillibs?igsh=dHZtOXc2b2gwbGk0", "instagram.png"],
+    ["X (Twitter)", "https://x.com/yehagerbah54327", "x.png"],
+    ["YouTube", "https://www.youtube.com/@YehagerbahilLibs", "youtube.png"],
+    ["TikTok", "https://www.tiktok.com/@yehager.bahil.lib", "tiktok.png"],
   ] as const;
   const socialHtml = socialLinks
-    .map(([label, href, icon]) => `<td style="padding:0 4px"><a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer" aria-label="${escapeHtml(label)}" style="display:block;width:34px;height:34px;border:1px solid #6d511d;border-radius:50%;background:#211a0d;color:#d6a43d;text-decoration:none;text-align:center;font-family:Arial,sans-serif;font-size:17px;font-weight:900;line-height:34px">${escapeHtml(icon)}</a></td>`)
+    .map(([label, href, imageName]) => `<td style="padding:4px 5px"><a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer" aria-label="${escapeHtml(label)}" title="${escapeHtml(label)}" style="display:block;width:40px;height:40px;text-decoration:none"><img src="${escapeHtml(appLink(`/images/email-social/${imageName}`))}" alt="${escapeHtml(label)}" width="40" height="40" style="display:block;width:40px;height:40px;object-fit:contain;border:0;border-radius:10px" /></a></td>`)
     .join("");
   const productionEmail = env.PRODUCTION_EMAIL || "naomiinvestments2100@gmail.com";
   const year = new Date().getFullYear();
@@ -523,57 +523,60 @@ function contactAndFooterHtml() {
   return `
     <style>
       @media only screen and (max-width:620px) {
-        .email-contact-column { display:block !important; width:100% !important; border-left:0 !important; border-top:1px solid #5a431d !important; }
-        .email-contact-column:first-child { border-top:0 !important; }
         .email-footer-identity { display:block !important; width:100% !important; text-align:center !important; }
         .email-footer-logo { margin:0 auto 12px !important; }
       }
     </style>
-    <div style="margin-top:30px;border-top:1px solid #6d511d;color:#c8b98b;font-family:Arial,sans-serif">
+    <div style="margin-top:30px;color:#c8b98b;font-family:Arial,sans-serif">
       <div style="padding:25px 0 20px;text-align:center">
         <table role="presentation" style="width:100%;border-collapse:collapse"><tr>
           <td style="width:31%;border-top:1px solid #5a431d"></td>
-          <td style="width:74px;padding:0 10px"><span style="display:inline-block;width:54px;height:54px;border:1px solid #d6a43d;border-radius:50%;color:#f8f1dc;font-size:28px;line-height:54px">♧</span></td>
+          <td style="width:74px;padding:0 10px"><span style="display:inline-block;width:54px;height:54px;border:1px solid #d6a43d;border-radius:50%;color:#f8f1dc;font-size:27px;line-height:54px">🎧</span></td>
           <td style="width:31%;border-top:1px solid #5a431d"></td>
         </tr></table>
-        <p style="margin:12px 0 2px;color:#d6a43d;font-size:21px;font-weight:900;line-height:1.25">Questions? Contact Us Directly</p>
+        <p style="margin:12px 0 2px;color:#d6a43d;font-size:19px;font-weight:900;line-height:1.25">Questions? Contact Us Directly</p>
         <p style="margin:0;color:#b8b0a5;font-size:16px;line-height:1.4">We’re here to help!</p>
       </div>
 
-      <table role="presentation" style="width:100%;border-collapse:collapse;border-bottom:1px solid #5a431d">
-        <tr>
-          <td class="email-contact-column" style="width:50%;padding:18px 14px 24px 0;vertical-align:middle">
-            <table role="presentation" style="border-collapse:collapse"><tr>
-              <td style="width:64px;padding-right:12px;vertical-align:middle"><span style="display:block;width:54px;height:54px;border:1px solid #d6a43d;border-radius:50%;color:#f8f1dc;font-size:30px;line-height:54px;text-align:center">☎</span></td>
-              <td style="vertical-align:middle">
-                <p style="margin:0 0 7px;color:#fff7df;font-size:15px;font-weight:900;line-height:1.25">Production Manager (Ethiopia)</p>
-                <p style="margin:0 0 5px;color:#d6a43d;font-size:15px;font-weight:800;line-height:1.35"><a href="tel:${escapeHtml(env.PRODUCTION_PHONE)}" style="color:#d6a43d;text-decoration:none">${escapeHtml(env.PRODUCTION_PHONE)}</a> <span style="color:#c8b98b;font-weight:400">(WhatsApp)</span></p>
-                <p style="margin:0;color:#d6a43d;font-size:12px;line-height:1.35">✉ <a href="mailto:${escapeHtml(productionEmail)}" style="color:#d6a43d;text-decoration:none">${escapeHtml(productionEmail)}</a></p>
-              </td>
-            </tr></table>
+      <div style="padding:14px 12px 18px">
+        <table role="presentation" style="width:100%;border-collapse:collapse"><tr>
+          <td style="width:68px;padding-right:14px;vertical-align:middle"><span style="display:block;width:54px;height:54px;border:1px solid #d6a43d;border-radius:50%;color:#f8f1dc;font-size:29px;line-height:54px;text-align:center">☎</span></td>
+          <td style="vertical-align:middle">
+            <p style="margin:0 0 7px;color:#fff7df;font-size:16px;font-weight:900;line-height:1.3">Production Manager (Ethiopia)</p>
+            <p style="margin:0 0 6px;color:#d6a43d;font-size:15px;font-weight:800;line-height:1.4"><a href="tel:${escapeHtml(env.PRODUCTION_PHONE)}" style="color:#d6a43d;text-decoration:none">${escapeHtml(env.PRODUCTION_PHONE)}</a> <span style="color:#c8b98b;font-weight:400">(WhatsApp)</span></p>
+            <p style="margin:0;color:#d6a43d;font-size:12px;line-height:1.45;overflow-wrap:anywhere">✉ <a href="mailto:${escapeHtml(productionEmail)}" style="color:#d6a43d;text-decoration:none">${escapeHtml(productionEmail)}</a></p>
           </td>
-          <td class="email-contact-column" style="width:50%;padding:18px 0 24px 18px;vertical-align:middle;border-left:1px solid #5a431d">
-            <table role="presentation" style="border-collapse:collapse"><tr>
-              <td style="width:64px;padding-right:12px;vertical-align:middle"><span style="display:block;width:54px;height:54px;border:1px solid #d6a43d;border-radius:50%;color:#f8f1dc;font-size:25px;line-height:54px;text-align:center">✉</span></td>
-              <td style="vertical-align:middle">
-                <p style="margin:0 0 7px;color:#fff7df;font-size:15px;font-weight:900">Customer Support</p>
-                <p style="margin:0;color:#d6a43d;font-size:12px;line-height:1.35;word-break:break-word"><a href="mailto:${escapeHtml(supportEmail)}" style="color:#d6a43d;text-decoration:none">${escapeHtml(supportEmail)}</a></p>
-              </td>
-            </tr></table>
-          </td>
-        </tr>
-      </table>
+        </tr></table>
+      </div>
 
-      <div style="padding:25px 0 22px;text-align:center;border-bottom:1px solid #5a431d">
+      <table role="presentation" style="width:82%;border-collapse:collapse;margin:0 auto"><tr><td style="border-top:1px solid #5a431d;height:1px;line-height:1px">&nbsp;</td></tr></table>
+
+      <div style="padding:18px 12px 25px">
+        <table role="presentation" style="width:100%;border-collapse:collapse"><tr>
+          <td style="width:68px;padding-right:14px;vertical-align:middle"><span style="display:block;width:54px;height:54px;border:1px solid #d6a43d;border-radius:50%;color:#f8f1dc;font-size:25px;line-height:54px;text-align:center">✉</span></td>
+          <td style="vertical-align:middle">
+            <p style="margin:0 0 7px;color:#fff7df;font-size:16px;font-weight:900">Customer Support</p>
+            <p style="margin:0;color:#d6a43d;font-size:13px;line-height:1.45;overflow-wrap:anywhere"><a href="mailto:${escapeHtml(supportEmail)}" style="color:#d6a43d;text-decoration:none">${escapeHtml(supportEmail)}</a></p>
+          </td>
+        </tr></table>
+      </div>
+
+      <table role="presentation" style="width:82%;border-collapse:collapse;margin:0 auto"><tr><td style="border-top:1px solid #5a431d;height:1px;line-height:1px">&nbsp;</td></tr></table>
+
+      <div style="padding:25px 0 22px;text-align:center">
         <span style="display:inline-block;width:54px;height:54px;border:1px solid #d6a43d;border-radius:50%;color:#f8f1dc;font-size:29px;line-height:54px">♡</span>
         <p style="margin:12px 0 4px;color:#d6a43d;font-size:21px;font-weight:900;line-height:1.25">Thank you for choosing us.</p>
         <p style="margin:0;color:#b8b0a5;font-size:16px;line-height:1.4">Wear your culture with pride.</p>
       </div>
 
-      <div style="padding:23px 0 22px;text-align:center;border-bottom:1px solid #5a431d">
+      <table role="presentation" style="width:82%;border-collapse:collapse;margin:0 auto"><tr><td style="border-top:1px solid #5a431d;height:1px;line-height:1px">&nbsp;</td></tr></table>
+
+      <div style="padding:23px 0 22px;text-align:center">
         <p style="margin:0 0 13px"><a href="https://www.yehagerbahillibs.com/" style="color:#35a7de;text-decoration:none;font-size:18px;font-weight:900"><span style="font-size:24px;vertical-align:-2px">🌐</span> YehagerBahilLibs.com</a></p>
         <table role="presentation" style="border-collapse:collapse;margin:0 auto"><tr>${socialHtml}</tr></table>
       </div>
+
+      <table role="presentation" style="width:82%;border-collapse:collapse;margin:0 auto"><tr><td style="border-top:1px solid #5a431d;height:1px;line-height:1px">&nbsp;</td></tr></table>
 
       <table role="presentation" style="width:100%;border-collapse:collapse;margin-top:20px">
         <tr>
