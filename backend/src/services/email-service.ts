@@ -71,12 +71,14 @@ export type OrderEmailEvent =
   | "order_in_production"
   | "order_shipped"
   | "order_ready_for_pickup"
+  | "order_fulfilled"
   | "order_delivered"
   | "order_cancelled"
   | "order_status_updated";
 
 type OrderStatusPayload = {
   event?: OrderEmailEvent;
+  productionStage?: string | null;
   to?: string | null;
   customerName?: string | null;
   orderNumber?: string | null;
@@ -282,7 +284,7 @@ function detailsList(items: Array<[string, unknown]>) {
 }
 
 function actionButton(label: string, href: string) {
-  return `<p style="margin:24px 0"><a href="${escapeHtml(href)}" style="display:inline-block;background:#d6a43d;color:#18130a;text-decoration:none;border-radius:6px;padding:14px 24px;font-weight:800;font-size:14px;letter-spacing:.02em">${escapeHtml(label)}</a></p>`;
+  return `<p style="margin:24px 0;text-align:center"><a href="${escapeHtml(href)}" style="display:inline-block;background:#d6a43d;color:#18130a;text-decoration:none;border-radius:6px;padding:14px 24px;font-weight:800;font-size:14px;letter-spacing:.02em">${escapeHtml(label)}</a></p>`;
 }
 
 function logoMarkUrl() {
@@ -296,7 +298,7 @@ function emailAddress(value: string | undefined, fallback: string) {
 
 function emailImageUrl(value: unknown) {
   const url = String(value ?? "").trim();
-  if (/^https:\/\//i.test(url)) return url;
+  if (/^https?:\/\//i.test(url)) return url;
   if (url.startsWith("/")) return appLink(url);
   return "";
 }
@@ -357,6 +359,12 @@ function compactMeasurementList(entries: Array<[string, unknown]>) {
   return `<table role="presentation" style="width:auto;border-collapse:collapse;margin:7px 0 0">${rows}</table>`;
 }
 
+function adaptiveMeasurementLayout(entries: Array<[string, unknown]>) {
+  const visible = entries.filter(([, value]) => value !== undefined && value !== null && String(value).trim() !== "");
+  if (!visible.length) return "";
+  return visible.length >= 6 ? compactMeasurementGrid(visible) : compactMeasurementList(visible);
+}
+
 function orderItemsSection(items: OrderEmailItem[] = [], totalUsd?: string | number | null) {
   if (!items.length) return "";
   const rows = items.map((item) => {
@@ -370,7 +378,7 @@ function orderItemsSection(items: OrderEmailItem[] = [], totalUsd?: string | num
       <td style="padding:10px 8px 10px 0;vertical-align:top;color:#c8b98b;font-size:12px;line-height:1.35">
         <strong style="display:block;color:#fff7df;font-size:15px;line-height:1.2">${escapeHtml(item.name || "Order item")}</strong>
         <span>${escapeHtml(item.itemNumber ? `Item ${item.itemNumber}` : "Item")} · Qty: ${escapeHtml(item.quantity ?? 1)}</span>
-        ${measurements.length ? compactMeasurementList(measurements) : ""}
+        ${measurements.length ? adaptiveMeasurementLayout(measurements) : ""}
       </td>
       <td style="width:78px;padding:10px 0;vertical-align:top;text-align:right;color:#fff7df;font-size:16px;font-weight:900;white-space:nowrap">${item.priceUsd != null ? `$${Number(item.priceUsd).toFixed(2)}` : "—"}</td>
     </tr>`;
@@ -497,6 +505,91 @@ function trackOnlineBox() {
 
 // ─── HTML Shell ───────────────────────────────────────────────────────────────
 
+function contactAndFooterHtml() {
+  const supportEmail = emailAddress(env.SUPPORT_NOTIFICATION_EMAIL, "support@yehagerbahillibs.com");
+  const socialLinks = [
+    ["Facebook", "https://www.facebook.com/profile.php?id=61559444502598", "f"],
+    ["Instagram", "https://www.instagram.com/yehagerbahillibs?igsh=dHZtOXc2b2gwbGk0", "◎"],
+    ["X (Twitter)", "https://x.com/yehagerbah54327", "𝕏"],
+    ["YouTube", "https://www.youtube.com/@YehagerbahilLibs", "▶"],
+    ["TikTok", "https://www.tiktok.com/@yehager.bahil.lib", "♪"],
+  ] as const;
+  const socialHtml = socialLinks
+    .map(([label, href, icon]) => `<td style="padding:0 4px"><a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer" aria-label="${escapeHtml(label)}" style="display:block;width:34px;height:34px;border:1px solid #6d511d;border-radius:50%;background:#211a0d;color:#d6a43d;text-decoration:none;text-align:center;font-family:Arial,sans-serif;font-size:17px;font-weight:900;line-height:34px">${escapeHtml(icon)}</a></td>`)
+    .join("");
+  const productionEmail = env.PRODUCTION_EMAIL || "naomiinvestments2100@gmail.com";
+  const year = new Date().getFullYear();
+
+  return `
+    <style>
+      @media only screen and (max-width:620px) {
+        .email-contact-column { display:block !important; width:100% !important; border-left:0 !important; border-top:1px solid #5a431d !important; }
+        .email-contact-column:first-child { border-top:0 !important; }
+        .email-footer-identity { display:block !important; width:100% !important; text-align:center !important; }
+        .email-footer-logo { margin:0 auto 12px !important; }
+      }
+    </style>
+    <div style="margin-top:30px;border-top:1px solid #6d511d;color:#c8b98b;font-family:Arial,sans-serif">
+      <div style="padding:25px 0 20px;text-align:center">
+        <table role="presentation" style="width:100%;border-collapse:collapse"><tr>
+          <td style="width:31%;border-top:1px solid #5a431d"></td>
+          <td style="width:74px;padding:0 10px"><span style="display:inline-block;width:54px;height:54px;border:1px solid #d6a43d;border-radius:50%;color:#f8f1dc;font-size:28px;line-height:54px">♧</span></td>
+          <td style="width:31%;border-top:1px solid #5a431d"></td>
+        </tr></table>
+        <p style="margin:12px 0 2px;color:#d6a43d;font-size:21px;font-weight:900;line-height:1.25">Questions? Contact Us Directly</p>
+        <p style="margin:0;color:#b8b0a5;font-size:16px;line-height:1.4">We’re here to help!</p>
+      </div>
+
+      <table role="presentation" style="width:100%;border-collapse:collapse;border-bottom:1px solid #5a431d">
+        <tr>
+          <td class="email-contact-column" style="width:50%;padding:18px 14px 24px 0;vertical-align:middle">
+            <table role="presentation" style="border-collapse:collapse"><tr>
+              <td style="width:64px;padding-right:12px;vertical-align:middle"><span style="display:block;width:54px;height:54px;border:1px solid #d6a43d;border-radius:50%;color:#f8f1dc;font-size:30px;line-height:54px;text-align:center">☎</span></td>
+              <td style="vertical-align:middle">
+                <p style="margin:0 0 7px;color:#fff7df;font-size:15px;font-weight:900;line-height:1.25">Production Manager (Ethiopia)</p>
+                <p style="margin:0 0 5px;color:#d6a43d;font-size:15px;font-weight:800;line-height:1.35"><a href="tel:${escapeHtml(env.PRODUCTION_PHONE)}" style="color:#d6a43d;text-decoration:none">${escapeHtml(env.PRODUCTION_PHONE)}</a> <span style="color:#c8b98b;font-weight:400">(WhatsApp)</span></p>
+                <p style="margin:0;color:#d6a43d;font-size:12px;line-height:1.35">✉ <a href="mailto:${escapeHtml(productionEmail)}" style="color:#d6a43d;text-decoration:none">${escapeHtml(productionEmail)}</a></p>
+              </td>
+            </tr></table>
+          </td>
+          <td class="email-contact-column" style="width:50%;padding:18px 0 24px 18px;vertical-align:middle;border-left:1px solid #5a431d">
+            <table role="presentation" style="border-collapse:collapse"><tr>
+              <td style="width:64px;padding-right:12px;vertical-align:middle"><span style="display:block;width:54px;height:54px;border:1px solid #d6a43d;border-radius:50%;color:#f8f1dc;font-size:25px;line-height:54px;text-align:center">✉</span></td>
+              <td style="vertical-align:middle">
+                <p style="margin:0 0 7px;color:#fff7df;font-size:15px;font-weight:900">Customer Support</p>
+                <p style="margin:0;color:#d6a43d;font-size:12px;line-height:1.35;word-break:break-word"><a href="mailto:${escapeHtml(supportEmail)}" style="color:#d6a43d;text-decoration:none">${escapeHtml(supportEmail)}</a></p>
+              </td>
+            </tr></table>
+          </td>
+        </tr>
+      </table>
+
+      <div style="padding:25px 0 22px;text-align:center;border-bottom:1px solid #5a431d">
+        <span style="display:inline-block;width:54px;height:54px;border:1px solid #d6a43d;border-radius:50%;color:#f8f1dc;font-size:29px;line-height:54px">♡</span>
+        <p style="margin:12px 0 4px;color:#d6a43d;font-size:21px;font-weight:900;line-height:1.25">Thank you for choosing us.</p>
+        <p style="margin:0;color:#b8b0a5;font-size:16px;line-height:1.4">Wear your culture with pride.</p>
+      </div>
+
+      <div style="padding:23px 0 22px;text-align:center;border-bottom:1px solid #5a431d">
+        <p style="margin:0 0 13px"><a href="https://www.yehagerbahillibs.com/" style="color:#35a7de;text-decoration:none;font-size:18px;font-weight:900"><span style="font-size:24px;vertical-align:-2px">🌐</span> YehagerBahilLibs.com</a></p>
+        <table role="presentation" style="border-collapse:collapse;margin:0 auto"><tr>${socialHtml}</tr></table>
+      </div>
+
+      <table role="presentation" style="width:100%;border-collapse:collapse;margin-top:20px">
+        <tr>
+          <td class="email-footer-identity" style="width:35%;text-align:center;vertical-align:middle">
+            <img class="email-footer-logo" src="${escapeHtml(logoMarkUrl())}" alt="Yehager Bahil Libs" width="78" height="78" style="display:block;width:78px;height:78px;object-fit:contain;margin:0 auto;padding:4px;border:2px solid #d6a43d;border-radius:50%;background:#fff" />
+          </td>
+          <td class="email-footer-identity" style="width:65%;padding:10px 0 10px 16px;color:#706b66;font-size:12px;line-height:1.6;vertical-align:middle">
+            <p style="margin:0;color:#c8b98b;font-size:13px">© ${year} Yehager Bahil Libs · Naomi Investments LLC</p>
+            <p style="margin:0">Minnesota, USA</p>
+          </td>
+        </tr>
+      </table>
+    </div>
+  `;
+}
+
 function htmlShell(title: string, body: string) {
   return `
     <div style="margin:0;padding:0;background:#120f09">
@@ -518,26 +611,8 @@ function htmlShell(title: string, body: string) {
           <!-- Body -->
           ${body}
 
-          <!-- Footer -->
-          <div style="margin-top:28px;padding-top:20px;border-top:1px solid #3d321d;color:#c8b98b;font-size:13px">
-            <p style="margin:0 0 12px">If you have any questions or need any changes before placing your order, please contact us at the details below before proceeding.</p>
-            <div style="margin:18px 0;padding:16px;border:1px solid #6d511d;border-radius:8px;background:#211a0d">
-              <p style="margin:0 0 8px;color:#d6a43d;font-size:16px;font-weight:900">📞 Questions? Contact Us Directly</p>
-              <p style="margin:0 0 4px;color:#fff7df;font-weight:800">Production Manager (Ethiopia)</p>
-              <p style="margin:0 0 4px">📞 <a href="tel:${escapeHtml(env.PRODUCTION_PHONE)}" style="color:#d6a43d;text-decoration:none;font-weight:800">${escapeHtml(env.PRODUCTION_PHONE)}</a> (WhatsApp)</p>
-              <p style="margin:0">✉️ <a href="mailto:${escapeHtml(env.PRODUCTION_EMAIL)}" style="color:#d6a43d;text-decoration:none">${escapeHtml(env.PRODUCTION_EMAIL)}</a></p>
-            </div>
-            <div style="margin:18px 0;padding:16px;border:1px solid #4d3714;border-radius:8px;background:#1b160d">
-              <p style="margin:0 0 4px;color:#fff7df;font-weight:800">Customer Support</p>
-              <p style="margin:0">✉️ <a href="mailto:${escapeHtml(emailAddress(env.SUPPORT_NOTIFICATION_EMAIL, "support@yehagerbahillibs.com"))}" style="color:#d6a43d;text-decoration:none">${escapeHtml(emailAddress(env.SUPPORT_NOTIFICATION_EMAIL, "support@yehagerbahillibs.com"))}</a></p>
-            </div>
-            <div style="margin:26px -4px 0;padding:28px 16px;background:#1b160d;text-align:center">
-              <p style="margin:0 0 6px;color:#d6a43d;font-size:22px;font-weight:700;font-style:italic">Thank you for choosing us.</p>
-              <p style="margin:0 0 12px;color:#b8b0a5;font-size:18px">Wear your culture with pride.</p>
-              <p style="margin:0 0 14px"><a href="https://www.yehagerbahillibs.com/" style="color:#d6a43d;text-decoration:none;font-size:18px;font-weight:800">🌐 YehagerBahilLibs.com</a></p>
-              <p style="margin:0;color:#706b66;font-size:14px;line-height:1.5">© ${new Date().getFullYear()} Yehager Bahil Libs · Naomi Investments LLC ·<br />Minnesota, USA</p>
-            </div>
-          </div>
+          <!-- Contact and footer -->
+          ${contactAndFooterHtml()}
         </div>
       </div>
     </div>
@@ -941,6 +1016,7 @@ function inferOrderEmailEvent(payload: OrderStatusPayload): OrderEmailEvent {
   if (status === "shipped") return "order_shipped";
   if (status === "delivered" || status === "picked_up") return "order_delivered";
   if (status === "ready_for_pickup") return "order_ready_for_pickup";
+  if (status === "fulfilled") return "order_fulfilled";
   if (["tailoring", "processing", "quality_check"].includes(status)) return "order_in_production";
   if (status === "cancelled") return "order_cancelled";
   if (payment === "paid") return "payment_confirmed";
@@ -949,9 +1025,30 @@ function inferOrderEmailEvent(payload: OrderStatusPayload): OrderEmailEvent {
   return "order_status_updated";
 }
 
-function orderEmailPresentation(event: OrderEmailEvent, orderNumber?: string | null) {
+function orderEmailPresentation(event: OrderEmailEvent, orderNumber?: string | null, productionStage?: string | null) {
   const reference = orderNumber ? `Order #${orderNumber}` : "Your Order";
   const suffix = " | Yehager Bahil Libs";
+  const normalizedProductionStage = String(productionStage ?? "").toLowerCase();
+  const production = normalizedProductionStage === "processing"
+    ? {
+        subjectLabel: "🧵 Order in Production — Processing",
+        title: `🧵 Your Order Is Being Processed — #${orderNumber ?? ""}`,
+        message: "Your order has entered processing. Our team is preparing the materials and production details before tailoring begins.",
+        tone: "blue" as const,
+      }
+    : normalizedProductionStage === "quality_check"
+      ? {
+          subjectLabel: "🔍 Order in Quality Check",
+          title: `🔍 Your Order Is in Quality Check — #${orderNumber ?? ""}`,
+          message: "Your garment has been completed and is now being inspected carefully for quality, measurements, and finishing details.",
+          tone: "blue" as const,
+        }
+      : {
+          subjectLabel: "✂️ Order in Production — Tailoring",
+          title: `✂️ Your Order Is Being Tailored — #${orderNumber ?? ""}`,
+          message: "Your garment is now being handcrafted by our tailoring team according to your selected design and measurements.",
+          tone: "blue" as const,
+        };
   const presentations: Record<OrderEmailEvent, { subject: string; title: string; message: string; tone: "green" | "amber" | "red" | "blue" }> = {
     payment_verification_pending: {
       subject: `⏳ ETB Payment Verification Pending — ${reference}${suffix}`,
@@ -990,10 +1087,10 @@ function orderEmailPresentation(event: OrderEmailEvent, orderNumber?: string | n
       tone: "green",
     },
     order_in_production: {
-      subject: `✂️ Order in Production — ${reference}${suffix}`,
-      title: `✂️ Your Order Is in Production — #${orderNumber ?? ""}`,
-      message: "Our tailoring team has started working on your order.",
-      tone: "blue",
+      subject: `${production.subjectLabel} — ${reference}${suffix}`,
+      title: production.title,
+      message: production.message,
+      tone: production.tone,
     },
     order_shipped: {
       subject: `🚚 Order Shipped — ${reference}${suffix}`,
@@ -1005,6 +1102,12 @@ function orderEmailPresentation(event: OrderEmailEvent, orderNumber?: string | n
       subject: `📦 Order Ready for Pickup — ${reference}${suffix}`,
       title: `📦 Your Order Is Ready for Pickup — #${orderNumber ?? ""}`,
       message: "Your completed order is ready for pickup.",
+      tone: "green",
+    },
+    order_fulfilled: {
+      subject: `✅ Order Fulfilled — ${reference}${suffix}`,
+      title: `✅ Your Order Has Been Fulfilled — #${orderNumber ?? ""}`,
+      message: "Your order has been completed and is being prepared for shipment or pickup.",
       tone: "green",
     },
     order_delivered: {
@@ -1044,7 +1147,7 @@ export async function sendOrderStatusEmail(payload: OrderStatusPayload) {
   const statusLabel = String(payload.status ?? "updated").replaceAll("_", " ");
   const deliveryStatusLabel = payload.deliveryStatus ? payload.deliveryStatus.replaceAll("_", " ") : null;
   const event = payload.event ?? inferOrderEmailEvent(payload);
-  const presentation = orderEmailPresentation(event, payload.orderNumber);
+  const presentation = orderEmailPresentation(event, payload.orderNumber, payload.productionStage ?? payload.status);
   const isNewOrder = event === "order_confirmed";
   const isEtbAwaiting = event === "payment_verification_pending";
 
@@ -1238,7 +1341,6 @@ function customDesignApprovedEmailHtml(payload: CustomDesignPayload, cartUrl: st
   const deliveryLabel = payload.estimatedDeliveryLabel || "40–50 days";
   const usdPrice = formattedDesignPrice(payload.quotedPriceUsd, "USD");
   const etbPrice = formattedDesignPrice(payload.quotedPriceEtb, "ETB");
-  const contactEmail = emailAddress(env.SUPPORT_NOTIFICATION_EMAIL, "yehagerbahillibs@gmail.com");
   const noteBlock = payload.reason
     ? `<div style="margin:18px 0;padding:14px;background:#241d11;border-left:4px solid #b57a13;border-radius:0 7px 7px 0"><p style="margin:0 0 4px;color:#d6a43d;font-size:13px;font-weight:800">Admin Note</p><p style="margin:0;color:#c9bdad;font-size:13px;line-height:1.6">${escapeHtml(payload.reason)}</p></div>`
     : "";
@@ -1314,19 +1416,7 @@ function customDesignApprovedEmailHtml(payload: CustomDesignPayload, cartUrl: st
               </ol>
             </div>
 
-            <p style="margin:24px 0;color:#b8b0a6;font-size:16px;line-height:1.8">If you have any questions or need any changes before placing your order, please contact us at the details below before proceeding:</p>
-            <div style="margin:0 0 26px;padding:17px 20px;background:#2c2609;border:1px solid #a36f16;border-radius:8px">
-              <p style="margin:0 0 5px;color:#bd7419;font-size:17px;font-weight:900">📞 Questions? Contact Us Directly:</p>
-              <p style="margin:0;color:#bd7419;font-size:23px;font-weight:900"><a href="tel:${escapeHtml(env.PRODUCTION_PHONE)}" style="color:#bd7419;text-decoration:none">${escapeHtml(env.PRODUCTION_PHONE)}</a> (WhatsApp)</p>
-              <p style="margin:2px 0 0"><a href="mailto:${escapeHtml(contactEmail)}" style="color:#bd7419;text-decoration:none;font-size:14px">${escapeHtml(contactEmail)}</a></p>
-            </div>
-
-            <div style="padding:24px 8px 4px;text-align:center">
-              <p style="margin:0 0 3px;color:#bd7419;font-size:18px;font-style:italic">Thank you for choosing us.</p>
-              <p style="margin:0 0 8px;color:#958f88;font-size:15px">Wear your culture with pride.</p>
-              <p style="margin:0 0 8px"><a href="https://www.yehagerbahillibs.com/" style="color:#bd7419;text-decoration:none;font-size:16px">🌐 YehagerBahilLibs.com</a></p>
-              <p style="margin:0;color:#706a64;font-size:12px;line-height:1.45">© ${new Date().getFullYear()} Yehager Bahil Libs · Naomi Investments LLC ·<br />Minnesota, USA</p>
-            </div>
+            ${contactAndFooterHtml()}
           </div>
         </div>
       </div>

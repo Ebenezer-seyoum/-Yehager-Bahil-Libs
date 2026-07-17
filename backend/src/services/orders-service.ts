@@ -152,6 +152,7 @@ function orderEmailEventForChange(
   const delivery = String(next.deliveryStatus ?? "").toLowerCase();
   if (requested.status && next.status !== previous.status) {
     if (status === "ready_for_pickup") return "order_ready_for_pickup";
+    if (status === "fulfilled") return "order_fulfilled";
     if (status === "delivered" || status === "picked_up") return "order_delivered";
     if (status === "shipped") return "order_shipped";
     if (["processing", "tailoring", "quality_check"].includes(status)) return "order_in_production";
@@ -176,12 +177,14 @@ async function orderDesignEmailDetails(order: { items?: unknown; totalUsd?: unkn
   const metadata = firstItem.item_metadata && typeof firstItem.item_metadata === "object" ? firstItem.item_metadata as Record<string, unknown> : {};
   const imageUrls = itemRows.flatMap((item) => {
     const itemMetadata = item.item_metadata && typeof item.item_metadata === "object" ? item.item_metadata as Record<string, unknown> : {};
-    return [
+    return imageList(
       itemMetadata.front_image_url ?? itemMetadata.frontImageUrl,
       itemMetadata.side_image_url ?? itemMetadata.sideImageUrl,
       itemMetadata.back_image_url ?? itemMetadata.backImageUrl,
       itemMetadata.detail_image_url ?? itemMetadata.detailImageUrl,
-    ].filter((url): url is string => typeof url === "string" && url.length > 0);
+      item.custom_design_images,
+      item.customDesignImages,
+    );
   }).filter((url, index, values) => values.indexOf(url) === index);
   const orderItems = itemRows.map((item, index) => {
     const itemMetadata = item.item_metadata && typeof item.item_metadata === "object" ? item.item_metadata as Record<string, unknown> : {};
