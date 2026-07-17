@@ -156,11 +156,13 @@ function orderDesignEmailDetails(order: { items?: unknown; totalUsd?: unknown; s
       : item.measurementSnapshot && typeof item.measurementSnapshot === "object"
         ? item.measurementSnapshot as Record<string, unknown>
         : undefined;
+    const rawQuantity = item.quantity ?? item.qty;
+    const rawPrice = item.price_usd ?? item.priceUsd ?? item.unit_price_usd ?? item.unitPriceUsd ?? item.total_usd ?? item.totalUsd ?? item.unitPrice;
     return {
       name: typeof item.product_name === "string" ? item.product_name : typeof item.productName === "string" ? item.productName : typeof item.name === "string" ? item.name : "Order item",
       itemNumber: typeof item.product_id === "string" ? item.product_id : typeof item.productId === "string" ? item.productId : typeof item.id === "string" ? item.id : `#${String(index + 1).padStart(3, "0")}`,
-      quantity: item.quantity ?? item.qty ?? 1,
-      priceUsd: item.price_usd ?? item.priceUsd ?? item.unit_price_usd ?? item.unitPriceUsd ?? item.total_usd ?? item.totalUsd ?? item.unitPrice,
+      quantity: typeof rawQuantity === "string" || typeof rawQuantity === "number" ? rawQuantity : 1,
+      priceUsd: typeof rawPrice === "string" || typeof rawPrice === "number" ? rawPrice : null,
       imageUrl: typeof itemImage === "string" ? itemImage : typeof item.image_url === "string" ? item.image_url : typeof item.product_image_url === "string" ? item.product_image_url : undefined,
       measurements: measurementSnapshot,
     };
@@ -174,7 +176,7 @@ function orderDesignEmailDetails(order: { items?: unknown; totalUsd?: unknown; s
     measurementSnapshot: firstItem.measurement_snapshot && typeof firstItem.measurement_snapshot === "object" ? firstItem.measurement_snapshot as Record<string, unknown> : undefined,
     imageUrls,
     orderItems,
-    totalUsd: order.totalUsd,
+    totalUsd: typeof order.totalUsd === "string" || typeof order.totalUsd === "number" ? order.totalUsd : null,
     shippingAddress: typeof order.shippingAddress === "string" ? order.shippingAddress : undefined,
     memberPricing: itemRows.flatMap((item) => {
       const itemMetadata = item.item_metadata && typeof item.item_metadata === "object" ? item.item_metadata as Record<string, unknown> : {};
