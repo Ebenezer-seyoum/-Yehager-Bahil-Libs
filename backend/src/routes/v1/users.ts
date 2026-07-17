@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { HTTPException } from "hono/http-exception";
 import { requireAuth, requireAuthenticatedToken } from "../../middleware/auth.js";
 import { z } from "zod";
 import { zValidator } from "@hono/zod-validator";
@@ -10,6 +11,7 @@ import {
   updateCurrentUserPresence,
 } from "../../services/users-service.js";
 import type { AppBindings } from "../../types/hono.js";
+import { getDashboardPreferences, updateDashboardPreferences } from "../../services/dashboard-preferences-service.js";
 
 export const usersRouter = new Hono<AppBindings>();
 
@@ -50,6 +52,10 @@ const passwordPatchSchema = z.object({
   currentPassword: z.string().min(1).max(128),
   newPassword: z.string().min(8).max(128),
 });
+const dashboardPreferencesSchema = z.object({
+  topBarColor: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+  sidebarColor: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+});
 
 usersRouter.get("/me", requireAuth, async (c) => {
   const authUser = c.get("authUser");
@@ -75,6 +81,20 @@ usersRouter.patch("/me/password", requireAuth, zValidator("json", passwordPatchS
     ...body,
   });
   return c.json({ data: user });
+});
+
+usersRouter.get("/me/dashboard-preferences", requireAuth, async (c) => {
+  const authUser = c.get("authUser");
+  return c.json({ data: await getDashboardPreferences(authUser?.email ?? "") });
+});
+
+usersRouter.patch("/me/dashboard-preferences", requireAuth, zValidator("json", dashboardPreferencesSchema), async (c) => {
+  const authUser = c.get("authUser");
+  try {
+    return c.json({ data: await updateDashboardPreferences(authUser?.email ?? "", c.req.valid("json")) });
+  } catch (error) {
+    throw new HTTPException(400, { message: error instanceof Error ? error.message : "Could not save dashboard preferences" });
+  }
 });
 
 usersRouter.post("/me/presence", requireAuth, zValidator("json", presenceSchema), async (c) => {

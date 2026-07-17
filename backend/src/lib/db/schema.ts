@@ -286,6 +286,18 @@ export const products = pgTable(
   ],
 );
 
+export const dashboardPreferences = pgTable(
+  "dashboard_preferences",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    topBarColor: varchar("top_bar_color", { length: 7 }).default("#0f172a").notNull(),
+    sidebarColor: varchar("sidebar_color", { length: 7 }).default("#0f172a").notNull(),
+    ...timestamps,
+  },
+  (table) => [uniqueIndex("dashboard_preferences_user_unique").on(table.userId)],
+);
+
 export const globalPricingRules = pgTable(
   "global_pricing_rules",
   {
@@ -756,25 +768,6 @@ export const auditLogs = pgTable(
     ...timestamps,
   },
   (table) => [index("audit_logs_category_idx").on(table.category), index("audit_logs_created_at_idx").on(table.createdAt)],
-);
-
-export const systemSettings = pgTable(
-  "system_settings",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    key: varchar("key", { length: 160 }).notNull(),
-    category: varchar("category", { length: 60 }).notNull(),
-    value: jsonb("value").$type<string | number | boolean | null | Record<string, unknown>>(),
-    valueType: varchar("value_type", { length: 20 }).default("string").notNull(),
-    description: text("description"),
-    isSensitive: boolean("is_sensitive").default(false).notNull(),
-    updatedBy: text("updated_by"),
-    ...timestamps,
-  },
-  (table) => [
-    uniqueIndex("system_settings_key_unique").on(table.key),
-    index("system_settings_category_idx").on(table.category),
-  ],
 );
 
 export const systemAlerts = pgTable(

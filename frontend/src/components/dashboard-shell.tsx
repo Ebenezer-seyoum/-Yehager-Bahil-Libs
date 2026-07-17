@@ -189,8 +189,18 @@ export function DashboardShell({
   }
   const profileHref = session?.user?.role === "employee" ? "/admin/profile" : "/admin/settings";
   const adminTopBar = variant === "admin" || variant === "employee";
+  const [dashboardColors, setDashboardColors] = useState({ topBarColor: "#0f172a", sidebarColor: "#0f172a" });
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const counts = notificationCounts ?? {};
+  useEffect(() => {
+    const applyColors = (detail?: { topBarColor?: string; sidebarColor?: string }) => {
+      if (detail?.topBarColor && detail?.sidebarColor) setDashboardColors({ topBarColor: detail.topBarColor, sidebarColor: detail.sidebarColor });
+    };
+    fetch("/api/backend/users/me/dashboard-preferences", { cache: "no-store" }).then((response) => response.json()).then((payload) => applyColors(payload?.data)).catch(() => undefined);
+    const onThemeUpdated = (event: Event) => applyColors((event as CustomEvent<{ topBarColor?: string; sidebarColor?: string }>).detail);
+    window.addEventListener("dashboard-theme-updated", onThemeUpdated);
+    return () => window.removeEventListener("dashboard-theme-updated", onThemeUpdated);
+  }, []);
   const [viewedOrderIds, setViewedOrderIds] = useState<string[]>([]);
   const [viewedPaymentIds, setViewedPaymentIds] = useState<string[]>([]);
   const [viewedCustomDesignIds, setViewedCustomDesignIds] = useState<string[]>([]);
@@ -529,7 +539,7 @@ export function DashboardShell({
   }, [pathname, visibleGroups]);
 
   const sidebar = (
-    <aside className="flex h-full flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground">
+    <aside style={{ backgroundColor: dashboardColors.sidebarColor }} className="flex h-full flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground">
       <div className="border-b border-sidebar-border px-5 py-5">
         <Link href={variant === "admin" ? "/admin" : "/employee"} className="flex items-center gap-3">
           <img
@@ -688,6 +698,7 @@ export function DashboardShell({
               ? "sticky top-0 z-30 border-b border-sidebar-border bg-sidebar text-sidebar-foreground shadow-[0_14px_32px_rgba(0,0,0,0.28)]"
               : "sticky top-0 z-30 border-b border-border bg-background/90 backdrop-blur"
           }
+          style={adminTopBar ? { backgroundColor: dashboardColors.topBarColor } : undefined}
         >
           <div className="flex min-h-20 flex-wrap items-center gap-3 px-4 py-3 sm:gap-4 sm:px-6 lg:h-20 lg:flex-nowrap lg:px-8 lg:py-0">
             <button

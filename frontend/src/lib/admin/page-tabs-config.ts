@@ -185,17 +185,7 @@ export const PAGE_TABS: Record<AdminPageId, AdminTabConfig[]> = {
     { id: "conversion", label: "Conversion Settings", icon: RefreshCw },
   ),
   settings: tabs(
-    { id: "overview", label: "Overview", icon: LayoutDashboard },
-    { id: "profile", label: "Profile", icon: UserRound },
-    { id: "store", label: "Organization & Store", icon: Store },
-    { id: "security", label: "Security", icon: ShieldCheck },
-    { id: "team", label: "Team & Permissions", icon: Users },
-    { id: "orders", label: "Orders & Delivery", icon: Truck },
-    { id: "notifications", label: "Notifications", icon: Bell },
-    { id: "integrations", label: "Integrations", icon: RefreshCw },
-    { id: "appearance", label: "Appearance", icon: Palette },
-    { id: "maintenance", label: "Maintenance", icon: Settings },
-    { id: "audit", label: "Audit Activity", icon: ScrollText },
+    { id: "profile", label: "Profile Settings", icon: Settings },
     { id: "pricing", label: "Global Pricing Rules", icon: DollarSign },
   ),
   "backup-restore": tabs(

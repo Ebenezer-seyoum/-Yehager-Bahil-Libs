@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { uploadFileToS3 } from "@/lib/uploads";
 import { cn } from "@/lib/utils";
+import { DashboardAppearanceSettings } from "@/components/dashboard-appearance-settings";
 
 export type EmployeeProfile = {
   firstName?: string | null;
@@ -606,6 +607,8 @@ export function DashboardProfileSettingsClient({
           {notice.message}
         </div>
       ) : null}
+
+      <DashboardAppearanceSettings />
 
       <div className="grid gap-4 lg:grid-cols-[280px_1fr]">
         <aside className="h-fit rounded-[2rem] border border-slate-200 bg-white p-3 shadow-sm lg:sticky lg:top-24">
