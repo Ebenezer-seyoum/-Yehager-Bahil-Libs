@@ -758,6 +758,25 @@ export const auditLogs = pgTable(
   (table) => [index("audit_logs_category_idx").on(table.category), index("audit_logs_created_at_idx").on(table.createdAt)],
 );
 
+export const systemSettings = pgTable(
+  "system_settings",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    key: varchar("key", { length: 160 }).notNull(),
+    category: varchar("category", { length: 60 }).notNull(),
+    value: jsonb("value").$type<string | number | boolean | null | Record<string, unknown>>(),
+    valueType: varchar("value_type", { length: 20 }).default("string").notNull(),
+    description: text("description"),
+    isSensitive: boolean("is_sensitive").default(false).notNull(),
+    updatedBy: text("updated_by"),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("system_settings_key_unique").on(table.key),
+    index("system_settings_category_idx").on(table.category),
+  ],
+);
+
 export const systemAlerts = pgTable(
   "system_alerts",
   {

@@ -351,8 +351,6 @@ supportRouter.post(
     reply: body.messageBody,
     attachments: emailAttachments,
     messageId: outboundMessageId,
-    inReplyTo,
-    references: previousEmailMessageIds,
   });
   if (!emailResult.sent && !emailResult.skipped) {
     throw new HTTPException(502, { message: "The message could not be sent because an attachment could not be delivered." });

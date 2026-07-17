@@ -291,9 +291,20 @@ function firstAddressName(addressObject: unknown) {
 }
 
 function messageBody(text?: string | false, html?: string | false) {
-  if (text && text.trim()) return text.trim();
+  if (text && text.trim()) return stripQuotedEmailHistory(text);
   if (!html) return "(no message body)";
-  return html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim() || "(no message body)";
+  return stripQuotedEmailHistory(html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " "));
+}
+
+function stripQuotedEmailHistory(value: string) {
+  const lines = value.replace(/\r\n/g, "\n").split("\n");
+  const quoteStart = lines.findIndex((line) => {
+    const trimmed = line.trim();
+    return /^On .+ wrote:\s*$/i.test(trimmed) || /^-{2,}\s*Original Message\s*-{2,}$/i.test(trimmed);
+  });
+  const unquotedLines = quoteStart >= 0 ? lines.slice(0, quoteStart) : lines;
+  const cleaned = unquotedLines.filter((line) => !/^\s*>/.test(line));
+  return cleaned.join("\n").trim() || "(no message body)";
 }
 
 function extractTicketNumber(subject: string) {

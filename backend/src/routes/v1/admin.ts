@@ -43,6 +43,7 @@ import {
 } from "../../services/discounts-service.js";
 import { getCustomerCreditWorkspacePayload, updateCustomerCreditRuleForAdmin } from "../../services/customer-credits-service.js";
 import { getProfitCostsWorkspacePayload, upsertProfitCostSettingForAdmin } from "../../services/profit-costs-service.js";
+import { getSystemSettings, updateSystemSettings } from "../../services/system-settings-service.js";
 import { getUsdEtbRate } from "../../repositories/exchange-rates-repository.js";
 import { deleteOrderForAdmin } from "../../services/orders-service.js";
 import { refreshStripeReceiptForOrder } from "../../services/payments-service.js";
@@ -1359,6 +1360,9 @@ adminRouter.get("/products", requirePermission(PERMISSIONS.PRODUCTS_VIEW), zVali
   });
 });
 
+const systemSettingsPatchSchema = z.object({
+  values: z.record(z.string(), z.unknown()).refine((values) => Object.keys(values).length > 0, "At least one setting is required"),
+});
 const pricingRulePatchSchema = z.object({
   markupAmountEtb: z.coerce.number().nonnegative(),
   isActive: z.boolean().optional(),
@@ -1493,6 +1497,19 @@ async function recalculateProductsForPricingScope(scope: PricingRuleScope) {
   }
   return { affected: affected.length, updated, skipped, failed };
 }
+
+adminRouter.get("/settings", requirePermission(PERMISSIONS.SETTINGS_VIEW), async (c) => {
+  return c.json({ data: await getSystemSettings() });
+});
+
+adminRouter.patch("/settings", requirePermission(PERMISSIONS.SETTINGS_EDIT), zValidator("json", systemSettingsPatchSchema), async (c) => {
+  const authUser = c.get("authUser");
+  try {
+    return c.json({ data: await updateSystemSettings(c.req.valid("json").values, authUser?.email ?? "admin") });
+  } catch (error) {
+    throw new HTTPException(400, { message: error instanceof Error ? error.message : "Settings update failed" });
+  }
+});
 
 adminRouter.get("/pricing-rules", requirePermission(PERMISSIONS.SETTINGS_VIEW), zValidator("query", pricingRuleScopeSchema), async (c) => {
   return c.json(await pricingRulesPayload(pricingScope(c.req.valid("query"))));
