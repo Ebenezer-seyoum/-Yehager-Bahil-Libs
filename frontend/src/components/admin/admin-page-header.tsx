@@ -15,6 +15,7 @@ export function AdminPageHeader({
   title,
   subtitle,
   onRefresh,
+  refreshLabel = "Refresh",
   isRefreshing,
   showExport,
   onExport,
@@ -26,6 +27,7 @@ export function AdminPageHeader({
   title?: string;
   subtitle?: string;
   onRefresh?: () => void;
+  refreshLabel?: string;
   isRefreshing?: boolean;
   showExport?: boolean;
   onExport?: () => void;
@@ -89,7 +91,7 @@ export function AdminPageHeader({
                 className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-sm font-bold text-slate-900 shadow-sm transition hover:bg-slate-50 disabled:opacity-60 group"
               >
                 <RefreshCw className={cn("h-4 w-4 text-slate-400 group-hover:rotate-180 transition-transform duration-500", isRefreshing && "animate-spin")} />
-                Refresh
+                {refreshLabel}
               </button>
             ) : null}
             {showExport && onExport ? <ExportButton onClick={onExport} label="Export" /> : null}

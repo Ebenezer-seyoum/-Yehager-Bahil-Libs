@@ -6,7 +6,8 @@ import { can } from "@/lib/permissions";
 import { DashboardProfileSettings } from "@/components/dashboard-profile-settings";
 import { AdminSettingsChrome } from "@/components/admin/pages/admin-settings-chrome";
 import { AccessRestricted } from "@/components/admin/access-restricted";
-export default async function AdminSettingsPage() {
+import { DashboardAppearanceSettings } from "@/components/dashboard-appearance-settings";
+export default async function AdminSettingsPage({ searchParams }: { searchParams?: Promise<{ tab?: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) redirect("/signin?callbackUrl=/admin/settings");
   if (session.user.role !== "admin" && session.user.role !== "employee") redirect("/");
@@ -14,10 +15,12 @@ export default async function AdminSettingsPage() {
     return <AccessRestricted requiredPermission="settings.view" sectionName="Settings" />;
   }
 
+  const tab = (await searchParams)?.tab ?? "profile";
+
   return (
     <Suspense fallback={<div className="p-6 text-sm text-muted-foreground">Loading settings…</div>}>
       <AdminSettingsChrome>
-        <DashboardProfileSettings variant="admin" returnPath="/admin/settings" />
+        {tab === "appearance" ? <DashboardAppearanceSettings /> : <DashboardProfileSettings variant="admin" returnPath="/admin/settings" />}
       </AdminSettingsChrome>
     </Suspense>
   );

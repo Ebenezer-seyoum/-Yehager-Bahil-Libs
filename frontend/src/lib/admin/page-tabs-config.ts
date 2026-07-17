@@ -185,7 +185,8 @@ export const PAGE_TABS: Record<AdminPageId, AdminTabConfig[]> = {
     { id: "conversion", label: "Conversion Settings", icon: RefreshCw },
   ),
   settings: tabs(
-    { id: "profile", label: "Profile Settings", icon: Settings },
+    { id: "profile", label: "My Profile", icon: Settings },
+    { id: "appearance", label: "Dashboard Appearance", icon: Palette },
     { id: "pricing", label: "Global Pricing Rules", icon: DollarSign },
   ),
   "backup-restore": tabs(

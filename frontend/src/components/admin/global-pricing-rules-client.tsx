@@ -243,13 +243,7 @@ export function GlobalPricingRulesClient({ canEdit }: { canEdit: boolean }) {
     <div className="mx-auto w-full max-w-screen-2xl space-y-5">
       <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div>
-            <p className="text-xs font-black uppercase tracking-[0.22em] text-orange-500">Admin</p>
-            <h1 className="mt-1 text-3xl font-black tracking-tight text-slate-950">Global Pricing Rules</h1>
-            <p className="mt-1 max-w-3xl text-sm font-medium text-slate-500">
-              Convert Telegram designer estimates into official role selling prices using one consistent ETB formula.
-            </p>
-          </div>
+          <div />
           <div className="flex flex-wrap gap-2">
             <button type="button" onClick={() => hardRefreshPage(dirty ? UNSAVED_REFRESH_WARNING : undefined)} disabled={saving} className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-5 text-sm font-black text-slate-700 transition hover:bg-slate-100 disabled:opacity-60">
               <RefreshCw className="h-4 w-4" />

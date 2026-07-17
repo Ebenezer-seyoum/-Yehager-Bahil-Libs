@@ -10,7 +10,6 @@ import {
   Mail,
   Pencil,
   Phone,
-  RefreshCw,
   Save,
   ShieldCheck,
   UserRound,
@@ -18,7 +17,6 @@ import {
 } from "lucide-react";
 import { uploadFileToS3 } from "@/lib/uploads";
 import { cn } from "@/lib/utils";
-import { DashboardAppearanceSettings } from "@/components/dashboard-appearance-settings";
 
 export type EmployeeProfile = {
   firstName?: string | null;
@@ -421,31 +419,6 @@ export function DashboardProfileSettingsClient({
   return (
     <div className="mx-auto w-full max-w-screen-2xl space-y-5">
       <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div>
-            <p className="text-xs font-black uppercase tracking-[0.22em] text-orange-500">
-              {variant}
-            </p>
-            <h1 className="mt-1 text-3xl font-black tracking-tight text-slate-950">
-              Profile Settings
-            </h1>
-            <p className="mt-1 text-sm font-medium text-slate-500">
-              Review profile details, update employee information, and manage
-              password access.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => window.location.reload()}
-            className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-5 text-sm font-black text-slate-700 transition hover:bg-slate-100"
-          >
-            <RefreshCw className="h-4 w-4" />
-            Refresh
-          </button>
-        </div>
-      </div>
-
-      <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex min-w-0 items-center gap-5">
             {effectiveAvatarUrl ? (
@@ -607,8 +580,6 @@ export function DashboardProfileSettingsClient({
           {notice.message}
         </div>
       ) : null}
-
-      <DashboardAppearanceSettings />
 
       <div className="grid gap-4 lg:grid-cols-[280px_1fr]">
         <aside className="h-fit rounded-[2rem] border border-slate-200 bg-white p-3 shadow-sm lg:sticky lg:top-24">

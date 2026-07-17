@@ -5,8 +5,8 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback } from "react";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { AdminTabs } from "@/components/admin/admin-tabs";
-import { computePageKpis } from "@/lib/admin/kpi-compute";
 import { getPageMeta } from "@/lib/admin/page-tabs-config";
+import { hardRefreshPage } from "@/lib/hard-refresh";
 
 export function AdminSettingsChrome({ children }: { children: ReactNode }) {
   const meta = getPageMeta("settings");
@@ -36,7 +36,7 @@ export function AdminSettingsChrome({ children }: { children: ReactNode }) {
 
   return (
     <div className="mx-auto w-full max-w-screen-2xl space-y-4 pb-8">
-      <AdminPageHeader pageId="settings" />
+      <AdminPageHeader pageId="settings" title="Settings" subtitle="Manage your profile, dashboard appearance, and global pricing rules." onRefresh={() => { void hardRefreshPage(); }} refreshLabel="Hard Refresh" />
       <AdminTabs tabs={meta.tabs} activeTab={activeTab} onChange={setActiveTab} />
       <div className="min-w-0">{children}</div>
     </div>
