@@ -264,7 +264,7 @@ export function AdminOperationsWorkspace({ data, mode }: { data: AdminWorkspaceD
   const allRows = useMemo(() => buildRows(mode, data), [data, mode]);
 
   return (
-    <AdminWorkspace pageId={config.pageId} initialData={data} hideKpis showDateRange={mode !== "backup"}>
+    <AdminWorkspace pageId={config.pageId} initialData={data} hideKpis showDateRange>
       {({ activeTab, search, setDisplayedRecordsCount }) => (
         <OperationsContent
           activeTab={activeTab}
