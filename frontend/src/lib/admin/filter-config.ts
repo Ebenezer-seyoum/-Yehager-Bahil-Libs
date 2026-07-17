@@ -21,7 +21,6 @@ export const FILTER_PLACEHOLDERS: Record<AdminPageId, string> = {
   reports: "Search reports...",
   "support-inbox": "Search by customer, email, or subject...",
   settings: "Search settings...",
-  "backup-restore": "Search backup and restore activity...",
   "activity-logs": "Search activity logs...",
   alerts: "Search alerts...",
 };

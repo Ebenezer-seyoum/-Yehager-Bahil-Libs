@@ -20,7 +20,6 @@ export type AdminPageId =
   | "documents"
   | "uploaded-designs"
   | "exchange-rate"
-  | "backup-restore"
   | "support-inbox"
   | "alerts"
   | "settings"

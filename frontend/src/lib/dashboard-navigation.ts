@@ -101,7 +101,6 @@ export const adminNavigation: readonly NavigationGroup[] = [
     items: [
       { href: "/admin/settings", label: "Settings", icon: "settings", permission: "settings.view" },
       { href: "/admin/alerts", label: "Alerts", icon: "alerts", permission: "alerts.view" },
-      { href: "/admin/system/backup-restore", label: "Backup & Restore", icon: "settings", permission: "backup.view" },
       {
         href: "/admin/audit",
         label: "Activity Logs",

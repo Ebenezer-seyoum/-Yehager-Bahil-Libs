@@ -3,11 +3,17 @@
 import Link from "next/link";
 import {
   ArchiveRestore,
+  ArrowRight,
   CheckCircle2,
   CreditCard,
+  Database,
   FileCheck,
+  HardDrive,
+  LockKeyhole,
   Package,
+  RefreshCw,
   ShieldAlert,
+  ShieldCheck,
   Truck,
   XCircle,
 } from "lucide-react";
@@ -17,7 +23,7 @@ import { AdminWorkspace } from "@/components/admin/admin-workspace";
 import type { AdminPageId, AdminWorkspaceData } from "@/lib/admin/types";
 import { cn } from "@/lib/utils";
 
-type Mode = "returns" | "shipping" | "transactions" | "coupons" | "backup";
+type Mode = "returns" | "shipping" | "transactions" | "coupons";
 type Row = Record<string, unknown>;
 
 type OperationRow = {
@@ -52,11 +58,6 @@ const modeConfig: Record<Mode, { pageId: AdminPageId; empty: string; description
     pageId: "coupons-discounts",
     empty: "No coupon or discount records exist in current order/product data.",
     description: "Coupon activity appears here when orders or products contain discount fields.",
-  },
-  backup: {
-    pageId: "backup-restore",
-    empty: "No backup or restore activity is recorded yet.",
-    description: "Backup and restore activity is read from the system audit trail.",
   },
 };
 
@@ -226,22 +227,7 @@ function buildRows(mode: Mode, data: AdminWorkspaceData): OperationRow[] {
     return [...orderDiscounts, ...productDiscounts];
   }
 
-  return audit
-    .filter((row) => ["backup", "restore", "database", "migration"].some((key) => norm(row.action).includes(key) || norm(row.entityType).includes(key)))
-    .map((row) => {
-      const action = norm(row.action) || "system event";
-      const failed = norm(row.severity) === "error" || action.includes("failed");
-      const restore = action.includes("restore");
-      return {
-        id: String(row.id ?? `${action}-${row.createdAt}`),
-        primary: statusLabel(action),
-        secondary: text(row.performedBy ?? row.actorEmail ?? row.actorId, "System"),
-        status: failed ? "failed" : restore ? "restore" : "completed",
-        reference: text(row.details ?? row.entityType, "Audit event"),
-        date: dateLabel(row.createdAt),
-        badgeTone: failed ? "red" : "green",
-      };
-    });
+  return [];
 }
 
 function filterRows(mode: Mode, rows: OperationRow[], tab: string, search: string) {
@@ -251,9 +237,7 @@ function filterRows(mode: Mode, rows: OperationRow[], tab: string, search: strin
       tab === "all" ||
       tab === "overview" ||
       row.status === tab ||
-      (mode === "backup" && tab === "backups" && row.status === "completed") ||
-      (mode === "backup" && tab === "restore" && row.status === "restore") ||
-      (mode === "backup" && tab === "failures" && row.status === "failed");
+      false;
     const searchMatch = query
       ? [row.primary, row.secondary, row.status, row.amount, row.reference, row.date].some((value) => String(value ?? "").toLowerCase().includes(query))
       : true;
@@ -393,16 +377,84 @@ function OperationsContent({
         </div>
       )}
 
-      {mode === "backup" ? (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm font-semibold text-amber-900">
-          <div className="flex items-start gap-3">
-            <ArchiveRestore className="mt-0.5 h-5 w-5 shrink-0" />
-            <p>
-              Restore and backup execution should be connected to a dedicated backend job with confirmation, audit logging, and storage controls before enabling write actions.
-            </p>
-          </div>
-        </div>
-      ) : null}
     </div>
   );
+}
+
+function BackupOperationsContent({ activeTab, rows, canEdit }: { activeTab: string; rows: OperationRow[]; canEdit: boolean }) {
+  const completed = rows.filter((row) => row.status === "completed").length;
+  const restores = rows.filter((row) => row.status === "restore").length;
+  const failures = rows.filter((row) => row.status === "failed").length;
+  const lastBackup = rows.find((row) => row.status === "completed");
+
+  if (activeTab === "restore") {
+    return (
+      <div className="space-y-4">
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5">
+          <div className="flex items-start gap-3">
+            <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" />
+            <div>
+              <h2 className="font-black text-amber-950">Restore is a controlled production operation</h2>
+              <p className="mt-1 text-sm font-medium leading-6 text-amber-900/80">A restore must first pass backup validation, impact review, approval, and a maintenance-window check. No restore action is available until the dedicated job runner is connected.</p>
+            </div>
+          </div>
+        </div>
+        <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="flex items-center justify-between gap-3">
+              <div><p className="text-xs font-black uppercase tracking-wide text-slate-500">Restore workflow</p><h2 className="mt-1 text-lg font-black text-slate-950">Safety gates</h2></div>
+              <LockKeyhole className="h-5 w-5 text-slate-400" />
+            </div>
+            <div className="mt-5 space-y-3">
+              {["Select a verified restore point", "Review data scope and impact", "Confirm maintenance window", "Approve and monitor the restore job"].map((step, index) => (
+                <div key={step} className="flex items-center gap-3 rounded-xl border border-slate-200 p-3">
+                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 text-xs font-black text-slate-600">{index + 1}</span>
+                  <span className="text-sm font-bold text-slate-700">{step}</span>
+                  <span className="ml-auto text-xs font-black uppercase text-slate-400">Locked</span>
+                </div>
+              ))}
+            </div>
+            <button type="button" disabled={!canEdit} className="mt-5 inline-flex cursor-not-allowed items-center gap-2 rounded-xl bg-slate-200 px-4 py-3 text-sm font-black text-slate-500">Start restore review <ArrowRight className="h-4 w-4" /></button>
+          </section>
+          <section className="rounded-2xl border border-slate-200 bg-slate-950 p-5 text-white shadow-sm">
+            <p className="text-xs font-black uppercase tracking-wide text-slate-400">Restore history</p>
+            <p className="mt-2 text-4xl font-black">{restores}</p>
+            <p className="mt-1 text-sm font-medium text-slate-400">recorded restore events</p>
+            <div className="mt-6 border-t border-white/10 pt-4 text-sm text-slate-300">Every restore must be attributable to an operator, backup ID, approval reference, and result.</div>
+          </section>
+        </div>
+      </div>
+    );
+  }
+
+  if (activeTab === "overview") {
+    return (
+      <div className="space-y-4">
+        <div className="grid gap-3 md:grid-cols-4">
+          <OperationMetric label="Verified backups" value={String(completed)} icon={Database} />
+          <OperationMetric label="Restore events" value={String(restores)} icon={RefreshCw} />
+          <OperationMetric label="Exceptions" value={String(failures)} icon={ShieldAlert} />
+          <OperationMetric label="Storage status" value="Not connected" icon={HardDrive} />
+        </div>
+        <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
+          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="flex items-start justify-between gap-4"><div><p className="text-xs font-black uppercase tracking-wide text-slate-500">Recovery readiness</p><h2 className="mt-1 text-xl font-black text-slate-950">Recovery controls need configuration</h2></div><ShieldCheck className="h-6 w-6 text-amber-600" /></div>
+            <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              {["Database backup", "Uploaded files", "Backup encryption", "Off-site retention"].map((item) => <div key={item} className="flex items-center gap-3 rounded-xl bg-slate-50 p-3"><span className="h-2 w-2 rounded-full bg-amber-500" /><span className="text-sm font-bold text-slate-700">{item}</span><span className="ml-auto text-xs font-black text-amber-600">Not configured</span></div>)}
+            </div>
+            <p className="mt-4 text-sm font-medium leading-6 text-slate-500">{lastBackup ? `Last recorded backup: ${lastBackup.date ?? "date unavailable"}.` : "No completed backup has been recorded yet."} Configure the job runner and storage provider before treating the system as recoverable.</p>
+          </section>
+          <section className="rounded-2xl border border-blue-200 bg-blue-50 p-5"><p className="text-xs font-black uppercase tracking-wide text-blue-700">Operator actions</p><h2 className="mt-1 text-lg font-black text-blue-950">Backup controls</h2><p className="mt-2 text-sm font-medium leading-6 text-blue-900/75">Actions require backup.edit permission and a connected backend job runner.</p><button type="button" disabled className="mt-5 inline-flex cursor-not-allowed items-center gap-2 rounded-xl bg-blue-200 px-4 py-3 text-sm font-black text-blue-700">Create backup <ArchiveRestore className="h-4 w-4" /></button><p className="mt-3 text-xs font-bold text-blue-800/70">Execution is intentionally unavailable in this release.</p></section>
+        </div>
+        <BackupActivityTable rows={rows} />
+      </div>
+    );
+  }
+
+  return <BackupActivityTable rows={rows} />;
+}
+
+function BackupActivityTable({ rows }: { rows: OperationRow[] }) {
+  if (!rows.length) return <EmptyState message="No backup or restore activity is recorded yet." description="Completed jobs, failures, and restore approvals will appear here once the recovery service is connected." />;
+  return <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"><div className="overflow-x-auto"><table className="w-full min-w-[850px] text-left text-sm"><thead className="bg-slate-50 text-xs font-black uppercase tracking-wide text-slate-500"><tr><th className="px-5 py-4">Operation</th><th className="px-5 py-4">Operator</th><th className="px-5 py-4">Status</th><th className="px-5 py-4">Reference</th><th className="px-5 py-4">Date</th></tr></thead><tbody>{rows.map((row) => <tr key={row.id} className="border-t border-slate-200"><td className="px-5 py-4 font-black text-slate-950">{row.primary}</td><td className="px-5 py-4 font-semibold text-slate-600">{row.secondary}</td><td className="px-5 py-4"><span className={cn("rounded-full px-3 py-1 text-xs font-black", row.badgeTone === "green" && "bg-emerald-100 text-emerald-700", row.badgeTone === "red" && "bg-rose-100 text-rose-700")}>{statusLabel(row.status)}</span></td><td className="px-5 py-4 text-slate-600">{row.reference ?? "-"}</td><td className="px-5 py-4 text-slate-500">{row.date ?? "-"}</td></tr>)}</tbody></table></div></div>;
 }

@@ -77,8 +77,6 @@ export const DASHBOARD_PERMISSION_REQUIREMENTS: PermissionRequirement[] = [
   { area: "Support Inbox", route: "/admin/support-inbox", feature: "Delete support conversation", action: "Delete", permissionKey: "support.delete", note: "Missing if support deletion is required." },
   { area: "Settings", route: "/admin/settings", feature: "View settings", action: "View", permissionKey: "settings.view" },
   { area: "Settings", route: "/admin/settings", feature: "Edit settings", action: "Edit", permissionKey: "settings.edit" },
-  { area: "Backup & Restore", route: "/admin/system/backup-restore", feature: "View backup and restore status", action: "View", permissionKey: "backup.view" },
-  { area: "Backup & Restore", route: "/admin/system/backup-restore", feature: "Create backups or start restore workflow", action: "Manage", permissionKey: "backup.edit" },
   { area: "Activity Logs", route: "/admin/audit", feature: "View activity logs", action: "View", permissionKey: "audit.view" },
   { area: "Alerts", route: "/admin/alerts", feature: "View alerts", action: "View", permissionKey: "alerts.view" },
   { area: "Alerts", route: "/admin/alerts", feature: "Manage alerts", action: "Manage", permissionKey: "alerts.manage" },

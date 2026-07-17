@@ -189,12 +189,6 @@ export const PAGE_TABS: Record<AdminPageId, AdminTabConfig[]> = {
     { id: "appearance", label: "Dashboard Appearance", icon: Palette },
     { id: "pricing", label: "Global Pricing Rules", icon: DollarSign },
   ),
-  "backup-restore": tabs(
-    { id: "overview", label: "Overview", icon: LayoutDashboard },
-    { id: "backups", label: "Backup Activity", icon: FileCheck },
-    { id: "restore", label: "Restore Activity", icon: RotateCcw },
-    { id: "failures", label: "Failures", icon: AlertTriangle },
-  ),
   reports: tabs(
     { id: "overview", label: "Business Overview", icon: BarChart3 },
     { id: "sales", label: "Sales", icon: DollarSign },
@@ -384,14 +378,6 @@ export const PAGE_META: Record<AdminPageId, Omit<AdminPageMeta, "tabs">> = {
     title: "Settings",
     subtitle: "Manage your profile and universal product pricing rules.",
     defaultTab: "profile",
-  },
-  "backup-restore": {
-    id: "backup-restore",
-    section: "System",
-    icon: FileCheck,
-    title: "Backup & Restore",
-    subtitle: "Review backup readiness, restore history, and system recovery audit events.",
-    defaultTab: "overview",
   },
   "activity-logs": {
     id: "activity-logs",

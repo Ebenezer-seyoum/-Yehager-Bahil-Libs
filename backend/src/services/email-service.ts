@@ -248,9 +248,8 @@ function actionButton(label: string, href: string) {
   return `<p style="margin:24px 0"><a href="${escapeHtml(href)}" style="display:inline-block;background:#d6a43d;color:#18130a;text-decoration:none;border-radius:6px;padding:14px 24px;font-weight:800;font-size:14px;letter-spacing:.02em">${escapeHtml(label)}</a></p>`;
 }
 
-function logoUrl() {
-  // Prefer an explicit logo URL env var; fall back to the production website.
-  return env.EMAIL_LOGO_URL || "https://www.yehagerbahillibs.com/images/email-logo.jpg";
+function logoMarkUrl() {
+  return env.EMAIL_LOGO_MARK_URL || "https://www.yehagerbahillibs.com/images/email-logo-mark.png";
 }
 
 function emailAddress(value: string | undefined, fallback: string) {
@@ -271,10 +270,40 @@ function designImageGrid(imageUrls: string[] = []) {
   if (!images.length) return "";
   const cells = images.map((url, index) => `
     <td style="width:${Math.floor(100 / images.length)}%;padding:4px;vertical-align:top;text-align:center">
-      <img src="${escapeHtml(url)}" alt="${escapeHtml(labels[index])}" width="140" style="display:block;width:100%;height:120px;object-fit:cover;margin:0 auto;border:1px solid #4d3714;border-radius:6px" />
+      <a href="${escapeHtml(url)}" style="display:block;text-decoration:none" target="_blank" rel="noopener noreferrer">
+        <img src="${escapeHtml(url)}" alt="${escapeHtml(labels[index])} — click to view full size" width="120" height="92" style="display:block;width:100%;height:92px;object-fit:cover;margin:0 auto;border:1px solid #4d3714;border-radius:6px" />
+      </a>
       <p style="margin:6px 0 0;color:#d6a43d;font-size:11px;font-weight:800;line-height:1.2">${escapeHtml(labels[index])}</p>
     </td>`).join("");
   return `<div style="margin:20px 0"><p style="margin:0 0 8px;color:#d6a43d;font-size:16px;font-weight:900">🖼️ Uploaded Design Images</p><table role="presentation" style="width:100%;border-collapse:collapse;table-layout:fixed"><tr>${cells}</tr></table></div>`;
+}
+
+function measurementLabel(key: string) {
+  return key
+    .replaceAll("_", " ")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function measurementValue(key: string, value: unknown) {
+  const normalized = String(value ?? "").trim();
+  if (!normalized || key.toLowerCase() === "gender" || /[a-z]/i.test(normalized) || normalized.includes('"')) return normalized;
+  return `${normalized}"`;
+}
+
+function compactMeasurementGrid(entries: Array<[string, unknown]>) {
+  const visible = entries.filter(([, value]) => value !== undefined && value !== null && String(value).trim() !== "");
+  if (!visible.length) return "";
+  const rows = [];
+  for (let index = 0; index < visible.length; index += 2) {
+    const cells = visible.slice(index, index + 2).map(([key, value]) => `
+      <td style="width:50%;padding:4px 10px 4px 0;color:#a99d8a;font-size:12px;line-height:1.2;vertical-align:top">
+        ${escapeHtml(measurementLabel(key))}
+        <strong style="color:#fff7df;font-size:12px;white-space:nowrap">${escapeHtml(measurementValue(key, value))}</strong>
+      </td>`).join("");
+    rows.push(`<tr>${cells}${visible[index + 1] ? "" : '<td style="width:50%">&nbsp;</td>'}</tr>`);
+  }
+  return `<table role="presentation" style="width:100%;border-collapse:collapse;margin:10px 0 0;border-top:1px solid #3d321d">${rows.join("")}</table>`;
 }
 
 function designSpecificationsSection(payload: CustomDesignPayload) {
@@ -288,7 +317,7 @@ function designSpecificationsSection(payload: CustomDesignPayload) {
   const measurementEntries = Object.entries(payload.measurementSnapshot ?? {}).filter(([, value]) => value != null && String(value).trim() !== "");
   if (!rows.some(([, value]) => value) && !measurementEntries.length) return "";
   const measurementHtml = measurementEntries.length
-    ? `<p style="margin:18px 0 8px;color:#d6a43d;font-size:15px;font-weight:900">📏 Custom Measurements</p>${detailsList(measurementEntries.map(([key, value]) => [key.replaceAll("_", " "), value]))}`
+    ? `<p style="margin:16px 0 6px;color:#d6a43d;font-size:14px;font-weight:900">📏 Custom Measurements</p>${compactMeasurementGrid(measurementEntries)}`
     : "";
   return `<div style="margin:20px 0"><p style="margin:0 0 8px;color:#d6a43d;font-size:16px;font-weight:900">🎨 Your Design Specifications</p>${detailsList(rows)}${measurementHtml}</div>`;
 }
@@ -402,7 +431,7 @@ function htmlShell(title: string, body: string) {
           <!-- Header -->
           <div style="text-align:center;margin-bottom:22px">
             <div style="text-align:center">
-              <img src="${escapeHtml(logoUrl())}" alt="Yehager Bahil Libs" width="88" height="88" style="display:block;width:88px;height:88px;object-fit:contain;margin:0 auto;border:3px solid #fff;border-radius:50%;background:#fff;outline:none;text-decoration:none" />
+              <img src="${escapeHtml(logoMarkUrl())}" alt="Yehager Bahil Libs" width="82" height="82" style="display:block;width:82px;height:82px;object-fit:contain;margin:0 auto;padding:6px;border:3px solid #fff;border-radius:50%;background:#fff;outline:none;text-decoration:none" />
             </div>
           </div>
           <p style="margin:0 0 4px;text-align:center;color:#d6a43d;font-size:22px;font-weight:900;letter-spacing:.01em">Yehager Bahil Libs</p>

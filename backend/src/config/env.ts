@@ -46,6 +46,7 @@ const envSchema = z.object({
   EMAIL_SUPPORT_FROM: z.string().min(1).optional(),
   EMAIL_TEAM_FROM: z.string().min(1).optional(),
   EMAIL_LOGO_URL: url.optional(),
+  EMAIL_LOGO_MARK_URL: url.optional(),
   SUPPORT_IMAP_HOST: z.string().min(1).optional(),
   SUPPORT_IMAP_PORT: z.coerce.number().int().positive().optional(),
   SUPPORT_IMAP_SECURE: booleanString.optional(),
