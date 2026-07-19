@@ -8,50 +8,67 @@ type BeforeInstallPromptEvent = Event & {
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 };
 
-const PWA_INSTALL_PROMPT_SHOWN_KEY = "pwa-install-prompt-shown";
+// sessionStorage intentionally resets when the customer closes the tab/browser.
+// This makes the banner appear again in a new browsing session, while keeping
+// it from repeatedly covering the same tab after dismissal.
+const PWA_INSTALL_PROMPT_SHOWN_KEY = "pwa-install-prompt-shown-this-session";
+
+function isPhoneOrTablet() {
+  const userAgent = navigator.userAgent.toLowerCase();
+  const isAppleTabletInDesktopMode =
+    navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1;
+
+  return (
+    /android|iphone|ipad|ipod|windows phone|webos|blackberry|mobile/i.test(userAgent) ||
+    isAppleTabletInDesktopMode
+  );
+}
 
 export function PwaInstallBanner() {
   const [show, setShow] = useState(false);
-  const [isIos, setIsIos] = useState(false);
+  const [isIos] = useState(() =>
+    typeof navigator !== "undefined" && /iphone|ipad|ipod/i.test(navigator.userAgent),
+  );
   const [showIosSteps, setShowIosSteps] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
 
   useEffect(() => {
+    if (!isPhoneOrTablet()) return;
+
     const navigatorWithStandalone = navigator as Navigator & { standalone?: boolean };
     if (window.matchMedia("(display-mode: standalone)").matches || navigatorWithStandalone.standalone) return;
-    if (window.localStorage.getItem(PWA_INSTALL_PROMPT_SHOWN_KEY)) return;
-
-    const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
-    setIsIos(ios);
+    if (window.sessionStorage.getItem(PWA_INSTALL_PROMPT_SHOWN_KEY)) return;
 
     function handlePrompt(event: Event) {
       event.preventDefault();
-      if (window.localStorage.getItem(PWA_INSTALL_PROMPT_SHOWN_KEY)) return;
+      if (window.sessionStorage.getItem(PWA_INSTALL_PROMPT_SHOWN_KEY)) return;
       setDeferredPrompt(event as BeforeInstallPromptEvent);
-      window.localStorage.setItem(PWA_INSTALL_PROMPT_SHOWN_KEY, "1");
+      window.sessionStorage.setItem(PWA_INSTALL_PROMPT_SHOWN_KEY, "1");
       setShow(true);
     }
 
     function handleInstalled() {
-      window.localStorage.setItem(PWA_INSTALL_PROMPT_SHOWN_KEY, "1");
+      window.sessionStorage.setItem(PWA_INSTALL_PROMPT_SHOWN_KEY, "1");
       setShow(false);
       setDeferredPrompt(null);
     }
 
     window.addEventListener("beforeinstallprompt", handlePrompt);
     window.addEventListener("appinstalled", handleInstalled);
-    if (ios) {
-      window.localStorage.setItem(PWA_INSTALL_PROMPT_SHOWN_KEY, "1");
-      setShow(true);
+    let iosShowTimer: number | undefined;
+    if (isIos) {
+      window.sessionStorage.setItem(PWA_INSTALL_PROMPT_SHOWN_KEY, "1");
+      iosShowTimer = window.setTimeout(() => setShow(true), 0);
     }
     return () => {
+      if (iosShowTimer !== undefined) window.clearTimeout(iosShowTimer);
       window.removeEventListener("beforeinstallprompt", handlePrompt);
       window.removeEventListener("appinstalled", handleInstalled);
     };
-  }, []);
+  }, [isIos]);
 
   async function install() {
-    window.localStorage.setItem(PWA_INSTALL_PROMPT_SHOWN_KEY, "1");
+    window.sessionStorage.setItem(PWA_INSTALL_PROMPT_SHOWN_KEY, "1");
     if (isIos) {
       setShowIosSteps(true);
       return;
@@ -64,7 +81,7 @@ export function PwaInstallBanner() {
   }
 
   function dismiss() {
-    window.localStorage.setItem(PWA_INSTALL_PROMPT_SHOWN_KEY, "1");
+    window.sessionStorage.setItem(PWA_INSTALL_PROMPT_SHOWN_KEY, "1");
     setShow(false);
     setShowIosSteps(false);
   }
