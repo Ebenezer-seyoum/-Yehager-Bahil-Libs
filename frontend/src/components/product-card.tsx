@@ -131,11 +131,8 @@ export function ProductCard({ product, eventId, groupId, selectionMode, etbRate 
                 </p>
                 {etbPriceText ? <p className="text-[11px] text-white/55">{etbPriceText}</p> : null}
                 {hasDiscount ? <p className="text-xs font-bold text-white/60 line-through">${originalPrice.toFixed(2)}</p> : null}
-                {rolePrices.length > 1 ? (
-                  <p className="text-[10px] text-white/50">{product.familyRoles?.map((role) => role.label).filter(Boolean).join(" / ") || "Couple"}</p>
-                ) : null}
               </div>
-              <span className="text-[11px] capitalize text-white/60 sm:text-xs">{rolePrices.length > 1 ? "Set" : product.gender ?? ""}</span>
+              <span className="text-[11px] capitalize text-white/60 sm:text-xs">{product.gender ?? ""}</span>
             </div>
           </div>
         </div>
