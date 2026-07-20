@@ -771,7 +771,8 @@ export async function getEmployeeDetailForAdmin(userId: string) {
 export async function createEmployeeForAdmin(payload: {
   email: string;
   name: string;
-  password: string;
+  password?: string;
+  sendInvite?: boolean;
   roleId?: string;
   status?: "active" | "inactive" | "suspended";
   accountStatus?: "active" | "invited" | "pending";
@@ -799,12 +800,19 @@ export async function createEmployeeForAdmin(payload: {
   if (existing) {
     throw new HTTPException(409, { message: "An account with this email already exists" });
   }
+  const sendInvite = payload.sendInvite === true;
+  const onboardingPassword = sendInvite
+    ? crypto.randomBytes(32).toString("base64url")
+    : payload.password;
+  if (!onboardingPassword) {
+    throw new HTTPException(400, { message: "Temporary password is required when invitation mode is off" });
+  }
   const assignedRole = payload.roleId ? await getAssignableEmployeeRole(payload.roleId) : null;
 
   const user = await createUser({
     email,
     name: payload.name.trim(),
-    passwordHash: await hashPassword(payload.password),
+    passwordHash: await hashPassword(onboardingPassword),
     role: "employee",
     status: payload.status ?? "active",
     accountStatus: payload.accountStatus ?? "active",
@@ -812,9 +820,9 @@ export async function createEmployeeForAdmin(payload: {
     phone: payload.phone ?? null,
     avatarUrl: payload.avatarUrl ?? null,
     mustChangePassword: true,
-    passwordStatus: "temporary_password_set",
+    passwordStatus: sendInvite ? "setup_link_sent" : "temporary_password_set",
     lastPasswordResetAt: new Date(),
-    lastPasswordResetMethod: "temporary_password",
+    lastPasswordResetMethod: sendInvite ? "invitation_link" : "temporary_password",
   });
 
   if (!user) {
@@ -863,18 +871,21 @@ export async function createEmployeeForAdmin(payload: {
     metadata: {
       email: user.email,
       role: user.role,
+      onboarding_method: sendInvite ? "invitation_link" : "temporary_password",
     },
   });
 
-  const setup = await createPasswordResetToken(user.id, true);
-  await markPasswordResetLinkSent({ userId: user.id });
-  await sendPasswordSetupEmail({
-    to: user.email,
-    name: user.name,
-    link: setup.link,
-    expiresAt: setup.expiresAt,
-    accountType: "employee",
-  });
+  if (sendInvite) {
+    const setup = await createPasswordResetToken(user.id, true);
+    await markPasswordResetLinkSent({ userId: user.id });
+    await sendPasswordSetupEmail({
+      to: user.email,
+      name: user.name,
+      link: setup.link,
+      expiresAt: setup.expiresAt,
+      accountType: "employee",
+    });
+  }
 
   return toPublicUser(createdUser);
 }

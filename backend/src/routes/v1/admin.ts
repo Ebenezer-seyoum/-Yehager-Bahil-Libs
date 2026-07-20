@@ -7,7 +7,11 @@ import { requireAuth } from "../../middleware/auth.js";
 import { requireAnyPermission, requirePermission } from "../../middleware/permissions.js";
 import { db } from "../../lib/db/drizzle.js";
 import { auditLogs, globalPricingRules, homepageSections, orders, products, profitCostSettings, systemAlerts, uploadedDesigns } from "../../lib/db/schema.js";
-import { strongPasswordSchema, temporaryPasswordSchema } from "../../lib/auth/password-policy.js";
+import {
+  employeeOnboardingCredentialsSchema,
+  strongPasswordSchema,
+  temporaryPasswordSchema,
+} from "../../lib/auth/password-policy.js";
 import { USER_ROLES } from "../../lib/auth/roles.js";
 import { PERMISSIONS } from "../../lib/auth/permissions.js";
 import {
@@ -242,10 +246,9 @@ const documentSchema = z.object({
 const deleteDocumentSchema = z.object({
   index: z.coerce.number().int().nonnegative(),
 });
-const createEmployeeSchema = z.object({
+const adminCreatedUserBaseSchema = z.object({
   name: z.string().trim().min(1).max(255),
   email: z.string().trim().email().max(320),
-  password: temporaryPasswordSchema,
   roleId: z.string().uuid().optional(),
   status: z.enum(["active", "inactive"]).optional(),
   accountStatus: z.enum(["active", "invited", "pending"]).optional(),
@@ -269,7 +272,8 @@ const createEmployeeSchema = z.object({
     })
     .optional(),
 });
-const createCustomerSchema = createEmployeeSchema.extend({
+const createEmployeeSchema = adminCreatedUserBaseSchema.and(employeeOnboardingCredentialsSchema);
+const createCustomerSchema = adminCreatedUserBaseSchema.extend({
   password: strongPasswordSchema,
 });
 const createRoleSchema = z.object({

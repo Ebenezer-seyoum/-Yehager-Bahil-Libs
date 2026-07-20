@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   PASSWORD_MAX_LENGTH,
+  employeeOnboardingCredentialsSchema,
   passwordMeetsPolicy,
   passwordPolicyChecks,
   strongPasswordSchema,
@@ -33,5 +34,15 @@ describe("password policy", () => {
     expect(temporaryPasswordSchema.safeParse("").success).toBe(false);
     expect(temporaryPasswordSchema.safeParse("   ").success).toBe(false);
     expect(temporaryPasswordSchema.safeParse("a".repeat(PASSWORD_MAX_LENGTH + 1)).success).toBe(false);
+  });
+
+  it("allows invitation onboarding without an admin-created password", () => {
+    const result = employeeOnboardingCredentialsSchema.safeParse({ sendInvite: true });
+    expect(result.success).toBe(true);
+  });
+
+  it("requires a temporary password when invitation onboarding is off", () => {
+    expect(employeeOnboardingCredentialsSchema.safeParse({ sendInvite: false }).success).toBe(false);
+    expect(employeeOnboardingCredentialsSchema.safeParse({ sendInvite: false, password: "1234" }).success).toBe(true);
   });
 });

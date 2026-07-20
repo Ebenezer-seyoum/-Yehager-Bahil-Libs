@@ -106,25 +106,6 @@ export function EmployeeCreateClient({ roles }: { roles: Role[] }) {
     };
   }, [formNotice]);
 
-  function generateAutoPassword() {
-    // Keep automatically generated temporary credentials difficult to guess.
-    const upper = "ABCDEFGHJKLMNPQRSTUVWXYZ";
-    const lower = "abcdefghijkmnopqrstuvwxyz";
-    const digits = "23456789";
-    const symbols = "!@#$%^&*";
-    const all = upper + lower + digits + symbols;
-    const seed = [
-      upper[Math.floor(Math.random() * upper.length)],
-      lower[Math.floor(Math.random() * lower.length)],
-      digits[Math.floor(Math.random() * digits.length)],
-      symbols[Math.floor(Math.random() * symbols.length)],
-    ];
-    while (seed.length < 12) {
-      seed.push(all[Math.floor(Math.random() * all.length)]);
-    }
-    return seed.sort(() => Math.random() - 0.5).join("");
-  }
-
   const selectedCountry = useMemo(() => {
     return COUNTRY_CALLING_CODES.find((item) => item.iso2 === safeIso2(phoneCountryIso2)) ?? COUNTRY_CALLING_CODES[0];
   }, [phoneCountryIso2]);
@@ -152,6 +133,23 @@ export function EmployeeCreateClient({ roles }: { roles: Role[] }) {
     return errors;
   };
 
+  const toggleInvitationMode = () => {
+    const nextValue = !sendInviteLink;
+    setSendInviteLink(nextValue);
+    setFieldErrors((current) => {
+      const next = { ...current };
+      delete next.tempPassword;
+      delete next.confirmPassword;
+      return next;
+    });
+    if (nextValue) {
+      setTempPassword("");
+      setConfirmPassword("");
+      setShowTempPassword(false);
+      setShowConfirmPassword(false);
+    }
+  };
+
   const handleCreate = async () => {
     const errors = validate();
     setFieldErrors(errors);
@@ -175,8 +173,6 @@ export function EmployeeCreateClient({ roles }: { roles: Role[] }) {
         // Implement upload logic or just use preview for now if backend expects URL
       }
 
-      const passwordToSend = sendInviteLink ? generateAutoPassword() : tempPassword;
-
       const payload = {
         name: `${firstName} ${fatherName} ${grandfatherName}`.trim(),
         email: email.trim(),
@@ -184,7 +180,7 @@ export function EmployeeCreateClient({ roles }: { roles: Role[] }) {
         roleId: roleId || undefined,
         status: accountStatus,
         avatarUrl,
-        password: passwordToSend,
+        password: sendInviteLink ? undefined : tempPassword,
         sendInvite: sendInviteLink,
         profile: {
           firstName: firstName.trim(),
@@ -213,7 +209,13 @@ export function EmployeeCreateClient({ roles }: { roles: Role[] }) {
         throw new Error(err.message || "Failed to create employee");
       }
 
-      setFormNotice({ tone: "success", title: "Success", message: "Employee account created successfully" });
+      setFormNotice({
+        tone: "success",
+        title: "Success",
+        message: sendInviteLink
+          ? "Employee created and invitation link sent."
+          : "Employee created with a temporary password. The employee must change it during first login.",
+      });
       setTimeout(() => router.push("/admin/users"), 1500);
     } catch (error: any) {
       setFormNotice({ tone: "error", title: "Error", message: error.message });
@@ -571,7 +573,11 @@ export function EmployeeCreateClient({ roles }: { roles: Role[] }) {
                     <p className="text-xs font-medium text-slate-500">Choose how the employee will set their password.</p>
                   </div>
                   <button 
-                    onClick={() => setSendInviteLink(!sendInviteLink)}
+                    type="button"
+                    role="switch"
+                    aria-checked={sendInviteLink}
+                    aria-label="Send employee invitation link"
+                    onClick={toggleInvitationMode}
                     className={cn(
                       "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2",
                       sendInviteLink ? "bg-primary" : "bg-slate-200"
@@ -607,14 +613,14 @@ export function EmployeeCreateClient({ roles }: { roles: Role[] }) {
                             fieldErrors.tempPassword ? "border-rose-200 bg-rose-50" : "border-slate-200 bg-white shadow-sm focus:ring-2 focus:ring-primary/20"
                           )}
                         />
-                        <button onClick={() => setShowTempPassword(!showTempPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-900">
+                        <button type="button" onClick={() => setShowTempPassword(!showTempPassword)} aria-label={showTempPassword ? "Hide temporary password" : "Show temporary password"} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-900">
                           {showTempPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                         </button>
                       </div>
                       {fieldErrors.tempPassword && <p className="text-[10px] font-bold text-rose-500 uppercase tracking-tighter">{fieldErrors.tempPassword}</p>}
                       </div>
                       <div className="space-y-2">
-                      <label className="text-xs font-black uppercase tracking-tight text-slate-900 flex items-center gap-1.5"><Lock className="h-3 w-3" /> Confirm Password</label>
+                      <label className="text-xs font-black uppercase tracking-tight text-slate-900 flex items-center gap-1.5"><Lock className="h-3 w-3" /> Confirm Temporary Password</label>
                       <div className="relative">
                         <input 
                           type={showConfirmPassword ? "text" : "password"}
@@ -626,15 +632,15 @@ export function EmployeeCreateClient({ roles }: { roles: Role[] }) {
                             fieldErrors.confirmPassword ? "border-rose-200 bg-rose-50" : "border-slate-200 bg-white shadow-sm focus:ring-2 focus:ring-primary/20"
                           )}
                         />
-                        <button onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-900">
+                        <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} aria-label={showConfirmPassword ? "Hide confirmed temporary password" : "Show confirmed temporary password"} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-900">
                           {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                         </button>
                       </div>
                       {fieldErrors.confirmPassword && <p className="text-[10px] font-bold text-rose-500 uppercase tracking-tighter">{fieldErrors.confirmPassword}</p>}
                       </div>
                     </div>
-                    <div className="rounded-xl border border-blue-100 bg-blue-50 p-3 text-xs font-medium leading-5 text-blue-800">
-                      This is a temporary password only. The employee must replace it with a strong permanent password after signing in.
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs font-semibold leading-5 text-amber-900">
+                      This is only a temporary first-login password, not the employee&apos;s permanent staff password. The employee must change it before accessing the staff dashboard.
                     </div>
                   </div>
                 )}

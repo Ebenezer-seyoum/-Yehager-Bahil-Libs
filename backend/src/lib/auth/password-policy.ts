@@ -23,6 +23,21 @@ export const temporaryPasswordSchema = z
   .max(PASSWORD_MAX_LENGTH, `Temporary password must be at most ${PASSWORD_MAX_LENGTH} characters`)
   .refine((password) => password.trim().length > 0, "Temporary password is required");
 
+export const employeeOnboardingCredentialsSchema = z
+  .object({
+    password: temporaryPasswordSchema.optional(),
+    sendInvite: z.boolean().optional().default(false),
+  })
+  .superRefine((value, ctx) => {
+    if (!value.sendInvite && !value.password) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["password"],
+        message: "Temporary password is required when invitation mode is off",
+      });
+    }
+  });
+
 export const strongPasswordSchema = z
   .string()
   .min(PASSWORD_MIN_LENGTH, `Password must be at least ${PASSWORD_MIN_LENGTH} characters`)

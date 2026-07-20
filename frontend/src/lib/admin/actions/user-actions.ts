@@ -18,7 +18,7 @@ export async function createEmployeeAction(formData: FormData) {
   try {
     await apiRequest("/api/v1/admin/users/employees", {
       method: "POST",
-      body: { name, email, password, roleId, status },
+      body: { name, email, password, roleId, status, sendInvite: false },
     });
     revalidatePath("/admin/users");
     revalidatePath("/admin/audit");
