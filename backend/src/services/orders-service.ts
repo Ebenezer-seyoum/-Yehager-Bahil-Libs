@@ -969,6 +969,14 @@ export async function createCheckoutIntent(payload: {
       },
     });
 
+    await tx.insert(systemAlerts).values({
+      title: `${orderType === "custom_order" ? "New custom order" : "New catalog order"} #${order.orderNumber}`,
+      message: `${order.customerName} placed a new order awaiting review.`,
+      type: orderType === "custom_order" ? "new_custom_order" : "new_catalog_order",
+      severity: "info",
+      entityId: order.id,
+    });
+
     return {
       order,
       totals,

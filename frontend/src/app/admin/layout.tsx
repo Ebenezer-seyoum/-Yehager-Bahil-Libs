@@ -20,30 +20,32 @@ type DashboardProfilePayload = {
 };
 
 type SummaryCounts = {
-  payment: number;
-  custom_request: number;
-  custom_order: number;
-  catalog_order: number;
-  refund_issue: number;
-  shipping_delivery: number;
-  catalog_price_submission: number;
+  orders: number;
+  customOrders: number;
+  payments: number;
+  customDesigns: number;
+  refundIssues: number;
+  shippingDelivery: number;
+  catalogPrices: number;
+  support?: number;
+  alerts?: number;
   total: number;
   paymentIds?: string[];
-  customRequestIds?: string[];
+  customDesignIds?: string[];
   customOrderIds?: string[];
-  catalogOrderIds?: string[];
+  orderIds?: string[];
   refundIssueIds?: string[];
   shippingDeliveryIds?: string[];
   catalogPriceProductIds?: string[];
 };
 
 async function getDashboardNotificationCounts(
-  canViewAlerts: boolean,
+  canUseNotifications: boolean,
   canViewSupport: boolean,
 ) {
   const [summaryResponse, supportResponse] = await Promise.all([
-    canViewAlerts
-      ? apiRequest<{ data?: SummaryCounts }>("/api/v1/admin/summary-counts").catch(() => null)
+    canUseNotifications
+      ? apiRequest<{ data?: SummaryCounts }>("/api/v1/notifications/summary").catch(() => null)
       : Promise.resolve(null),
     canViewSupport
       ? apiRequest<{ count?: number }>("/api/v1/admin/support/unread-count").catch(() => null)
@@ -52,23 +54,23 @@ async function getDashboardNotificationCounts(
   const counts = summaryResponse?.data;
 
   return {
-    orders: counts?.catalog_order ?? 0,
-    orderIds: counts?.catalogOrderIds ?? [],
-    payments: counts?.payment ?? 0,
+    orders: counts?.orders ?? 0,
+    orderIds: counts?.orderIds ?? [],
+    payments: counts?.payments ?? 0,
     paymentIds: counts?.paymentIds ?? [],
-    customDesigns: counts?.custom_request ?? counts?.custom_order ?? 0,
-    customDesignIds: counts?.customRequestIds ?? [],
-    customOrders: counts?.custom_order ?? 0,
+    customDesigns: counts?.customDesigns ?? 0,
+    customDesignIds: counts?.customDesignIds ?? [],
+    customOrders: counts?.customOrders ?? 0,
     customOrderIds: counts?.customOrderIds ?? [],
-    refundIssues: counts?.refund_issue ?? 0,
+    refundIssues: counts?.refundIssues ?? 0,
     refundIssueIds: counts?.refundIssueIds ?? [],
-    shippingDelivery: counts?.shipping_delivery ?? 0,
+    shippingDelivery: counts?.shippingDelivery ?? 0,
     shippingDeliveryIds: counts?.shippingDeliveryIds ?? [],
-    catalogPrices: counts?.catalog_price_submission ?? 0,
+    catalogPrices: counts?.catalogPrices ?? 0,
     catalogPriceProductIds: counts?.catalogPriceProductIds ?? [],
     total: counts?.total ?? 0,
-    alerts: 0,
-    support: supportResponse?.count ?? 0,
+    alerts: counts?.alerts ?? 0,
+    support: Math.max(counts?.support ?? 0, supportResponse?.count ?? 0),
   };
 }
 
@@ -98,7 +100,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const isAdmin = session?.user?.role === "admin";
   const isEmployee = session?.user?.role === "employee";
   const notificationCounts = await getDashboardNotificationCounts(
-    isAdmin || permissions.includes("alerts.view"),
+    isAdmin || permissions.length > 0,
     isAdmin || permissions.includes("support.view"),
   );
 

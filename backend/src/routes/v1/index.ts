@@ -15,6 +15,7 @@ import { usersRouter } from "./users.js";
 import { supportRouter } from "./support.js";
 import { uploadedDesignsRouter } from "./uploaded-designs.js";
 import { telegramRouter } from "./telegram.js";
+import { notificationsRouter } from "./notifications.js";
 
 export const v1Router = new Hono<AppBindings>();
 
@@ -33,3 +34,4 @@ v1Router.route("/admin", adminRouter);
 v1Router.route("/admin/support", supportRouter);
 v1Router.route("/uploaded-designs", uploadedDesignsRouter);
 v1Router.route("/integrations/telegram", telegramRouter);
+v1Router.route("/notifications", notificationsRouter);

@@ -2,9 +2,8 @@
 
 import { FormEvent, useMemo, useState } from "react";
 import { LockKeyhole, ShieldCheck } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { getPostLoginRedirect } from "@/lib/auth-redirect";
+import { PASSWORD_REQUIREMENTS, passwordMeetsPolicy, passwordPolicyChecks } from "@/lib/password-policy";
 
 type Profile = {
   name?: string | null;
@@ -13,7 +12,6 @@ type Profile = {
 };
 
 export default function ChangePasswordRequiredPage() {
-  const router = useRouter();
   const { user, checkAppState, logout } = useAuth();
   const profile = (user ?? {}) as Profile;
   const [currentPassword, setCurrentPassword] = useState("");
@@ -24,20 +22,18 @@ export default function ChangePasswordRequiredPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const passwordChecks = useMemo(
-    () => ({
-      length: newPassword.length >= 8,
-      match: newPassword.length > 0 && newPassword === confirmPassword,
-    }),
+    () => ({ ...passwordPolicyChecks(newPassword), match: newPassword.length > 0 && newPassword === confirmPassword }),
     [confirmPassword, newPassword],
   );
+  const canSubmit = currentPassword.length > 0 && passwordMeetsPolicy(newPassword) && passwordChecks.match;
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
     setMessage("");
 
-    if (!passwordChecks.length) {
-      setError("New password must be at least 8 characters.");
+    if (!passwordMeetsPolicy(newPassword)) {
+      setError("Use at least 8 characters with uppercase, lowercase, number, and special character.");
       return;
     }
     if (!passwordChecks.match) {
@@ -59,10 +55,7 @@ export default function ChangePasswordRequiredPage() {
 
       setMessage("Password changed successfully. Redirecting...");
       await checkAppState();
-      const redirectTo = profile.role === "customer"
-        ? "/my-account"
-        : getPostLoginRedirect(profile.role, undefined, profile.permissions ?? []);
-      router.replace(redirectTo);
+      window.location.replace(profile.role === "employee" ? "/auth/redirect" : "/my-account");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Password change failed.");
     } finally {
@@ -120,11 +113,13 @@ export default function ChangePasswordRequiredPage() {
             />
           </label>
 
-          <div className="rounded-xl border border-slate-700 bg-slate-900/70 p-3 text-sm text-slate-300">
-            <p className="flex items-center gap-2">
-              <ShieldCheck className={`h-4 w-4 ${passwordChecks.length ? "text-emerald-300" : "text-slate-500"}`} />
-              At least 8 characters
-            </p>
+          <div className="space-y-1 rounded-xl border border-slate-700 bg-slate-900/70 p-3 text-sm text-slate-300">
+            {PASSWORD_REQUIREMENTS.map((requirement) => (
+              <p key={requirement.key} className="flex items-center gap-2">
+                <ShieldCheck className={`h-4 w-4 ${passwordChecks[requirement.key] ? "text-emerald-300" : "text-slate-500"}`} />
+                {requirement.label}
+              </p>
+            ))}
             <p className="mt-1 flex items-center gap-2">
               <ShieldCheck className={`h-4 w-4 ${passwordChecks.match ? "text-emerald-300" : "text-slate-500"}`} />
               Password confirmation matches
@@ -136,7 +131,7 @@ export default function ChangePasswordRequiredPage() {
 
           <button
             type="submit"
-            disabled={isSubmitting}
+            disabled={isSubmitting || !canSubmit}
             className="h-12 w-full rounded-xl bg-amber-500 px-4 text-sm font-black text-slate-950 transition hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {isSubmitting ? "Changing password..." : "Change Password"}

@@ -27,6 +27,7 @@ import { COUNTRY_CALLING_CODES } from "@/lib/country-calling-codes";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { safeIso2 } from "@/lib/utils/phone-utils";
 import { filterAssignableEmployeeRoles } from "@/lib/admin/assignable-roles";
+import { PASSWORD_REQUIREMENTS, passwordMeetsPolicy, passwordPolicyChecks } from "@/lib/password-policy";
 
 const TypedPopoverContent = PopoverContent as ComponentType<PropsWithChildren<{ align?: string; className?: string; sideOffset?: number }>>;
 
@@ -84,6 +85,7 @@ export function EmployeeCreateClient({ roles }: { roles: Role[] }) {
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const assignableRoles = useMemo(() => filterAssignableEmployeeRoles(roles), [roles]);
+  const tempPasswordChecks = useMemo(() => passwordPolicyChecks(tempPassword), [tempPassword]);
 
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [formNotice, setFormNotice] = useState<{ tone: "success" | "error"; title: string; message: string } | null>(null);
@@ -146,7 +148,7 @@ export function EmployeeCreateClient({ roles }: { roles: Role[] }) {
     if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errors.email = "Valid email is required";
     if (!phoneNumber.trim()) errors.phone = "Phone number is required";
     if (!gender) errors.gender = "Gender is required";
-    if (!sendInviteLink && (!tempPassword || tempPassword.length < 8)) errors.tempPassword = "Password must be at least 8 characters";
+    if (!sendInviteLink && !passwordMeetsPolicy(tempPassword)) errors.tempPassword = "Use 8+ characters with uppercase, lowercase, number, and special character";
     if (!sendInviteLink && tempPassword !== confirmPassword) errors.confirmPassword = "Passwords do not match";
     return errors;
   };
@@ -591,8 +593,9 @@ export function EmployeeCreateClient({ roles }: { roles: Role[] }) {
                     </p>
                   </div>
                 ) : (
-                  <div className="grid gap-6 md:grid-cols-2 animate-in fade-in zoom-in-95 duration-200">
-                    <div className="space-y-2">
+                  <div className="animate-in space-y-4 fade-in zoom-in-95 duration-200">
+                    <div className="grid gap-6 md:grid-cols-2">
+                      <div className="space-y-2">
                       <label className="text-xs font-black uppercase tracking-tight text-slate-900 flex items-center gap-1.5"><Lock className="h-3 w-3" /> Temporary Password</label>
                       <div className="relative">
                         <input 
@@ -609,8 +612,8 @@ export function EmployeeCreateClient({ roles }: { roles: Role[] }) {
                         </button>
                       </div>
                       {fieldErrors.tempPassword && <p className="text-[10px] font-bold text-rose-500 uppercase tracking-tighter">{fieldErrors.tempPassword}</p>}
-                    </div>
-                    <div className="space-y-2">
+                      </div>
+                      <div className="space-y-2">
                       <label className="text-xs font-black uppercase tracking-tight text-slate-900 flex items-center gap-1.5"><Lock className="h-3 w-3" /> Confirm Password</label>
                       <div className="relative">
                         <input 
@@ -627,6 +630,15 @@ export function EmployeeCreateClient({ roles }: { roles: Role[] }) {
                         </button>
                       </div>
                       {fieldErrors.confirmPassword && <p className="text-[10px] font-bold text-rose-500 uppercase tracking-tighter">{fieldErrors.confirmPassword}</p>}
+                      </div>
+                    </div>
+                    <div className="grid gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 sm:grid-cols-2">
+                      {PASSWORD_REQUIREMENTS.map((requirement) => (
+                        <p key={requirement.key} className={cn("flex items-center gap-2 text-xs font-bold", tempPasswordChecks[requirement.key] ? "text-emerald-700" : "text-slate-500")}>
+                          {tempPasswordChecks[requirement.key] ? <CheckCircle2 className="h-3.5 w-3.5" /> : <XCircle className="h-3.5 w-3.5" />}
+                          {requirement.label}
+                        </p>
+                      ))}
                     </div>
                   </div>
                 )}

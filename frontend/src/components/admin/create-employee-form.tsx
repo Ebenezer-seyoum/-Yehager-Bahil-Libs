@@ -131,6 +131,8 @@ export function CreateEmployeeForm({
                   name="password"
                   type={showPassword ? "text" : "password"}
                   minLength={8}
+                  pattern="(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[^A-Za-z0-9]).{8,}"
+                  title="Use at least 8 characters with uppercase, lowercase, number, and special character."
                   required
                   disabled={!canCreate}
                   className="h-11 w-full rounded-xl border border-blue-100 px-3 pr-11 text-sm outline-none focus:border-blue-800 focus:ring-2 focus:ring-blue-800/20 disabled:opacity-50"
@@ -144,7 +146,7 @@ export function CreateEmployeeForm({
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
-              <span className="mt-1 block text-xs text-slate-500">Minimum 8 characters</span>
+              <span className="mt-1 block text-xs text-slate-500">8+ characters with uppercase, lowercase, number, and special character</span>
             </label>
           </div>
         </FormSection>

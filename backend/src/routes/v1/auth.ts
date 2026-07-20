@@ -11,13 +11,14 @@ import {
   verifyCustomerRegistration,
 } from "../../services/users-service.js";
 import type { AppBindings } from "../../types/hono.js";
+import { strongPasswordSchema } from "../../lib/auth/password-policy.js";
 
 export const authRouter = new Hono<AppBindings>();
 
 const registerSchema = z.object({
   name: z.string().trim().min(1).max(255).optional(),
   email: z.string().trim().email().max(320),
-  password: z.string().min(8).max(128),
+  password: strongPasswordSchema,
 });
 
 const loginSchema = z.object({
@@ -31,7 +32,7 @@ const passwordResetRequestSchema = z.object({
 
 const passwordResetConfirmSchema = z.object({
   token: z.string().trim().min(32).max(256),
-  password: z.string().min(8).max(128),
+  password: strongPasswordSchema,
 });
 
 const verifyRegistrationSchema = z.object({

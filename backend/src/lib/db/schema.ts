@@ -814,6 +814,24 @@ export const supportTickets = pgTable(
   ]
 );
 
+export const systemAlertReads = pgTable(
+  "system_alert_reads",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    alertId: uuid("alert_id")
+      .notNull()
+      .references(() => systemAlerts.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    readAt: timestamp("read_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("system_alert_reads_alert_user_unique").on(table.alertId, table.userId),
+    index("system_alert_reads_user_idx").on(table.userId),
+  ],
+);
+
 export const supportMessages = pgTable(
   "support_messages",
   {

@@ -12,6 +12,7 @@ import {
 } from "../../services/users-service.js";
 import type { AppBindings } from "../../types/hono.js";
 import { getDashboardPreferences, updateDashboardPreferences } from "../../services/dashboard-preferences-service.js";
+import { strongPasswordSchema } from "../../lib/auth/password-policy.js";
 
 export const usersRouter = new Hono<AppBindings>();
 
@@ -50,7 +51,7 @@ const presenceSchema = z.object({
 
 const passwordPatchSchema = z.object({
   currentPassword: z.string().min(1).max(128),
-  newPassword: z.string().min(8).max(128),
+  newPassword: strongPasswordSchema,
 });
 const dashboardPreferencesSchema = z.object({
   topBarColor: z.string().regex(/^#[0-9a-fA-F]{6}$/),

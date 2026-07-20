@@ -39,6 +39,10 @@ export async function middleware(req: NextRequest) {
     }
   }
 
+  if (token.role === "employee" && token.mustChangePassword && pathname !== "/change-password-required") {
+    return NextResponse.redirect(new URL("/change-password-required", req.url));
+  }
+
   if (pathname.startsWith("/employee")) {
     const role = typeof token.role === "string" ? token.role : "customer";
     if (role !== "employee") {

@@ -334,7 +334,7 @@ export async function processStripeWebhook(payload: { body: string; signature?: 
         await db.insert(systemAlerts).values({
           title: `New paid order #${order.orderNumber}`,
           message: `Payment confirmed for ${order.userEmail}.`,
-          type: "new_order",
+          type: "payment_received",
           severity: "info",
           entityId: order.id,
         });

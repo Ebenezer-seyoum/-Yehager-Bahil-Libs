@@ -25,7 +25,7 @@ import {
   UserRound,
   UsersRound,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   canAccessNavigationItem,
   type NavigationGroup,
@@ -51,6 +51,12 @@ type NotificationCounts = {
   catalogPrices?: number;
   catalogPriceProductIds?: Array<string | null | undefined>;
   total?: number;
+};
+
+type NotificationReadSelector = {
+  entityId?: string;
+  category?: "orders" | "custom_orders" | "custom_designs" | "payments" | "shipping" | "returns" | "catalog_prices" | "support" | "alerts";
+  all?: boolean;
 };
 
 const icons = {
@@ -191,7 +197,11 @@ export function DashboardShell({
   const adminTopBar = variant === "admin" || variant === "employee";
   const [dashboardColors, setDashboardColors] = useState({ topBarColor: "#0f172a", sidebarColor: "#0f172a" });
   const [notificationsOpen, setNotificationsOpen] = useState(false);
-  const counts = notificationCounts ?? {};
+  const [liveCounts, setLiveCounts] = useState<NotificationCounts>(notificationCounts ?? {});
+  const counts = liveCounts;
+  useEffect(() => {
+    setLiveCounts(notificationCounts ?? {});
+  }, [notificationCounts]);
   useEffect(() => {
     const applyColors = (detail?: { topBarColor?: string; sidebarColor?: string }) => {
       if (detail?.topBarColor && detail?.sidebarColor) setDashboardColors({ topBarColor: detail.topBarColor, sidebarColor: detail.sidebarColor });
@@ -210,6 +220,10 @@ export function DashboardShell({
   const [catalogPriceProductIds, setCatalogPriceProductIds] = useState<string[]>(
     (counts.catalogPriceProductIds ?? []).filter(Boolean).map(String),
   );
+  useEffect(() => {
+    setVisibleCatalogPriceCount(counts.catalogPrices ?? 0);
+    setCatalogPriceProductIds((counts.catalogPriceProductIds ?? []).filter(Boolean).map(String));
+  }, [counts.catalogPriceProductIds, counts.catalogPrices]);
   const activeOrderIds = (counts.orderIds ?? []).filter(Boolean).map(String);
   const activePaymentIds = (counts.paymentIds ?? []).filter(Boolean).map(String);
   const activeCustomDesignIds = (counts.customDesignIds ?? []).filter(Boolean).map(String);
@@ -235,13 +249,13 @@ export function DashboardShell({
     ? activeShippingDeliveryIds.filter((id) => !viewedShippingDeliveryIds.includes(id)).length
     : Math.max((counts.shippingDelivery ?? 0) - viewedShippingDeliveryIds.length, 0);
   const canViewAlerts = hasAccess("alerts.view");
-  const canViewProducts = hasAccess("products.view");
   const canViewSupport = hasAccess("support.view");
   const notificationItems = [
     {
       href: catalogPriceProductIds[0] ? `/admin/inventory/${catalogPriceProductIds[0]}` : "/admin/inventory?tab=new-prices",
       label: "New catalog price submitted",
       value: visibleCatalogPriceCount,
+      category: "catalog_prices",
       permissions: ["products.view"],
       Icon: Boxes,
       accent: "bg-emerald-400",
@@ -252,6 +266,7 @@ export function DashboardShell({
       href: "/admin/payments",
       label: "New payments received",
       value: visiblePaymentCount,
+      category: "payments",
       permissions: ["payments.view"],
       Icon: CreditCard,
       accent: "bg-amber-400",
@@ -262,6 +277,7 @@ export function DashboardShell({
       href: "/admin/custom-orders?tab=requests&filter=awaiting-review",
       label: "Custom requests awaiting review",
       value: visibleCustomDesignCount,
+      category: "custom_designs",
       permissions: ["uploaded_designs.view"],
       Icon: FileText,
       accent: "bg-violet-400",
@@ -272,6 +288,7 @@ export function DashboardShell({
       href: "/admin/custom-orders?tab=orders&filter=awaiting-review",
       label: "Custom orders awaiting review",
       value: visibleCustomOrderCount,
+      category: "custom_orders",
       permissions: ["orders.view"],
       Icon: ClipboardList,
       accent: "bg-fuchsia-400",
@@ -282,6 +299,7 @@ export function DashboardShell({
       href: "/admin/catalog-orders?filter=awaiting-review",
       label: "Catalog orders awaiting review",
       value: visibleOrderCount,
+      category: "orders",
       permissions: ["orders.view"],
       Icon: ClipboardList,
       accent: "bg-blue-400",
@@ -292,6 +310,7 @@ export function DashboardShell({
       href: "/admin/orders/shipping-delivery",
       label: "Orders ready for delivery",
       value: visibleShippingDeliveryCount,
+      category: "shipping",
       permissions: ["shipping.view"],
       Icon: ClipboardList,
       accent: "bg-cyan-400",
@@ -302,13 +321,37 @@ export function DashboardShell({
       href: "/admin/orders/returns-refunds?filter=awaiting-review",
       label: "Refund issues awaiting review",
       value: visibleRefundIssueCount,
+      category: "returns",
       permissions: ["returns.view"],
       Icon: ArrowLeftRight,
       accent: "bg-rose-400",
       active: "border-rose-400/30 bg-rose-400/10 text-rose-50",
       badge: "bg-rose-400 text-white",
     },
+    {
+      href: "/admin/support-inbox",
+      label: "New support messages",
+      value: visibleSupportCount,
+      category: "support",
+      permissions: ["support.view"],
+      Icon: Inbox,
+      accent: "bg-teal-400",
+      active: "border-teal-400/30 bg-teal-400/10 text-teal-50",
+      badge: "bg-teal-400 text-slate-950",
+    },
+    {
+      href: "/admin/alerts",
+      label: "System alerts",
+      value: counts.alerts ?? 0,
+      category: "alerts",
+      permissions: ["alerts.view"],
+      Icon: BellRing,
+      accent: "bg-orange-400",
+      active: "border-orange-400/30 bg-orange-400/10 text-orange-50",
+      badge: "bg-orange-400 text-slate-950",
+    },
   ].filter((item) => item.permissions.some(hasAccess));
+  const canViewNotifications = canViewAlerts || notificationItems.length > 0;
   const totalNotifications = notificationItems.reduce((total, item) => total + item.value, 0);
   const badgeForHref = (href: string) => {
     if (variant !== "admin") return 0;
@@ -338,6 +381,47 @@ export function DashboardShell({
     (session?.user as { image?: string | null; avatarUrl?: string | null } | undefined)?.image ||
     (session?.user as { image?: string | null; avatarUrl?: string | null } | undefined)?.avatarUrl ||
     null;
+
+  const refreshNotifications = useCallback(async () => {
+    if (variant !== "admin" || !session?.user?.id) return;
+    try {
+      const response = await fetch("/api/backend/notifications/summary", { cache: "no-store" });
+      const payload = response.ok ? await response.json() : null;
+      if (!payload?.data) return;
+      setLiveCounts((current) => ({
+        ...current,
+        ...payload.data,
+        support: Math.max(Number(current.support ?? 0), Number(payload.data.support ?? 0)),
+      }));
+    } catch {
+      // Notification polling is best-effort; server-rendered counts remain available.
+    }
+  }, [session?.user?.id, variant]);
+
+  const markNotificationRead = useCallback(async (selector: NotificationReadSelector) => {
+    try {
+      const response = await fetch("/api/backend/notifications/read", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(selector),
+      });
+      if (response.ok) await refreshNotifications();
+    } catch {
+      // The next poll will retry the authoritative unread state.
+    }
+  }, [refreshNotifications]);
+
+  useEffect(() => {
+    if (variant !== "admin" || !session?.user?.id || isUnassignedEmployee) return;
+    void refreshNotifications();
+    const intervalId = window.setInterval(() => void refreshNotifications(), 15_000);
+    const onFocus = () => void refreshNotifications();
+    window.addEventListener("focus", onFocus);
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [isUnassignedEmployee, refreshNotifications, session?.user?.id, variant]);
 
   useEffect(() => {
     if (!session?.user?.id) return;
@@ -409,31 +493,6 @@ export function DashboardShell({
   }, [canViewSupport, counts.support, variant]);
 
   useEffect(() => {
-    if (variant !== "admin" || !canViewAlerts || !canViewProducts) return;
-    const refreshCatalogPriceNotifications = () => {
-      fetch("/api/backend/admin/summary-counts", { cache: "no-store" })
-        .then((response) => response.ok ? response.json() : null)
-        .then((payload) => {
-          const data = payload?.data;
-          if (!data) return;
-          const ids = Array.isArray(data.catalogPriceProductIds)
-            ? data.catalogPriceProductIds.filter(Boolean).map(String)
-            : [];
-          setCatalogPriceProductIds(ids);
-          setVisibleCatalogPriceCount(Number(data.catalog_price_submission ?? ids.length) || 0);
-        })
-        .catch(() => undefined);
-    };
-    refreshCatalogPriceNotifications();
-    const intervalId = window.setInterval(refreshCatalogPriceNotifications, 15000);
-    window.addEventListener("focus", refreshCatalogPriceNotifications);
-    return () => {
-      window.clearInterval(intervalId);
-      window.removeEventListener("focus", refreshCatalogPriceNotifications);
-    };
-  }, [canViewAlerts, canViewProducts, variant]);
-
-  useEffect(() => {
     if (variant !== "admin") return;
     const onCatalogPriceViewed = (event: Event) => {
       const productId = (event as CustomEvent<string>).detail;
@@ -456,12 +515,13 @@ export function DashboardShell({
 
   useEffect(() => {
     if (variant !== "admin") return;
+    const storagePrefix = `employee-notifications:${session?.user?.id ?? "anonymous"}`;
     const readTimeout = window.setTimeout(() => {
       try {
-        const viewedOrdersRaw = window.localStorage.getItem("admin-viewed-order-notifications");
-        const viewedPaymentsRaw = window.localStorage.getItem("admin-viewed-payment-notifications");
-        const viewedDesignsRaw = window.localStorage.getItem("admin-viewed-custom-design-notifications");
-        const viewedShippingRaw = window.localStorage.getItem("admin-viewed-shipping-delivery-notifications");
+        const viewedOrdersRaw = window.localStorage.getItem(`${storagePrefix}:orders`);
+        const viewedPaymentsRaw = window.localStorage.getItem(`${storagePrefix}:payments`);
+        const viewedDesignsRaw = window.localStorage.getItem(`${storagePrefix}:designs`);
+        const viewedShippingRaw = window.localStorage.getItem(`${storagePrefix}:shipping`);
         setViewedOrderIds(viewedOrdersRaw ? JSON.parse(viewedOrdersRaw) : []);
         setViewedPaymentIds(viewedPaymentsRaw ? JSON.parse(viewedPaymentsRaw) : []);
         setViewedCustomDesignIds(viewedDesignsRaw ? JSON.parse(viewedDesignsRaw) : []);
@@ -478,36 +538,40 @@ export function DashboardShell({
       if (!orderId) return;
       setViewedOrderIds((current) => {
         const next = Array.from(new Set([...current, orderId]));
-        try { window.localStorage.setItem("admin-viewed-order-notifications", JSON.stringify(next)); } catch {}
+        try { window.localStorage.setItem(`${storagePrefix}:orders`, JSON.stringify(next)); } catch {}
         return next;
       });
+      void markNotificationRead({ entityId: orderId });
     };
     const onPaymentViewed = (event: Event) => {
       const orderId = (event as CustomEvent<string>).detail;
       if (!orderId) return;
       setViewedPaymentIds((current) => {
         const next = Array.from(new Set([...current, orderId]));
-        try { window.localStorage.setItem("admin-viewed-payment-notifications", JSON.stringify(next)); } catch {}
+        try { window.localStorage.setItem(`${storagePrefix}:payments`, JSON.stringify(next)); } catch {}
         return next;
       });
+      void markNotificationRead({ entityId: orderId, category: "payments" });
     };
     const onCustomViewed = (event: Event) => {
       const designId = (event as CustomEvent<string>).detail;
       if (!designId) return;
       setViewedCustomDesignIds((current) => {
         const next = Array.from(new Set([...current, designId]));
-        try { window.localStorage.setItem("admin-viewed-custom-design-notifications", JSON.stringify(next)); } catch {}
+        try { window.localStorage.setItem(`${storagePrefix}:designs`, JSON.stringify(next)); } catch {}
         return next;
       });
+      void markNotificationRead({ entityId: designId, category: "custom_designs" });
     };
     const onShippingViewed = (event: Event) => {
       const orderId = (event as CustomEvent<string>).detail;
       if (!orderId) return;
       setViewedShippingDeliveryIds((current) => {
         const next = Array.from(new Set([...current, orderId]));
-        try { window.localStorage.setItem("admin-viewed-shipping-delivery-notifications", JSON.stringify(next)); } catch {}
+        try { window.localStorage.setItem(`${storagePrefix}:shipping`, JSON.stringify(next)); } catch {}
         return next;
       });
+      void markNotificationRead({ entityId: orderId, category: "shipping" });
     };
     window.addEventListener("admin-order-viewed", onViewed);
     window.addEventListener("admin-payment-viewed", onPaymentViewed);
@@ -520,7 +584,7 @@ export function DashboardShell({
       window.removeEventListener("admin-custom-design-viewed", onCustomViewed);
       window.removeEventListener("admin-shipping-delivery-viewed", onShippingViewed);
     };
-  }, [variant]);
+  }, [markNotificationRead, session?.user?.id, variant]);
 
   useEffect(() => {
     const id = window.setTimeout(() => {
@@ -732,7 +796,7 @@ export function DashboardShell({
               Search anything...
             </div>
 
-            {canViewAlerts ? <div className="relative">
+            {canViewNotifications ? <div className="relative">
               <button
                 type="button"
                 onClick={() => setNotificationsOpen((value) => !value)}
@@ -761,7 +825,10 @@ export function DashboardShell({
                     <Link
                       key={item.href}
                       href={item.href}
-                      onClick={() => setNotificationsOpen(false)}
+                      onClick={() => {
+                        setNotificationsOpen(false);
+                        if (item.value > 0) void markNotificationRead({ category: item.category as NotificationReadSelector["category"] });
+                      }}
                       className={item.value > 0 ? `mt-1 flex items-center justify-between gap-3 rounded-xl border px-3 py-2.5 text-sm transition hover:bg-sidebar-accent ${item.active}` : "mt-1 flex items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-sm transition hover:bg-sidebar-accent hover:text-white"}
                     >
                       <span className="flex min-w-0 items-center gap-3">
@@ -775,13 +842,19 @@ export function DashboardShell({
                       </span>
                     </Link>
                   ))}
-                  <Link
-                    href="/admin/alerts"
-                    onClick={() => setNotificationsOpen(false)}
-                    className="mt-2 block rounded-xl border border-sidebar-border px-3 py-2 text-center text-xs font-bold text-sidebar-foreground/75 transition hover:bg-sidebar-accent hover:text-white"
-                  >
-                    View all notifications
-                  </Link>
+                  {canViewAlerts ? (
+                    <Link
+                      href="/admin/alerts"
+                      onClick={() => setNotificationsOpen(false)}
+                      className="mt-2 block rounded-xl border border-sidebar-border px-3 py-2 text-center text-xs font-bold text-sidebar-foreground/75 transition hover:bg-sidebar-accent hover:text-white"
+                    >
+                      View all notifications
+                    </Link>
+                  ) : (
+                    <p className="mt-2 px-3 py-2 text-center text-[11px] font-semibold text-sidebar-foreground/55">
+                      Notifications are filtered by your assigned permissions.
+                    </p>
+                  )}
                 </div>
               ) : null}
             </div> : null}
