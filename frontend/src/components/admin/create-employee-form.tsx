@@ -125,14 +125,12 @@ export function CreateEmployeeForm({
               />
             </label>
             <label className="block text-sm md:col-span-2">
-              <span className="mb-1.5 block font-medium text-slate-700">Initial password *</span>
+              <span className="mb-1.5 block font-medium text-slate-700">Temporary password *</span>
               <div className="relative">
                 <input
                   name="password"
                   type={showPassword ? "text" : "password"}
-                  minLength={8}
-                  pattern="(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[^A-Za-z0-9]).{8,}"
-                  title="Use at least 8 characters with uppercase, lowercase, number, and special character."
+                  maxLength={128}
                   required
                   disabled={!canCreate}
                   className="h-11 w-full rounded-xl border border-blue-100 px-3 pr-11 text-sm outline-none focus:border-blue-800 focus:ring-2 focus:ring-blue-800/20 disabled:opacity-50"
@@ -146,7 +144,7 @@ export function CreateEmployeeForm({
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
-              <span className="mt-1 block text-xs text-slate-500">8+ characters with uppercase, lowercase, number, and special character</span>
+              <span className="mt-1 block text-xs text-slate-500">The employee must replace this temporary password with a strong permanent password after signing in.</span>
             </label>
           </div>
         </FormSection>

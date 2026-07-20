@@ -7,7 +7,7 @@ import { requireAuth } from "../../middleware/auth.js";
 import { requireAnyPermission, requirePermission } from "../../middleware/permissions.js";
 import { db } from "../../lib/db/drizzle.js";
 import { auditLogs, globalPricingRules, homepageSections, orders, products, profitCostSettings, systemAlerts, uploadedDesigns } from "../../lib/db/schema.js";
-import { strongPasswordSchema } from "../../lib/auth/password-policy.js";
+import { strongPasswordSchema, temporaryPasswordSchema } from "../../lib/auth/password-policy.js";
 import { USER_ROLES } from "../../lib/auth/roles.js";
 import { PERMISSIONS } from "../../lib/auth/permissions.js";
 import {
@@ -23,7 +23,7 @@ import {
   listCustomersForAdmin,
   listUsersForAdmin,
   resetCustomerPasswordForAdmin,
-  resetUserPasswordForAdmin,
+  resetEmployeePasswordForAdmin,
   sendPasswordResetLinkForAdmin,
   updateCustomerProfileForAdmin,
   updateCustomerStatusForAdmin,
@@ -245,7 +245,7 @@ const deleteDocumentSchema = z.object({
 const createEmployeeSchema = z.object({
   name: z.string().trim().min(1).max(255),
   email: z.string().trim().email().max(320),
-  password: strongPasswordSchema,
+  password: temporaryPasswordSchema,
   roleId: z.string().uuid().optional(),
   status: z.enum(["active", "inactive"]).optional(),
   accountStatus: z.enum(["active", "invited", "pending"]).optional(),
@@ -268,6 +268,9 @@ const createEmployeeSchema = z.object({
       notes: z.string().trim().optional(),
     })
     .optional(),
+});
+const createCustomerSchema = createEmployeeSchema.extend({
+  password: strongPasswordSchema,
 });
 const createRoleSchema = z.object({
   name: z.string().trim().min(1).max(255),
@@ -338,6 +341,9 @@ const userStatusPatchSchema = z.object({
 });
 const userPasswordResetSchema = z.object({
   password: strongPasswordSchema,
+});
+const employeeTemporaryPasswordSchema = z.object({
+  password: temporaryPasswordSchema,
 });
 const roleIdParamSchema = z.object({
   roleId: z.string().uuid(),
@@ -1110,7 +1116,7 @@ adminRouter.post("/users/employees", requirePermission(PERMISSIONS.EMPLOYEES_CRE
   return c.json({ data }, 201);
 });
 
-adminRouter.post("/users/customers", requirePermission(PERMISSIONS.CUSTOMERS_CREATE), zValidator("json", createEmployeeSchema), async (c) => {
+adminRouter.post("/users/customers", requirePermission(PERMISSIONS.CUSTOMERS_CREATE), zValidator("json", createCustomerSchema), async (c) => {
   const authUser = c.get("authUser");
   const data = await createCustomerForAdmin({
     ...c.req.valid("json"),
@@ -1225,12 +1231,12 @@ adminRouter.patch(
   "/users/:userId/password",
   requirePermission(PERMISSIONS.EMPLOYEES_EDIT),
   zValidator("param", userParamSchema),
-  zValidator("json", userPasswordResetSchema),
+  zValidator("json", employeeTemporaryPasswordSchema),
   async (c) => {
     const authUser = c.get("authUser");
     const { userId } = c.req.valid("param");
     const { password } = c.req.valid("json");
-    const data = await resetUserPasswordForAdmin({
+    const data = await resetEmployeePasswordForAdmin({
       userId,
       password,
       performedBy: authUser?.email,

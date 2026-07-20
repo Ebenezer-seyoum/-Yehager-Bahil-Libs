@@ -17,6 +17,12 @@ export function passwordMeetsPolicy(password: string) {
   return Object.values(passwordPolicyChecks(password)).every(Boolean);
 }
 
+export const temporaryPasswordSchema = z
+  .string()
+  .min(1, "Temporary password is required")
+  .max(PASSWORD_MAX_LENGTH, `Temporary password must be at most ${PASSWORD_MAX_LENGTH} characters`)
+  .refine((password) => password.trim().length > 0, "Temporary password is required");
+
 export const strongPasswordSchema = z
   .string()
   .min(PASSWORD_MIN_LENGTH, `Password must be at least ${PASSWORD_MIN_LENGTH} characters`)

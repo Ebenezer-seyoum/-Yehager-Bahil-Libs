@@ -1266,6 +1266,14 @@ export async function resetUserPasswordForAdmin(payload: {
   return withComputedUserState(updated);
 }
 
+export async function resetEmployeePasswordForAdmin(payload: Parameters<typeof resetUserPasswordForAdmin>[0]) {
+  const existing = await getUserById(payload.userId);
+  if (!existing || existing.role !== "employee") {
+    throw new HTTPException(404, { message: "Employee not found" });
+  }
+  return resetUserPasswordForAdmin(payload);
+}
+
 export async function updateCurrentUserPresence(payload: { email: string; online: boolean }) {
   const user = await getUserByEmail(normalizeEmail(payload.email));
   if (!user) {

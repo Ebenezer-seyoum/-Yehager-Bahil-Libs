@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  Check,
   Eye,
   EyeOff,
   FileText,
@@ -18,7 +17,6 @@ import {
   RotateCcw,
   Trash2,
   Edit,
-  X,
   RefreshCw,
   ArrowLeft,
   Users,
@@ -342,24 +340,13 @@ export function EmployeeDetailClient({
     message: string;
   } | null>(null);
 
-  const passwordRules = {
-    minLength: newPassword.length >= 8,
-    uppercase: /[A-Z]/.test(newPassword),
-    lowercase: /[a-z]/.test(newPassword),
-    number: /[0-9]/.test(newPassword),
-    special: /[^A-Za-z0-9]/.test(newPassword),
-  };
-  const isPasswordValid =
-    passwordRules.minLength &&
-    passwordRules.uppercase &&
-    passwordRules.lowercase &&
-    passwordRules.number &&
-    passwordRules.special;
+  const isTemporaryPasswordValid =
+    newPassword.trim().length > 0 && newPassword.length <= 128;
   const doPasswordsMatch =
     newPassword.length > 0 &&
     confirmNewPassword.length > 0 &&
     newPassword === confirmNewPassword;
-  const canSubmitResetPassword = !busy && isPasswordValid && doPasswordsMatch;
+  const canSubmitResetPassword = !busy && isTemporaryPasswordValid && doPasswordsMatch;
 
   const user = payload.user;
   const profile = payload.profile ?? {};
@@ -853,10 +840,10 @@ export function EmployeeDetailClient({
   }
 
   async function submitResetPassword() {
-    if (!isPasswordValid || !doPasswordsMatch) {
+    if (!isTemporaryPasswordValid || !doPasswordsMatch) {
       await dashboardError(
         "Validation Error",
-        "Please make sure the password meets all requirements and matches the confirmation password.",
+        "Enter a temporary password and make sure it matches the confirmation password.",
         { target: swalTargetRef.current ?? undefined },
       );
       return;
@@ -878,8 +865,8 @@ export function EmployeeDetailClient({
       setConfirmNewPassword("");
       setResetPasswordNotice(null);
       await dashboardSuccess(
-        "Password Reset Successfully",
-        "Employee password has been updated successfully.",
+        "Temporary Password Set",
+        "The employee must replace this temporary password with a strong permanent password after signing in.",
         {
           target: swalTargetRef.current ?? undefined,
         },
@@ -1408,12 +1395,13 @@ export function EmployeeDetailClient({
               <>
                 <label className="block text-sm">
                   <span className="mb-1.5 block font-medium text-slate-700">
-                    New Password
+                    Temporary Password
                   </span>
                   <div className="relative">
                     <input
                       type={showNewPassword ? "text" : "password"}
                       value={newPassword}
+                      maxLength={128}
                       onChange={(e) => {
                         setNewPassword(e.target.value);
                         setResetPasswordNotice(null);
@@ -1437,51 +1425,8 @@ export function EmployeeDetailClient({
                       )}
                     </button>
                   </div>
-                  <div className="mt-2 space-y-1 text-xs">
-                    {[
-                      {
-                        key: "minLength",
-                        label: "At least 8 characters",
-                        ok: passwordRules.minLength,
-                      },
-                      {
-                        key: "uppercase",
-                        label: "At least one uppercase letter",
-                        ok: passwordRules.uppercase,
-                      },
-                      {
-                        key: "lowercase",
-                        label: "At least one lowercase letter",
-                        ok: passwordRules.lowercase,
-                      },
-                      {
-                        key: "number",
-                        label: "At least one number",
-                        ok: passwordRules.number,
-                      },
-                      {
-                        key: "special",
-                        label: "At least one special character",
-                        ok: passwordRules.special,
-                      },
-                    ].map((rule) => (
-                      <div
-                        key={rule.key}
-                        className={cn(
-                          "flex items-center gap-2",
-                          rule.ok ? "text-emerald-700" : "text-slate-500",
-                        )}
-                      >
-                        {rule.ok ? (
-                          <Check className="h-3.5 w-3.5" />
-                        ) : (
-                          <X className="h-3.5 w-3.5" />
-                        )}
-                        <span className={cn(rule.ok ? "font-semibold" : "")}>
-                          {rule.label}
-                        </span>
-                      </div>
-                    ))}
+                  <div className="mt-2 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-medium leading-5 text-blue-800">
+                    No complexity rules apply to this temporary password. The employee will be required to create a strong permanent password after signing in.
                   </div>
                 </label>
                 <label className="block text-sm">
@@ -1492,6 +1437,7 @@ export function EmployeeDetailClient({
                     <input
                       type={showConfirmNewPassword ? "text" : "password"}
                       value={confirmNewPassword}
+                      maxLength={128}
                       onChange={(e) => {
                         setConfirmNewPassword(e.target.value);
                         setResetPasswordNotice(null);
@@ -1552,7 +1498,7 @@ export function EmployeeDetailClient({
                     {busy ? (
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     ) : null}
-                    Save Password
+                    Set Temporary Password
                   </button>
                 </div>
               </>

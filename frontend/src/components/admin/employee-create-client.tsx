@@ -27,7 +27,6 @@ import { COUNTRY_CALLING_CODES } from "@/lib/country-calling-codes";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { safeIso2 } from "@/lib/utils/phone-utils";
 import { filterAssignableEmployeeRoles } from "@/lib/admin/assignable-roles";
-import { PASSWORD_REQUIREMENTS, passwordMeetsPolicy, passwordPolicyChecks } from "@/lib/password-policy";
 
 const TypedPopoverContent = PopoverContent as ComponentType<PropsWithChildren<{ align?: string; className?: string; sideOffset?: number }>>;
 
@@ -85,7 +84,6 @@ export function EmployeeCreateClient({ roles }: { roles: Role[] }) {
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const assignableRoles = useMemo(() => filterAssignableEmployeeRoles(roles), [roles]);
-  const tempPasswordChecks = useMemo(() => passwordPolicyChecks(tempPassword), [tempPassword]);
 
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [formNotice, setFormNotice] = useState<{ tone: "success" | "error"; title: string; message: string } | null>(null);
@@ -109,7 +107,7 @@ export function EmployeeCreateClient({ roles }: { roles: Role[] }) {
   }, [formNotice]);
 
   function generateAutoPassword() {
-    // Keep this compatible with backend policy: min 8, include mixed chars.
+    // Keep automatically generated temporary credentials difficult to guess.
     const upper = "ABCDEFGHJKLMNPQRSTUVWXYZ";
     const lower = "abcdefghijkmnopqrstuvwxyz";
     const digits = "23456789";
@@ -148,7 +146,8 @@ export function EmployeeCreateClient({ roles }: { roles: Role[] }) {
     if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errors.email = "Valid email is required";
     if (!phoneNumber.trim()) errors.phone = "Phone number is required";
     if (!gender) errors.gender = "Gender is required";
-    if (!sendInviteLink && !passwordMeetsPolicy(tempPassword)) errors.tempPassword = "Use 8+ characters with uppercase, lowercase, number, and special character";
+    if (!sendInviteLink && !tempPassword.trim()) errors.tempPassword = "Temporary password is required";
+    if (!sendInviteLink && tempPassword.length > 128) errors.tempPassword = "Temporary password must be at most 128 characters";
     if (!sendInviteLink && tempPassword !== confirmPassword) errors.confirmPassword = "Passwords do not match";
     return errors;
   };
@@ -602,6 +601,7 @@ export function EmployeeCreateClient({ roles }: { roles: Role[] }) {
                           type={showTempPassword ? "text" : "password"}
                           value={tempPassword}
                           onChange={(e) => setTempPassword(e.target.value)}
+                          maxLength={128}
                           className={cn(
                             "w-full rounded-xl border px-4 py-3 text-sm font-bold outline-none transition-all pr-12",
                             fieldErrors.tempPassword ? "border-rose-200 bg-rose-50" : "border-slate-200 bg-white shadow-sm focus:ring-2 focus:ring-primary/20"
@@ -620,6 +620,7 @@ export function EmployeeCreateClient({ roles }: { roles: Role[] }) {
                           type={showConfirmPassword ? "text" : "password"}
                           value={confirmPassword}
                           onChange={(e) => setConfirmPassword(e.target.value)}
+                          maxLength={128}
                           className={cn(
                             "w-full rounded-xl border px-4 py-3 text-sm font-bold outline-none transition-all pr-12",
                             fieldErrors.confirmPassword ? "border-rose-200 bg-rose-50" : "border-slate-200 bg-white shadow-sm focus:ring-2 focus:ring-primary/20"
@@ -632,13 +633,8 @@ export function EmployeeCreateClient({ roles }: { roles: Role[] }) {
                       {fieldErrors.confirmPassword && <p className="text-[10px] font-bold text-rose-500 uppercase tracking-tighter">{fieldErrors.confirmPassword}</p>}
                       </div>
                     </div>
-                    <div className="grid gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 sm:grid-cols-2">
-                      {PASSWORD_REQUIREMENTS.map((requirement) => (
-                        <p key={requirement.key} className={cn("flex items-center gap-2 text-xs font-bold", tempPasswordChecks[requirement.key] ? "text-emerald-700" : "text-slate-500")}>
-                          {tempPasswordChecks[requirement.key] ? <CheckCircle2 className="h-3.5 w-3.5" /> : <XCircle className="h-3.5 w-3.5" />}
-                          {requirement.label}
-                        </p>
-                      ))}
+                    <div className="rounded-xl border border-blue-100 bg-blue-50 p-3 text-xs font-medium leading-5 text-blue-800">
+                      This is a temporary password only. The employee must replace it with a strong permanent password after signing in.
                     </div>
                   </div>
                 )}
