@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useSession } from "next-auth/react";
-import { BookOpen, ChevronDown, Clock, Mail, Pencil, Play, Ruler, ShoppingBag, Users, X, PlusCircle } from "lucide-react";
+import { BookOpen, Check, ChevronDown, Clock, Mail, Pencil, Play, Ruler, ShoppingBag, Users, X, PlusCircle } from "lucide-react";
 import type { FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { ShareLinks } from "@/components/share-links";
@@ -123,14 +123,11 @@ function customerTypeForRole(role: Role) {
   return "woman";
 }
 
-function optionDescription(role: Role) {
-  if (role.description) return role.description;
-  if (role.outfitOption === "full_set") return "Top + pants";
-  if (role.outfitOption === "top_only") return "Shirt / top clothes";
-  if (role.outfitOption === "pants_only") return "Bottom / suri";
-  if (role.customerType === "girl") return "Traditional outfit for girls";
-  if (role.customerType === "boy") return "Traditional outfit for boys";
-  return "Complete traditional outfit";
+function optionLabel(role: Role) {
+  if (role.outfitOption === "full_set") return "Full Set";
+  if (role.outfitOption === "top_only") return "Top";
+  if (role.outfitOption === "pants_only") return "Pants";
+  return role.customerType ? "Complete Outfit" : role.label;
 }
 
 function inchesToCm(inches?: number | null) {
@@ -261,7 +258,6 @@ export function ProductPurchasePanel({
   const { status: sessionStatus } = useSession();
   const [selectedRoleIndex, setSelectedRoleIndex] = useState(0);
   const [eventOpen, setEventOpen] = useState(false);
-  const [openCustomerTypes, setOpenCustomerTypes] = useState<Record<string, boolean>>({ woman: true, man: true, girl: false, boy: false });
   const [showVideo, setShowVideo] = useState(false);
   const [isMeasurementEditorOpen, setIsMeasurementEditorOpen] = useState(!latestMeasurement?.id);
   const [savedMeasurement, setSavedMeasurement] = useState<SavedMeasurement | null>(latestMeasurement);
@@ -361,44 +357,41 @@ export function ProductPurchasePanel({
 
       {roleOptions.length > 0 ? (
         <div>
-          <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Who is this for?</h3>
-          <div className="space-y-2">
+          <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Choose outfit</h3>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {availableCustomerTypes.map((type) => {
               const firstRoleIndex = roleOptions.findIndex((role) => customerTypeForRole(role) === type.value);
               const selected = selectedCustomerType === type.value;
-              const isOpen = openCustomerTypes[type.value] ?? false;
-              const typeRoles = roleOptions.filter((role) => customerTypeForRole(role) === type.value);
               return (
-                <div key={type.value} className={`overflow-hidden rounded-xl border ${selected ? "border-primary" : "border-border"}`}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedRoleIndex(firstRoleIndex >= 0 ? firstRoleIndex : 0);
-                      setOpenCustomerTypes((current) => ({ ...current, [type.value]: !isOpen }));
-                    }}
-                    className={`flex w-full items-center justify-between p-4 text-left ${selected ? "bg-primary/10" : "bg-secondary"}`}
-                  >
-                    <span><span className="block text-sm font-black">{type.label}</span><span className="mt-1 block text-[11px] text-muted-foreground">{type.description}</span></span>
-                    <ChevronDown className={`h-5 w-5 transition-transform ${isOpen ? "rotate-180" : ""}`} />
-                  </button>
-                  {isOpen ? <div className="grid gap-2 border-t border-border bg-background p-3 sm:grid-cols-3">
-                    {typeRoles.map((role) => {
-                      const index = roleOptions.indexOf(role);
-                      const roleCurrency = role.currency ?? "USD";
-                      return <button key={`${role.label}-${index}`} type="button" onClick={() => setSelectedRoleIndex(index)} className={`rounded-lg border p-3 text-left ${selectedRoleIndex === index ? "border-primary bg-primary/10" : "border-border bg-secondary"}`}><span className="block text-xs font-bold">{role.label}</span><span className="mt-2 block text-lg font-black text-primary">{roleCurrency} {Number(role.enteredPrice ?? role.price).toFixed(2)}</span></button>;
-                    })}
-                  </div> : null}
-                </div>
+                <button key={type.value} type="button" onClick={() => setSelectedRoleIndex(firstRoleIndex >= 0 ? firstRoleIndex : 0)} className={`rounded-xl border px-3 py-2.5 text-sm font-bold transition-colors ${selected ? "border-primary bg-primary text-primary-foreground" : "border-border bg-secondary text-muted-foreground hover:border-primary/50 hover:text-foreground"}`}>
+                  {type.label.replace("'s Traditional Outfit", "")}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="mt-3 grid gap-2 sm:grid-cols-3">
+            {roleOptions.filter((role) => customerTypeForRole(role) === selectedCustomerType).map((role) => {
+              const index = roleOptions.indexOf(role);
+              const roleCurrency = role.currency ?? "USD";
+              const selected = selectedRoleIndex === index;
+              return (
+                <button key={`${role.label}-${index}`} type="button" onClick={() => setSelectedRoleIndex(index)} className={`relative rounded-xl border p-3 text-left transition-colors ${selected ? "border-primary bg-primary/10" : "border-border bg-secondary hover:border-primary/50"}`}>
+                  {selected ? <Check className="absolute right-3 top-3 h-4 w-4 text-primary" /> : null}
+                  <span className="block pr-5 text-sm font-bold">{optionLabel(role)}</span>
+                  <span className="mt-1 block text-base font-black text-primary">{roleCurrency} {Number(role.enteredPrice ?? role.price).toFixed(2)}</span>
+                </button>
               );
             })}
           </div>
 
           {selectedRole ? (
-            <div className="mt-4 rounded-xl border border-primary/30 bg-primary/10 p-4">
-              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-primary">Selected</p>
-              <p className="mt-1 text-sm font-bold">{selectedRole.label}</p>
-              <p className="mt-1 text-xs text-muted-foreground">Includes: {optionDescription(selectedRole)}</p>
-              <p className="mt-2 text-2xl font-black text-primary">{selectedRole.currency ?? "USD"} {Number(selectedRole.enteredPrice ?? selectedRole.price).toFixed(2)}</p>
+            <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-primary/30 bg-primary/10 px-4 py-3">
+              <div className="min-w-0">
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-primary">Selected</p>
+                <p className="mt-1 truncate text-sm font-bold">{selectedRole.label}</p>
+              </div>
+              <p className="shrink-0 text-lg font-black text-primary">{selectedRole.currency ?? "USD"} {Number(selectedRole.enteredPrice ?? selectedRole.price).toFixed(2)}</p>
             </div>
           ) : null}
         </div>
