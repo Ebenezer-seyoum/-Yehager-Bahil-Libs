@@ -86,6 +86,7 @@ type ProductPurchasePanelProps = {
 };
 
 type SavedMeasurement = NonNullable<ProductPurchasePanelProps["latestMeasurement"]>;
+type CustomerType = NonNullable<Role["customerType"]>;
 
 const REQUIRED_DRAFT_MEASUREMENT_KEYS = [
   "gender",
@@ -107,12 +108,58 @@ function formatGender(value?: string | null) {
   return "Unisex";
 }
 
-const CUSTOMER_TYPES: Array<{ value: "woman" | "man" | "girl" | "boy"; label: string; description: string }> = [
-  { value: "woman", label: "Women's Traditional Outfit", description: "Traditional outfit for women" },
-  { value: "man", label: "Men's Traditional Outfit", description: "Traditional outfit for men" },
-  { value: "girl", label: "Girls' Traditional Outfit", description: "Traditional outfit for girls" },
-  { value: "boy", label: "Boys' Traditional Outfit", description: "Traditional outfit for boys" },
+const CUSTOMER_TYPES: Array<{ value: CustomerType; label: string }> = [
+  { value: "woman", label: "Women" },
+  { value: "girl", label: "Girls" },
+  { value: "man", label: "Men" },
+  { value: "boy", label: "Boys" },
 ];
+
+const AUDIENCE_GROUPS: Array<{
+  id: string;
+  label: string;
+  customerTypes: CustomerType[];
+  labelClass: string;
+  lineClass: string;
+}> = [
+  {
+    id: "women-girls",
+    label: "Women & Girls",
+    customerTypes: ["woman", "girl"],
+    labelClass: "text-rose-400",
+    lineClass: "bg-rose-500/40",
+  },
+  {
+    id: "men-boys",
+    label: "Men & Boys",
+    customerTypes: ["man", "boy"],
+    labelClass: "text-indigo-400",
+    lineClass: "bg-indigo-500/40",
+  },
+];
+
+const AUDIENCE_TONES = {
+  rose: {
+    selectedButton: "border-rose-400 bg-rose-500/20 text-rose-100 shadow-[0_0_18px_rgba(244,63,94,0.12)]",
+    idleButton: "border-rose-500/30 bg-rose-500/5 text-rose-200 hover:border-rose-400/70 hover:bg-rose-500/10",
+    selectedOption: "border-rose-400 bg-rose-500/10 shadow-[0_0_18px_rgba(244,63,94,0.10)]",
+    idleOption: "border-border bg-secondary hover:border-rose-400/60",
+    summary: "border-rose-500/30 bg-rose-500/10",
+    accentText: "text-rose-400",
+  },
+  indigo: {
+    selectedButton: "border-indigo-400 bg-indigo-500/20 text-indigo-100 shadow-[0_0_18px_rgba(99,102,241,0.12)]",
+    idleButton: "border-indigo-500/30 bg-indigo-500/5 text-indigo-200 hover:border-indigo-400/70 hover:bg-indigo-500/10",
+    selectedOption: "border-indigo-400 bg-indigo-500/10 shadow-[0_0_18px_rgba(99,102,241,0.10)]",
+    idleOption: "border-border bg-secondary hover:border-indigo-400/60",
+    summary: "border-indigo-500/30 bg-indigo-500/10",
+    accentText: "text-indigo-400",
+  },
+};
+
+function audienceTone(customerType: CustomerType) {
+  return customerType === "woman" || customerType === "girl" ? AUDIENCE_TONES.rose : AUDIENCE_TONES.indigo;
+}
 
 function customerTypeForRole(role: Role) {
   if (role.customerType) return role.customerType;
@@ -272,6 +319,11 @@ export function ProductPurchasePanel({
   const selectedRole = roleOptions[selectedRoleIndex] ?? roleOptions[0] ?? null;
   const selectedCustomerType = selectedRole ? customerTypeForRole(selectedRole) : "woman";
   const availableCustomerTypes = CUSTOMER_TYPES.filter((type) => roleOptions.some((role) => customerTypeForRole(role) === type.value));
+  const availableAudienceGroups = AUDIENCE_GROUPS.map((group) => ({
+    ...group,
+    customerTypes: group.customerTypes.map((value) => availableCustomerTypes.find((type) => type.value === value)).filter(Boolean) as Array<(typeof CUSTOMER_TYPES)[number]>,
+  })).filter((group) => group.customerTypes.length > 0);
+  const selectedTone = audienceTone(selectedCustomerType);
   const displayPrice = Number(selectedRole?.price ?? price);
   const displayCurrency = selectedRole?.currency ?? product.baseCurrency ?? "USD";
   const displayAmount = Number(selectedRole?.enteredPrice ?? (selectedRole ? selectedRole.price : product.basePriceAmount ?? displayPrice));
@@ -358,16 +410,35 @@ export function ProductPurchasePanel({
       {roleOptions.length > 0 ? (
         <div>
           <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Choose outfit</h3>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            {availableCustomerTypes.map((type) => {
-              const firstRoleIndex = roleOptions.findIndex((role) => customerTypeForRole(role) === type.value);
-              const selected = selectedCustomerType === type.value;
-              return (
-                <button key={type.value} type="button" onClick={() => setSelectedRoleIndex(firstRoleIndex >= 0 ? firstRoleIndex : 0)} className={`rounded-xl border px-3 py-2.5 text-sm font-bold transition-colors ${selected ? "border-primary bg-primary text-primary-foreground" : "border-border bg-secondary text-muted-foreground hover:border-primary/50 hover:text-foreground"}`}>
-                  {type.label.replace("'s Traditional Outfit", "")}
-                </button>
-              );
-            })}
+          <div className={`grid gap-3 ${availableAudienceGroups.length > 1 ? "sm:grid-cols-2" : ""}`}>
+            {availableAudienceGroups.map((group) => (
+              <div key={group.id} className="rounded-xl border border-white/5 bg-secondary/20 p-2.5">
+                <div className="mb-2 flex items-center gap-2 px-1">
+                  <span className={`h-px flex-1 ${group.lineClass}`} />
+                  <span className={`text-[10px] font-black uppercase tracking-[0.16em] ${group.labelClass}`}>{group.label}</span>
+                  <span className={`h-px flex-1 ${group.lineClass}`} />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  {group.customerTypes.map((type) => {
+                    const firstRoleIndex = roleOptions.findIndex((role) => customerTypeForRole(role) === type.value);
+                    const selected = selectedCustomerType === type.value;
+                    const tone = audienceTone(type.value);
+                    return (
+                      <button
+                        key={type.value}
+                        type="button"
+                        aria-pressed={selected}
+                        onClick={() => setSelectedRoleIndex(firstRoleIndex >= 0 ? firstRoleIndex : 0)}
+                        className={`relative rounded-lg border px-3 py-2.5 text-sm font-bold transition-colors ${selected ? tone.selectedButton : tone.idleButton}`}
+                      >
+                        {type.label}
+                        {selected ? <Check className="absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2" aria-hidden="true" /> : null}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
           </div>
 
           <div className="mt-3 grid gap-2 sm:grid-cols-3">
@@ -376,22 +447,22 @@ export function ProductPurchasePanel({
               const roleCurrency = role.currency ?? "USD";
               const selected = selectedRoleIndex === index;
               return (
-                <button key={`${role.label}-${index}`} type="button" onClick={() => setSelectedRoleIndex(index)} className={`relative rounded-xl border p-3 text-left transition-colors ${selected ? "border-primary bg-primary/10" : "border-border bg-secondary hover:border-primary/50"}`}>
-                  {selected ? <Check className="absolute right-3 top-3 h-4 w-4 text-primary" /> : null}
+                <button key={`${role.label}-${index}`} type="button" aria-pressed={selected} onClick={() => setSelectedRoleIndex(index)} className={`relative rounded-xl border p-3 text-left transition-colors ${selected ? selectedTone.selectedOption : selectedTone.idleOption}`}>
+                  {selected ? <Check className={`absolute right-3 top-3 h-4 w-4 ${selectedTone.accentText}`} aria-hidden="true" /> : null}
                   <span className="block pr-5 text-sm font-bold">{optionLabel(role)}</span>
-                  <span className="mt-1 block text-base font-black text-primary">{roleCurrency} {Number(role.enteredPrice ?? role.price).toFixed(2)}</span>
+                  <span className={`mt-1 block text-base font-black ${selectedTone.accentText}`}>{roleCurrency} {Number(role.enteredPrice ?? role.price).toFixed(2)}</span>
                 </button>
               );
             })}
           </div>
 
           {selectedRole ? (
-            <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-primary/30 bg-primary/10 px-4 py-3">
+            <div className={`mt-3 flex items-center justify-between gap-3 rounded-xl border px-4 py-3 ${selectedTone.summary}`}>
               <div className="min-w-0">
-                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-primary">Selected</p>
+                <p className={`text-[10px] font-black uppercase tracking-[0.2em] ${selectedTone.accentText}`}>Selected</p>
                 <p className="mt-1 truncate text-sm font-bold">{selectedRole.label}</p>
               </div>
-              <p className="shrink-0 text-lg font-black text-primary">{selectedRole.currency ?? "USD"} {Number(selectedRole.enteredPrice ?? selectedRole.price).toFixed(2)}</p>
+              <p className={`shrink-0 text-lg font-black ${selectedTone.accentText}`}>{selectedRole.currency ?? "USD"} {Number(selectedRole.enteredPrice ?? selectedRole.price).toFixed(2)}</p>
             </div>
           ) : null}
         </div>
