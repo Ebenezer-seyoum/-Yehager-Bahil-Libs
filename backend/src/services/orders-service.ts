@@ -1,8 +1,21 @@
 import { HTTPException } from "hono/http-exception";
 import { and, eq, inArray, isNull, or } from "drizzle-orm";
 import { db } from "../lib/db/drizzle.js";
-import { auditLogs, cartItems, eventParticipants, events, familyMembers, measurements, orderNotes, orders, products, systemAlerts, uploadedDesigns } from "../lib/db/schema.js";
+import { auditLogs, cartItems, eventParticipants, events, familyMembers, measurements, orderLineItems, orderNotes, orders, orderWorkstreamEvents, orderWorkstreams, products, systemAlerts, uploadedDesigns } from "../lib/db/schema.js";
 import { PERMISSIONS } from "../lib/auth/permissions.js";
+import {
+  canTransitionWorkstreamStatus,
+  classifyOrderLine,
+  inferOrderType,
+  initialWorkstreamStatus,
+  isWorkstreamStatus,
+  rollUpOrderStatus,
+  workstreamLabel,
+  workstreamTrackingReference,
+  workstreamTypesForLines,
+  type OrderWorkstreamStatus,
+  type OrderWorkstreamType,
+} from "../lib/orders/order-workstreams.js";
 import { deleteCartItemsByIdsForUser, listCartItemsByIdsForUser } from "../repositories/cart-repository.js";
 import {
   getOrderById,
@@ -22,7 +35,7 @@ import {
   moneyToNumber,
   numberToMoney,
 } from "./checkout-utils.js";
-import { sendAdminOrderCreatedEmail, sendAdminOrderStatusChangedEmail, sendAdminPaymentReceivedEmail, sendOrderStatusEmail } from "./email-service.js";
+import { sendAdminOrderCreatedEmail, sendAdminOrderStatusChangedEmail, sendAdminPaymentReceivedEmail, sendOrderStatusEmail, sendOrderWorkstreamStatusEmail } from "./email-service.js";
 import type { OrderEmailEvent } from "./email-service.js";
 import { calculateCouponDiscount, markCouponRedeemed } from "./discounts-service.js";
 import { awardCustomerCreditForPaidOrder } from "./customer-credits-service.js";
@@ -106,19 +119,41 @@ export async function getOrderDetailsForCurrentUser(payload: { orderId: string; 
   if (!order) {
     throw new HTTPException(404, { message: "Order not found" });
   }
-  return enrichOrderMeasurements(order);
+  return enrichOrderWorkstreamItems(await enrichOrderMeasurements(order));
 }
 
-export async function getOrdersForAdmin(limit = 100) {
-  return listAllOrders(limit);
+export async function getOrdersForAdmin(limit = 100, scope?: OrderWorkstreamType) {
+  return listAllOrders(limit, scope);
 }
 
-export async function getOrderDetailsForAdmin(orderId: string) {
+export async function getOrderDetailsForAdmin(orderId: string, scope?: OrderWorkstreamType) {
   const order = await getOrderById(orderId);
   if (!order) {
     throw new HTTPException(404, { message: "Order not found" });
   }
-  return enrichOrderMeasurements(order);
+  if (scope && !order.workstreams.some((workstream) => workstream.type === scope)) {
+    throw new HTTPException(404, { message: `${workstreamLabel(scope)} order workstream not found` });
+  }
+  return enrichOrderWorkstreamItems(await enrichOrderMeasurements(order));
+}
+
+function enrichOrderWorkstreamItems<T extends { items?: unknown; workstreams?: unknown }>(order: T) {
+  const items = Array.isArray(order.items)
+    ? order.items.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object")
+    : [];
+  const workstreams = Array.isArray(order.workstreams)
+    ? order.workstreams.filter((row): row is Record<string, unknown> => Boolean(row) && typeof row === "object")
+    : [];
+  return {
+    ...order,
+    workstreams: workstreams.map((workstream) => {
+      const type = workstream.type === "custom" ? "custom" : "catalog";
+      return {
+        ...workstream,
+        items: items.filter((item) => classifyOrderLine(item) === type),
+      };
+    }),
+  };
 }
 
 function measurementRecord(row: typeof measurements.$inferSelect) {
@@ -178,8 +213,14 @@ function customerItemNumber(value: unknown, index: number) {
   return candidate && !isUuid ? candidate : `#${String(index + 1).padStart(3, "0")}`;
 }
 
-async function orderDesignEmailDetails(order: Record<string, unknown> & { items?: unknown; eventId?: string | null }) {
-  const rawItems = Array.isArray(order.items) ? order.items.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object") : [];
+async function orderDesignEmailDetails(
+  order: Record<string, unknown> & { items?: unknown; eventId?: string | null },
+  workstreamType?: OrderWorkstreamType,
+) {
+  const allItems = Array.isArray(order.items) ? order.items.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object") : [];
+  const rawItems = workstreamType
+    ? allItems.filter((item) => classifyOrderLine(item) === workstreamType)
+    : allItems;
   const enrichedOrder = rawItems.length
     ? await enrichOrderMeasurements({ ...order, items: rawItems } as { items: Array<Record<string, unknown>>; eventId?: string | null })
     : order;
@@ -239,6 +280,7 @@ async function orderDesignEmailDetails(order: Record<string, unknown> & { items?
       memberRole: emailString(itemMetadata.role_label, itemMetadata.member_gender, itemMetadata.memberGender),
       isGroupOrder: itemType === "group_order" || Boolean(memberName),
       measurements: measurementSnapshot,
+      workstreamType: classifyOrderLine(item),
     };
   });
   const memberPricing = itemRows.flatMap((item) => {
@@ -262,6 +304,16 @@ async function orderDesignEmailDetails(order: Record<string, unknown> & { items?
       measurements,
     };
   });
+  const workstreamReferences = Array.isArray(order.workstreams)
+    ? order.workstreams
+        .filter((workstream): workstream is Record<string, unknown> => Boolean(workstream) && typeof workstream === "object")
+        .map((workstream) => ({
+          type: workstream.type === "custom" ? "custom" as const : "catalog" as const,
+          trackingReference: emailString(workstream.trackingReference, workstream.tracking_reference) ?? "",
+          status: emailString(workstream.status),
+        }))
+        .filter((workstream) => workstream.trackingReference)
+    : [];
   return {
     designTitle: emailString(metadata.design_title, metadata.designTitle, firstItem.product_name, firstItem.productName),
     fabricType: emailString(metadata.fabric_type, metadata.fabricType),
@@ -276,6 +328,7 @@ async function orderDesignEmailDetails(order: Record<string, unknown> & { items?
     imageUrls,
     orderItems,
     groupMembers,
+    workstreamReferences,
     totalUsd: typeof order.totalUsd === "string" || typeof order.totalUsd === "number" ? order.totalUsd : null,
     totalEtb: typeof order.totalEtb === "string" || typeof order.totalEtb === "number" ? order.totalEtb : null,
     orderDate: order.createdAt instanceof Date || typeof order.createdAt === "string" ? order.createdAt : null,
@@ -599,13 +652,33 @@ export async function updateOrderAdminState(payload: {
     throw new HTTPException(400, { message: `Invalid delivery status: ${payload.deliveryStatus}` });
   }
 
-  const nextStatus = payload.status ?? order.status;
+  const workstreamRows = Array.isArray(order.workstreams)
+    ? order.workstreams.filter((row): row is Record<string, unknown> => Boolean(row) && typeof row === "object")
+    : [];
+  const workstreamRollup = workstreamRows.length
+    ? rollUpOrderStatus(workstreamRows.map((row) => ({
+        type: row.type === "custom" ? "custom" : "catalog",
+        status: String(row.status ?? initialWorkstreamStatus(row.type === "custom" ? "custom" : "catalog")),
+      })))
+    : undefined;
+  const paidReadyStatus = payload.paymentStatus === "paid" && workstreamRollup === "fulfilled"
+    ? "fulfilled"
+    : undefined;
+  const nextStatus = payload.status ?? paidReadyStatus ?? order.status;
   const nextPayment = payload.paymentStatus ?? order.paymentStatus;
   if (
     ["fulfilled", "shipped", "delivered", "ready_for_pickup", "picked_up"].includes(nextStatus) &&
     nextPayment !== "paid"
   ) {
     throw new HTTPException(400, { message: "Order must be paid before moving into fulfillment-complete states" });
+  }
+  if (
+    payload.status &&
+    ["fulfilled", "shipped", "delivered", "ready_for_pickup", "picked_up"].includes(payload.status) &&
+    workstreamRows.length > 0 &&
+    workstreamRollup !== "fulfilled"
+  ) {
+    throw new HTTPException(409, { message: "Every active catalog and custom workstream must be ready before shared fulfillment can begin" });
   }
 
   const statusChanged = Boolean(payload.deliveryStatus && payload.deliveryStatus !== order.deliveryStatus);
@@ -628,7 +701,7 @@ export async function updateOrderAdminState(payload: {
   const [updated] = await db
     .update(orders)
     .set({
-      status: payload.status ?? undefined,
+      status: payload.status ?? paidReadyStatus,
       paymentStatus: payload.paymentStatus ?? undefined,
       fulfillmentType: payload.fulfillmentType ?? undefined,
       carrier: payload.carrier ?? undefined,
@@ -744,6 +817,244 @@ export async function updateOrderAdminState(payload: {
   return updated;
 }
 
+const SHARED_FULFILLMENT_ORDER_STATUSES = new Set([
+  "shipped",
+  "delivered",
+  "ready_for_pickup",
+  "picked_up",
+]);
+
+export async function updateOrderWorkstream(payload: {
+  orderId: string;
+  type: OrderWorkstreamType;
+  performedBy?: string;
+  status?: string;
+  assignedUserId?: string | null;
+  dueAt?: string | null;
+}) {
+  if (payload.status === undefined && payload.assignedUserId === undefined && payload.dueAt === undefined) {
+    throw new HTTPException(400, { message: "At least one workstream field must be updated" });
+  }
+  if (payload.status && !isWorkstreamStatus(payload.type, payload.status)) {
+    throw new HTTPException(400, { message: `Invalid ${payload.type} workstream status: ${payload.status}` });
+  }
+
+  const dueAt = payload.dueAt === undefined
+    ? undefined
+    : payload.dueAt === null
+      ? null
+      : new Date(payload.dueAt);
+  if (dueAt instanceof Date && Number.isNaN(dueAt.getTime())) {
+    throw new HTTPException(400, { message: "Invalid workstream due date" });
+  }
+
+  const transition = await db.transaction(async (tx) => {
+    const [order] = await tx
+      .select()
+      .from(orders)
+      .where(eq(orders.id, payload.orderId))
+      .for("update");
+    if (!order) {
+      throw new HTTPException(404, { message: "Order not found" });
+    }
+
+    const [workstream] = await tx
+      .select()
+      .from(orderWorkstreams)
+      .where(and(eq(orderWorkstreams.orderId, payload.orderId), eq(orderWorkstreams.type, payload.type)))
+      .for("update");
+    if (!workstream) {
+      throw new HTTPException(404, { message: `${workstreamLabel(payload.type)} order workstream not found` });
+    }
+
+    const nextStatus = payload.status ?? workstream.status;
+    const statusChanged = nextStatus !== workstream.status;
+    if (statusChanged && SHARED_FULFILLMENT_ORDER_STATUSES.has(order.status)) {
+      throw new HTTPException(409, { message: "Workstream status cannot change after shared shipping or pickup has started" });
+    }
+    if (statusChanged && !canTransitionWorkstreamStatus(payload.type, workstream.status, nextStatus)) {
+      throw new HTTPException(409, {
+        message: `Cannot move ${workstreamLabel(payload.type).toLowerCase()} work from ${workstream.status.replaceAll("_", " ")} directly to ${nextStatus.replaceAll("_", " ")}`,
+      });
+    }
+
+    const now = new Date();
+    const nextVersion = statusChanged ? workstream.version + 1 : workstream.version;
+    const [updatedWorkstream] = await tx
+      .update(orderWorkstreams)
+      .set({
+        status: statusChanged ? nextStatus : undefined,
+        assignedUserId: payload.assignedUserId,
+        dueAt,
+        startedAt: statusChanged && !workstream.startedAt ? now : undefined,
+        completedAt: statusChanged && ["ready", "cancelled"].includes(nextStatus)
+          ? now
+          : statusChanged
+            ? null
+            : undefined,
+        lastStatusChangedAt: statusChanged ? now : undefined,
+        lastStatusChangedBy: statusChanged ? payload.performedBy ?? "admin" : undefined,
+        version: statusChanged ? nextVersion : undefined,
+        updatedAt: now,
+      })
+      .where(eq(orderWorkstreams.id, workstream.id))
+      .returning();
+
+    if (statusChanged) {
+      await tx
+        .update(orderLineItems)
+        .set({ status: nextStatus, updatedAt: now })
+        .where(eq(orderLineItems.workstreamId, workstream.id));
+    }
+
+    const currentWorkstreams = await tx.query.orderWorkstreams.findMany({
+      where: eq(orderWorkstreams.orderId, payload.orderId),
+    });
+    const rolledStatus = rollUpOrderStatus(currentWorkstreams.map((row) => ({
+      type: row.type as OrderWorkstreamType,
+      status: row.status,
+    })));
+    const paymentSafeRolledStatus = rolledStatus === "fulfilled" && order.paymentStatus !== "paid"
+      ? "processing"
+      : rolledStatus;
+    const nextOrderStatus = SHARED_FULFILLMENT_ORDER_STATUSES.has(order.status)
+      ? order.status
+      : paymentSafeRolledStatus;
+
+    if (statusChanged && nextOrderStatus !== order.status) {
+      await tx
+        .update(orders)
+        .set({ status: nextOrderStatus, updatedAt: now })
+        .where(eq(orders.id, payload.orderId));
+    }
+
+    if (statusChanged && nextOrderStatus === "fulfilled" && order.status !== "fulfilled") {
+      const existingDeliveryAlert = await tx.query.systemAlerts.findFirst({
+        where: and(
+          eq(systemAlerts.type, "shipping_delivery_ready"),
+          eq(systemAlerts.entityId, payload.orderId),
+          eq(systemAlerts.isResolved, false),
+        ),
+      });
+      if (!existingDeliveryAlert) {
+        await tx.insert(systemAlerts).values({
+          title: `Order ready for delivery #${order.orderNumber}`,
+          message: `${order.customerName}'s active order work is ready for shared fulfillment.`,
+          type: "shipping_delivery_ready",
+          severity: "info",
+          entityId: order.id,
+        });
+      }
+    }
+
+    let workstreamEvent: typeof orderWorkstreamEvents.$inferSelect | undefined;
+    if (statusChanged) {
+      const eventKey = `${workstream.id}:status:${nextVersion}:${nextStatus}`;
+      [workstreamEvent] = await tx
+        .insert(orderWorkstreamEvents)
+        .values({
+          orderId: payload.orderId,
+          workstreamId: workstream.id,
+          fromStatus: workstream.status,
+          toStatus: nextStatus,
+          version: nextVersion,
+          eventKey,
+          changedBy: payload.performedBy ?? "admin",
+          metadata: {
+            workstream_type: payload.type,
+            tracking_reference: workstream.trackingReference,
+            previous_order_status: order.status,
+            rolled_order_status: nextOrderStatus,
+          },
+        })
+        .returning();
+    }
+
+    await tx.insert(auditLogs).values({
+      action: statusChanged ? "order_workstream_status_updated" : "order_workstream_assignment_updated",
+      category: "order",
+      severity: "info",
+      entityType: "order_workstream",
+      entityId: workstream.id,
+      performedBy: payload.performedBy ?? "admin",
+      details: `${workstreamLabel(payload.type)} workstream updated for order ${order.orderNumber}`,
+      metadata: {
+        order_id: order.id,
+        order_number: order.orderNumber,
+        tracking_reference: workstream.trackingReference,
+        previous_status: workstream.status,
+        current_status: nextStatus,
+        previous_order_status: order.status,
+        current_order_status: nextOrderStatus,
+        assigned_user_id: payload.assignedUserId,
+        due_at: dueAt?.toISOString?.() ?? dueAt,
+      },
+    });
+
+    return {
+      order,
+      previousWorkstream: workstream,
+      workstream: updatedWorkstream,
+      workstreams: currentWorkstreams,
+      event: workstreamEvent,
+      orderStatus: nextOrderStatus,
+      changedAt: now,
+      statusChanged,
+    };
+  });
+
+  const detailedOrder = await getOrderDetailsForAdmin(payload.orderId);
+  if (transition.statusChanged && transition.event) {
+    const otherWorkstream = transition.workstreams.find((row) => row.id !== transition.workstream.id);
+    const emailResult = await sendOrderWorkstreamStatusEmail({
+      ...(await orderDesignEmailDetails(detailedOrder, payload.type)),
+      to: detailedOrder.userEmail,
+      customerName: detailedOrder.customerName,
+      orderNumber: detailedOrder.orderNumber,
+      orderDate: detailedOrder.createdAt,
+      status: detailedOrder.status,
+      paymentStatus: detailedOrder.paymentStatus,
+      totalUsd: detailedOrder.totalUsd,
+      workstreamType: payload.type,
+      trackingReference: transition.workstream.trackingReference,
+      previousWorkstreamStatus: transition.previousWorkstream.status,
+      workstreamStatus: transition.workstream.status,
+      otherWorkstreamStatus: otherWorkstream
+        ? `${workstreamLabel(otherWorkstream.type as OrderWorkstreamType)}: ${otherWorkstream.status}`
+        : null,
+      overallStatus: transition.orderStatus,
+      workstreamDueAt: transition.workstream.dueAt,
+      changedAt: transition.changedAt,
+    });
+
+    await db
+      .update(orderWorkstreamEvents)
+      .set({
+        customerEmailStatus: emailResult.sent ? "sent" : emailResult.skipped ? "skipped" : "failed",
+        customerEmailSentAt: emailResult.sent ? new Date() : null,
+        customerEmailAttempts: 1,
+        customerEmailLastError: emailResult.sent ? null : emailResult.reason ?? "unknown_email_error",
+        updatedAt: new Date(),
+      })
+      .where(eq(orderWorkstreamEvents.id, transition.event.id));
+
+    await sendAdminOrderStatusChangedEmail({
+      orderId: detailedOrder.id,
+      orderNumber: transition.workstream.trackingReference,
+      customerName: detailedOrder.customerName,
+      customerEmail: detailedOrder.userEmail,
+      previousStatus: transition.previousWorkstream.status,
+      status: transition.workstream.status,
+      paymentStatus: detailedOrder.paymentStatus,
+      changedBy: payload.performedBy ?? "admin",
+    });
+  }
+
+  return transition.statusChanged
+    ? getOrderDetailsForAdmin(payload.orderId)
+    : detailedOrder;
+}
+
 export async function createCheckoutIntent(payload: {
   userEmail?: string;
   cartItemIds: string[];
@@ -813,8 +1124,14 @@ export async function createCheckoutIntent(payload: {
     });
 
     const lines = buildCheckoutLines(lineInputs);
-    const isCustomOrder = lines.some((line) => line.itemType === "custom_design" || line.uploadedDesignId);
-    const orderType = isCustomOrder ? "custom_order" : "catalog_order";
+    const orderType = inferOrderType(lines);
+    const workstreamTypes = workstreamTypesForLines(lines);
+    const catalogSubtotalUsd = lines
+      .filter((line) => classifyOrderLine(line) === "catalog")
+      .reduce((sum, line) => sum + line.lineTotalUsd, 0);
+    const customSubtotalUsd = lines
+      .filter((line) => classifyOrderLine(line) === "custom")
+      .reduce((sum, line) => sum + line.lineTotalUsd, 0);
     const orderMode = lines.some((line) => line.itemType === "group_order") || primaryEventId ? "group" : "individual";
     const totalItems = lines.reduce((sum, line) => sum + line.quantity, 0);
     const fulfillmentType = payload.fulfillmentType ?? "mail";
@@ -827,6 +1144,8 @@ export async function createCheckoutIntent(payload: {
       subtotalUsd: baseTotals.subtotalUsd,
       shippingCostUsd,
       orderType,
+      catalogSubtotalUsd,
+      customSubtotalUsd,
     });
     const discountAmountUsd = couponResult.discountAmountUsd;
     const totals = {
@@ -926,6 +1245,43 @@ export async function createCheckoutIntent(payload: {
       })
       .returning();
 
+    const workstreamRows = await tx
+      .insert(orderWorkstreams)
+      .values(workstreamTypes.map((type) => ({
+        orderId: order.id,
+        type,
+        trackingReference: workstreamTrackingReference(order.orderNumber, type),
+        status: initialWorkstreamStatus(type),
+        lastStatusChangedBy: "checkout",
+      })))
+      .returning();
+    const workstreamByType = new Map(workstreamRows.map((row) => [row.type, row]));
+
+    await tx.insert(orderLineItems).values(lines.map((line, index) => {
+      const type = classifyOrderLine(line);
+      const workstream = workstreamByType.get(type);
+      if (!workstream) {
+        throw new HTTPException(500, { message: `Could not create ${type} order workstream` });
+      }
+      return {
+        orderId: order.id,
+        workstreamId: workstream.id,
+        sourceCartItemId: line.cartItemId,
+        position: index + 1,
+        itemType: line.itemType ?? "product",
+        productId: line.productId,
+        uploadedDesignId: line.uploadedDesignId,
+        productName: line.productName,
+        quantity: line.quantity,
+        unitPriceUsd: numberToMoney(line.unitPriceUsd),
+        lineTotalUsd: numberToMoney(line.lineTotalUsd),
+        measurementId: line.measurementId,
+        measurementSnapshot: line.measurementSnapshot,
+        itemMetadata: line.itemMetadata,
+        status: workstream.status,
+      };
+    }));
+
     const uploadedDesignIds = lines
       .map((line) => line.uploadedDesignId)
       .filter((id): id is string => Boolean(id));
@@ -969,16 +1325,23 @@ export async function createCheckoutIntent(payload: {
       },
     });
 
-    await tx.insert(systemAlerts).values({
-      title: `${orderType === "custom_order" ? "New custom order" : "New catalog order"} #${order.orderNumber}`,
-      message: `${order.customerName} placed a new order awaiting review.`,
-      type: orderType === "custom_order" ? "new_custom_order" : "new_catalog_order",
+    await tx.insert(systemAlerts).values(workstreamRows.map((workstream) => ({
+      title: `New ${workstreamLabel(workstream.type as OrderWorkstreamType)} order #${workstream.trackingReference}`,
+      message: `${order.customerName} placed ${orderType === "mixed_order" ? "a mixed order" : "an order"}; the ${workstream.type} part is awaiting review.`,
+      type: workstream.type === "custom" ? "new_custom_order" : "new_catalog_order",
       severity: "info",
       entityId: order.id,
-    });
+    })));
 
     return {
-      order,
+      order: {
+        ...order,
+        workstreams: workstreamRows.map((workstream) => ({
+          ...workstream,
+          items: lines.filter((line) => classifyOrderLine(line) === workstream.type),
+          events: [],
+        })),
+      },
       totals,
       lines,
     };
@@ -1002,6 +1365,8 @@ export async function createCheckoutIntent(payload: {
     paymentStatus: result.order.paymentStatus,
     totalUsd: result.order.totalUsd,
     paymentMethod: result.order.paymentMethod,
+    orderType: result.order.orderType,
+    workstreamTypes: result.order.workstreams.map((workstream) => workstream.type as OrderWorkstreamType),
   });
   return result;
 }
@@ -1044,9 +1409,13 @@ export async function previewCheckoutCoupon(payload: {
     })),
   );
 
-  const orderType = lines.some((line) => line.itemType === "custom_design" || line.uploadedDesignId)
-    ? "custom_order"
-    : "catalog_order";
+  const orderType = inferOrderType(lines);
+  const catalogSubtotalUsd = lines
+    .filter((line) => classifyOrderLine(line) === "catalog")
+    .reduce((sum, line) => sum + line.lineTotalUsd, 0);
+  const customSubtotalUsd = lines
+    .filter((line) => classifyOrderLine(line) === "custom")
+    .reduce((sum, line) => sum + line.lineTotalUsd, 0);
   const totalItems = lines.reduce((sum, line) => sum + line.quantity, 0);
   const fulfillmentType = payload.fulfillmentType ?? "mail";
   const carrier = fulfillmentType === "pickup" ? "pickup" : payload.carrier ?? "Ethiopian Mail Service";
@@ -1058,6 +1427,8 @@ export async function previewCheckoutCoupon(payload: {
     subtotalUsd: baseTotals.subtotalUsd,
     shippingCostUsd,
     orderType,
+    catalogSubtotalUsd,
+    customSubtotalUsd,
   });
   const discountAmountUsd = couponResult.discountAmountUsd;
 
@@ -1188,6 +1559,16 @@ export async function deleteOrderForAdmin(payload: { orderId: string; performedB
   await db.delete(auditLogs).where(
     and(eq(auditLogs.entityType, "order"), eq(auditLogs.entityId, payload.orderId)),
   );
+  const workstreamIds = Array.isArray(order.workstreams)
+    ? order.workstreams
+        .map((workstream) => typeof workstream.id === "string" ? workstream.id : null)
+        .filter((id): id is string => Boolean(id))
+    : [];
+  if (workstreamIds.length) {
+    await db.delete(auditLogs).where(
+      and(eq(auditLogs.entityType, "order_workstream"), inArray(auditLogs.entityId, workstreamIds)),
+    );
+  }
 
   // Delete the order (order_notes cascade automatically via DB FK)
   const [deleted] = await db.delete(orders).where(eq(orders.id, payload.orderId)).returning();

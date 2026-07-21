@@ -304,9 +304,10 @@ export function AdminAnalyticsWorkspace({
   }, [filteredOrders]);
 
   const orderTypeSplit = useMemo(() => [
-    { label: "Catalog", value: filteredOrders.filter((o) => norm(o.orderType) !== "custom").length, color: "#6366f1" },
-    { label: "Custom", value: filteredOrders.filter((o) => norm(o.orderType) === "custom").length, color: "#8b5cf6" },
-  ], [filteredOrders]);
+    { label: "Catalog", value: filteredOrders.filter((o) => ["catalog", "catalog_order", "group_order"].includes(norm(o.orderType))).length, color: "#6366f1" },
+    { label: "Custom", value: filteredOrders.filter((o) => ["custom", "custom_order", "custom_design_order"].includes(norm(o.orderType))).length, color: "#8b5cf6" },
+    { label: "Mixed", value: filteredOrders.filter((o) => norm(o.orderType) === "mixed_order").length, color: "#f59e0b" },
+  ].filter((row) => row.value > 0), [filteredOrders]);
 
   const topProducts = useMemo(() => {
     const salesMap: Record<string, number> = {};

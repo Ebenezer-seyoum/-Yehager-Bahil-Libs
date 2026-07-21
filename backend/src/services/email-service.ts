@@ -110,11 +110,27 @@ type OrderStatusPayload = {
   memberPricing?: Array<Record<string, unknown>>;
   orderItems?: Array<OrderEmailItem>;
   groupMembers?: Array<OrderEmailGroupMember>;
+  workstreamReferences?: Array<{
+    type: "catalog" | "custom";
+    trackingReference: string;
+    status?: string | null;
+  }>;
   totalUsd?: string | number | null;
   shippingAddress?: string | Record<string, unknown> | null;
   pickupLocation?: string | null;
   /** Pass true to show the cancellation policy block (e.g. on new order confirmation). */
   showCancellationPolicy?: boolean;
+};
+
+export type OrderWorkstreamStatusPayload = OrderStatusPayload & {
+  workstreamType: "catalog" | "custom";
+  trackingReference: string;
+  previousWorkstreamStatus?: string | null;
+  workstreamStatus: string;
+  otherWorkstreamStatus?: string | null;
+  overallStatus?: string | null;
+  workstreamDueAt?: Date | string | null;
+  changedAt?: Date | string | null;
 };
 
 type OrderEmailItem = {
@@ -130,6 +146,7 @@ type OrderEmailItem = {
   memberRole?: string | null;
   isGroupOrder?: boolean;
   measurements?: Record<string, unknown> | null;
+  workstreamType?: "catalog" | "custom" | null;
 };
 
 type OrderEmailGroupMember = {
@@ -155,6 +172,8 @@ type AdminOrderPayload = {
   paymentStatus?: string | null;
   totalUsd?: string | number | null;
   paymentMethod?: string | null;
+  orderType?: string | null;
+  workstreamTypes?: Array<"catalog" | "custom">;
 };
 
 type AdminOrderStatusPayload = AdminOrderPayload & {
@@ -510,8 +529,30 @@ function orderItemsSection(
   items: OrderEmailItem[] = [],
   totalUsd?: string | number | null,
   groupMembers: OrderEmailGroupMember[] = [],
-) {
+  sectionTitle = "Your Order Details",
+  allowWorkstreamSplit = true,
+): string {
   if (!items.length && !groupMembers.length) return "";
+  const visibleWorkstreamTypes = [...new Set(items.map((item) => item.workstreamType).filter(Boolean))];
+  if (allowWorkstreamSplit && visibleWorkstreamTypes.length > 1) {
+    const catalogItems = items.filter((item) => item.workstreamType === "catalog");
+    const customItems = items.filter((item) => item.workstreamType === "custom");
+    const catalogMembers = catalogItems.some((item) => item.isGroupOrder) ? groupMembers : [];
+    const customMembers = customItems.some((item) => item.isGroupOrder) ? groupMembers : [];
+    const total = formatUsd(totalUsd);
+    return `<div style="margin:22px 0">
+      <p style="margin:0 0 9px;color:#d6a43d;font-size:18px;font-weight:900">🧵 ${escapeHtml(sectionTitle)}</p>
+      <div style="margin:0 0 16px;padding:14px;border:1px solid #284a70;border-radius:8px;background:#121b28">
+        <p style="margin:0 0 9px;color:#9fc4ff;font-size:15px;font-weight:900">📦 Catalog Items</p>
+        ${orderItemsSection(catalogItems, undefined, catalogMembers, "Catalog Items", false)}
+      </div>
+      <div style="margin:0 0 16px;padding:14px;border:1px solid #6f4a86;border-radius:8px;background:#1b1422">
+        <p style="margin:0 0 9px;color:#d8b4fe;font-size:15px;font-weight:900">✂️ Custom Items</p>
+        ${orderItemsSection(customItems, undefined, customMembers, "Custom Items", false)}
+      </div>
+      ${total ? `<table role="presentation" style="width:100%;border-collapse:collapse;background:#17120e"><tr><td style="padding:13px 10px;color:#fff7df;font-size:17px;font-weight:900">Combined order total</td><td style="padding:13px 10px;color:#d6a43d;font-size:23px;font-weight:900;text-align:right;white-space:nowrap">${escapeHtml(total)}</td></tr></table>` : ""}
+    </div>`;
+  }
   const groupItems = items.filter((item) => item.isGroupOrder);
   const regularItems = items.filter((item) => !item.isGroupOrder);
   const regularCards = regularItems.map(regularOrderItemCard).join("");
@@ -548,7 +589,7 @@ function orderItemsSection(
 
   const total = formatUsd(totalUsd);
   return `<div style="margin:22px 0">
-    <p style="margin:0 0 9px;color:#d6a43d;font-size:18px;font-weight:900">🧵 Your Order Details</p>
+    ${allowWorkstreamSplit ? `<p style="margin:0 0 9px;color:#d6a43d;font-size:18px;font-weight:900">🧵 ${escapeHtml(sectionTitle)}</p>` : ""}
     ${regularCards}${groupCard}
     ${total ? `<table role="presentation" style="width:100%;border-collapse:collapse;background:#17120e"><tr><td style="padding:13px 10px;color:#fff7df;font-size:17px;font-weight:900">Total</td><td style="padding:13px 10px;color:#d6a43d;font-size:23px;font-weight:900;text-align:right;white-space:nowrap">${escapeHtml(total)}</td></tr></table>` : ""}
   </div>`;
@@ -1240,7 +1281,7 @@ function orderEmailPresentation(event: OrderEmailEvent, orderNumber?: string | n
     order_confirmed: {
       subject: `✅ Order Confirmed — ${reference}${suffix}`,
       title: "✅ Order Confirmed!",
-      message: "Your custom garment is being prepared.",
+      message: "Your order has been received. Catalog and custom items will be prepared in their own tracked workstreams when applicable.",
       tone: "green",
     },
     order_in_production: {
@@ -1387,6 +1428,18 @@ function orderSummaryCard(payload: OrderStatusPayload) {
   </table></div>`;
 }
 
+function orderWorkstreamReferenceBlock(payload: OrderStatusPayload) {
+  const references = payload.workstreamReferences ?? [];
+  if (!references.length) return "";
+  return `<div style="margin:0 0 20px;padding:16px;background:#171510;border:1px solid #383125;border-radius:8px">
+    <p style="margin:0 0 10px;color:#d6a43d;font-size:14px;font-weight:900">Order tracking references</p>
+    ${detailsList(references.map((workstream) => [
+      `${workstream.type === "custom" ? "Custom" : "Catalog"} order`,
+      `${workstream.trackingReference}${workstream.status ? ` · ${humanizeValue(workstream.status)}` : ""}`,
+    ]))}
+  </div>`;
+}
+
 function orderPaymentMethodBlock(payload: OrderStatusPayload) {
   const method = paymentMethodLabel(payload.paymentMethod);
   const status = String(payload.paymentStatus ?? "pending").toLowerCase();
@@ -1436,6 +1489,7 @@ function orderStatusEmailHtml(
     ${orderEventBanner(presentation)}
     <div style="padding:30px">
       ${orderSummaryCard(payload)}
+      ${orderWorkstreamReferenceBlock(payload)}
       ${orderPaymentMethodBlock(payload)}
       ${orderItemsSection(payload.orderItems, payload.totalUsd, payload.groupMembers)}
       ${deliveryDetails}
@@ -1499,15 +1553,83 @@ export async function sendOrderStatusEmail(payload: OrderStatusPayload) {
   });
 }
 
+export async function sendOrderWorkstreamStatusEmail(payload: OrderWorkstreamStatusPayload) {
+  const label = payload.workstreamType === "custom" ? "Custom" : "Catalog";
+  const icon = payload.workstreamType === "custom" ? "✂️" : "📦";
+  const workstreamStatus = humanizeValue(payload.workstreamStatus);
+  const previousStatus = payload.previousWorkstreamStatus
+    ? humanizeValue(payload.previousWorkstreamStatus)
+    : null;
+  const orderUrl = appLink("/my-orders");
+  const tone = payload.workstreamStatus === "cancelled"
+    ? "red"
+    : payload.workstreamStatus === "ready"
+      ? "green"
+      : "blue";
+  const presentation = {
+    subject: `${icon} ${label} order update — #${payload.trackingReference} | Yehager Bahil Libs`,
+    title: `${icon} ${label} order: ${workstreamStatus}`,
+    message: `The ${label.toLowerCase()} part of your order has moved to ${workstreamStatus.toLowerCase()}.`,
+    tone,
+  } as const;
+
+  return sendTransactionalEmailSafely({
+    channel: "notifications",
+    to: payload.to,
+    subject: presentation.subject,
+    text: paragraph([
+      `Hello ${payload.customerName || "Customer"},`,
+      presentation.message,
+      payload.orderNumber ? `Main order: #${payload.orderNumber}` : null,
+      `Tracking reference: ${payload.trackingReference}`,
+      previousStatus ? `Previous ${label.toLowerCase()} status: ${previousStatus}` : null,
+      `New ${label.toLowerCase()} status: ${workstreamStatus}`,
+      payload.otherWorkstreamStatus
+        ? `Other order part: ${humanizeValue(payload.otherWorkstreamStatus)}`
+        : null,
+      payload.overallStatus ? `Overall order status: ${humanizeValue(payload.overallStatus)}` : null,
+      `View your order: ${orderUrl}`,
+    ]),
+    html: customerEmailFrame(`
+      ${orderEventBanner(presentation)}
+      <div style="padding:30px">
+        <p style="margin:0 0 20px;color:#f5efe6;font-size:17px">Hello <strong>${escapeHtml(payload.customerName || "Customer")}</strong>,</p>
+        ${orderSummaryCard(payload)}
+        ${detailsList([
+          ["Updated order part", `${label} order`],
+          ["Tracking reference", payload.trackingReference],
+          ["Previous status", previousStatus],
+          ["New status", workstreamStatus],
+          ["Changed", formatEmailDate(payload.changedAt)],
+          ["Expected by", formatEmailDate(payload.workstreamDueAt)],
+          ["Other order part", payload.otherWorkstreamStatus ? humanizeValue(payload.otherWorkstreamStatus) : null],
+          ["Overall order", payload.overallStatus ? humanizeValue(payload.overallStatus) : null],
+        ])}
+        ${orderItemsSection(payload.orderItems, undefined, payload.groupMembers, `${label} Items`)}
+        <div style="margin:18px 0;padding:14px;background:#171510;border:1px solid #383125;border-radius:7px">
+          <p style="margin:0;color:#c9bdad;font-size:13px;line-height:1.6">Only the <strong style="color:#fff7df">${escapeHtml(label.toLowerCase())}</strong> part changed. Payment, shipping, and the other part of your order remain unchanged unless they are listed above.</p>
+        </div>
+        ${trackOnlineBox()}
+        ${actionButton("View My Order", orderUrl)}
+      </div>
+    `),
+  });
+}
+
 export async function sendAdminOrderCreatedEmail(payload: AdminOrderPayload) {
   const orderUrl = payload.orderId ? appLink(`/admin/orders/${payload.orderId}`) : appLink("/admin/orders");
+  const orderTypeLabel = payload.orderType === "mixed_order"
+    ? "Mixed order (catalog + custom)"
+    : humanizeValue(payload.orderType || "Order");
   return sendTransactionalEmailSafely({
     channel: "team",
     to: internalNotificationRecipients(),
-    subject: `✅ New Order Created${payload.orderNumber ? ` — Order #${payload.orderNumber}` : ""} | Yehager Bahil Libs`,
+    subject: `✅ New ${payload.orderType === "mixed_order" ? "Mixed " : ""}Order Created${payload.orderNumber ? ` — Order #${payload.orderNumber}` : ""} | Yehager Bahil Libs`,
     text: paragraph([
       `A new order was created${payload.orderNumber ? `: ${payload.orderNumber}` : "."}`,
       payload.customerEmail ? `Customer: ${payload.customerEmail}` : null,
+      `Order type: ${orderTypeLabel}`,
+      payload.workstreamTypes?.length ? `Operational queues: ${payload.workstreamTypes.map(humanizeValue).join(", ")}` : null,
       payload.totalUsd ? `Total: $${payload.totalUsd}` : null,
       `Open order: ${orderUrl}`,
     ]),
@@ -1516,6 +1638,8 @@ export async function sendAdminOrderCreatedEmail(payload: AdminOrderPayload) {
       `<p>A customer created a new order.</p>${detailsList([
         ["Order", payload.orderNumber],
         ["Customer", payload.customerName || payload.customerEmail],
+        ["Order type", orderTypeLabel],
+        ["Operational queues", payload.workstreamTypes?.map(humanizeValue).join(" + ")],
         ["Total", payload.totalUsd ? `$${payload.totalUsd}` : null],
         ["Status", payload.status],
         ["Payment", payload.paymentStatus],

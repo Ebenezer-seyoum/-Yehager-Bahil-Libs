@@ -37,6 +37,15 @@ function pricingStatus(product: Product) {
   return { label: "Price Not Set", className: "border-slate-200 bg-slate-50 text-slate-600" };
 }
 
+function pricingStatusKey(product: Product) {
+  const status = String(product.priceStatus ?? "draft").toLowerCase();
+  if (["approved", "published"].includes(status)) return "approved";
+  if (["submitted", "pending_approval"].includes(status)) return "pending_approval";
+  if (status === "rejected") return "rejected";
+  if (["waiting_price", "sent"].includes(status) || product.telegramStatus === "waiting_price") return "waiting_price";
+  return "price_not_set";
+}
+
 function formatCurrency(value: string | number | null | undefined) {
   const amount = Number(value);
   if (!Number.isFinite(amount)) return "$0.00";
@@ -52,10 +61,12 @@ function formatEtb(value: string | number | null | undefined) {
 export function AdminProductManager({
   initialProducts,
   externalSearch,
+  priceStatusFilter = "all",
   onFilteredCountChange,
 }: {
   initialProducts: Product[];
   externalSearch?: string;
+  priceStatusFilter?: string;
   viewMode?: "modal" | "page";
   onFilteredCountChange?: (count: number) => void;
 }) {
@@ -84,6 +95,7 @@ export function AdminProductManager({
   }, []);
 
   const filteredProducts = initialProducts.filter((p) => {
+    if (priceStatusFilter !== "all" && pricingStatusKey(p) !== priceStatusFilter) return false;
     if (!externalSearch) return true;
     const q = externalSearch.toLowerCase();
     return (

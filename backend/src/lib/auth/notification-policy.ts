@@ -24,12 +24,12 @@ const RULES: Record<string, NotificationRule> = {
   new_catalog_order: {
     category: "orders",
     permissions: ["orders.view"],
-    href: (id) => (id ? `/admin/orders/${id}` : "/admin/catalog-orders"),
+    href: (id) => (id ? `/admin/orders/${id}?scope=catalog` : "/admin/catalog-orders"),
   },
   new_custom_order: {
     category: "custom_orders",
     permissions: ["orders.view"],
-    href: (id) => (id ? `/admin/orders/${id}` : "/admin/custom-orders?tab=orders"),
+    href: (id) => (id ? `/admin/orders/${id}?scope=custom` : "/admin/custom-orders?tab=orders"),
   },
   design_review: {
     category: "custom_designs",

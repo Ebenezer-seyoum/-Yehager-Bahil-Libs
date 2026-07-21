@@ -12,9 +12,11 @@ function requestNeedsReview(row: Record<string, unknown>) {
 }
 
 function orderNeedsReview(row: Record<string, unknown>) {
-  const status = String(row.status ?? "pending").toLowerCase();
+  const workstreams = Array.isArray(row.workstreams) ? row.workstreams as Array<Record<string, unknown>> : [];
+  const customWorkstream = workstreams.find((workstream) => workstream.type === "custom");
+  const status = String(customWorkstream?.status ?? row.status ?? "design_review").toLowerCase();
   const payment = String(row.paymentStatus ?? "pending").toLowerCase();
-  return ["pending", "processing"].includes(status) || payment === "awaiting_verification";
+  return ["pending", "design_review"].includes(status) || payment === "awaiting_verification";
 }
 
 export function AdminCustomOrdersWorkspace({

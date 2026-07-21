@@ -148,7 +148,9 @@ export async function calculateCouponDiscount(payload: {
   code?: string | null;
   subtotalUsd: number;
   shippingCostUsd: number;
-  orderType: "catalog_order" | "custom_order";
+  orderType: "catalog_order" | "custom_order" | "mixed_order";
+  catalogSubtotalUsd?: number;
+  customSubtotalUsd?: number;
 }) {
   const code = normalizeCode(payload.code ?? "");
   if (!code) {
@@ -161,14 +163,19 @@ export async function calculateCouponDiscount(payload: {
   if (coupon.usageLimit && coupon.redemptionCount >= coupon.usageLimit) {
     throw new HTTPException(400, { message: "Coupon usage limit has been reached" });
   }
-  if (coupon.appliesTo === "catalog_orders" && payload.orderType !== "catalog_order") {
-    throw new HTTPException(400, { message: "Coupon only applies to catalog orders" });
+  const eligibleSubtotal = coupon.appliesTo === "catalog_orders"
+    ? payload.catalogSubtotalUsd ?? (payload.orderType === "catalog_order" ? payload.subtotalUsd : 0)
+    : coupon.appliesTo === "custom_orders"
+      ? payload.customSubtotalUsd ?? (payload.orderType === "custom_order" ? payload.subtotalUsd : 0)
+      : payload.subtotalUsd;
+  if (coupon.appliesTo === "catalog_orders" && eligibleSubtotal <= 0) {
+    throw new HTTPException(400, { message: "Coupon requires at least one catalog item" });
   }
-  if (coupon.appliesTo === "custom_orders" && payload.orderType !== "custom_order") {
-    throw new HTTPException(400, { message: "Coupon only applies to custom orders" });
+  if (coupon.appliesTo === "custom_orders" && eligibleSubtotal <= 0) {
+    throw new HTTPException(400, { message: "Coupon requires at least one custom item" });
   }
   const minimum = moneyToNumber(coupon.minimumOrderUsd);
-  if (minimum > 0 && payload.subtotalUsd < minimum) {
+  if (minimum > 0 && eligibleSubtotal < minimum) {
     throw new HTTPException(400, { message: `Coupon requires at least $${minimum.toFixed(2)} in products` });
   }
 
@@ -178,9 +185,9 @@ export async function calculateCouponDiscount(payload: {
     discountAmountUsd = Math.max(payload.shippingCostUsd, 0);
     freeShipping = true;
   } else if (coupon.discountType === "percentage") {
-    discountAmountUsd = payload.subtotalUsd * (Math.min(moneyToNumber(coupon.discountValue), 100) / 100);
+    discountAmountUsd = eligibleSubtotal * (Math.min(moneyToNumber(coupon.discountValue), 100) / 100);
   } else {
-    discountAmountUsd = moneyToNumber(coupon.discountValue);
+    discountAmountUsd = Math.min(moneyToNumber(coupon.discountValue), eligibleSubtotal);
   }
   const maxDiscount = moneyToNumber(coupon.maxDiscountUsd);
   if (maxDiscount > 0) discountAmountUsd = Math.min(discountAmountUsd, maxDiscount);

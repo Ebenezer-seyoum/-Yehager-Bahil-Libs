@@ -6,12 +6,15 @@ import { moneyToNumber, numberToMoney } from "./checkout-utils.js";
 type CostSetting = typeof profitCostSettings.$inferSelect;
 
 function isCustomOrder(order: typeof orders.$inferSelect) {
-  if (order.orderType === "custom_order" || order.orderType === "custom_design_order") return true;
+  if (order.orderType === "custom_order" || order.orderType === "custom_design_order" || order.orderType === "mixed_order") return true;
   return Array.isArray(order.items) && order.items.some((item) => {
     if (!item || typeof item !== "object") return false;
-    const row = item as Record<string, unknown>;
-    return row.uploaded_design_id || row.uploadedDesignId || row.item_type === "custom_design" || row.itemType === "custom_design";
+    return isCustomItem(item as Record<string, unknown>);
   });
+}
+
+function isCustomItem(item: Record<string, unknown>) {
+  return Boolean(item.uploaded_design_id || item.uploadedDesignId || item.item_type === "custom_design" || item.itemType === "custom_design");
 }
 
 function baseSetting(): CostSetting {
@@ -167,6 +170,7 @@ function customOrderSnapshotTotals(order: typeof orders.$inferSelect) {
   for (const rawItem of items) {
     if (!rawItem || typeof rawItem !== "object") continue;
     const item = rawItem as Record<string, unknown>;
+    if (!isCustomItem(item)) continue;
     const memberRows = memberPricingFromItem(item);
     if (memberRows.length) {
       hasSnapshot = true;
@@ -192,6 +196,18 @@ function customOrderSnapshotTotals(order: typeof orders.$inferSelect) {
   }
 
   return hasSnapshot ? { revenue, productionCost, netProfit: revenue - productionCost } : null;
+}
+
+function customOrderRevenue(order: typeof orders.$inferSelect) {
+  const items = Array.isArray(order.items) ? order.items : [];
+  return items.reduce((sum, rawItem) => {
+    if (!rawItem || typeof rawItem !== "object") return sum;
+    const item = rawItem as Record<string, unknown>;
+    if (!isCustomItem(item)) return sum;
+    const quantity = quantityFromItem(item);
+    const lineTotal = moneyToNumber(moneyLike(item.line_total_usd ?? item.lineTotalUsd));
+    return sum + (lineTotal > 0 ? lineTotal : sellingPriceFromItem(item, undefined) * quantity);
+  }, 0);
 }
 
 function marginPercent(revenue: number, profit: number) {
@@ -331,6 +347,7 @@ export async function getProfitCostsWorkspacePayload() {
     .filter(isCustomOrder)
     .map((order) => {
       const snapshotTotals = customOrderSnapshotTotals(order);
+      const customRevenue = customOrderRevenue(order) || moneyToNumber(order.totalUsd);
       const calculated = calculateProfit({
         entityType: "custom_order",
         entityId: order.id,
@@ -338,14 +355,14 @@ export async function getProfitCostsWorkspacePayload() {
         orderNumber: order.orderNumber,
         customerName: order.customerName,
         customerEmail: order.userEmail,
-        revenueUsd: order.totalUsd,
+        revenueUsd: customRevenue,
         setting: settingsByKey.get(key("custom_order", order.id)) ?? defaults,
         status: order.status,
       });
       if (!snapshotTotals) return calculated;
       return {
         ...calculated,
-        revenueUsd: numberToMoney(snapshotTotals.revenue || moneyToNumber(order.totalUsd)),
+        revenueUsd: numberToMoney(snapshotTotals.revenue || customRevenue),
         totalCostUsd: numberToMoney(snapshotTotals.productionCost),
         netProfitUsd: numberToMoney(snapshotTotals.netProfit),
         marginPercent: numberToMoney(marginPercent(snapshotTotals.revenue, snapshotTotals.netProfit)),

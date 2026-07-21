@@ -20,7 +20,7 @@ export default async function AdminGroupOrdersPage({ searchParams }) {
   try {
     const response = await apiRequest("/api/v1/orders?limit=200");
     const allOrders = Array.isArray(response?.data) ? response.data : [];
-    orders = allOrders.filter((order) => order?.orderType === "group_order");
+    orders = allOrders.filter((order) => order?.orderMode === "group" || order?.orderType === "group_order");
   } catch {
     orders = [];
   }

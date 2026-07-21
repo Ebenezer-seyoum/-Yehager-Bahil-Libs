@@ -467,7 +467,8 @@ adminRouter.get("/summary-counts", requirePermission(PERMISSIONS.ALERTS_VIEW), a
   const orderById = new Map(orderRows.map((order) => [String(order.id), order]));
 
   const customRequestTypes = new Set(["custom_design_submitted", "design_review"]);
-  const catalogTypes = new Set(["new_order", "new_catalog_order"]);
+  const customOrderTypes = new Set(["new_custom_order"]);
+  const catalogTypes = new Set(["new_catalog_order"]);
   const refundTypes = new Set(["refund_issue", "refund_requested", "return_refund", "refund_pending"]);
   const shippingTypes = new Set(["shipping_delivery_ready"]);
   const catalogPriceTypes = new Set(["catalog_price_submitted"]);
@@ -501,9 +502,21 @@ adminRouter.get("/summary-counts", requirePermission(PERMISSIONS.ALERTS_VIEW), a
 
   function isCustomOrder(order: typeof orderRows[number] | null | undefined) {
     const orderType = String(order?.orderType ?? "catalog_order");
-    if (orderType === "custom_order" || orderType === "custom_design_order") return true;
+    if (orderType === "custom_order" || orderType === "custom_design_order" || orderType === "mixed_order") return true;
     if (orderType === "group_order") return orderHasUploadedDesign(order);
     return false;
+  }
+
+  function isCatalogOrder(order: typeof orderRows[number] | null | undefined) {
+    if (!order) return false;
+    const orderType = String(order.orderType ?? "catalog_order");
+    if (orderType === "catalog_order" || orderType === "mixed_order") return true;
+    if (!Array.isArray(order.items)) return false;
+    return order.items.some((item) => {
+      if (!item || typeof item !== "object") return false;
+      const row = item as Record<string, unknown>;
+      return !Boolean(row.uploaded_design_id || row.uploadedDesignId || row.item_type === "custom_design" || row.itemType === "custom_design");
+    });
   }
 
   function orderNeedsReview(order: typeof orderRows[number]) {
@@ -525,7 +538,7 @@ adminRouter.get("/summary-counts", requirePermission(PERMISSIONS.ALERTS_VIEW), a
     ["submitted", "in_review", "under_review", "needs_changes"].includes(String(design.status ?? "").toLowerCase()),
   );
   const customOrderRows = orderRows.filter((order) => isCustomOrder(order) && orderNeedsReview(order));
-  const catalogOrderRows = orderRows.filter((order) => !isCustomOrder(order) && orderNeedsReview(order));
+  const catalogOrderRows = orderRows.filter((order) => isCatalogOrder(order) && orderNeedsReview(order));
   const paymentRows = orderRows.filter((order) => hasPaymentRecord(order));
   const shippingDeliveryRows = orderRows.filter(isDeliveryReady);
 
@@ -560,6 +573,13 @@ adminRouter.get("/summary-counts", requirePermission(PERMISSIONS.ALERTS_VIEW), a
       }
       return;
     }
+    if (customOrderTypes.has(type)) {
+      if (entityId && !counts.customOrderIds.includes(entityId)) {
+        counts.custom_order++;
+        counts.customOrderIds.push(entityId);
+      }
+      return;
+    }
     if (refundTypes.has(type)) {
       counts.refund_issue++;
       if (entityId) counts.refundIssueIds.push(entityId);
@@ -573,16 +593,18 @@ adminRouter.get("/summary-counts", requirePermission(PERMISSIONS.ALERTS_VIEW), a
       return;
     }
     if (catalogTypes.has(type)) {
-      if (isCustomOrder(order)) {
-        if (entityId && !counts.customOrderIds.includes(entityId)) {
-          counts.custom_order++;
-          counts.customOrderIds.push(entityId);
-        }
-      } else {
-        if (entityId && !counts.catalogOrderIds.includes(entityId)) {
-          counts.catalog_order++;
-          counts.catalogOrderIds.push(entityId);
-        }
+      if (entityId && !counts.catalogOrderIds.includes(entityId)) {
+        counts.catalog_order++;
+        counts.catalogOrderIds.push(entityId);
+      }
+      return;
+    }
+    if (type === "new_order" && entityId) {
+      const targetIds = isCustomOrder(order) ? counts.customOrderIds : counts.catalogOrderIds;
+      if (!targetIds.includes(entityId)) {
+        if (isCustomOrder(order)) counts.custom_order++;
+        else counts.catalog_order++;
+        targetIds.push(entityId);
       }
     }
   });

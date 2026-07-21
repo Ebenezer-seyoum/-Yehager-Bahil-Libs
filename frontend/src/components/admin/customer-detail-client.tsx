@@ -323,6 +323,7 @@ function hasUploadedDesign(order: OrderRow) {
 
 function normalizedOrderKind(order: OrderRow) {
   const type = String(order.orderType ?? order.type ?? "catalog_order").toLowerCase();
+  if (type === "mixed_order" || (Array.isArray(order.workstreams) && order.workstreams.length > 1)) return "mixed_order";
   if (type === "custom_order" || type === "custom_design_order" || type === "custom" || type.includes("custom")) return "custom_order";
   if (type === "group_order") return hasUploadedDesign(order) ? "custom_order" : "catalog_order";
   return "catalog_order";
@@ -343,7 +344,8 @@ function normalizedOrderMode(order: OrderRow) {
 
 function orderType(order: OrderRow) {
   const mode = normalizedOrderMode(order) === "group" ? "Group" : "Individual";
-  const kind = normalizedOrderKind(order) === "custom_order" ? "Custom" : "Catalog";
+  const normalizedKind = normalizedOrderKind(order);
+  const kind = normalizedKind === "mixed_order" ? "Mixed" : normalizedKind === "custom_order" ? "Custom" : "Catalog";
   return `${mode} ${kind}`;
 }
 

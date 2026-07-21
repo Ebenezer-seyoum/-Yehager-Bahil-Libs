@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canReceiveNotification, notificationRuleForType } from "../../lib/auth/notification-policy.js";
+import { canReceiveNotification, notificationHref, notificationRuleForType } from "../../lib/auth/notification-policy.js";
 
 describe("notification permission policy", () => {
   it("routes order notifications only to employees who can view orders", () => {
@@ -17,6 +17,11 @@ describe("notification permission policy", () => {
     expect(notificationRuleForType("design_review").category).toBe("custom_designs");
     expect(canReceiveNotification("design_review", ["uploaded_designs.view"])).toBe(true);
     expect(canReceiveNotification("design_review", ["orders.view"])).toBe(false);
+  });
+
+  it("opens catalog and custom order alerts in their own mixed-order scope", () => {
+    expect(notificationHref("new_catalog_order", "order-id")).toBe("/admin/orders/order-id?scope=catalog");
+    expect(notificationHref("new_custom_order", "order-id")).toBe("/admin/orders/order-id?scope=custom");
   });
 
   it("allows administrators to receive every alert type", () => {

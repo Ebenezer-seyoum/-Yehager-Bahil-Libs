@@ -6,19 +6,6 @@ import { can } from "@/lib/permissions";
 import { AdminCustomOrdersWorkspace } from "@/components/admin/pages/admin-custom-orders-workspace";
 import { AccessRestricted } from "@/components/admin/access-restricted";
 
-function hasUploadedDesign(order) {
-  return Array.isArray(order?.items)
-    ? order.items.some((item) => item?.uploaded_design_id || item?.uploadedDesignId || item?.item_type === "custom_design" || item?.itemType === "custom_design")
-    : false;
-}
-
-function isCustomOrder(order) {
-  const type = order?.orderType ?? "catalog_order";
-  if (type === "custom_order" || type === "custom_design_order") return true;
-  if (type === "group_order") return hasUploadedDesign(order);
-  return false;
-}
-
 export default async function AdminCustomOrdersPage({ searchParams }) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) redirect("/signin?callbackUrl=/admin/custom-orders");
@@ -37,12 +24,11 @@ export default async function AdminCustomOrdersPage({ searchParams }) {
       ? apiRequest("/api/v1/uploaded-designs/admin?limit=200").catch(() => ({ data: [] }))
       : Promise.resolve({ data: [] }),
     canViewOrders
-      ? apiRequest("/api/v1/orders?limit=200").catch(() => ({ data: [] }))
+      ? apiRequest("/api/v1/orders?limit=200&scope=custom").catch(() => ({ data: [] }))
       : Promise.resolve({ data: [] }),
   ]);
   uploadedDesigns = Array.isArray(designsResponse?.data) ? designsResponse.data : [];
-  const allOrders = Array.isArray(ordersResponse?.data) ? ordersResponse.data : [];
-  orders = allOrders.filter(isCustomOrder);
+  orders = Array.isArray(ordersResponse?.data) ? ordersResponse.data : [];
 
   const requestedTab = typeof searchParams?.tab === "string" ? searchParams.tab : null;
   const initialTab = requestedTab === "orders" && canViewOrders

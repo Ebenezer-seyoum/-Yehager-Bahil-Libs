@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Plus, Package, Eye } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AdminProductManager } from "@/components/admin-product-manager";
@@ -15,6 +15,7 @@ export function AdminProductsWorkspace({ data, canCreate = false }: { data: Admi
   const activeTab = searchParams.get("tab") || "all";
 
   const products = useMemo(() => (data.products ?? []), [data.products]);
+  const [priceStatusFilter, setPriceStatusFilter] = useState("all");
   const newPriceCount = products.filter((product) => Boolean(product.hasNewPriceSubmission)).length;
   const approvedPriceCount = products.filter((product) => ["approved", "published"].includes(String(product.priceStatus ?? "").toLowerCase())).length;
   const notApprovedPriceCount = products.length - approvedPriceCount;
@@ -48,11 +49,26 @@ export function AdminProductsWorkspace({ data, canCreate = false }: { data: Admi
           </button>
         ) : null
       }
+      filterActions={({ activeTab }) => activeTab === "not-approved-prices" ? (
+        <select
+          value={priceStatusFilter}
+          onChange={(event) => setPriceStatusFilter(event.target.value)}
+          aria-label="Filter products by price status"
+          className="h-9 rounded-lg border border-border bg-background px-3 text-sm font-medium"
+        >
+          <option value="all">All Statuses</option>
+          <option value="pending_approval">Pending Approval</option>
+          <option value="rejected">Declined</option>
+          <option value="waiting_price">Waiting for Price</option>
+          <option value="price_not_set">Price Not Set</option>
+        </select>
+      ) : null}
     >
       {({ filteredData, search, setDisplayedRecordsCount }) => (
         <AdminProductManager
           initialProducts={(filteredData.products ?? []) as any}
           externalSearch={search}
+          priceStatusFilter={activeTab === "not-approved-prices" ? priceStatusFilter : "all"}
           onFilteredCountChange={setDisplayedRecordsCount}
           viewMode="page"
         />

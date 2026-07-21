@@ -5,11 +5,35 @@ import { moneyToNumber, numberToMoney } from "./checkout-utils.js";
 
 type CreditOrder = typeof orders.$inferSelect;
 
-function appliesToOrder(ruleAppliesTo: string | null | undefined, orderType: string | null | undefined) {
-  if (!ruleAppliesTo || ruleAppliesTo === "all_orders") return true;
-  if (ruleAppliesTo === "catalog_orders") return orderType === "catalog_order";
-  if (ruleAppliesTo === "custom_orders") return orderType === "custom_order";
-  return false;
+function isCustomLine(item: Record<string, unknown>) {
+  return Boolean(
+    item.uploaded_design_id ||
+    item.uploadedDesignId ||
+    item.item_type === "custom_design" ||
+    item.itemType === "custom_design",
+  );
+}
+
+function lineTotal(item: Record<string, unknown>) {
+  const quantity = Math.max(Number(item.quantity ?? 1), 1);
+  const explicitTotal = moneyToNumber(item.line_total_usd as string | number | null | undefined ?? item.lineTotalUsd as string | number | null | undefined);
+  if (explicitTotal > 0) return explicitTotal;
+  return moneyToNumber(item.unit_price_usd as string | number | null | undefined ?? item.unitPriceUsd as string | number | null | undefined) * quantity;
+}
+
+function eligiblePaidTotal(ruleAppliesTo: string | null | undefined, order: CreditOrder) {
+  if (!ruleAppliesTo || ruleAppliesTo === "all_orders") return moneyToNumber(order.totalUsd);
+  const items = Array.isArray(order.items)
+    ? order.items.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object")
+    : [];
+  const wantsCustom = ruleAppliesTo === "custom_orders";
+  const subtotal = items
+    .filter((item) => isCustomLine(item) === wantsCustom)
+    .reduce((sum, item) => sum + lineTotal(item), 0);
+  if (subtotal > 0) return subtotal;
+  if (wantsCustom && order.orderType === "custom_order") return moneyToNumber(order.totalUsd);
+  if (!wantsCustom && order.orderType === "catalog_order") return moneyToNumber(order.totalUsd);
+  return 0;
 }
 
 async function balanceForCustomer(userEmail: string) {
@@ -128,9 +152,9 @@ export async function awardCustomerCreditForPaidOrder(order: CreditOrder, perfor
     .where(eq(customerCreditRules.status, "active"))
     .orderBy(desc(customerCreditRules.minimumPaidUsd));
 
-  const totalPaid = moneyToNumber(order.totalUsd);
-  const rule = rules.find((item) => totalPaid >= moneyToNumber(item.minimumPaidUsd) && appliesToOrder(item.appliesTo, order.orderType));
+  const rule = rules.find((item) => eligiblePaidTotal(item.appliesTo, order) >= moneyToNumber(item.minimumPaidUsd));
   if (!rule) return null;
+  const eligibleTotal = eligiblePaidTotal(rule.appliesTo, order);
 
   const previousBalance = await balanceForCustomer(order.userEmail);
   const reward = moneyToNumber(rule.rewardUsd);
@@ -152,6 +176,7 @@ export async function awardCustomerCreditForPaidOrder(order: CreditOrder, perfor
       createdBy: performedBy,
       metadata: {
         order_total_usd: order.totalUsd,
+        eligible_order_total_usd: numberToMoney(eligibleTotal),
         rule_minimum_paid_usd: rule.minimumPaidUsd,
         rule_reward_usd: rule.rewardUsd,
       },

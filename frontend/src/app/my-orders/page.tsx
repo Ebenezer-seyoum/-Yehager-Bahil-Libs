@@ -13,6 +13,17 @@ type OrderItem = {
   item_type?: string;
   uploaded_design_id?: string;
   item_metadata?: Record<string, unknown>;
+  itemType?: string;
+  uploadedDesignId?: string;
+};
+
+type OrderWorkstream = {
+  id: string;
+  type: "catalog" | "custom";
+  trackingReference?: string | null;
+  status: string;
+  dueAt?: string | null;
+  items?: OrderItem[];
 };
 
 type Order = {
@@ -33,6 +44,8 @@ type Order = {
   pickupPersonPhone?: string | null;
   shippingDocuments?: Array<{ url: string; label: string; uploadedAt?: string }> | null;
   items?: OrderItem[];
+  orderType?: string | null;
+  workstreams?: OrderWorkstream[];
 };
 
 type Event = {
@@ -45,12 +58,19 @@ type Event = {
 
 const STATUS_STYLES: Record<string, string> = {
   pending: "bg-gray-100 text-gray-700",
+  processing: "bg-sky-100 text-sky-800",
+  picking: "bg-sky-100 text-sky-800",
+  design_review: "bg-violet-100 text-violet-800",
+  measurements_confirmed: "bg-indigo-100 text-indigo-800",
   tailoring: "bg-amber-100 text-amber-800",
   quality_check: "bg-purple-100 text-purple-800",
+  ready: "bg-emerald-100 text-emerald-800",
+  fulfilled: "bg-emerald-100 text-emerald-800",
   shipped: "bg-blue-100 text-blue-700",
   delivered: "bg-green-100 text-green-800",
   ready_for_pickup: "bg-orange-100 text-orange-800",
   picked_up: "bg-green-200 text-green-900",
+  cancelled: "bg-red-100 text-red-800",
 };
 
 const CARRIER_TRACKING: Record<string, { name: string; url: string }> = {
@@ -59,19 +79,35 @@ const CARRIER_TRACKING: Record<string, { name: string; url: string }> = {
   "Ethiopian Mail Service": { name: "Ethiopian Postal Service", url: "https://www.ethiopianpostalservice.com" },
 };
 
-const STEP_LABELS_MAIL = ["Received", "Tailoring", "QC", "Shipped", "Delivered"];
-const STEP_LABELS_PICKUP = ["Received", "Tailoring", "QC", "Ready", "Picked Up"];
-
 function titleCase(value?: string | null) {
   return String(value ?? "")
     .replace(/_/g, " ")
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-function getOrderSteps(fulfillmentType?: "mail" | "pickup") {
-  return fulfillmentType === "pickup"
-    ? ["pending", "tailoring", "quality_check", "ready_for_pickup", "picked_up"]
-    : ["pending", "tailoring", "quality_check", "shipped", "delivered"];
+const WORKSTREAM_STEPS = {
+  catalog: ["pending", "picking", "quality_check", "ready"],
+  custom: ["design_review", "measurements_confirmed", "tailoring", "quality_check", "ready"],
+} as const;
+
+const WORKSTREAM_LABELS = {
+  catalog: ["Received", "Picking", "QC", "Ready"],
+  custom: ["Review", "Measurements", "Tailoring", "QC", "Ready"],
+} as const;
+
+function isCustomItem(item: OrderItem) {
+  return Boolean(item.uploaded_design_id || item.uploadedDesignId || item.item_type === "custom_design" || item.itemType === "custom_design");
+}
+
+function orderWorkstreams(order: Order): OrderWorkstream[] {
+  if (order.workstreams?.length) return order.workstreams;
+  const items = order.items ?? [];
+  const customItems = items.filter(isCustomItem);
+  const catalogItems = items.filter((item) => !isCustomItem(item));
+  return [
+    ...(catalogItems.length ? [{ id: `${order.id}-catalog`, type: "catalog" as const, trackingReference: `${order.orderNumber ?? order.id}-CAT`, status: order.status ?? "pending", items: catalogItems }] : []),
+    ...(customItems.length ? [{ id: `${order.id}-custom`, type: "custom" as const, trackingReference: `${order.orderNumber ?? order.id}-CUS`, status: order.status ?? "design_review", items: customItems }] : []),
+  ];
 }
 
 export default async function MyOrdersPage({
@@ -150,8 +186,8 @@ export default async function MyOrdersPage({
           <div className="space-y-4">
             {orders.map((order) => {
               const statusStyle = STATUS_STYLES[order.status ?? ""] ?? "bg-gray-100 text-gray-700";
-              const steps = getOrderSteps(order.fulfillmentType);
-              const currentStepIndex = Math.max(0, steps.indexOf(order.status ?? "pending"));
+              const workstreams = orderWorkstreams(order);
+              const isMixed = workstreams.length > 1;
               return (
                 <div key={order.id} className="rounded-xl border border-border bg-card p-5">
                   <div className="flex items-start justify-between gap-4">
@@ -159,6 +195,7 @@ export default async function MyOrdersPage({
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="font-mono text-sm font-bold">{order.orderNumber ?? order.id}</span>
                         <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${statusStyle}`}>{(order.status ?? "pending").replaceAll("_", " ")}</span>
+                        {isMixed ? <span className="rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-xs font-bold text-amber-800">Mixed order</span> : null}
                         {order.paymentStatus === "paid" ? (
                           <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800">Paid</span>
                         ) : (
@@ -178,40 +215,48 @@ export default async function MyOrdersPage({
                     <p className="whitespace-nowrap text-xs text-muted-foreground">{order.createdAt ? new Date(order.createdAt).toLocaleDateString() : ""}</p>
                   </div>
 
-                  <div className="mt-3 space-y-1">
-                    {(order.items ?? []).map((item, idx) => (
-                      <div key={`${order.id}-${idx}`} className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                        <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
-                        <span>{item.product_name ?? item.productName ?? "Item"}</span>
-                        {item.item_type === "custom_design" || item.uploaded_design_id ? (
-                          <span className="rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-bold uppercase text-primary">Custom Design</span>
-                        ) : null}
-                        <span>
-                          {Number(item.unit_price_usd ?? item.price ?? item.priceUsd ?? 0) > 0
-                            ? ` - $${Number(item.unit_price_usd ?? item.price ?? item.priceUsd ?? 0).toFixed(2)}`
-                            : ` x${Number(item.quantity ?? 1)}`}
-                        </span>
-                        {item.item_metadata?.estimated_delivery_label ? (
-                          <span>Estimate: {String(item.item_metadata.estimated_delivery_label)}</span>
-                        ) : null}
-                      </div>
-                    ))}
+                  <div className="mt-4 space-y-3">
+                    {workstreams.map((workstream) => {
+                      const steps = WORKSTREAM_STEPS[workstream.type];
+                      const labels = WORKSTREAM_LABELS[workstream.type];
+                      const currentStepIndex = workstream.status === "cancelled"
+                        ? -1
+                        : Math.max(0, (steps as readonly string[]).indexOf(workstream.status));
+                      const workstreamStyle = STATUS_STYLES[workstream.status] ?? STATUS_STYLES.pending;
+                      return (
+                        <div key={workstream.id} className={`rounded-xl border p-4 ${workstream.type === "custom" ? "border-violet-200 bg-violet-50/40" : "border-sky-200 bg-sky-50/40"}`}>
+                          <div className="flex flex-wrap items-start justify-between gap-2">
+                            <div>
+                              <p className="text-[10px] font-black uppercase tracking-[0.16em] text-muted-foreground">{workstream.type} order</p>
+                              <p className="mt-1 font-mono text-xs font-bold">{workstream.trackingReference}</p>
+                            </div>
+                            <span className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase ${workstreamStyle}`}>{titleCase(workstream.status)}</span>
+                          </div>
+                          <div className="mt-3 space-y-1">
+                            {(workstream.items ?? []).map((item, idx) => (
+                              <div key={`${workstream.id}-${idx}`} className="flex justify-between gap-3 text-xs text-muted-foreground">
+                                <span>{item.product_name ?? item.productName ?? "Item"} × {Number(item.quantity ?? 1)}</span>
+                                <span>{Number(item.unit_price_usd ?? item.price ?? item.priceUsd ?? 0) > 0 ? `$${Number(item.unit_price_usd ?? item.price ?? item.priceUsd ?? 0).toFixed(2)}` : "Quoted"}</span>
+                              </div>
+                            ))}
+                          </div>
+                          {workstream.status !== "cancelled" ? (
+                            <div className="mt-3">
+                              <div className="mb-1 flex gap-1">
+                                {steps.map((step, index) => <div key={step} className={`h-1.5 flex-1 rounded-full ${index <= currentStepIndex ? "bg-primary" : "bg-border"}`} />)}
+                              </div>
+                              <div className="flex justify-between text-[9px] text-muted-foreground">
+                                {labels.map((label) => <span key={`${workstream.id}-${label}`}>{label}</span>)}
+                              </div>
+                            </div>
+                          ) : null}
+                        </div>
+                      );
+                    })}
                   </div>
 
-                  <div className="mt-3">
-                    <div className="mb-1 flex gap-1">
-                      {steps.map((step, index) => (
-                        <div key={step} className={`h-1.5 flex-1 rounded-full ${index <= currentStepIndex ? "bg-primary" : "bg-border"}`} />
-                      ))}
-                    </div>
-                    <div className="flex justify-between text-[10px] text-muted-foreground">
-                      {(order.fulfillmentType === "pickup" ? STEP_LABELS_PICKUP : STEP_LABELS_MAIL).map((label) => (
-                        <span key={`${order.id}-${label}`}>{label}</span>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="mt-3 space-y-2 border-t border-border pt-3 text-xs text-muted-foreground">
+                  <div className="mt-4 space-y-2 border-t border-border pt-3 text-xs text-muted-foreground">
+                    <p className="font-bold text-foreground">Shared delivery for the complete order</p>
                     {order.fulfillmentType === "pickup" ? (
                       <div className="space-y-1">
                         <p className="flex items-center gap-1.5">

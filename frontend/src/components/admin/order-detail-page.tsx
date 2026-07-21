@@ -52,6 +52,8 @@ type OrderItem = {
   priceUsd?: number | string | null;
   unit_price_usd?: number | string | null;
   line_total_usd?: number | string | null;
+  lineTotalUsd?: number | string | null;
+  unitPriceUsd?: number | string | null;
   original_price_usd?: number | string | null;
   discount_amount_usd?: number | string | null;
   discount_label?: string | null;
@@ -75,6 +77,33 @@ type OrderItem = {
   outfit_option?: string | null;
   measurementId?: string | null;
   measurement_id?: string | null;
+  itemType?: string | null;
+  item_type?: string | null;
+  uploadedDesignId?: string | null;
+  uploaded_design_id?: string | null;
+};
+
+type OrderWorkstreamEvent = {
+  id: string;
+  fromStatus?: string | null;
+  toStatus: string;
+  changedBy?: string | null;
+  customerEmailStatus?: string | null;
+  createdAt: string | number | Date;
+};
+
+type OrderWorkstream = {
+  id: string;
+  type: "catalog" | "custom";
+  trackingReference: string;
+  status: string;
+  assignedUserId?: string | null;
+  dueAt?: string | null;
+  startedAt?: string | null;
+  completedAt?: string | null;
+  lastStatusChangedAt?: string | null;
+  items?: OrderItem[] | null;
+  events?: OrderWorkstreamEvent[] | null;
 };
 
 type ShippingAddress = {
@@ -178,14 +207,31 @@ export type OrderDetailData = {
   measurements?: Record<string, unknown> | null;
   measurementSnapshot?: Record<string, unknown> | null;
   measurement_snapshot?: Record<string, unknown> | null;
+  workstreams?: OrderWorkstream[] | null;
   createdAt: string | number | Date;
   updatedAt: string | number | Date;
 };
 
 const MAIN_STATUSES = ["pending", "processing", "tailoring", "quality_check", "fulfilled", "shipped", "ready_for_pickup", "delivered", "cancelled"] as const;
+const WORKSTREAM_STATUS_TRANSITIONS: Record<"catalog" | "custom", Record<string, string[]>> = {
+  catalog: {
+    pending: ["picking", "cancelled"],
+    picking: ["pending", "quality_check", "cancelled"],
+    quality_check: ["picking", "ready", "cancelled"],
+    ready: ["quality_check", "cancelled"],
+    cancelled: ["pending"],
+  },
+  custom: {
+    design_review: ["measurements_confirmed", "cancelled"],
+    measurements_confirmed: ["design_review", "tailoring", "cancelled"],
+    tailoring: ["measurements_confirmed", "quality_check", "cancelled"],
+    quality_check: ["tailoring", "ready", "cancelled"],
+    ready: ["quality_check", "cancelled"],
+    cancelled: ["design_review"],
+  },
+};
 const PAYMENT_STATUSES = ["pending", "awaiting_verification", "paid", "failed", "refunded", "unpaid"] as const;
 const DELIVERY_WINDOW_DAYS = 40;
-type MainStatus = (typeof MAIN_STATUSES)[number];
 type PaymentStatus = (typeof PAYMENT_STATUSES)[number];
 type OrderDetailSection = "summary" | "items" | "discounts" | "customer" | "measurements" | "shipping" | "timeline" | "attachments" | "notes";
 type MeasurementPerson = {
@@ -302,9 +348,13 @@ const SHIPPING_STATES = ["not_started", "packing", "packed", "assigned_to_ems", 
 const STATUS_STYLES: Record<string, string> = {
   pending: "bg-amber-50 text-amber-800 border-amber-200",
   processing: "bg-sky-50 text-sky-800 border-sky-200",
+  picking: "bg-sky-50 text-sky-800 border-sky-200",
+  design_review: "bg-fuchsia-50 text-fuchsia-800 border-fuchsia-200",
+  measurements_confirmed: "bg-indigo-50 text-indigo-800 border-indigo-200",
   tailoring: "bg-blue-50 text-blue-800 border-blue-200",
   quality_check: "bg-violet-50 text-violet-800 border-violet-200",
   fulfilled: "bg-emerald-50 text-emerald-800 border-emerald-200",
+  ready: "bg-emerald-50 text-emerald-800 border-emerald-200",
   ready_for_pickup: "bg-emerald-50 text-emerald-800 border-emerald-200",
   shipped: "bg-cyan-50 text-cyan-800 border-cyan-200",
   delivered: "bg-green-50 text-green-800 border-green-200",
@@ -419,11 +469,11 @@ function itemImages(item: OrderItem) {
 }
 
 function itemPrice(item: OrderItem) {
-  return item.line_total_usd ?? item.priceUsd ?? item.unit_price_usd ?? item.price ?? null;
+  return item.lineTotalUsd ?? item.line_total_usd ?? item.priceUsd ?? item.unitPriceUsd ?? item.unit_price_usd ?? item.price ?? null;
 }
 
 function itemUnitPrice(item: OrderItem) {
-  return item.unit_price_usd ?? item.priceUsd ?? item.price ?? null;
+  return item.unitPriceUsd ?? item.unit_price_usd ?? item.priceUsd ?? item.price ?? null;
 }
 
 function itemOriginalPrice(item: OrderItem) {
@@ -487,6 +537,10 @@ function isCustomOrder(order: OrderDetailData) {
     const row = item as Record<string, unknown>;
     return row.uploaded_design_id || row.uploadedDesignId || row.item_type === "custom_design" || row.itemType === "custom_design";
   }));
+}
+
+function isCustomItem(item: OrderItem) {
+  return Boolean(item.uploaded_design_id || item.uploadedDesignId || item.item_type === "custom_design" || item.itemType === "custom_design");
 }
 
 function statusPill(value?: string | null, styles = STATUS_STYLES) {
@@ -693,12 +747,18 @@ function stageIndex<T extends readonly string[]>(steps: T, current: string) {
   return idx < 0 ? 0 : idx;
 }
 
+function selectableWorkstreamStatuses(type: "catalog" | "custom", currentStatus: string) {
+  return [currentStatus, ...(WORKSTREAM_STATUS_TRANSITIONS[type][currentStatus] ?? [])];
+}
+
 export function OrderDetailPage({
   initialOrder,
   backUrl = "/admin/orders",
+  scope = null,
 }: {
   initialOrder: OrderDetailData;
   backUrl?: string;
+  scope?: "catalog" | "custom" | null;
 }) {
   const router = useRouter();
   const { data: session } = useSession();
@@ -719,9 +779,22 @@ export function OrderDetailPage({
   const [receiptBusy, setReceiptBusy] = useState(false);
   const [timelineNow] = useState(() => new Date());
 
+  const activeWorkstream = scope ? order.workstreams?.find((workstream) => workstream.type === scope) ?? null : null;
+  const visibleItems = scope
+    ? activeWorkstream?.items ?? (order.items ?? []).filter((item) => scope === "custom" ? isCustomItem(item) : !isCustomItem(item))
+    : order.items ?? [];
+  const displayOrder = { ...order, items: visibleItems };
+  const hasCatalogWorkstream = Boolean(order.workstreams?.some((workstream) => workstream.type === "catalog"));
+  const hasCustomWorkstream = Boolean(order.workstreams?.some((workstream) => workstream.type === "custom"));
+  const isMixedOrder = hasCatalogWorkstream && hasCustomWorkstream;
   const isGroup = order.orderMode === "group" || order.orderType === "group_order" || Boolean(order.members?.length);
-  const orderKind = `${isGroup ? "Group" : "Individual"} ${isCustomOrder(order) ? "Custom" : "Catalog"} Order`;
-  const orderImage = firstOrderImage(order);
+  const operationalKind = scope
+    ? `${scope === "custom" ? "Custom" : "Catalog"} Workstream`
+    : isMixedOrder
+      ? "Mixed Order"
+      : `${isCustomOrder(order) ? "Custom" : "Catalog"} Order`;
+  const orderKind = `${isGroup ? "Group" : "Individual"} ${operationalKind}`;
+  const orderImage = firstOrderImage(displayOrder);
   const isPickup = order.fulfillmentType === "pickup" || order.carrier === "pickup";
   const deliveryStage = isDeliveryStageOrder(order);
   const sessionUser = session?.user as { id?: string | null; role?: string | null; permissions?: string[] | null } | undefined;
@@ -734,6 +807,10 @@ export function OrderDetailPage({
     can(userPermissions, "orders.status.update");
   const canUpdatePaymentStatus =
     isAdmin || can(userPermissions, "orders.edit") || can(userPermissions, "payments.verify");
+  const operationalStatus = activeWorkstream?.status ?? order.status ?? "pending";
+  const operationalStatusOptions = scope
+    ? selectableWorkstreamStatuses(scope, operationalStatus)
+    : MAIN_STATUSES;
   const stripeReceiptUrl = order.stripeReceiptUrl ?? order.stripe_receipt_url ?? null;
   const stripePaymentIntentId = order.stripePaymentIntentId ?? order.stripe_payment_intent_id ?? null;
   const stripeChargeId = order.stripeChargeId ?? order.stripe_charge_id ?? null;
@@ -819,7 +896,7 @@ export function OrderDetailPage({
   const finalTotal = Number(order.totalUsd ?? order.totalAmount ?? 0);
   const deadline = deliveryDeadline(order.createdAt, timelineNow, order.status === "delivered" || order.status === "picked_up");
   const groupMetaById = new Map<string, { name?: string | null; productName?: string | null; productImage?: string | null; eventName?: string | null }>();
-  (order.items ?? []).forEach((item, idx) => {
+  visibleItems.forEach((item, idx) => {
     const metadata = item.itemMetadata ?? item.item_metadata ?? {};
     const groupId = metadataValue(metadata, "group_id", "groupId");
     if (!groupId) return;
@@ -848,7 +925,7 @@ export function OrderDetailPage({
       measurements: normalizeMeasurementRecord(measurements),
     };
   });
-  const itemMeasurementPeople: MeasurementPerson[] = (order.items ?? [])
+  const itemMeasurementPeople: MeasurementPerson[] = visibleItems
     .map((item, idx) => {
       const measurements = itemMeasurements(item);
       const metadata = item.itemMetadata ?? item.item_metadata ?? {};
@@ -1009,23 +1086,27 @@ export function OrderDetailPage({
     if (patch.paymentStatus && !canUpdatePaymentStatus) return;
     setBusy(true);
     try {
-      const res = await fetch(`/api/backend/orders/${order.id}/admin-state`, {
+      const updatesWorkstream = Boolean(scope && patch.status);
+      const endpoint = updatesWorkstream
+        ? `/api/backend/orders/${order.id}/workstreams/${scope}`
+        : `/api/backend/orders/${order.id}/admin-state`;
+      const res = await fetch(endpoint, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(patch),
       });
-      if (!res.ok) throw new Error("Update failed");
-      const payload = await res.json();
+      const payload = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(payload?.error ?? "Update failed");
       setOrder((prev) => ({ ...prev, ...(payload.data ?? patch) }));
     } catch (error) {
-      console.error(error);
+      await dashboardError("Update failed", error instanceof Error ? error.message : "Could not update order status");
     } finally {
       setBusy(false);
     }
   }
 
   const documents = [
-    { label: "Customer Design Image", required: true, url: firstOrderImage(order), type: "Design" },
+    { label: "Customer Design Image", required: true, url: firstOrderImage(displayOrder), type: "Design" },
     { label: "Measurement Sheet", required: true, url: null, type: "Measurements" },
     { label: "Invoice", required: true, url: order.shippingDocumentUrl ?? null, type: "Finance" },
     { label: "Payment Proof", required: false, url: order.paymentProofUrl ?? null, type: "Payment" },
@@ -1040,10 +1121,19 @@ export function OrderDetailPage({
     })),
   ];
 
+  const workstreamTimelineRows = (scope && activeWorkstream ? [activeWorkstream] : order.workstreams ?? [])
+    .flatMap((workstream) => (workstream.events ?? []).map((event) => ({
+      event: `${workstream.type === "custom" ? "Custom" : "Catalog"} Status`,
+      time: event.createdAt,
+      by: event.changedBy || "Admin",
+      status: prettyLabel(event.toStatus),
+      notes: `${workstream.trackingReference}: ${prettyLabel(event.fromStatus)} to ${prettyLabel(event.toStatus)}. Customer email: ${prettyLabel(event.customerEmailStatus)}.`,
+    })));
   const timelineRows = [
     { event: "Order Created", time: order.createdAt, by: "System", status: "Completed", notes: `Order #${order.orderNumber} was created.` },
     { event: "Payment Status", time: order.updatedAt, by: "Payment System", status: prettyLabel(order.paymentStatus), notes: stripeTransactionId ?? order.paymentReference ?? order.payment_reference ?? "No payment reference recorded." },
-    { event: "Order Status", time: order.updatedAt, by: "Admin", status: prettyLabel(order.status), notes: "Production is managed with the simplified main order status." },
+    ...workstreamTimelineRows,
+    { event: "Overall Order Status", time: order.updatedAt, by: "System", status: prettyLabel(order.status), notes: "Calculated from catalog and custom work until shared fulfillment begins." },
     { event: "Delivery Deadline", time: deadline.dueDate, by: "System", status: deadline.label, notes: deadline.note },
     { event: "Fulfillment Status", time: order.updatedAt, by: isPickup ? "Pickup Team" : "Shipping Team", status: prettyLabel(fulfillmentStatus), notes: isPickup ? "Pickup flow selected." : `${order.carrier || "EMS/DHL"} delivery flow selected.` },
     { event: "Order Closed", time: order.status === "delivered" || order.status === "picked_up" ? order.updatedAt : null, by: "System", status: order.status === "delivered" || order.status === "picked_up" ? "Closed" : "Open", notes: "Order closes after pickup or delivery is completed." },
@@ -1056,8 +1146,8 @@ export function OrderDetailPage({
           icon={ShoppingBag}
           iconTheme="bg-blue-50 text-blue-600 border-blue-100"
           category="Order Detail Workspace"
-          title={`Order #${order.orderNumber}`}
-          subtitle="Manage order summary, main status, fulfillment, documents, and internal team context."
+          title={`${scope ? `${scope === "custom" ? "Custom" : "Catalog"} · ` : ""}Order #${order.orderNumber}`}
+          subtitle={scope ? `Manage only the ${scope} part of this order. Payment and delivery remain shared.` : "Manage the complete order, shared payment and delivery, and both operational workstreams."}
           onRefresh={() => router.refresh()}
           onBack={() => router.push(backUrl)}
           backLabel={backUrl.includes("custom-orders") ? "Back to Custom Orders" : backUrl.includes("catalog-orders") ? "Back to Catalog Orders" : "Back to Orders"}
@@ -1080,29 +1170,41 @@ export function OrderDetailPage({
                 {order.customerName || order.userEmail || "Customer"} - {dateTime(order.createdAt)}
               </p>
               <div className="mt-3 flex flex-wrap items-center gap-2">
-                {statusPill(order.status)}
+                {statusPill(operationalStatus)}
                 {statusPill(order.paymentStatus, PAYMENT_STYLES)}
                 <span className="inline-flex rounded-xl border border-slate-200 bg-slate-50 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-slate-600">{orderKind}</span>
                 <span className="inline-flex rounded-xl border border-slate-200 bg-slate-50 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-slate-600">{isPickup ? "Pickup" : "Mail"} Flow</span>
               </div>
-              <p className="mt-4 text-3xl font-black text-slate-950">{money(order.totalUsd ?? order.totalAmount)}</p>
+              {activeWorkstream ? (
+                <p className="mt-3 font-mono text-xs font-black text-slate-600">Tracking: {activeWorkstream.trackingReference}</p>
+              ) : null}
+              {scope && isMixedOrder ? (
+                <a
+                  href={`/admin/orders/${order.id}?scope=${scope === "custom" ? "catalog" : "custom"}`}
+                  className="mt-3 inline-flex rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-700 transition hover:border-blue-300 hover:text-blue-700"
+                >
+                  Open {scope === "custom" ? "catalog" : "custom"} workstream
+                </a>
+              ) : null}
+              <p className="mt-4 text-[10px] font-black uppercase tracking-widest text-slate-500">Combined order total</p>
+              <p className="mt-1 text-3xl font-black text-slate-950">{money(order.totalUsd ?? order.totalAmount)}</p>
             </div>
           </div>
           <div className="grid w-full gap-3 rounded-3xl border border-slate-200 bg-slate-50 p-4 sm:grid-cols-2 lg:w-[420px]">
             <div className="space-y-1.5">
-              <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Main Status</span>
-              {deliveryStage || !canUpdateOrderStatus ? (
+              <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">{scope ? `${scope} work status` : "Overall Status"}</span>
+              {deliveryStage || !canUpdateOrderStatus || !scope ? (
                 <div className="flex min-h-10 items-center rounded-xl border border-slate-200 bg-white px-3">
-                  {statusPill(order.status)}
+                  {statusPill(operationalStatus)}
                 </div>
               ) : (
                 <select
                   disabled={busy}
-                  value={order.status ?? "pending"}
-                  onChange={(event) => void updateOrder({ status: event.target.value as MainStatus })}
+                  value={operationalStatus}
+                  onChange={(event) => void updateOrder({ status: event.target.value })}
                   className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs font-black uppercase text-slate-900"
                 >
-                  {MAIN_STATUSES.map((status) => <option key={status} value={status}>{prettyLabel(status)}</option>)}
+                  {operationalStatusOptions.map((status) => <option key={status} value={status}>{prettyLabel(status)}</option>)}
                 </select>
               )}
             </div>
@@ -1128,7 +1230,7 @@ export function OrderDetailPage({
                 Delivery-stage orders are view only here. Manage EMS or office pickup progress in Shipping & Delivery.
               </p>
             ) : null}
-            {canDeleteOrder && (
+            {canDeleteOrder && !scope && (
               <button
                 type="button"
                 disabled={busy}
@@ -1147,7 +1249,40 @@ export function OrderDetailPage({
       onSectionChange={(id) => setSection(id as OrderDetailSection)}
     >
       {section === "summary" ? (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="space-y-5">
+          <div className="grid gap-4 lg:grid-cols-2">
+            {(order.workstreams ?? []).map((workstream) => {
+              const selected = scope === workstream.type;
+              const workstreamItems = workstream.items ?? [];
+              const workstreamTotal = workstreamItems.reduce((sum, item) => sum + Number(itemPrice(item) ?? 0), 0);
+              const accent = workstream.type === "custom"
+                ? "border-violet-200 bg-violet-50/60"
+                : "border-sky-200 bg-sky-50/60";
+              return (
+                <a
+                  key={workstream.id}
+                  href={`/admin/orders/${order.id}?scope=${workstream.type}`}
+                  className={cn("rounded-2xl border p-5 transition hover:-translate-y-0.5 hover:shadow-md", accent, selected && "ring-2 ring-slate-900/10")}
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">{workstream.type} workstream</p>
+                      <p className="mt-1 font-mono text-sm font-black text-slate-950">{workstream.trackingReference}</p>
+                    </div>
+                    {statusPill(workstream.status)}
+                  </div>
+                  <div className="mt-4 flex flex-wrap gap-3 text-xs font-bold text-slate-600">
+                    <span>{workstreamItems.length} item{workstreamItems.length === 1 ? "" : "s"}</span>
+                    <span>·</span>
+                    <span>{money(workstreamTotal)}</span>
+                    <span>·</span>
+                    <span>{workstream.dueAt ? `Due ${dateOnly(workstream.dueAt)}` : "Due date not assigned"}</span>
+                  </div>
+                </a>
+              );
+            })}
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           <DetailField label="Order Number" value={order.orderNumber} />
           <DetailField label="Order Type" value={orderKind} />
           <DetailField label="Delivery Method" value={isPickup ? "Pickup" : "Mail"} />
@@ -1182,12 +1317,13 @@ export function OrderDetailPage({
           ) : null}
           <DetailField label="Created" value={dateTime(order.createdAt)} />
           <DetailField label="Updated" value={dateTime(order.updatedAt)} />
+          </div>
         </div>
       ) : null}
 
       {section === "items" ? (
         <div className="space-y-5">
-          {(order.items ?? []).map((item, index) => {
+          {visibleItems.map((item, index) => {
             const images = itemImages(item);
             const selectionRows = itemSelectionRows(item, index);
             return (
@@ -1244,7 +1380,7 @@ export function OrderDetailPage({
               </div>
             );
           })}
-          {(order.items ?? []).length === 0 ? <DetailField label="Order Items" value="No order items were found." /> : null}
+          {visibleItems.length === 0 ? <DetailField label="Order Items" value="No order items were found." /> : null}
         </div>
       ) : null}
 
@@ -1269,7 +1405,7 @@ export function OrderDetailPage({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 bg-slate-50">
-                {(order.items ?? []).map((item, index) => {
+                {visibleItems.map((item, index) => {
                   const original = itemOriginalPrice(item);
                   const charged = itemUnitPrice(item);
                   const originalNum = Number(original ?? charged ?? 0);
@@ -1555,8 +1691,8 @@ export function OrderDetailPage({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 bg-slate-50">
-                {timelineRows.map((row) => (
-                  <tr key={row.event} className="align-top">
+                {timelineRows.map((row, index) => (
+                  <tr key={`${row.event}-${index}`} className="align-top">
                     <td className="whitespace-normal px-4 py-4 font-black leading-6 text-slate-950">{row.event}</td>
                     <td className="whitespace-normal px-4 py-4 font-semibold leading-6 text-slate-600">{row.time ? dateTime(row.time) : "Pending"}</td>
                     <td className="whitespace-normal px-4 py-4 font-semibold leading-6 text-slate-600">{row.by}</td>

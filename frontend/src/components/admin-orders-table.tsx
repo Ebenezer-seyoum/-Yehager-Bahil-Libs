@@ -51,6 +51,15 @@ type OrderItem = {
   measurement_details?: Record<string, string | number | null> | null;
 };
 
+type OrderWorkstream = {
+  id: string;
+  type: "catalog" | "custom";
+  trackingReference?: string | null;
+  status: string;
+  dueAt?: string | null;
+  items?: OrderItem[] | null;
+};
+
 type ShippingAddress = {
   street?: string | null;
   city?: string | null;
@@ -95,22 +104,47 @@ type Order = {
   paymentReference?: string | null;
   payment_reference?: string | null;
   members?: any[] | null;
+  workstreams?: OrderWorkstream[] | null;
   createdAt: string | number | Date;
   updatedAt: string | number | Date;
 };
 
 const ORDER_STATUSES = ["pending", "processing", "tailoring", "quality_check", "fulfilled", "shipped", "ready_for_pickup", "delivered", "cancelled"];
+const CATALOG_WORKSTREAM_STATUSES = ["pending", "picking", "quality_check", "ready", "cancelled"];
+const CUSTOM_WORKSTREAM_STATUSES = ["design_review", "measurements_confirmed", "tailoring", "quality_check", "ready", "cancelled"];
+const CATALOG_STATUS_TRANSITIONS: Record<string, string[]> = {
+  pending: ["picking", "cancelled"],
+  picking: ["pending", "quality_check", "cancelled"],
+  quality_check: ["picking", "ready", "cancelled"],
+  ready: ["quality_check", "cancelled"],
+  cancelled: ["pending"],
+};
+const CUSTOM_STATUS_TRANSITIONS: Record<string, string[]> = {
+  design_review: ["measurements_confirmed", "cancelled"],
+  measurements_confirmed: ["design_review", "tailoring", "cancelled"],
+  tailoring: ["measurements_confirmed", "quality_check", "cancelled"],
+  quality_check: ["tailoring", "ready", "cancelled"],
+  ready: ["quality_check", "cancelled"],
+  cancelled: ["design_review"],
+};
 const PAYMENT_STATUSES = ["pending", "awaiting_verification", "paid", "failed", "refunded", "unpaid"];
 const ORDER_MODES = ["individual", "group"] as const;
 
 const STATUS_STYLES: Record<string, string> = {
   pending: "bg-yellow-100 text-yellow-900 border-yellow-200",
+  processing: "bg-blue-100 text-blue-800 border-blue-200",
+  picking: "bg-sky-100 text-sky-800 border-sky-200",
+  design_review: "bg-violet-100 text-violet-800 border-violet-200",
+  measurements_confirmed: "bg-indigo-100 text-indigo-800 border-indigo-200",
   tailoring: "bg-blue-100 text-blue-800 border-blue-200",
   quality_check: "bg-purple-100 text-purple-800 border-purple-200",
+  ready: "bg-emerald-100 text-emerald-800 border-emerald-200",
+  fulfilled: "bg-emerald-100 text-emerald-800 border-emerald-200",
   shipped: "bg-cyan-100 text-cyan-800 border-cyan-200",
   delivered: "bg-green-100 text-green-800 border-green-200",
   ready_for_pickup: "bg-orange-100 text-orange-800 border-orange-200",
   picked_up: "bg-green-100 text-green-900 border-green-200",
+  cancelled: "bg-red-100 text-red-800 border-red-200",
 };
 
 const PAYMENT_STYLES: Record<string, string> = {
@@ -177,7 +211,23 @@ function hasUploadedDesign(order: Order) {
   );
 }
 
+function workstreamFor(order: Order, type: "catalog" | "custom") {
+  return order.workstreams?.find((workstream) => workstream.type === type) ?? null;
+}
+
+function workstreamTypeForLockedOrderType(lockedOrderType?: "catalog_order" | "custom_order" | null) {
+  if (lockedOrderType === "catalog_order") return "catalog" as const;
+  if (lockedOrderType === "custom_order") return "custom" as const;
+  return null;
+}
+
+function hasWorkstream(order: Order, type: "catalog" | "custom") {
+  if (workstreamFor(order, type)) return true;
+  return type === "custom" ? hasUploadedDesign(order) : !hasUploadedDesign(order);
+}
+
 function normalizedOrderType(order: Order) {
+  if (hasWorkstream(order, "catalog") && hasWorkstream(order, "custom")) return "mixed_order";
   const type = order.orderType ?? "catalog_order";
   if (type === "custom_order" || type === "custom_design_order") return "custom_order";
   if (type === "group_order") return hasUploadedDesign(order) ? "custom_order" : "catalog_order";
@@ -191,12 +241,14 @@ function normalizedOrderMode(order: Order) {
 }
 
 function orderTypeLabel(order: Order) {
-  const typeLabel = normalizedOrderType(order) === "custom_order" ? "Custom" : "Catalog";
+  const normalizedType = normalizedOrderType(order);
+  const typeLabel = normalizedType === "mixed_order" ? "Mixed" : normalizedType === "custom_order" ? "Custom" : "Catalog";
   const modeLabel = normalizedOrderMode(order) === "group" ? "Group" : "Individual";
   return `${modeLabel} ${typeLabel}`;
 }
 
 function orderTypeClass(order: Order) {
+  if (normalizedOrderType(order) === "mixed_order") return "border-amber-200 bg-amber-50 text-amber-800";
   if (normalizedOrderType(order) === "custom_order") return "border-violet-200 bg-violet-50 text-violet-700";
   return "border-blue-200 bg-blue-50 text-blue-700";
 }
@@ -210,8 +262,19 @@ function measurementRows(item: OrderItem) {
   return Object.entries(measurements).filter(([, value]) => value !== null && value !== undefined && value !== "");
 }
 
-function needsAttention(order: Order) {
-  return order.status === "pending" || order.paymentStatus === "awaiting_verification";
+function operationalStatus(order: Order, lockedOrderType?: "catalog_order" | "custom_order" | null) {
+  const type = workstreamTypeForLockedOrderType(lockedOrderType);
+  return type ? workstreamFor(order, type)?.status ?? order.status : order.status;
+}
+
+function selectableWorkstreamStatuses(type: "catalog" | "custom", currentStatus: string) {
+  const transitions = type === "custom" ? CUSTOM_STATUS_TRANSITIONS : CATALOG_STATUS_TRANSITIONS;
+  return [currentStatus, ...(transitions[currentStatus] ?? [])];
+}
+
+function needsAttention(order: Order, lockedOrderType?: "catalog_order" | "custom_order" | null) {
+  const status = operationalStatus(order, lockedOrderType);
+  return ["pending", "design_review"].includes(status ?? "") || order.paymentStatus === "awaiting_verification";
 }
 
 function isDeliveryStageOrder(order: Order) {
@@ -245,6 +308,7 @@ export function AdminOrdersTable({
     isAdmin || can(permissions, "orders.edit") || can(permissions, "orders.status.update");
   const canUpdatePaymentStatus =
     isAdmin || can(permissions, "orders.edit") || can(permissions, "payments.verify");
+  const lockedWorkstreamType = workstreamTypeForLockedOrderType(lockedOrderType);
   const [orders, setOrders] = useState(initialOrders);
   const [search, setSearch] = useState("");
   const effectiveSearch = externalSearch ?? search;
@@ -302,7 +366,8 @@ export function AdminOrdersTable({
 
   function markOrderViewed(orderId: string) {
     window.dispatchEvent(new CustomEvent("admin-order-viewed", { detail: orderId }));
-    fetch(`/api/backend/orders/admin/${orderId}`).catch(err => {
+    const scopeQuery = lockedWorkstreamType ? `?scope=${lockedWorkstreamType}` : "";
+    fetch(`/api/backend/orders/admin/${orderId}${scopeQuery}`).catch(err => {
       console.error("Could not trigger alert resolution:", err);
     });
   }
@@ -317,13 +382,13 @@ export function AdminOrdersTable({
           .some((value) => String(value).toLowerCase().includes(needle));
       const isPickup = order.fulfillmentType === "pickup";
       const matchesFulfillment = fulfillmentFilter === "all" || (fulfillmentFilter === "pickup" ? isPickup : !isPickup);
-      const matchesLockedType = !lockedOrderType || normalizedOrderType(order) === lockedOrderType;
+      const matchesLockedType = !lockedWorkstreamType || hasWorkstream(order, lockedWorkstreamType);
       const matchesMode = modeFilter === "all" || normalizedOrderMode(order) === modeFilter;
-      const matchesStatus = statusFilter === "all" || order.status === statusFilter;
+      const matchesStatus = statusFilter === "all" || operationalStatus(order, lockedOrderType) === statusFilter;
       const matchesPayment = paymentFilter === "all" || order.paymentStatus === paymentFilter;
       return matchesSearch && matchesFulfillment && matchesLockedType && matchesMode && matchesStatus && matchesPayment;
     });
-  }, [effectiveSearch, fulfillmentFilter, lockedOrderType, modeFilter, orders, paymentFilter, statusFilter]);
+  }, [effectiveSearch, fulfillmentFilter, lockedOrderType, lockedWorkstreamType, modeFilter, orders, paymentFilter, statusFilter]);
 
   useEffect(() => {
     onFilteredCountChange?.(filteredOrders.length);
@@ -336,7 +401,11 @@ export function AdminOrdersTable({
     setBusyKey(key);
     setError(null);
     try {
-      const res = await fetch(`/api/backend/orders/${orderId}/admin-state`, {
+      const updatesWorkstream = Boolean(patch.status && lockedWorkstreamType);
+      const endpoint = updatesWorkstream
+        ? `/api/backend/orders/${orderId}/workstreams/${lockedWorkstreamType}`
+        : `/api/backend/orders/${orderId}/admin-state`;
+      const res = await fetch(endpoint, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(patch),
@@ -355,6 +424,16 @@ export function AdminOrdersTable({
     }
   }
 
+  function detailHref(orderId: string) {
+    return `/admin/orders/${orderId}${lockedWorkstreamType ? `?scope=${lockedWorkstreamType}` : ""}`;
+  }
+
+  const visibleStatusOptions = lockedWorkstreamType === "catalog"
+    ? CATALOG_WORKSTREAM_STATUSES
+    : lockedWorkstreamType === "custom"
+      ? CUSTOM_WORKSTREAM_STATUSES
+      : ORDER_STATUSES;
+
   return (
     <div className="space-y-4">
       <div className="rounded-xl border border-border bg-card p-3 shadow-sm">
@@ -372,7 +451,7 @@ export function AdminOrdersTable({
           ) : null}
           <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="h-9 rounded-lg border border-input bg-background px-3 text-sm font-medium">
             <option value="all">All Statuses</option>
-            {ORDER_STATUSES.map((status) => <option key={status} value={status}>{prettyLabel(status)}</option>)}
+            {visibleStatusOptions.map((status) => <option key={status} value={status}>{prettyLabel(status)}</option>)}
           </select>
           <select value={paymentFilter} onChange={(event) => setPaymentFilter(event.target.value)} className="h-9 rounded-lg border border-input bg-background px-3 text-sm font-medium">
             <option value="all">All Payments</option>
@@ -413,50 +492,62 @@ export function AdminOrdersTable({
               ) : (
                 filteredOrders.map((order, index) => {
                   const isViewed = viewedOrderIdsLocal.includes(order.id);
-                  const highlightRow = needsAttention(order) && !isViewed;
+                  const highlightRow = needsAttention(order, lockedOrderType) && !isViewed;
                   const isSelected = selectedOrderId === order.id;
                   const deliveryStage = isDeliveryStageOrder(order);
+                  const rowStatus = operationalStatus(order, lockedOrderType) ?? "pending";
+                  const activeWorkstream = lockedWorkstreamType ? workstreamFor(order, lockedWorkstreamType) : null;
                   return (
                     <tr
                       key={order.id}
                       className={`border-t border-border transition hover:bg-blue-50/70 ${highlightRow ? "border-l-4 border-l-blue-500 bg-blue-50/70" : ""} ${isSelected ? "bg-primary/5 ring-1 ring-inset ring-primary/25" : ""}`}
                     >
                       <td className="px-4 py-5 align-middle">
-                        <a href={`/admin/orders/${order.id}`} onClick={() => markOrderViewed(order.id)} className="text-sm font-semibold text-slate-600 hover:text-primary transition-colors inline-block">
+                        <a href={detailHref(order.id)} onClick={() => markOrderViewed(order.id)} className="text-sm font-semibold text-slate-600 hover:text-primary transition-colors inline-block">
                           {index + 1}
                         </a>
                       </td>
                       <td className="px-4 py-5 align-middle">
-                        <a href={`/admin/orders/${order.id}`} onClick={() => markOrderViewed(order.id)} className="text-left inline-block w-full">
+                        <a href={detailHref(order.id)} onClick={() => markOrderViewed(order.id)} className="text-left inline-block w-full">
                           <div className="flex items-center gap-2">
                             {highlightRow ? <span className="rounded-full border border-blue-200 bg-blue-600 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-white">New</span> : null}
                             <p className="max-w-[120px] break-words font-mono text-xs font-black text-foreground">{shortOrderNumber(order.orderNumber ?? order.id)}</p>
                           </div>
                           <p className="mt-1 text-xs text-muted-foreground">{order.createdAt ? new Date(order.createdAt).toLocaleDateString() : "-"}</p>
+                          {activeWorkstream?.trackingReference ? <p className="mt-1 font-mono text-[10px] font-bold text-slate-500">{activeWorkstream.trackingReference}</p> : null}
                         </a>
                       </td>
                       <td className="px-4 py-5 align-middle">
                         <span className={`inline-flex rounded-full border px-3 py-1 text-[11px] font-black uppercase ${orderTypeClass(order)}`}>
                           {orderTypeLabel(order)}
                         </span>
+                        {!lockedWorkstreamType && (order.workstreams?.length ?? 0) > 1 ? (
+                          <div className="mt-2 flex flex-wrap gap-1.5">
+                            {order.workstreams?.map((workstream) => (
+                              <span key={workstream.id} className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${workstream.type === "custom" ? "border-violet-200 bg-violet-50 text-violet-700" : "border-sky-200 bg-sky-50 text-sky-700"}`}>
+                                {workstream.type === "custom" ? "Custom" : "Catalog"}: {prettyLabel(workstream.status)}
+                              </span>
+                            ))}
+                          </div>
+                        ) : null}
                       </td>
                       <td className="px-4 py-5 align-middle">
                         <p className="font-bold">{order.customerName || order.userEmail || "Guest Customer"}</p>
                         <p className="text-sm text-muted-foreground">{order.customerName ? order.userEmail : "Unregistered/Direct"}</p>
                       </td>
                       <td className="px-4 py-5 align-middle">
-                        {deliveryStage || !canUpdateOrderStatus ? (
-                          <span className={`inline-flex rounded-full border px-4 py-2 text-sm font-bold capitalize ${STATUS_STYLES[order.status ?? "pending"] ?? STATUS_STYLES.pending}`}>
-                            {prettyLabel(order.status)}
+                        {deliveryStage || !canUpdateOrderStatus || !lockedWorkstreamType ? (
+                          <span className={`inline-flex rounded-full border px-4 py-2 text-sm font-bold capitalize ${STATUS_STYLES[rowStatus] ?? STATUS_STYLES.pending}`}>
+                            {prettyLabel(rowStatus)}
                           </span>
                         ) : (
                           <select
-                            value={order.status ?? "pending"}
+                            value={rowStatus}
                             disabled={busyKey !== null}
                             onChange={(event) => void updateOrder(order.id, { status: event.target.value })}
-                            className={`h-9 min-w-[190px] rounded-full border px-4 text-sm font-bold capitalize outline-none ${STATUS_STYLES[order.status ?? "pending"] ?? STATUS_STYLES.pending}`}
+                            className={`h-9 min-w-[190px] rounded-full border px-4 text-sm font-bold capitalize outline-none ${STATUS_STYLES[rowStatus] ?? STATUS_STYLES.pending}`}
                           >
-                            {ORDER_STATUSES.map((status) => <option key={status} value={status}>{prettyLabel(status)}</option>)}
+                            {selectableWorkstreamStatuses(lockedWorkstreamType, rowStatus).map((status) => <option key={status} value={status}>{prettyLabel(status)}</option>)}
                           </select>
                         )}
                       </td>
@@ -478,7 +569,7 @@ export function AdminOrdersTable({
                       </td>
                       <td className="px-4 py-5 align-middle">
                         <DashboardTableActions>
-                          <DashboardActionButton action="view" href={`/admin/orders/${order.id}`} onClick={() => markOrderViewed(order.id)} aria-label="Open order details" />
+                          <DashboardActionButton action="view" href={detailHref(order.id)} onClick={() => markOrderViewed(order.id)} aria-label="Open order details" />
                         </DashboardTableActions>
                       </td>
                     </tr>

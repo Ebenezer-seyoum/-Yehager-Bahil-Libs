@@ -18,6 +18,7 @@ import {
   submitEtbPaymentProof,
   updateOrderNote,
   updateOrderAdminState,
+  updateOrderWorkstream,
 } from "../../services/orders-service.js";
 import { systemAlerts } from "../../lib/db/schema.js";
 import { db } from "../../lib/db/drizzle.js";
@@ -28,6 +29,7 @@ import { getEffectivePermissionsForUser } from "../../services/permissions-servi
 
 const querySchema = z.object({
   limit: z.coerce.number().int().positive().max(200).optional(),
+  scope: z.enum(["catalog", "custom"]).optional(),
 });
 const ORDER_READ_PERMISSIONS = [
   PERMISSIONS.ORDERS_VIEW,
@@ -83,6 +85,14 @@ const adminUpdateSchema = z.object({
   trackingNumber: z.string().trim().max(120).optional().nullable(),
   deliveryNote: z.string().trim().max(1000).optional(),
 });
+const workstreamUpdateSchema = z.object({
+  status: z.string().trim().max(40).optional(),
+  assignedUserId: z.string().uuid().nullable().optional(),
+  dueAt: z.iso.datetime().nullable().optional(),
+}).refine(
+  (value) => value.status !== undefined || value.assignedUserId !== undefined || value.dueAt !== undefined,
+  { message: "At least one workstream field must be updated" },
+);
 const noteSchema = z.object({
   noteType: z.enum(["admin", "tailor", "delivery", "customer"]),
   note: z.string().trim().min(3).max(1000),
@@ -154,14 +164,20 @@ ordersRouter.post("/me/:orderId/etb-proof", requireAuth, zValidator("json", etbP
 });
 
 ordersRouter.get("/", requireAuth, requireAnyPermission(ORDER_READ_PERMISSIONS), zValidator("query", querySchema), async (c) => {
-  const { limit } = c.req.valid("query");
-  const data = await getOrdersForAdmin(limit ?? 100);
+  const { limit, scope } = c.req.valid("query");
+  const data = await getOrdersForAdmin(limit ?? 100, scope);
   return c.json({ data });
 });
 
-ordersRouter.get("/admin/:orderId", requireAuth, requireAnyPermission(ORDER_READ_PERMISSIONS), async (c) => {
+ordersRouter.get("/admin/:orderId", requireAuth, requireAnyPermission(ORDER_READ_PERMISSIONS), zValidator("query", querySchema), async (c) => {
   const orderId = c.req.param("orderId");
-  const data = await getOrderDetailsForAdmin(orderId);
+  const { scope } = c.req.valid("query");
+  const data = await getOrderDetailsForAdmin(orderId, scope);
+  const visibleAlertTypes = scope === "catalog"
+    ? sql`${systemAlerts.type} IN ('new_order', 'new_catalog_order', 'payment_review', 'payment_proof_uploaded', 'refund_issue', 'refund_requested', 'return_refund', 'refund_pending', 'shipping_delivery_ready')`
+    : scope === "custom"
+      ? sql`${systemAlerts.type} IN ('new_order', 'new_custom_order', 'payment_review', 'payment_proof_uploaded', 'refund_issue', 'refund_requested', 'return_refund', 'refund_pending', 'shipping_delivery_ready')`
+      : sql`${systemAlerts.type} IN ('new_order', 'new_catalog_order', 'new_custom_order', 'payment_review', 'payment_proof_uploaded', 'refund_issue', 'refund_requested', 'return_refund', 'refund_pending', 'shipping_delivery_ready')`;
 
   await db
     .update(systemAlerts)
@@ -172,7 +188,7 @@ ordersRouter.get("/admin/:orderId", requireAuth, requireAnyPermission(ORDER_READ
     })
     .where(
       and(
-        sql`${systemAlerts.type} IN ('new_order', 'new_catalog_order', 'payment_review', 'payment_proof_uploaded', 'refund_issue', 'refund_requested', 'return_refund', 'refund_pending', 'shipping_delivery_ready')`,
+        visibleAlertTypes,
         eq(systemAlerts.entityId, orderId)
       )
     );
@@ -236,11 +252,37 @@ ordersRouter.delete("/:orderId/notes/:noteId", requireAuth, requirePermission(PE
   return c.json({ data });
 });
 
-ordersRouter.get("/:orderId", requireAuth, requireAnyPermission(ORDER_READ_PERMISSIONS), async (c) => {
+ordersRouter.get("/:orderId", requireAuth, requireAnyPermission(ORDER_READ_PERMISSIONS), zValidator("query", querySchema), async (c) => {
   const orderId = c.req.param("orderId");
-  const data = await getOrderDetailsForAdmin(orderId);
+  const { scope } = c.req.valid("query");
+  const data = await getOrderDetailsForAdmin(orderId, scope);
   return c.json({ data });
 });
+
+ordersRouter.patch(
+  "/:orderId/workstreams/:workstreamType",
+  requireAuth,
+  requireAnyPermission([PERMISSIONS.ORDERS_EDIT, PERMISSIONS.ORDERS_STATUS_UPDATE]),
+  zValidator("json", workstreamUpdateSchema),
+  async (c) => {
+    const authUser = c.get("authUser");
+    const orderId = c.req.param("orderId");
+    const workstreamType = c.req.param("workstreamType");
+    if (workstreamType !== "catalog" && workstreamType !== "custom") {
+      throw new HTTPException(400, { message: "Workstream type must be catalog or custom" });
+    }
+    const body = c.req.valid("json");
+    const data = await updateOrderWorkstream({
+      orderId,
+      type: workstreamType,
+      performedBy: authUser?.email,
+      status: body.status,
+      assignedUserId: body.assignedUserId,
+      dueAt: body.dueAt,
+    });
+    return c.json({ data });
+  },
+);
 
 ordersRouter.patch(
   "/:orderId/admin-state",

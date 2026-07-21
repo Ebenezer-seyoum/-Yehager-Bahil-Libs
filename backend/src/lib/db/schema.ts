@@ -684,6 +684,94 @@ export const orders = pgTable(
   ],
 );
 
+export const orderWorkstreams = pgTable(
+  "order_workstreams",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    orderId: uuid("order_id").notNull().references(() => orders.id, { onDelete: "cascade" }),
+    type: varchar("workstream_type", { length: 16 }).notNull(),
+    trackingReference: text("tracking_reference").notNull(),
+    status: varchar("status", { length: 40 }).notNull(),
+    assignedUserId: uuid("assigned_user_id").references(() => users.id, { onDelete: "set null" }),
+    dueAt: timestamp("due_at", { withTimezone: true }),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    lastStatusChangedAt: timestamp("last_status_changed_at", { withTimezone: true }).defaultNow().notNull(),
+    lastStatusChangedBy: text("last_status_changed_by"),
+    version: integer("version").default(1).notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("order_workstreams_order_type_unique").on(table.orderId, table.type),
+    uniqueIndex("order_workstreams_tracking_reference_unique").on(table.trackingReference),
+    index("order_workstreams_type_status_idx").on(table.type, table.status),
+    index("order_workstreams_assigned_user_idx").on(table.assignedUserId),
+    check("order_workstreams_type_check", sql`${table.type} in ('catalog', 'custom')`),
+  ],
+);
+
+export const orderLineItems = pgTable(
+  "order_line_items",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    orderId: uuid("order_id").notNull().references(() => orders.id, { onDelete: "cascade" }),
+    workstreamId: uuid("workstream_id").notNull().references(() => orderWorkstreams.id, { onDelete: "cascade" }),
+    sourceCartItemId: uuid("source_cart_item_id"),
+    position: integer("position").default(1).notNull(),
+    itemType: text("item_type").default("product").notNull(),
+    productId: uuid("product_id"),
+    uploadedDesignId: uuid("uploaded_design_id"),
+    productName: text("product_name").notNull(),
+    quantity: integer("quantity").default(1).notNull(),
+    unitPriceUsd: numeric("unit_price_usd", { precision: 12, scale: 2 }).default("0").notNull(),
+    lineTotalUsd: numeric("line_total_usd", { precision: 12, scale: 2 }).default("0").notNull(),
+    measurementId: uuid("measurement_id"),
+    measurementSnapshot: jsonb("measurement_snapshot").$type<Record<string, unknown>>(),
+    itemMetadata: jsonb("item_metadata").$type<Record<string, unknown>>(),
+    status: varchar("status", { length: 40 }).notNull(),
+    assignedUserId: uuid("assigned_user_id").references(() => users.id, { onDelete: "set null" }),
+    dueAt: timestamp("due_at", { withTimezone: true }),
+    ...timestamps,
+  },
+  (table) => [
+    index("order_line_items_order_idx").on(table.orderId),
+    index("order_line_items_workstream_idx").on(table.workstreamId),
+    index("order_line_items_type_status_idx").on(table.itemType, table.status),
+    uniqueIndex("order_line_items_order_cart_item_unique")
+      .on(table.orderId, table.sourceCartItemId)
+      .where(sql`${table.sourceCartItemId} is not null`),
+  ],
+);
+
+export const orderWorkstreamEvents = pgTable(
+  "order_workstream_events",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    orderId: uuid("order_id").notNull().references(() => orders.id, { onDelete: "cascade" }),
+    workstreamId: uuid("workstream_id").notNull().references(() => orderWorkstreams.id, { onDelete: "cascade" }),
+    fromStatus: varchar("from_status", { length: 40 }),
+    toStatus: varchar("to_status", { length: 40 }).notNull(),
+    version: integer("version").notNull(),
+    eventKey: text("event_key").notNull(),
+    changedBy: text("changed_by"),
+    customerEmailStatus: varchar("customer_email_status", { length: 20 }).default("pending").notNull(),
+    customerEmailSentAt: timestamp("customer_email_sent_at", { withTimezone: true }),
+    customerEmailAttempts: integer("customer_email_attempts").default(0).notNull(),
+    customerEmailLastError: text("customer_email_last_error"),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>(),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("order_workstream_events_event_key_unique").on(table.eventKey),
+    index("order_workstream_events_workstream_idx").on(table.workstreamId, table.createdAt),
+    index("order_workstream_events_order_idx").on(table.orderId, table.createdAt),
+    check(
+      "order_workstream_events_email_status_check",
+      sql`${table.customerEmailStatus} in ('pending', 'sent', 'failed', 'skipped')`,
+    ),
+  ],
+);
+
 export const orderNotes = pgTable(
   "order_notes",
   {

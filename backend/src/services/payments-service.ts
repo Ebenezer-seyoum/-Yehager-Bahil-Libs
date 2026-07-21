@@ -282,6 +282,24 @@ export async function processStripeWebhook(payload: { body: string; signature?: 
         });
         if (updatedOrder) {
           await awardCustomerCreditForPaidOrder(updatedOrder, "stripe");
+          if (updatedOrder.status === "fulfilled" && order.status !== "fulfilled") {
+            const existingDeliveryAlert = await db.query.systemAlerts.findFirst({
+              where: and(
+                eq(systemAlerts.type, "shipping_delivery_ready"),
+                eq(systemAlerts.entityId, order.id),
+                eq(systemAlerts.isResolved, false),
+              ),
+            });
+            if (!existingDeliveryAlert) {
+              await db.insert(systemAlerts).values({
+                title: `Order ready for delivery #${order.orderNumber}`,
+                message: `${order.customerName}'s active order work is ready for shared fulfillment.`,
+                type: "shipping_delivery_ready",
+                severity: "info",
+                entityId: order.id,
+              });
+            }
+          }
         }
         await sendOrderStatusEmail({
           event: "payment_confirmed",
