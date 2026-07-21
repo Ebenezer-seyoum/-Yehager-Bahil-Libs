@@ -75,7 +75,7 @@ telegramRouter.post("/price-submit", async (c) => {
   const body = await c.req.json().catch(() => null) as PriceFormBody | null;
   if (!validPriceFormSession(body) || !body?.productId) return c.json({ error: "Invalid Telegram form session" }, 401);
   const [product] = await db.select().from(products).where(eq(products.id, body.productId)).limit(1);
-  if (!product?.uniqueId) return c.json({ error: "Product not found" }, 404);
+  if (!product) return c.json({ error: "Product not found" }, 404);
   const prices = body.prices || {};
   const result = await updateEstimatedPrices(product.id, {
     men: Number(prices.men),
