@@ -24,6 +24,74 @@ export type CatalogWorkstreamStatus = (typeof CATALOG_WORKSTREAM_STATUSES)[numbe
 export type CustomWorkstreamStatus = (typeof CUSTOM_WORKSTREAM_STATUSES)[number];
 export type OrderWorkstreamStatus = CatalogWorkstreamStatus | CustomWorkstreamStatus;
 
+export const MAIL_DELIVERY_STATUSES = [
+  "not_started",
+  "packing",
+  "packed",
+  "assigned_to_ems",
+  "handed_to_ems",
+  "in_transit",
+  "at_hub",
+  "out_for_delivery",
+  "delivered",
+  "failed_attempt",
+  "returned",
+] as const;
+
+export const PICKUP_DELIVERY_STATUSES = [
+  "not_started",
+  "packing",
+  "packed",
+  "moved_to_pickup_desk",
+  "ready_for_pickup",
+  "customer_notified",
+  "waiting_customer",
+  "picked_up",
+  "cancelled_pickup",
+] as const;
+
+export type DeliveryStatus = (typeof MAIL_DELIVERY_STATUSES)[number] | (typeof PICKUP_DELIVERY_STATUSES)[number];
+
+const MAIL_DELIVERY_TRANSITIONS: Record<string, readonly string[]> = {
+  not_started: ["packing"],
+  packing: ["not_started", "packed"],
+  packed: ["packing", "assigned_to_ems"],
+  assigned_to_ems: ["packed", "handed_to_ems"],
+  handed_to_ems: ["assigned_to_ems", "in_transit"],
+  in_transit: ["handed_to_ems", "at_hub", "out_for_delivery", "failed_attempt"],
+  at_hub: ["in_transit", "out_for_delivery", "failed_attempt"],
+  out_for_delivery: ["in_transit", "delivered", "failed_attempt"],
+  delivered: [],
+  failed_attempt: ["out_for_delivery", "returned"],
+  returned: [],
+};
+
+const PICKUP_DELIVERY_TRANSITIONS: Record<string, readonly string[]> = {
+  not_started: ["packing"],
+  packing: ["not_started", "packed"],
+  packed: ["packing", "moved_to_pickup_desk"],
+  moved_to_pickup_desk: ["packed", "ready_for_pickup"],
+  ready_for_pickup: ["customer_notified", "waiting_customer", "picked_up", "cancelled_pickup"],
+  customer_notified: ["waiting_customer", "picked_up", "cancelled_pickup"],
+  waiting_customer: ["picked_up", "cancelled_pickup"],
+  picked_up: [],
+  cancelled_pickup: ["packed"],
+};
+
+export function deliveryStatuses(isPickup = false) {
+  return isPickup ? PICKUP_DELIVERY_STATUSES : MAIL_DELIVERY_STATUSES;
+}
+
+export function isDeliveryStatus(value: string, isPickup = false): value is DeliveryStatus {
+  return deliveryStatuses(isPickup).includes(value as never);
+}
+
+export function canTransitionDeliveryStatus(type: string, currentStatus: string, nextStatus: string) {
+  if (currentStatus === nextStatus) return true;
+  const transitions = type === "pickup" ? PICKUP_DELIVERY_TRANSITIONS : MAIL_DELIVERY_TRANSITIONS;
+  return Boolean(transitions[currentStatus]?.includes(nextStatus));
+}
+
 type OrderLineLike = {
   itemType?: string | null;
   item_type?: string | null;

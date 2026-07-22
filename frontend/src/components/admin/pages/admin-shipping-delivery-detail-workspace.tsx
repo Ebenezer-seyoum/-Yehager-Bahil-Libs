@@ -45,6 +45,7 @@ type Order = Record<string, unknown> & {
   shipping_address?: Record<string, unknown> | string | null;
   updatedAt?: string | number | Date | null;
   items?: Array<Record<string, unknown>> | null;
+  workstreams?: Array<Record<string, unknown>> | null;
   shippingDocuments?: Array<{ url: string; label: string; uploadedAt?: string }> | null;
   shipping_documents?: Array<{ url: string; label: string; uploadedAt?: string }> | null;
 };
@@ -141,12 +142,14 @@ function DetailField({ label, value }: { label: string; value: unknown }) {
 
 export function AdminShippingDeliveryDetailWorkspace({
   initialOrder,
+  scope,
   canEdit,
   canViewDocuments,
   canViewNotes,
   canAddDeliveryNote,
 }: {
   initialOrder: Order;
+  scope?: "catalog" | "custom";
   canEdit: boolean;
   canViewDocuments: boolean;
   canViewNotes: boolean;
@@ -154,16 +157,18 @@ export function AdminShippingDeliveryDetailWorkspace({
 }) {
   const router = useRouter();
   const [order, setOrder] = useState(initialOrder);
+  const pickup = isPickup(order);
+  const activeWorkstream = scope ? (order.workstreams ?? []).find((row) => row.type === scope) : null;
+  const deliveryRecord = activeWorkstream ?? order;
   const [activeSection, setActiveSection] = useState("summary");
   const [busy, setBusy] = useState(false);
   const [provider, setProvider] = useState(String(order.carrier ?? "Ethiopian Mail Service"));
   const [packageWeight, setPackageWeight] = useState("1");
-  const [fulfillmentStatus, setFulfillmentStatus] = useState(derivedFulfillmentStatus(order));
-  const [trackingNumber, setTrackingNumber] = useState(String(order.trackingNumber ?? order.tracking_number ?? ""));
+  const [fulfillmentStatus, setFulfillmentStatus] = useState(derivedFulfillmentStatus(deliveryRecord as Order));
+  const [trackingNumber, setTrackingNumber] = useState(String((deliveryRecord as Order).trackingNumber ?? (deliveryRecord as Order).tracking_number ?? (deliveryRecord as Record<string, unknown>).deliveryTrackingNumber ?? ""));
   const [deliveryNote, setDeliveryNote] = useState("");
   const [deliveryNotes, setDeliveryNotes] = useState<OrderNote[]>([]);
   const [error, setError] = useState("");
-  const pickup = isPickup(order);
   const image = firstImage(order);
 
   useEffect(() => {
@@ -208,16 +213,27 @@ export function AdminShippingDeliveryDetailWorkspace({
     setError("");
     try {
       const nextMainStatus = mainStatusForDelivery(next, pickup);
-      const res = await fetch(`/api/backend/orders/${order.id}/admin-state`, {
+      const endpoint = scope
+        ? `/api/backend/orders/${order.id}/workstreams/${scope}`
+        : `/api/backend/orders/${order.id}/admin-state`;
+      const body = scope
+        ? {
+            deliveryStatus: next,
+            deliveryCarrier: pickup ? "pickup" : provider,
+            deliveryTrackingNumber: trackingNumber.trim() || undefined,
+            deliveryNote: note ?? (deliveryNote.trim() || undefined),
+          }
+        : {
+            status: nextMainStatus,
+            carrier: pickup ? "pickup" : provider,
+            deliveryStatus: next,
+            trackingNumber: trackingNumber.trim() || undefined,
+            deliveryNote: note ?? (deliveryNote.trim() || undefined),
+          };
+      const res = await fetch(endpoint, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          status: nextMainStatus,
-          carrier: pickup ? "pickup" : provider,
-          deliveryStatus: next,
-          trackingNumber: trackingNumber.trim() || undefined,
-          deliveryNote: note ?? (deliveryNote.trim() || undefined),
-        }),
+        body: JSON.stringify(body),
       });
       if (!res.ok) {
         const payload = await res.json().catch(() => null);
@@ -226,7 +242,11 @@ export function AdminShippingDeliveryDetailWorkspace({
       const json = await res.json();
       const noteToSave = note ?? deliveryNote.trim();
       await createDeliveryNote(noteToSave || `${titleCase(next)} updated for ${pickup ? "store pickup" : "EMS delivery"}.`);
-      setOrder((current) => ({ ...current, ...(json.data ?? { deliveryStatus: next, status: nextMainStatus ?? current.status }) }));
+      if (scope && json.data?.workstream) {
+        setOrder((current) => ({ ...current, workstreams: (current.workstreams ?? []).map((row) => row.type === scope ? { ...row, ...json.data.workstream } : row) }));
+      } else {
+        setOrder((current) => ({ ...current, ...(json.data ?? { deliveryStatus: next, status: nextMainStatus ?? current.status }) }));
+      }
       setFulfillmentStatus(next);
       setDeliveryNote("");
       await dashboardSuccess("Delivery Updated", `${titleCase(next)} saved successfully.`);

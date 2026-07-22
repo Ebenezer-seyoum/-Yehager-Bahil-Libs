@@ -37,6 +37,9 @@ type OrderRow = Record<string, unknown> & {
   _method?: string;
   _provider?: string;
   _fulfillmentStatus?: string;
+  _scope?: "catalog" | "custom";
+  _parentOrderId?: string;
+  workstreams?: Array<Record<string, unknown>> | null;
 };
 
 function norm(value: unknown) {
@@ -154,6 +157,21 @@ export function AdminShippingDeliveryWorkspace({ data }: { data: AdminWorkspaceD
 
   const fulfillmentOrders = useMemo(() => {
     return ((data.orders ?? []) as OrderRow[])
+      .flatMap((order) => {
+        const workstreams = Array.isArray(order.workstreams) ? order.workstreams : [];
+        if (!workstreams.length) return [order];
+        return workstreams.map((workstream) => ({
+          ...order,
+          id: `${order.id}-${String(workstream.type)}`,
+          _parentOrderId: order.id,
+          _scope: workstream.type === "custom" ? "custom" as const : "catalog" as const,
+          orderNumber: `${order.orderNumber ?? order.id}-${workstream.type === "custom" ? "CUS" : "CAT"}`,
+          status: workstream.status === "ready" ? "fulfilled" : String(workstream.status ?? order.status),
+          deliveryStatus: workstream.deliveryStatus ?? order.deliveryStatus,
+          trackingNumber: workstream.deliveryTrackingNumber ?? order.trackingNumber,
+          carrier: typeof workstream.deliveryCarrier === "string" ? workstream.deliveryCarrier : order.carrier,
+        }) as OrderRow);
+      })
       .filter(readyForFulfillment)
       .map((order) => ({
         ...order,
@@ -284,8 +302,9 @@ function ShippingDeliveryTable({
             <tbody>
               {rows.map((order, index) => {
                 const status = order._fulfillmentStatus ?? fulfillmentStatus(order);
-                const orderId = String(order.id ?? "");
-                const isNew = Boolean(orderId && !viewedDeliveryIds.includes(orderId));
+                const rowId = String(order.id ?? "");
+                const orderId = String(order._parentOrderId ?? order.id ?? "");
+                const isNew = Boolean(rowId && !viewedDeliveryIds.includes(rowId));
                 return (
                   <tr key={orderId} className={cn("border-t border-slate-200 transition hover:bg-blue-50/70", isNew && "border-l-4 border-l-blue-500 bg-blue-50/70")}>
                     <td className="px-5 py-4 font-semibold text-slate-500">{index + 1}</td>
@@ -305,7 +324,7 @@ function ShippingDeliveryTable({
                     <td className="px-5 py-4 text-slate-600">{text(order.trackingNumber ?? order.tracking_number ?? order.pickupLocation, isPickup(order) ? "Office pickup" : "Tracking pending")}</td>
                     <td className="px-5 py-4">
                       <DashboardTableActions>
-                        <DashboardActionButton action="view" href={`/admin/orders/shipping-delivery/${orderId}`} onClick={() => markDeliveryViewed(orderId)} aria-label="Open delivery details" />
+                        <DashboardActionButton action="view" href={`/admin/orders/shipping-delivery/${orderId}${order._scope ? `?scope=${order._scope}` : ""}`} onClick={() => markDeliveryViewed(rowId)} aria-label="Open delivery details" />
                       </DashboardTableActions>
                     </td>
                   </tr>

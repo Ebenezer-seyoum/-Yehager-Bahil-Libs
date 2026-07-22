@@ -22,6 +22,10 @@ type OrderWorkstream = {
   type: "catalog" | "custom";
   trackingReference?: string | null;
   status: string;
+  deliveryStatus?: string | null;
+  deliveryCarrier?: string | null;
+  deliveryTrackingNumber?: string | null;
+  deliveryDueAt?: string | null;
   dueAt?: string | null;
   items?: OrderItem[];
 };
@@ -230,7 +234,10 @@ export default async function MyOrdersPage({
                               <p className="text-[10px] font-black uppercase tracking-[0.16em] text-muted-foreground">{workstream.type} order</p>
                               <p className="mt-1 font-mono text-xs font-bold">{workstream.trackingReference}</p>
                             </div>
-                            <span className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase ${workstreamStyle}`}>{titleCase(workstream.status)}</span>
+                            <div className="flex flex-wrap justify-end gap-2">
+                              <span className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase ${workstreamStyle}`}>{titleCase(workstream.status)}</span>
+                              {workstream.deliveryStatus && workstream.deliveryStatus !== "not_started" ? <span className="rounded-full bg-blue-100 px-2.5 py-1 text-[10px] font-black uppercase text-blue-800">{titleCase(workstream.deliveryStatus)}</span> : null}
+                            </div>
                           </div>
                           <div className="mt-3 space-y-1">
                             {(workstream.items ?? []).map((item, idx) => (
@@ -250,13 +257,20 @@ export default async function MyOrdersPage({
                               </div>
                             </div>
                           ) : null}
+                          {workstream.deliveryStatus && workstream.deliveryStatus !== "not_started" ? (
+                            <p className="mt-3 text-xs font-semibold text-muted-foreground">
+                              Delivery: {titleCase(workstream.deliveryStatus)}
+                              {workstream.deliveryTrackingNumber ? ` · Tracking ${workstream.deliveryTrackingNumber}` : ""}
+                              {workstream.deliveryDueAt ? ` · Expected ${new Date(workstream.deliveryDueAt).toLocaleDateString()}` : ""}
+                            </p>
+                          ) : null}
                         </div>
                       );
                     })}
                   </div>
 
                   <div className="mt-4 space-y-2 border-t border-border pt-3 text-xs text-muted-foreground">
-                    <p className="font-bold text-foreground">Shared delivery for the complete order</p>
+                    <p className="font-bold text-foreground">Delivery information</p>
                     {order.fulfillmentType === "pickup" ? (
                       <div className="space-y-1">
                         <p className="flex items-center gap-1.5">

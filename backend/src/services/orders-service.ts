@@ -5,10 +5,12 @@ import { auditLogs, cartItems, eventParticipants, events, familyMembers, measure
 import { PERMISSIONS } from "../lib/auth/permissions.js";
 import {
   canTransitionWorkstreamStatus,
+  canTransitionDeliveryStatus,
   classifyOrderLine,
   inferOrderType,
   initialWorkstreamStatus,
   isWorkstreamStatus,
+  isDeliveryStatus as isWorkstreamDeliveryStatus,
   rollUpOrderStatus,
   workstreamLabel,
   workstreamTrackingReference,
@@ -829,14 +831,22 @@ export async function updateOrderWorkstream(payload: {
   type: OrderWorkstreamType;
   performedBy?: string;
   status?: string;
+  deliveryStatus?: string;
+  deliveryCarrier?: string | null;
+  deliveryTrackingNumber?: string | null;
+  deliveryNote?: string;
+  deliveryDueAt?: string | null;
   assignedUserId?: string | null;
   dueAt?: string | null;
 }) {
-  if (payload.status === undefined && payload.assignedUserId === undefined && payload.dueAt === undefined) {
+  if (payload.status === undefined && payload.deliveryStatus === undefined && payload.assignedUserId === undefined && payload.dueAt === undefined && payload.deliveryCarrier === undefined && payload.deliveryTrackingNumber === undefined && payload.deliveryDueAt === undefined) {
     throw new HTTPException(400, { message: "At least one workstream field must be updated" });
   }
   if (payload.status && !isWorkstreamStatus(payload.type, payload.status)) {
     throw new HTTPException(400, { message: `Invalid ${payload.type} workstream status: ${payload.status}` });
+  }
+  if (payload.deliveryStatus && !isWorkstreamDeliveryStatus(payload.deliveryStatus, false) && !isWorkstreamDeliveryStatus(payload.deliveryStatus, true)) {
+    throw new HTTPException(400, { message: `Invalid delivery status: ${payload.deliveryStatus}` });
   }
 
   const dueAt = payload.dueAt === undefined
@@ -869,21 +879,57 @@ export async function updateOrderWorkstream(payload: {
 
     const nextStatus = payload.status ?? workstream.status;
     const statusChanged = nextStatus !== workstream.status;
-    if (statusChanged && SHARED_FULFILLMENT_ORDER_STATUSES.has(order.status)) {
-      throw new HTTPException(409, { message: "Workstream status cannot change after shared shipping or pickup has started" });
-    }
     if (statusChanged && !canTransitionWorkstreamStatus(payload.type, workstream.status, nextStatus)) {
       throw new HTTPException(409, {
         message: `Cannot move ${workstreamLabel(payload.type).toLowerCase()} work from ${workstream.status.replaceAll("_", " ")} directly to ${nextStatus.replaceAll("_", " ")}`,
       });
     }
 
+    const fulfillmentType = String(order.fulfillmentType ?? "mail").toLowerCase();
+    const deliveryStatusChanged = payload.deliveryStatus !== undefined && payload.deliveryStatus !== workstream.deliveryStatus;
+    if (deliveryStatusChanged) {
+      if (workstream.status !== "ready") {
+        throw new HTTPException(409, { message: "Delivery can start only after this workstream is fulfilled" });
+      }
+      if (order.paymentStatus !== "paid") {
+        throw new HTTPException(409, { message: "The order must be paid before delivery can start" });
+      }
+      if (!canTransitionDeliveryStatus(fulfillmentType, workstream.deliveryStatus, payload.deliveryStatus!)) {
+        throw new HTTPException(409, {
+          message: `Cannot move delivery from ${String(workstream.deliveryStatus).replaceAll("_", " ")} to ${payload.deliveryStatus!.replaceAll("_", " ")}`,
+        });
+      }
+    }
+
     const now = new Date();
-    const nextVersion = statusChanged ? workstream.version + 1 : workstream.version;
+    const nextVersion = statusChanged || deliveryStatusChanged ? workstream.version + 1 : workstream.version;
+    const deliveryTimeline = deliveryStatusChanged
+      ? [
+          ...(Array.isArray(workstream.deliveryTimeline) ? workstream.deliveryTimeline : []),
+          {
+            status: payload.deliveryStatus!,
+            note: payload.deliveryNote,
+            changedBy: payload.performedBy ?? "admin",
+            changedAt: now.toISOString(),
+            trackingNumber: payload.deliveryTrackingNumber ?? workstream.deliveryTrackingNumber ?? undefined,
+          },
+        ]
+      : undefined;
     const [updatedWorkstream] = await tx
       .update(orderWorkstreams)
       .set({
         status: statusChanged ? nextStatus : undefined,
+        deliveryStatus: deliveryStatusChanged ? payload.deliveryStatus : undefined,
+        deliveryCarrier: payload.deliveryCarrier === undefined ? undefined : payload.deliveryCarrier,
+        deliveryTrackingNumber: payload.deliveryTrackingNumber === undefined ? undefined : payload.deliveryTrackingNumber,
+        deliveryStatusChangedBy: deliveryStatusChanged ? payload.performedBy ?? "admin" : undefined,
+        deliveryStatusChangedAt: deliveryStatusChanged ? now : undefined,
+        deliveryTimeline,
+        deliveryDueAt: payload.deliveryDueAt === undefined
+          ? undefined
+          : payload.deliveryDueAt === null
+            ? null
+            : new Date(payload.deliveryDueAt),
         assignedUserId: payload.assignedUserId,
         dueAt,
         startedAt: statusChanged && !workstream.startedAt ? now : undefined,
@@ -917,18 +963,24 @@ export async function updateOrderWorkstream(payload: {
     const paymentSafeRolledStatus = rolledStatus === "fulfilled" && order.paymentStatus !== "paid"
       ? "processing"
       : rolledStatus;
-    const nextOrderStatus = SHARED_FULFILLMENT_ORDER_STATUSES.has(order.status)
-      ? order.status
-      : paymentSafeRolledStatus;
+    const activeAfterUpdate = currentWorkstreams.filter((row) => row.status !== "cancelled");
+    const allDelivered = activeAfterUpdate.length > 0 && activeAfterUpdate.every((row) => ["delivered", "picked_up"].includes(String(row.deliveryStatus)));
+    const anyShipped = activeAfterUpdate.some((row) => ["assigned_to_ems", "handed_to_ems", "in_transit", "at_hub", "out_for_delivery"].includes(String(row.deliveryStatus)));
+    const anyReadyForPickup = activeAfterUpdate.some((row) => ["ready_for_pickup", "customer_notified", "waiting_customer"].includes(String(row.deliveryStatus)));
+    const nextOrderStatus = allDelivered
+      ? (activeAfterUpdate.every((row) => String(row.deliveryStatus) === "picked_up") ? "picked_up" : "delivered")
+      : anyReadyForPickup ? "ready_for_pickup"
+        : anyShipped ? "shipped"
+          : paymentSafeRolledStatus;
 
-    if (statusChanged && nextOrderStatus !== order.status) {
+    if ((statusChanged || deliveryStatusChanged) && nextOrderStatus !== order.status) {
       await tx
         .update(orders)
         .set({ status: nextOrderStatus, updatedAt: now })
         .where(eq(orders.id, payload.orderId));
     }
 
-    if (statusChanged && nextOrderStatus === "fulfilled" && order.status !== "fulfilled") {
+    if ((statusChanged || deliveryStatusChanged) && nextOrderStatus === "fulfilled" && order.status !== "fulfilled") {
       const existingDeliveryAlert = await tx.query.systemAlerts.findFirst({
         where: and(
           eq(systemAlerts.type, "shipping_delivery_ready"),
@@ -948,15 +1000,15 @@ export async function updateOrderWorkstream(payload: {
     }
 
     let workstreamEvent: typeof orderWorkstreamEvents.$inferSelect | undefined;
-    if (statusChanged) {
-      const eventKey = `${workstream.id}:status:${nextVersion}:${nextStatus}`;
+    if (statusChanged || deliveryStatusChanged) {
+      const eventKey = `${workstream.id}:${deliveryStatusChanged ? "delivery" : "status"}:${nextVersion}:${deliveryStatusChanged ? payload.deliveryStatus : nextStatus}`;
       [workstreamEvent] = await tx
         .insert(orderWorkstreamEvents)
         .values({
           orderId: payload.orderId,
           workstreamId: workstream.id,
-          fromStatus: workstream.status,
-          toStatus: nextStatus,
+          fromStatus: deliveryStatusChanged ? workstream.deliveryStatus : workstream.status,
+          toStatus: deliveryStatusChanged ? payload.deliveryStatus! : nextStatus,
           version: nextVersion,
           eventKey,
           changedBy: payload.performedBy ?? "admin",
@@ -965,13 +1017,14 @@ export async function updateOrderWorkstream(payload: {
             tracking_reference: workstream.trackingReference,
             previous_order_status: order.status,
             rolled_order_status: nextOrderStatus,
+            status_kind: deliveryStatusChanged ? "delivery" : "production",
           },
         })
         .returning();
     }
 
     await tx.insert(auditLogs).values({
-      action: statusChanged ? "order_workstream_status_updated" : "order_workstream_assignment_updated",
+      action: statusChanged ? "order_workstream_status_updated" : deliveryStatusChanged ? "order_workstream_delivery_updated" : "order_workstream_assignment_updated",
       category: "order",
       severity: "info",
       entityType: "order_workstream",
@@ -984,6 +1037,8 @@ export async function updateOrderWorkstream(payload: {
         tracking_reference: workstream.trackingReference,
         previous_status: workstream.status,
         current_status: nextStatus,
+        previous_delivery_status: workstream.deliveryStatus,
+        current_delivery_status: deliveryStatusChanged ? payload.deliveryStatus : workstream.deliveryStatus,
         previous_order_status: order.status,
         current_order_status: nextOrderStatus,
         assigned_user_id: payload.assignedUserId,
@@ -1000,11 +1055,12 @@ export async function updateOrderWorkstream(payload: {
       orderStatus: nextOrderStatus,
       changedAt: now,
       statusChanged,
+      deliveryStatusChanged,
     };
   });
 
   const detailedOrder = await getOrderDetailsForAdmin(payload.orderId);
-  if (transition.statusChanged && transition.event) {
+  if ((transition.statusChanged || transition.deliveryStatusChanged) && transition.event) {
     const otherWorkstream = transition.workstreams.find((row) => row.id !== transition.workstream.id);
     const emailResult = await sendOrderWorkstreamStatusEmail({
       ...(await orderDesignEmailDetails(detailedOrder, payload.type)),
@@ -1017,8 +1073,8 @@ export async function updateOrderWorkstream(payload: {
       totalUsd: detailedOrder.totalUsd,
       workstreamType: payload.type,
       trackingReference: transition.workstream.trackingReference,
-      previousWorkstreamStatus: transition.previousWorkstream.status,
-      workstreamStatus: transition.workstream.status,
+      previousWorkstreamStatus: transition.deliveryStatusChanged ? transition.previousWorkstream.deliveryStatus : transition.previousWorkstream.status,
+      workstreamStatus: transition.deliveryStatusChanged ? transition.workstream.deliveryStatus : transition.workstream.status,
       otherWorkstreamStatus: otherWorkstream
         ? `${workstreamLabel(otherWorkstream.type as OrderWorkstreamType)}: ${otherWorkstream.status}`
         : null,

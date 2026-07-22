@@ -87,10 +87,15 @@ const adminUpdateSchema = z.object({
 });
 const workstreamUpdateSchema = z.object({
   status: z.string().trim().max(40).optional(),
+  deliveryStatus: z.string().trim().max(40).optional(),
+  deliveryCarrier: z.string().trim().max(120).nullable().optional(),
+  deliveryTrackingNumber: z.string().trim().max(120).nullable().optional(),
+  deliveryNote: z.string().trim().max(1000).optional(),
+  deliveryDueAt: z.iso.datetime().nullable().optional(),
   assignedUserId: z.string().uuid().nullable().optional(),
   dueAt: z.iso.datetime().nullable().optional(),
 }).refine(
-  (value) => value.status !== undefined || value.assignedUserId !== undefined || value.dueAt !== undefined,
+  (value) => value.status !== undefined || value.deliveryStatus !== undefined || value.deliveryCarrier !== undefined || value.deliveryTrackingNumber !== undefined || value.deliveryDueAt !== undefined || value.assignedUserId !== undefined || value.dueAt !== undefined,
   { message: "At least one workstream field must be updated" },
 );
 const noteSchema = z.object({
@@ -262,7 +267,7 @@ ordersRouter.get("/:orderId", requireAuth, requireAnyPermission(ORDER_READ_PERMI
 ordersRouter.patch(
   "/:orderId/workstreams/:workstreamType",
   requireAuth,
-  requireAnyPermission([PERMISSIONS.ORDERS_EDIT, PERMISSIONS.ORDERS_STATUS_UPDATE]),
+  requireAnyPermission([PERMISSIONS.ORDERS_EDIT, PERMISSIONS.ORDERS_STATUS_UPDATE, PERMISSIONS.SHIPPING_EDIT]),
   zValidator("json", workstreamUpdateSchema),
   async (c) => {
     const authUser = c.get("authUser");
@@ -277,6 +282,11 @@ ordersRouter.patch(
       type: workstreamType,
       performedBy: authUser?.email,
       status: body.status,
+      deliveryStatus: body.deliveryStatus,
+      deliveryCarrier: body.deliveryCarrier,
+      deliveryTrackingNumber: body.deliveryTrackingNumber,
+      deliveryNote: body.deliveryNote,
+      deliveryDueAt: body.deliveryDueAt,
       assignedUserId: body.assignedUserId,
       dueAt: body.dueAt,
     });

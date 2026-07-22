@@ -97,6 +97,10 @@ type OrderWorkstream = {
   type: "catalog" | "custom";
   trackingReference: string;
   status: string;
+  deliveryStatus?: string | null;
+  deliveryCarrier?: string | null;
+  deliveryTrackingNumber?: string | null;
+  deliveryDueAt?: string | null;
   assignedUserId?: string | null;
   dueAt?: string | null;
   startedAt?: string | null;
@@ -796,7 +800,9 @@ export function OrderDetailPage({
   const orderKind = `${isGroup ? "Group" : "Individual"} ${operationalKind}`;
   const orderImage = firstOrderImage(displayOrder);
   const isPickup = order.fulfillmentType === "pickup" || order.carrier === "pickup";
-  const deliveryStage = isDeliveryStageOrder(order);
+  const deliveryStage = activeWorkstream
+    ? activeWorkstream.status === "ready" && Boolean(activeWorkstream.deliveryStatus && activeWorkstream.deliveryStatus !== "not_started")
+    : isDeliveryStageOrder(order);
   const sessionUser = session?.user as { id?: string | null; role?: string | null; permissions?: string[] | null } | undefined;
   const userPermissions = sessionUser?.permissions ?? [];
   const isAdmin = sessionUser?.role === "admin";
@@ -1248,6 +1254,21 @@ export function OrderDetailPage({
       activeSection={section}
       onSectionChange={(id) => setSection(id as OrderDetailSection)}
     >
+      {(order.workstreams ?? []).length > 0 ? (
+        <div className="mb-5 flex flex-wrap gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">
+          <a href={`/admin/orders/${order.id}`} className={cn("rounded-xl px-4 py-2 text-xs font-black uppercase tracking-wide", !scope ? "bg-slate-950 text-white" : "text-slate-600 hover:bg-slate-100")}>Order Summary</a>
+          {(order.workstreams ?? []).map((workstream) => (
+            <a
+              key={workstream.id}
+              href={`/admin/orders/${order.id}?scope=${workstream.type}`}
+              className={cn("rounded-xl px-4 py-2 text-xs font-black uppercase tracking-wide", scope === workstream.type ? "bg-blue-600 text-white" : "text-slate-600 hover:bg-slate-100")}
+            >
+              {workstream.type === "custom" ? "Custom Order" : "Catalog Order"}
+            </a>
+          ))}
+          <a href={`/admin/orders/shipping-delivery${scope ? `/${order.id}?scope=${scope}` : ""}`} className="rounded-xl px-4 py-2 text-xs font-black uppercase tracking-wide text-orange-700 hover:bg-orange-50">Shipping & Delivery</a>
+        </div>
+      ) : null}
       {section === "summary" ? (
         <div className="space-y-5">
           <div className="grid gap-4 lg:grid-cols-2">
@@ -1269,7 +1290,10 @@ export function OrderDetailPage({
                       <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">{workstream.type} workstream</p>
                       <p className="mt-1 font-mono text-sm font-black text-slate-950">{workstream.trackingReference}</p>
                     </div>
-                    {statusPill(workstream.status)}
+                    <div className="flex flex-wrap justify-end gap-2">
+                      {statusPill(workstream.status)}
+                      {workstream.deliveryStatus && workstream.deliveryStatus !== "not_started" ? statusPill(workstream.deliveryStatus) : null}
+                    </div>
                   </div>
                   <div className="mt-4 flex flex-wrap gap-3 text-xs font-bold text-slate-600">
                     <span>{workstreamItems.length} item{workstreamItems.length === 1 ? "" : "s"}</span>

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   canTransitionWorkstreamStatus,
+  canTransitionDeliveryStatus,
   classifyOrderLine,
   inferOrderType,
   rollUpOrderStatus,
@@ -45,5 +46,19 @@ describe("order workstreams", () => {
   it("creates stable child tracking references", () => {
     expect(workstreamTrackingReference("YH-20260720-1234", "catalog")).toBe("YH-20260720-1234-CAT");
     expect(workstreamTrackingReference("YH-20260720-1234", "custom")).toBe("YH-20260720-1234-CUS");
+  });
+
+  it("keeps mail delivery transitions separate from production", () => {
+    expect(canTransitionDeliveryStatus("mail", "not_started", "packing")).toBe(true);
+    expect(canTransitionDeliveryStatus("mail", "packed", "in_transit")).toBe(false);
+    expect(canTransitionDeliveryStatus("mail", "handed_to_ems", "in_transit")).toBe(true);
+    expect(canTransitionDeliveryStatus("mail", "failed_attempt", "returned")).toBe(true);
+  });
+
+  it("supports the pickup delivery lifecycle", () => {
+    expect(canTransitionDeliveryStatus("pickup", "packed", "moved_to_pickup_desk")).toBe(true);
+    expect(canTransitionDeliveryStatus("pickup", "moved_to_pickup_desk", "ready_for_pickup")).toBe(true);
+    expect(canTransitionDeliveryStatus("pickup", "ready_for_pickup", "picked_up")).toBe(true);
+    expect(canTransitionDeliveryStatus("pickup", "packed", "delivered")).toBe(false);
   });
 });
