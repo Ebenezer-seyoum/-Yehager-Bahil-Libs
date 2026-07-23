@@ -161,8 +161,10 @@ export type OrderDetailData = {
   totalUsd?: number | string | null;
   subtotalUsd?: number | string | null;
   subtotal_usd?: number | string | null;
-  discountAmountUsd?: number | string | null;
-  discount_amount_usd?: number | string | null;
+    discountAmountUsd?: number | string | null;
+    discount_amount_usd?: number | string | null;
+    creditUsedUsd?: number | string | null;
+    credit_used_usd?: number | string | null;
   couponCode?: string | null;
   coupon_code?: string | null;
   totalEtb?: number | string | null;
@@ -1061,6 +1063,7 @@ export function OrderDetailPage({
     return Number.isFinite(computed) && computed >= 0 ? computed : 0;
   })();
   const couponDiscount = Number(order.discountAmountUsd ?? order.discount_amount_usd ?? 0);
+  const creditUsed = Number(order.creditUsedUsd ?? order.credit_used_usd ?? 0);
   const couponCode = order.couponCode ?? order.coupon_code ?? null;
   const finalTotal = Number(order.totalUsd ?? order.totalAmount ?? 0);
   const deadline = deliveryDeadline(order.createdAt, timelineNow, order.status === "delivered" || order.status === "picked_up");
@@ -1737,6 +1740,7 @@ export function OrderDetailPage({
             <DetailField label="Subtotal Before Coupon" value={money(subtotalBeforeCoupon)} />
             <DetailField label="Coupon Code" value={couponCode || "No coupon used"} />
             <DetailField label="Coupon Discount" value={couponDiscount > 0 ? `-${money(couponDiscount)}` : "$0.00"} />
+            <DetailField label="Company Credit Used" value={creditUsed > 0 ? `-${money(creditUsed)}` : "$0.00"} />
             <DetailField label="Final Order Total" value={money(finalTotal)} />
           </div>
 

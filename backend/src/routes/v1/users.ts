@@ -13,6 +13,7 @@ import {
 import type { AppBindings } from "../../types/hono.js";
 import { getDashboardPreferences, updateDashboardPreferences } from "../../services/dashboard-preferences-service.js";
 import { strongPasswordSchema } from "../../lib/auth/password-policy.js";
+import { getCustomerCreditBalance } from "../../services/customer-credits-service.js";
 
 export const usersRouter = new Hono<AppBindings>();
 
@@ -82,6 +83,12 @@ usersRouter.patch("/me/password", requireAuth, zValidator("json", passwordPatchS
     ...body,
   });
   return c.json({ data: user });
+});
+
+usersRouter.get("/me/customer-credit", requireAuth, async (c) => {
+  const authUser = c.get("authUser");
+  const balanceUsd = await getCustomerCreditBalance(authUser?.email ?? "");
+  return c.json({ data: { balanceUsd, eligibleSection: "Other" } });
 });
 
 usersRouter.get("/me/dashboard-preferences", requireAuth, async (c) => {

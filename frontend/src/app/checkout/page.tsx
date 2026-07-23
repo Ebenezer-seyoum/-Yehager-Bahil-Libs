@@ -29,6 +29,7 @@ type Profile = {
   role?: string | null;
   profileComplete?: boolean | null;
 };
+type CustomerCredit = { balanceUsd?: string | number | null; eligibleSection?: string | null };
 
 export default async function CheckoutPage({
   searchParams,
@@ -112,6 +113,7 @@ export default async function CheckoutPage({
             pickupPersonPhone: pickupPersonPhone || undefined,
             remarks: tailorNote || undefined,
             couponCode: couponCode || undefined,
+            useCustomerCredit: formData.get("useCustomerCredit") === "on",
           },
         });
 
@@ -155,16 +157,19 @@ export default async function CheckoutPage({
   let etbRate: number | null = null;
   let authRequired = false;
   let profileComplete = true;
+  let customerCredit: CustomerCredit = { balanceUsd: 0, eligibleSection: "Other" };
   try {
     await ensureBackendUserSynced();
-    const [cartRes, rateRes, profileRes] = await Promise.all([
+    const [cartRes, rateRes, profileRes, creditRes] = await Promise.all([
       apiRequest<{ data: CartItem[] }>("/api/v1/cart"),
       backendPublicRequest("/api/v1/exchange-rate").catch(() => ({ data: null })),
       apiRequest<{ data?: Profile | null }>("/api/v1/users/me"),
+      apiRequest<{ data?: CustomerCredit }>("/api/v1/users/me/customer-credit").catch(() => ({ data: undefined })),
     ]);
     items = Array.isArray(cartRes?.data) ? cartRes.data : [];
     etbRate = Number(rateRes?.data?.rate ?? 0) || null;
     const profile = profileRes?.data;
+    customerCredit = creditRes?.data ?? customerCredit;
     profileComplete = String(profile?.role ?? role ?? "customer").toLowerCase() !== "customer" || profile?.profileComplete !== false;
     const eventIds = [...new Set(items.map((item) => item.eventId).filter(Boolean))];
     if (eventIds.length === 1) {
@@ -238,7 +243,7 @@ export default async function CheckoutPage({
     <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
       <h1 className="font-heading text-3xl font-bold mb-8">Checkout</h1>
 
-      <CheckoutFlow items={items} event={event} error={err} etbRate={etbRate} startCheckoutAction={startCheckout} />
+      <CheckoutFlow items={items} event={event} error={err} etbRate={etbRate} customerCredit={customerCredit} startCheckoutAction={startCheckout} />
     </div>
   );
 }

@@ -87,10 +87,11 @@ export default async function MyAccountPage() {
   let orders = [];
 
   // Use allSettled so a failure in one call doesn't reset the others
-  const [userRes, measurementRes, ordersRes] = await Promise.allSettled([
+  const [userRes, measurementRes, ordersRes, creditRes] = await Promise.allSettled([
     apiRequest("/api/v1/users/me"),
     apiRequest("/api/v1/measurements"),
     apiRequest("/api/v1/orders/me?limit=50"),
+    apiRequest("/api/v1/users/me/customer-credit"),
   ]);
 
   if (userRes.status === "fulfilled") {
@@ -104,6 +105,7 @@ export default async function MyAccountPage() {
   if (ordersRes.status === "fulfilled") {
     orders = Array.isArray(ordersRes.value?.data) ? ordersRes.value.data : [];
   }
+  const customerCredit = creditRes.status === "fulfilled" ? creditRes.value?.data ?? {} : {};
 
   return (
     <CustomerAccountDashboard
@@ -114,6 +116,7 @@ export default async function MyAccountPage() {
         role: session?.user?.role ?? profile?.role ?? "customer",
       }}
       orders={orders}
+      customerCredit={customerCredit}
       measurements={measurements}
       createMeasurement={createMeasurement}
       updateMeasurement={updateMeasurement}

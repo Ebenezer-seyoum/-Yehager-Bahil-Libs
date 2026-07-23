@@ -59,6 +59,7 @@ export function PaymentDetailClient({
   const subtotalUsd = order.subtotalUsd ?? order.subtotal_usd;
   const shippingCostUsd = order.shippingCostUsd ?? order.shipping_cost_usd;
   const discountAmountUsd = order.discountAmountUsd ?? order.discount_amount_usd;
+  const creditUsedUsd = order.creditUsedUsd ?? order.credit_used_usd;
   const couponCode = order.couponCode ?? order.coupon_code;
   const totalEtb = order.totalEtb ?? order.total_etb;
   const isEtb = paymentMethod === "etb_bank_transfer" || paymentCurrency === "ETB";
@@ -279,6 +280,10 @@ export function PaymentDetailClient({
               <div className="flex items-center justify-between mb-8">
                  <h2 className="flex items-center gap-2 text-sm font-black uppercase tracking-widest text-slate-400"><FileText className="h-4 w-4" /> Proof of Transfer</h2>
                  {proofUrl ? <button onClick={() => setShowFullProof(true)} className="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-primary hover:underline"><Maximize2 className="h-3 w-3" /> View Full Screen</button> : null}
+              </div>
+              <div className="rounded-2xl bg-amber-50 p-6">
+                 <span className="text-[10px] font-black uppercase text-amber-500 tracking-widest">Company Credit Used</span>
+                 <p className="mt-2 text-2xl font-black text-amber-800">{Number(creditUsedUsd ?? 0) > 0 ? `-${formatUsd(creditUsedUsd)}` : "$0.00"}</p>
               </div>
               <div className="mb-6 grid gap-3 sm:grid-cols-3">
                 <ReceiptField label="Transfer Amount" value={totalEtb ? `${Number(totalEtb).toLocaleString()} ETB` : "Not available"} />

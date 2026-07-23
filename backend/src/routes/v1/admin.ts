@@ -219,7 +219,7 @@ const customerCreditRuleSchema = z.object({
   name: z.string().trim().max(180).nullable().optional(),
   minimumPaidUsd: z.coerce.number().positive(),
   rewardUsd: z.coerce.number().positive(),
-  appliesTo: z.enum(["all_orders", "catalog_orders", "custom_orders"]),
+  appliesTo: z.enum(["all_orders", "catalog_orders", "custom_orders", "other_orders"]),
   status: z.enum(["active", "inactive"]),
   internalNote: z.string().trim().max(1000).nullable().optional(),
 });

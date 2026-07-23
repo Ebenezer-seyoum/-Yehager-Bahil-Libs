@@ -2,8 +2,20 @@ import { desc, eq, sql } from "drizzle-orm";
 import { db } from "../lib/db/drizzle.js";
 import { auditLogs, customerCreditLedger, customerCreditRules, orders, users } from "../lib/db/schema.js";
 import { moneyToNumber, numberToMoney } from "./checkout-utils.js";
+import { sendCustomerCreditAwardedEmail } from "./email-service.js";
 
 type CreditOrder = typeof orders.$inferSelect;
+
+export function isOtherCreditLine(item: Record<string, unknown>) {
+  const metadata = item.item_metadata ?? item.itemMetadata;
+  const values = [
+    item.category,
+    item.subcategory,
+    typeof metadata === "object" && metadata ? (metadata as Record<string, unknown>).category : null,
+    typeof metadata === "object" && metadata ? (metadata as Record<string, unknown>).subcategory : null,
+  ].map((value) => String(value ?? "").trim().toLowerCase());
+  return values.some((value) => ["other", "others", "jewelry", "jewellery", "ring", "rings"].includes(value));
+}
 
 function isCustomLine(item: Record<string, unknown>) {
   return Boolean(
@@ -26,6 +38,9 @@ function eligiblePaidTotal(ruleAppliesTo: string | null | undefined, order: Cred
   const items = Array.isArray(order.items)
     ? order.items.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object")
     : [];
+  if (ruleAppliesTo === "other_orders") {
+    return items.filter(isOtherCreditLine).reduce((sum, item) => sum + lineTotal(item), 0);
+  }
   const wantsCustom = ruleAppliesTo === "custom_orders";
   const subtotal = items
     .filter((item) => isCustomLine(item) === wantsCustom)
@@ -105,7 +120,7 @@ export async function updateCustomerCreditRuleForAdmin(payload: {
   name?: string | null;
   minimumPaidUsd: number;
   rewardUsd: number;
-  appliesTo: "all_orders" | "catalog_orders" | "custom_orders";
+  appliesTo: "all_orders" | "catalog_orders" | "custom_orders" | "other_orders";
   status: "active" | "inactive";
   internalNote?: string | null;
   performedBy?: string | null;
@@ -201,5 +216,70 @@ export async function awardCustomerCreditForPaidOrder(order: CreditOrder, perfor
     },
   });
 
+  await sendCustomerCreditAwardedEmail({
+    to: order.userEmail,
+    customerName: order.customerName,
+    amountUsd: entry.amountUsd,
+    balanceUsd: entry.balanceAfterUsd ?? numberToMoney(previousBalance + reward),
+    orderNumber: order.orderNumber,
+  });
+
   return entry;
+}
+
+export async function getCustomerCreditBalance(userEmail: string) {
+  return balanceForCustomer(userEmail);
+}
+
+export async function spendCustomerCreditForOrder(payload: {
+  userEmail: string;
+  userId?: string | null;
+  customerName?: string | null;
+  orderId: string;
+  orderNumber: string;
+  amountUsd: number;
+  performedBy?: string;
+}) {
+  const amount = Number(payload.amountUsd.toFixed(2));
+  if (amount <= 0) return null;
+  const previousBalance = await balanceForCustomer(payload.userEmail);
+  if (amount > previousBalance) throw new Error("Customer credit balance is insufficient");
+  const [entry] = await db.insert(customerCreditLedger).values({
+    userId: payload.userId ?? null,
+    userEmail: payload.userEmail,
+    customerName: payload.customerName ?? null,
+    orderId: payload.orderId,
+    orderNumber: payload.orderNumber,
+    amountUsd: numberToMoney(-amount),
+    balanceAfterUsd: numberToMoney(previousBalance - amount),
+    type: "credit_used",
+    reason: `Company credit used for order #${payload.orderNumber}`,
+    createdBy: payload.performedBy ?? "checkout",
+    metadata: { eligible_section: "Other" },
+  }).returning();
+  return entry ?? null;
+}
+
+export async function restoreCustomerCreditForOrder(order: CreditOrder, performedBy = "system") {
+  const usedRows = await db.select().from(customerCreditLedger).where(eq(customerCreditLedger.orderId, order.id));
+  const used = usedRows.find((entry) => entry.type === "credit_used" && moneyToNumber(entry.amountUsd) < 0);
+  if (!used) return null;
+  const alreadyRestored = usedRows.some((entry) => entry.type === "bonus_credit" && entry.metadata?.credit_refund === true);
+  if (alreadyRestored) return null;
+  const amount = Math.abs(moneyToNumber(used.amountUsd));
+  const previousBalance = await balanceForCustomer(order.userEmail);
+  const [entry] = await db.insert(customerCreditLedger).values({
+    userId: order.userId ?? null,
+    userEmail: order.userEmail,
+    customerName: order.customerName,
+    orderId: order.id,
+    orderNumber: order.orderNumber,
+    amountUsd: numberToMoney(amount),
+    balanceAfterUsd: numberToMoney(previousBalance + amount),
+    type: "bonus_credit",
+    reason: `Company credit restored after order #${order.orderNumber} ${order.paymentStatus}`,
+    createdBy: performedBy,
+    metadata: { credit_refund: true, restored_from_entry_id: used.id },
+  }).returning();
+  return entry ?? null;
 }

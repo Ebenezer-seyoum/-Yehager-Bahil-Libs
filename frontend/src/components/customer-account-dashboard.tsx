@@ -7,6 +7,7 @@ import {
   ChevronDown,
   ChevronRight,
   CreditCard,
+  Wallet,
   Lock,
   LogOut,
   Mail,
@@ -238,6 +239,7 @@ export function CustomerAccountDashboard({
   createMeasurement,
   updateMeasurement,
   deleteMeasurement,
+  customerCredit,
 }: {
   profile: Profile;
   orders: Order[];
@@ -245,6 +247,7 @@ export function CustomerAccountDashboard({
   createMeasurement: ServerAction;
   updateMeasurement: ServerAction;
   deleteMeasurement: ServerAction;
+  customerCredit?: { balanceUsd?: string | number | null; eligibleSection?: string | null };
 }) {
   const mustChangePassword = Boolean(profile.mustChangePassword);
   const searchParams = useSearchParams();
@@ -365,6 +368,16 @@ export function CustomerAccountDashboard({
               <p className="mt-0.5 text-xs text-background/60">{label}</p>
             </div>
           ))}
+        </div>
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-primary/30 bg-primary/10 p-4">
+          <div className="flex items-center gap-3">
+            <Wallet className="h-6 w-6 text-primary" />
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Company Credit Card</p>
+              <p className="mt-1 text-2xl font-bold">${Number(customerCredit?.balanceUsd ?? 0).toFixed(2)}</p>
+            </div>
+          </div>
+          <p className="max-w-xs text-right text-xs text-background/70">Use this company balance only for the Other section, including jewelry and rings.</p>
         </div>
       </div>
 

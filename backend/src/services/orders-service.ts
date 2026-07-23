@@ -1,7 +1,7 @@
 import { HTTPException } from "hono/http-exception";
-import { and, eq, inArray, isNull, or } from "drizzle-orm";
+import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { db } from "../lib/db/drizzle.js";
-import { auditLogs, cartItems, eventParticipants, events, familyMembers, measurements, orderLineItemEvents, orderLineItems, orderNotes, orders, orderWorkstreamEvents, orderWorkstreams, products, systemAlerts, uploadedDesigns } from "../lib/db/schema.js";
+import { auditLogs, cartItems, customerCreditLedger, eventParticipants, events, familyMembers, measurements, orderLineItemEvents, orderLineItems, orderNotes, orders, orderWorkstreamEvents, orderWorkstreams, products, systemAlerts, uploadedDesigns } from "../lib/db/schema.js";
 import { PERMISSIONS } from "../lib/auth/permissions.js";
 import {
   allActiveLineItemsFulfilled,
@@ -46,7 +46,7 @@ import {
 import { sendAdminOrderCreatedEmail, sendAdminOrderStatusChangedEmail, sendAdminPaymentReceivedEmail, sendOrderStatusEmail, sendOrderWorkstreamStatusEmail } from "./email-service.js";
 import type { OrderEmailEvent } from "./email-service.js";
 import { calculateCouponDiscount, markCouponRedeemed } from "./discounts-service.js";
-import { awardCustomerCreditForPaidOrder } from "./customer-credits-service.js";
+import { awardCustomerCreditForPaidOrder, isOtherCreditLine, restoreCustomerCreditForOrder } from "./customer-credits-service.js";
 import { hasPermission } from "./permissions-service.js";
 
 const ORDER_STATUS_VALUES = CUSTOMER_MAIN_STATUSES;
@@ -871,6 +871,10 @@ export async function updateOrderAdminState(payload: {
     }
   }
 
+  if ((nextPayment === "failed" || nextPayment === "refunded") && order.paymentStatus !== nextPayment) {
+    await restoreCustomerCreditForOrder(updated, payload.performedBy ?? "admin");
+  }
+
   await db.insert(auditLogs).values({
     action: "order_admin_state_updated",
     category: "order",
@@ -967,6 +971,7 @@ export async function updateOrderWorkstream(payload: {
   if (payload.status === undefined && payload.deliveryStatus === undefined && payload.assignedUserId === undefined && payload.dueAt === undefined && payload.deliveryCarrier === undefined && payload.deliveryTrackingNumber === undefined && payload.deliveryDueAt === undefined) {
     throw new HTTPException(400, { message: "At least one workstream field must be updated" });
   }
+
   if (payload.status && !isWorkstreamStatus(payload.type, payload.status)) {
     throw new HTTPException(400, { message: `Invalid ${payload.type} workstream status: ${payload.status}` });
   }
@@ -1465,6 +1470,7 @@ export async function createCheckoutIntent(payload: {
   pickupPersonPhone?: string;
   remarks?: string;
   couponCode?: string;
+  useCustomerCredit?: boolean;
 }) {
   const userEmail = payload.userEmail;
   if (!userEmail) {
@@ -1504,7 +1510,11 @@ export async function createCheckoutIntent(payload: {
         })
       : undefined;
 
+    const productIds = cartRows.map((row) => row.productId).filter((id): id is string => Boolean(id));
+    const productRows = productIds.length ? await tx.query.products.findMany({ where: inArray(products.id, productIds) }) : [];
+    const productById = new Map(productRows.map((product) => [product.id, product]));
     const lineInputs = cartRows.map((row) => {
+      const product = row.productId ? productById.get(row.productId) : undefined;
       return {
         cartItemId: row.id,
         productId: row.productId,
@@ -1515,7 +1525,11 @@ export async function createCheckoutIntent(payload: {
         measurementSnapshot: row.measurementSnapshot,
         itemType: row.itemType,
         uploadedDesignId: row.uploadedDesignId,
-        itemMetadata: row.itemMetadata,
+        itemMetadata: {
+          ...(row.itemMetadata ?? {}),
+          category: product?.category ?? (row.itemMetadata as Record<string, unknown> | null | undefined)?.category,
+          subcategory: product?.subcategory ?? (row.itemMetadata as Record<string, unknown> | null | undefined)?.subcategory,
+        },
       };
     });
 
@@ -1544,10 +1558,17 @@ export async function createCheckoutIntent(payload: {
       customSubtotalUsd,
     });
     const discountAmountUsd = couponResult.discountAmountUsd;
+    const otherSubtotalUsd = lines.filter(isOtherCreditLine).reduce((sum, line) => sum + line.lineTotalUsd, 0);
+    let creditUsedUsd = 0;
+    if (payload.useCustomerCredit) {
+      if (otherSubtotalUsd <= 0) throw new HTTPException(400, { message: "Company credit can only be used for Other-section products such as jewelry and rings" });
+      const [balanceRow] = await tx.select({ balance: sql<string>`coalesce(sum(${customerCreditLedger.amountUsd}), 0)` }).from(customerCreditLedger).where(eq(customerCreditLedger.userEmail, userEmail));
+      creditUsedUsd = Math.min(moneyToNumber(balanceRow?.balance), otherSubtotalUsd, Math.max(baseTotals.totalUsd - discountAmountUsd, 0));
+    }
     const totals = {
       ...baseTotals,
       discountAmountUsd,
-      totalUsd: Math.max(baseTotals.totalUsd - discountAmountUsd, 0),
+      totalUsd: Math.max(baseTotals.totalUsd - discountAmountUsd - creditUsedUsd, 0),
     };
 
     let totalEtb: string | undefined;
@@ -1616,6 +1637,7 @@ export async function createCheckoutIntent(payload: {
         })),
         subtotalUsd: numberToMoney(baseTotals.subtotalUsd),
         discountAmountUsd: numberToMoney(discountAmountUsd),
+        creditUsedUsd: numberToMoney(creditUsedUsd),
         couponCode: couponResult.coupon?.code,
         couponId: couponResult.coupon?.id,
         totalUsd: numberToMoney(totals.totalUsd),
@@ -1640,6 +1662,25 @@ export async function createCheckoutIntent(payload: {
         remarks: payload.remarks,
       })
       .returning();
+
+    if (creditUsedUsd > 0) {
+      const [balanceRow] = await tx.select({ balance: sql<string>`coalesce(sum(${customerCreditLedger.amountUsd}), 0)` }).from(customerCreditLedger).where(eq(customerCreditLedger.userEmail, userEmail));
+      const balance = moneyToNumber(balanceRow?.balance);
+      if (creditUsedUsd > balance) throw new HTTPException(409, { message: "Customer credit balance changed. Please try checkout again." });
+      await tx.insert(customerCreditLedger).values({
+        userId: user?.id ?? null,
+        userEmail,
+        customerName,
+        orderId: order.id,
+        orderNumber,
+        amountUsd: numberToMoney(-creditUsedUsd),
+        balanceAfterUsd: numberToMoney(balance - creditUsedUsd),
+        type: "credit_used",
+        reason: `Company credit used for Other-section order #${orderNumber}`,
+        createdBy: "checkout",
+        metadata: { eligible_section: "Other", credit_reserved: true },
+      });
+    }
 
     const workstreamRows = await tx
       .insert(orderWorkstreams)

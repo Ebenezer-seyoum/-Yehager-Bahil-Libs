@@ -954,6 +954,42 @@ export async function sendRegistrationEmail(payload: { to?: string | null; name?
   });
 }
 
+export async function sendCustomerCreditAwardedEmail(payload: {
+  to: string;
+  customerName?: string | null;
+  amountUsd: string | number;
+  balanceUsd: string | number;
+  orderNumber?: string | null;
+}) {
+  const amount = Number(payload.amountUsd).toFixed(2);
+  const balance = Number(payload.balanceUsd).toFixed(2);
+  const creditUrl = appLink("/my-account");
+  return sendTransactionalEmailSafely({
+    channel: "notifications",
+    to: payload.to,
+    subject: `Your Yehager Bahil company credit is ready — $${amount}`,
+    text: paragraph([
+      `Hello ${payload.customerName || "Customer"},`,
+      `Yehager Bahil has added $${amount} to your company credit card${payload.orderNumber ? ` after order #${payload.orderNumber}` : ""}.`,
+      `Your available balance is now $${balance}.`,
+      "Company credit can be used only for products in the Other section, including jewelry and rings.",
+      `View your credit card: ${creditUrl}`,
+    ]),
+    html: customerEmailFrame(`
+      <div style="padding:30px">
+        <p style="margin:0 0 10px;color:#f5efe6;font-size:17px">Hello <strong>${escapeHtml(payload.customerName || "Customer")}</strong>,</p>
+        <div style="margin:20px 0;padding:24px;border:1px solid #a8c88b;border-radius:14px;background:#192016;text-align:center">
+          <p style="margin:0;color:#a8c88b;font-size:12px;text-transform:uppercase;letter-spacing:2px">Company Credit Added</p>
+          <p style="margin:12px 0;color:#fff7df;font-size:34px;font-weight:900">+$${escapeHtml(amount)}</p>
+          <p style="margin:0;color:#d7d0c4;font-size:14px">Available balance: <strong>$${escapeHtml(balance)}</strong></p>
+        </div>
+        <p style="color:#c9bdad;line-height:1.6">This company credit belongs to Yehager Bahil Libs and can be used only in the Other section, including jewelry, rings, and similar products.</p>
+        ${actionButton("View My Credit Card", creditUrl)}
+      </div>
+    `),
+  });
+}
+
 export async function sendPasswordSetupEmail(payload: PasswordLinkPayload) {
   const name = payload.name || "there";
   const expires = payload.expiresAt.toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" });

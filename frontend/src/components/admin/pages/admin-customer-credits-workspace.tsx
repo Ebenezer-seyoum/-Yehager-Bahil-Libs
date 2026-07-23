@@ -69,6 +69,7 @@ function typeLabel(value: unknown) {
 function appliesToLabel(value: unknown) {
   if (value === "catalog_orders") return "Catalog Orders";
   if (value === "custom_orders") return "Custom Orders";
+  if (value === "other_orders") return "Other Section (Jewelry & Rings)";
   return "All Orders";
 }
 
@@ -82,7 +83,7 @@ function RuleForm({
   const [name, setName] = useState(String(rule?.name ?? ""));
   const [minimumPaidUsd, setMinimumPaidUsd] = useState(String(rule?.minimumPaidUsd ?? "500"));
   const [rewardUsd, setRewardUsd] = useState(String(rule?.rewardUsd ?? "30"));
-  const [appliesTo, setAppliesTo] = useState(String(rule?.appliesTo ?? "all_orders"));
+  const [appliesTo, setAppliesTo] = useState(String(rule?.appliesTo ?? "other_orders"));
   const [status, setStatus] = useState(String(rule?.status ?? "active"));
   const [internalNote, setInternalNote] = useState(String(rule?.internalNote ?? ""));
   const [busy, setBusy] = useState(false);
@@ -139,6 +140,7 @@ function RuleForm({
             <option value="all_orders">All Orders</option>
             <option value="catalog_orders">Catalog Orders</option>
             <option value="custom_orders">Custom Orders</option>
+            <option value="other_orders">Other Section (Jewelry & Rings)</option>
           </select>
         </label>
       </div>

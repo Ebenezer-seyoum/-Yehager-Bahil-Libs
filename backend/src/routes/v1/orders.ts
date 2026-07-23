@@ -55,6 +55,7 @@ const checkoutIntentSchema = z.object({
   pickupPersonPhone: z.string().optional(),
   remarks: z.string().max(1000).optional(),
   couponCode: z.string().trim().max(64).optional(),
+  useCustomerCredit: z.boolean().optional(),
 });
 const couponPreviewSchema = z.object({
   cartItemIds: z.array(z.string().uuid()).min(1),
@@ -133,6 +134,7 @@ ordersRouter.post("/checkout-intent", requireAuth, zValidator("json", checkoutIn
     pickupPersonPhone: body.pickupPersonPhone,
     remarks: body.remarks,
     couponCode: body.couponCode,
+    useCustomerCredit: body.useCustomerCredit,
   });
   return c.json({ data }, 201);
 });

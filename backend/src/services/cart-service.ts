@@ -194,6 +194,8 @@ export async function addItemToCart(payload: {
       gender: selectedRole?.gender ?? payload.measurementSnapshot?.gender,
       child_age: customerType === "girl" || customerType === "boy" ? childAge : undefined,
       pricing_snapshot: roleCostSnapshot,
+      category: product.category,
+      subcategory: product.subcategory,
       price_currency: selectedRole?.currency ?? product.baseCurrency ?? "USD",
       entered_price: selectedRole?.enteredPrice ?? Number(pricedProduct.effectivePriceUsd ?? product.priceUsd),
     },

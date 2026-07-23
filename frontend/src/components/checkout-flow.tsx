@@ -27,6 +27,7 @@ type CheckoutFlowProps = {
   event: Event | null;
   error?: string;
   etbRate: number | null;
+  customerCredit?: { balanceUsd?: string | number | null; eligibleSection?: string | null };
   startCheckoutAction: (formData: FormData) => void | Promise<void>;
 };
 
@@ -86,7 +87,7 @@ function SelectDot({ selected }: { selected: boolean }) {
   return <span className={`mt-1 h-4 w-4 shrink-0 rounded-full border-2 ${selected ? "border-primary bg-primary shadow-[inset_0_0_0_4px_#050505]" : "border-white bg-white"}`} />;
 }
 
-export function CheckoutFlow({ items, event, error, etbRate, startCheckoutAction }: CheckoutFlowProps) {
+export function CheckoutFlow({ items, event, error, etbRate, customerCredit, startCheckoutAction }: CheckoutFlowProps) {
   const [fulfillmentType, setFulfillmentType] = useState<"mail" | "pickup">("mail");
   const [shipChoice, setShipChoice] = useState("own");
   const [paymentMethod, setPaymentMethod] = useState<"stripe_usd" | "etb_bank_transfer">("stripe_usd");
@@ -95,6 +96,7 @@ export function CheckoutFlow({ items, event, error, etbRate, startCheckoutAction
   const [couponCode, setCouponCode] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState<AppliedCoupon | null>(null);
   const [isApplyingCoupon, setIsApplyingCoupon] = useState(false);
+  const [useCustomerCredit, setUseCustomerCredit] = useState(false);
 
   const totalItems = items.reduce((sum, item) => sum + Number(item.quantity ?? 1), 0);
   const subtotal = items.reduce((sum, item) => sum + Number(item.priceUsd ?? 0) * Number(item.quantity ?? 1), 0);
@@ -103,6 +105,9 @@ export function CheckoutFlow({ items, event, error, etbRate, startCheckoutAction
   const displaySubtotal = appliedCoupon ? appliedCoupon.subtotalUsd : subtotal;
   const displayShipping = appliedCoupon ? appliedCoupon.shippingCostUsd : shipping;
   const payableTotal = appliedCoupon ? appliedCoupon.totalUsd : total;
+  const creditBalance = Number(customerCredit?.balanceUsd ?? 0);
+  const estimatedCredit = Math.min(Math.max(creditBalance, 0), payableTotal);
+  const displayedPayableTotal = Math.max(payableTotal - (useCustomerCredit ? estimatedCredit : 0), 0);
   const totalEtb = etbRate ? Math.round(payableTotal * etbRate) : null;
   const message = errorMessage(error);
   const hasEventAddress = Boolean(event?.shippingAddress);
@@ -120,8 +125,8 @@ export function CheckoutFlow({ items, event, error, etbRate, startCheckoutAction
   }, [event?.shippingAddress]);
 
   const payLabel = paymentMethod === "etb_bank_transfer"
-    ? `Continue to ETB Payment${totalEtb ? ` (${totalEtb.toLocaleString()} ETB)` : ""}`
-    : `Pay $${payableTotal.toFixed(2)} USD with Stripe`;
+    ? `Continue to ETB Payment${totalEtb ? ` (${(displayedPayableTotal * (etbRate ?? 0)).toLocaleString()} ETB)` : ""}`
+    : `Pay $${displayedPayableTotal.toFixed(2)} USD with Stripe`;
 
   function chooseStripeCurrency(code: string) {
     setSelectedCurrency(code);
@@ -209,6 +214,7 @@ export function CheckoutFlow({ items, event, error, etbRate, startCheckoutAction
       <input type="hidden" name="selectedCurrency" value={selectedCurrency} />
       <input type="hidden" name="tailorNote" value={tailorNote} />
       <input type="hidden" name="couponCode" value={appliedCoupon?.code ?? ""} />
+      {useCustomerCredit ? <input type="hidden" name="useCustomerCredit" value="on" /> : null}
 
       <div className="rounded-xl border border-amber-100 bg-amber-50 p-4 text-orange-700">
         <div className="flex items-start gap-4">
@@ -332,9 +338,19 @@ export function CheckoutFlow({ items, event, error, etbRate, startCheckoutAction
             <SummaryLine label={`Coupon Discount (${appliedCoupon.code})`} value={`-$${appliedCoupon.discountAmountUsd.toFixed(2)} USD`} />
           </div>
         ) : null}
+        <div className="mt-4 rounded-xl border border-emerald-300/50 bg-emerald-50/10 p-4">
+          <label className="flex cursor-pointer items-start gap-3">
+            <input type="checkbox" checked={useCustomerCredit} onChange={(event) => setUseCustomerCredit(event.target.checked)} disabled={creditBalance <= 0} className="mt-1 h-5 w-5 accent-emerald-600" />
+            <span>
+              <span className="block text-sm font-bold text-foreground">Use company credit card balance</span>
+              <span className="mt-1 block text-xs text-muted-foreground">Available: ${Math.max(creditBalance, 0).toFixed(2)} · Works only for the Other section (jewelry, rings, and similar items).</span>
+            </span>
+          </label>
+          {useCustomerCredit ? <SummaryLine label="Company Credit Used" value={`-$${estimatedCredit.toFixed(2)} USD`} /> : null}
+        </div>
         <div className="flex items-center justify-between pt-2 border-t border-border mt-2">
           <span className="font-bold text-base">Total</span>
-          <span className="font-heading text-4xl font-bold text-primary">${payableTotal.toFixed(2)} USD</span>
+          <span className="font-heading text-4xl font-bold text-primary">${displayedPayableTotal.toFixed(2)} USD</span>
         </div>
       </section>
 
