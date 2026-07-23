@@ -658,7 +658,7 @@ export function ProductCreateClient() {
         gender: isOtherProduct ? "unisex" : gender,
         fabricType: isOtherProduct ? undefined : fabricType || undefined,
         embroideryStyle: isOtherProduct ? undefined : embroideryStyle || undefined,
-        tailoringDays: isOtherProduct ? 0 : Number(tailoringDays) || 30,
+        tailoringDays: Number(tailoringDays) || 30,
         isActive,
         isFeatured,
         sendToTelegram,
