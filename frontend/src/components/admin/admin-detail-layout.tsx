@@ -76,6 +76,7 @@ export function AdminDetailLayout({
   topHeader,
   topNotice,
   profileCard,
+  profileNavigation,
   sections,
   activeSection,
   onSectionChange,
@@ -86,6 +87,7 @@ export function AdminDetailLayout({
   topHeader?: ReactNode;
   topNotice?: ReactNode;
   profileCard?: ReactNode;
+  profileNavigation?: ReactNode;
   sections: DetailSectionItem[];
   activeSection: string;
   onSectionChange: (id: string) => void;
@@ -132,6 +134,8 @@ export function AdminDetailLayout({
           {profileCard}
         </section>
       )}
+
+      {profileNavigation}
 
       {navigationVariant === "top" ? (
         <>

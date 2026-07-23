@@ -2,8 +2,15 @@ import Link from "next/link";
 import { ExternalLink, FileCheck, FileText, MapPin, Package, Truck, Users } from "lucide-react";
 import { apiRequest } from "@/lib/api-client";
 import { ensureBackendUserSynced } from "@/lib/backend-user-sync";
+import {
+  CUSTOMER_ORDER_STATUSES,
+  customerStatusForItem,
+  rollUpCustomerStatus,
+  type CustomerOrderStatus,
+} from "@/lib/orders/order-statuses";
 
 type OrderItem = {
+  id?: string;
   product_name?: string;
   productName?: string;
   quantity?: number;
@@ -15,6 +22,7 @@ type OrderItem = {
   item_metadata?: Record<string, unknown>;
   itemType?: string;
   uploadedDesignId?: string;
+  status?: string | null;
 };
 
 type OrderWorkstream = {
@@ -63,17 +71,12 @@ type Event = {
 const STATUS_STYLES: Record<string, string> = {
   pending: "bg-gray-100 text-gray-700",
   processing: "bg-sky-100 text-sky-800",
-  picking: "bg-sky-100 text-sky-800",
-  design_review: "bg-violet-100 text-violet-800",
-  measurements_confirmed: "bg-indigo-100 text-indigo-800",
   tailoring: "bg-amber-100 text-amber-800",
   quality_check: "bg-purple-100 text-purple-800",
-  ready: "bg-emerald-100 text-emerald-800",
   fulfilled: "bg-emerald-100 text-emerald-800",
   shipped: "bg-blue-100 text-blue-700",
   delivered: "bg-green-100 text-green-800",
   ready_for_pickup: "bg-orange-100 text-orange-800",
-  picked_up: "bg-green-200 text-green-900",
   cancelled: "bg-red-100 text-red-800",
 };
 
@@ -89,15 +92,8 @@ function titleCase(value?: string | null) {
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-const WORKSTREAM_STEPS = {
-  catalog: ["pending", "picking", "quality_check", "ready"],
-  custom: ["design_review", "measurements_confirmed", "tailoring", "quality_check", "ready"],
-} as const;
-
-const WORKSTREAM_LABELS = {
-  catalog: ["Received", "Picking", "QC", "Ready"],
-  custom: ["Review", "Measurements", "Tailoring", "QC", "Ready"],
-} as const;
+const PRODUCTION_STEPS = ["pending", "processing", "tailoring", "quality_check", "fulfilled"] as const;
+const PRODUCTION_LABELS = ["Pending", "Processing", "Tailoring", "Quality Check", "Fulfilled"] as const;
 
 function isCustomItem(item: OrderItem) {
   return Boolean(item.uploaded_design_id || item.uploadedDesignId || item.item_type === "custom_design" || item.itemType === "custom_design");
@@ -110,8 +106,59 @@ function orderWorkstreams(order: Order): OrderWorkstream[] {
   const catalogItems = items.filter((item) => !isCustomItem(item));
   return [
     ...(catalogItems.length ? [{ id: `${order.id}-catalog`, type: "catalog" as const, trackingReference: `${order.orderNumber ?? order.id}-CAT`, status: order.status ?? "pending", items: catalogItems }] : []),
-    ...(customItems.length ? [{ id: `${order.id}-custom`, type: "custom" as const, trackingReference: `${order.orderNumber ?? order.id}-CUS`, status: order.status ?? "design_review", items: customItems }] : []),
+    ...(customItems.length ? [{ id: `${order.id}-custom`, type: "custom" as const, trackingReference: `${order.orderNumber ?? order.id}-CUS`, status: order.status ?? "pending", items: customItems }] : []),
   ];
+}
+
+function safeLegacyMainStatus(status?: string | null): CustomerOrderStatus | null {
+  const normalized = String(status ?? "").trim().toLowerCase();
+  if (normalized === "picked_up") return "delivered";
+  return (CUSTOMER_ORDER_STATUSES as readonly string[]).includes(normalized)
+    ? normalized as CustomerOrderStatus
+    : null;
+}
+
+function itemMainStatus(order: Order, workstream: OrderWorkstream, item?: OrderItem): CustomerOrderStatus {
+  const productionStatus = item?.status ?? workstream.status ?? order.status;
+  const legacyMainStatus = safeLegacyMainStatus(productionStatus);
+  if (legacyMainStatus && ["shipped", "ready_for_pickup", "delivered", "cancelled"].includes(legacyMainStatus)) {
+    return legacyMainStatus;
+  }
+  const workstreamDelivery = workstream.deliveryStatus;
+  return customerStatusForItem({
+    productionStatus,
+    deliveryStatus: workstreamDelivery && workstreamDelivery !== "not_started"
+      ? workstreamDelivery
+      : order.deliveryStatus ?? workstreamDelivery,
+    fulfillmentType: order.fulfillmentType,
+  });
+}
+
+function workstreamMainStatus(order: Order, workstream: OrderWorkstream): CustomerOrderStatus {
+  const items = workstream.items ?? [];
+  if (!items.length) return itemMainStatus(order, workstream);
+  return rollUpCustomerStatus(items.map((item) => itemMainStatus(order, workstream, item)));
+}
+
+function orderMainStatus(order: Order, workstreams: OrderWorkstream[]): CustomerOrderStatus {
+  const itemStatuses = workstreams.flatMap((workstream) => {
+    const items = workstream.items ?? [];
+    return items.length
+      ? items.map((item) => itemMainStatus(order, workstream, item))
+      : [itemMainStatus(order, workstream)];
+  });
+  if (itemStatuses.length) return rollUpCustomerStatus(itemStatuses);
+  return safeLegacyMainStatus(order.status) ?? customerStatusForItem({
+    productionStatus: order.status,
+    deliveryStatus: order.deliveryStatus,
+    fulfillmentType: order.fulfillmentType,
+  });
+}
+
+function productionStepIndex(status: CustomerOrderStatus) {
+  if (status === "cancelled") return -1;
+  if (["fulfilled", "shipped", "ready_for_pickup", "delivered"].includes(status)) return PRODUCTION_STEPS.length - 1;
+  return Math.max(0, (PRODUCTION_STEPS as readonly string[]).indexOf(status));
 }
 
 export default async function MyOrdersPage({
@@ -189,16 +236,19 @@ export default async function MyOrdersPage({
         ) : (
           <div className="space-y-4">
             {orders.map((order) => {
-              const statusStyle = STATUS_STYLES[order.status ?? ""] ?? "bg-gray-100 text-gray-700";
               const workstreams = orderWorkstreams(order);
-              const isMixed = workstreams.length > 1;
+              const streamTypes = new Set(workstreams.map((workstream) => workstream.type));
+              const isMixed = order.orderType === "mixed_order" || (streamTypes.has("catalog") && streamTypes.has("custom"));
+              const mainStatus = orderMainStatus(order, workstreams);
+              const statusStyle = STATUS_STYLES[mainStatus] ?? STATUS_STYLES.pending;
+              const itemCount = workstreams.reduce((count, workstream) => count + (workstream.items?.length ?? 0), 0) || (order.items ?? []).length;
               return (
                 <div key={order.id} className="rounded-xl border border-border bg-card p-5">
                   <div className="flex items-start justify-between gap-4">
                     <div>
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="font-mono text-sm font-bold">{order.orderNumber ?? order.id}</span>
-                        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${statusStyle}`}>{(order.status ?? "pending").replaceAll("_", " ")}</span>
+                        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${statusStyle}`}>{titleCase(mainStatus)}</span>
                         {isMixed ? <span className="rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-xs font-bold text-amber-800">Mixed order</span> : null}
                         {order.paymentStatus === "paid" ? (
                           <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800">Paid</span>
@@ -207,7 +257,7 @@ export default async function MyOrdersPage({
                         )}
                       </div>
                       <p className="mt-1 text-sm text-muted-foreground">
-                        {(order.items ?? []).length} item(s) · <span className="font-semibold text-foreground">${Number(order.totalUsd ?? 0).toFixed(2)}</span>
+                        {itemCount} item(s) · <span className="font-semibold text-foreground">${Number(order.totalUsd ?? 0).toFixed(2)}</span>
                       </p>
                       {order.eventName ? (
                         <p className="mt-1 flex items-center gap-1 text-xs text-primary">
@@ -221,12 +271,9 @@ export default async function MyOrdersPage({
 
                   <div className="mt-4 space-y-3">
                     {workstreams.map((workstream) => {
-                      const steps = WORKSTREAM_STEPS[workstream.type];
-                      const labels = WORKSTREAM_LABELS[workstream.type];
-                      const currentStepIndex = workstream.status === "cancelled"
-                        ? -1
-                        : Math.max(0, (steps as readonly string[]).indexOf(workstream.status));
-                      const workstreamStyle = STATUS_STYLES[workstream.status] ?? STATUS_STYLES.pending;
+                      const workstreamStatus = workstreamMainStatus(order, workstream);
+                      const currentStepIndex = productionStepIndex(workstreamStatus);
+                      const workstreamStyle = STATUS_STYLES[workstreamStatus] ?? STATUS_STYLES.pending;
                       return (
                         <div key={workstream.id} className={`rounded-xl border p-4 ${workstream.type === "custom" ? "border-violet-200 bg-violet-50/40" : "border-sky-200 bg-sky-50/40"}`}>
                           <div className="flex flex-wrap items-start justify-between gap-2">
@@ -235,32 +282,36 @@ export default async function MyOrdersPage({
                               <p className="mt-1 font-mono text-xs font-bold">{workstream.trackingReference}</p>
                             </div>
                             <div className="flex flex-wrap justify-end gap-2">
-                              <span className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase ${workstreamStyle}`}>{titleCase(workstream.status)}</span>
-                              {workstream.deliveryStatus && workstream.deliveryStatus !== "not_started" ? <span className="rounded-full bg-blue-100 px-2.5 py-1 text-[10px] font-black uppercase text-blue-800">{titleCase(workstream.deliveryStatus)}</span> : null}
+                              <span className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase ${workstreamStyle}`}>{titleCase(workstreamStatus)}</span>
                             </div>
                           </div>
                           <div className="mt-3 space-y-1">
-                            {(workstream.items ?? []).map((item, idx) => (
-                              <div key={`${workstream.id}-${idx}`} className="flex justify-between gap-3 text-xs text-muted-foreground">
+                            {(workstream.items ?? []).map((item, idx) => {
+                              const individualStatus = itemMainStatus(order, workstream, item);
+                              return (
+                              <div key={item.id ?? `${workstream.id}-${idx}`} className="flex items-center justify-between gap-3 rounded-lg bg-white/70 px-2.5 py-2 text-xs text-muted-foreground">
                                 <span>{item.product_name ?? item.productName ?? "Item"} × {Number(item.quantity ?? 1)}</span>
-                                <span>{Number(item.unit_price_usd ?? item.price ?? item.priceUsd ?? 0) > 0 ? `$${Number(item.unit_price_usd ?? item.price ?? item.priceUsd ?? 0).toFixed(2)}` : "Quoted"}</span>
+                                <span className="flex items-center gap-2">
+                                  <span>{Number(item.unit_price_usd ?? item.price ?? item.priceUsd ?? 0) > 0 ? `$${Number(item.unit_price_usd ?? item.price ?? item.priceUsd ?? 0).toFixed(2)}` : "Quoted"}</span>
+                                  {isMixed ? <span className={`rounded-full px-2 py-0.5 text-[9px] font-black uppercase ${STATUS_STYLES[individualStatus] ?? STATUS_STYLES.pending}`}>{titleCase(individualStatus)}</span> : null}
+                                </span>
                               </div>
-                            ))}
+                              );
+                            })}
                           </div>
-                          {workstream.status !== "cancelled" ? (
+                          {workstreamStatus !== "cancelled" ? (
                             <div className="mt-3">
                               <div className="mb-1 flex gap-1">
-                                {steps.map((step, index) => <div key={step} className={`h-1.5 flex-1 rounded-full ${index <= currentStepIndex ? "bg-primary" : "bg-border"}`} />)}
+                                {PRODUCTION_STEPS.map((step, index) => <div key={step} className={`h-1.5 flex-1 rounded-full ${index <= currentStepIndex ? "bg-primary" : "bg-border"}`} />)}
                               </div>
                               <div className="flex justify-between text-[9px] text-muted-foreground">
-                                {labels.map((label) => <span key={`${workstream.id}-${label}`}>{label}</span>)}
+                                {PRODUCTION_LABELS.map((label) => <span key={`${workstream.id}-${label}`}>{label}</span>)}
                               </div>
                             </div>
                           ) : null}
-                          {workstream.deliveryStatus && workstream.deliveryStatus !== "not_started" ? (
+                          {workstream.deliveryTrackingNumber ? (
                             <p className="mt-3 text-xs font-semibold text-muted-foreground">
-                              Delivery: {titleCase(workstream.deliveryStatus)}
-                              {workstream.deliveryTrackingNumber ? ` · Tracking ${workstream.deliveryTrackingNumber}` : ""}
+                              Tracking {workstream.deliveryTrackingNumber}
                               {workstream.deliveryDueAt ? ` · Expected ${new Date(workstream.deliveryDueAt).toLocaleDateString()}` : ""}
                             </p>
                           ) : null}
@@ -289,11 +340,6 @@ export default async function MyOrdersPage({
                           <Truck className="h-3.5 w-3.5 text-primary" />
                           <span className="font-medium text-foreground">{order.carrier ?? "Carrier TBD"}</span>
                           {order.shippingAddress?.city ? <span>→ {order.shippingAddress.city}, {order.shippingAddress.country}</span> : null}
-                          {order.deliveryStatus ? (
-                            <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-blue-700">
-                              {titleCase(order.deliveryStatus)}
-                            </span>
-                          ) : null}
                           {order.trackingNumber ? (
                             <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-700">
                               Tracking: {order.trackingNumber}
@@ -318,7 +364,7 @@ export default async function MyOrdersPage({
                             {doc.uploadedAt ? <span className="text-muted-foreground">({new Date(doc.uploadedAt).toLocaleDateString()})</span> : null}
                           </a>
                         ))}
-                        {(order.shippingDocuments ?? []).length === 0 && order.status !== "delivered" ? (
+                        {(order.shippingDocuments ?? []).length === 0 && mainStatus !== "delivered" ? (
                           <p>⏳ Shipping documents will appear here once dispatched</p>
                         ) : null}
                       </div>

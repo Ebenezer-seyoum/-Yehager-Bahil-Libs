@@ -5,6 +5,14 @@ import { useRouter } from "next/navigation";
 import { CheckCircle2, ClipboardList, FileText, MapPin, Package, Send, Truck, UserRound } from "lucide-react";
 import { AdminDetailHeader, AdminDetailLayout } from "@/components/admin/admin-detail-layout";
 import { dashboardConfirm, dashboardError, dashboardSuccess } from "@/lib/dashboard-swal";
+import {
+  MAIL_DELIVERY_STATUSES,
+  PICKUP_DELIVERY_STATUSES,
+  customerStatusForItem,
+  normalizeProductionStatus,
+  rollUpCustomerStatus,
+  type CustomerOrderStatus,
+} from "@/lib/orders/order-statuses";
 import { cn } from "@/lib/utils";
 
 type Order = Record<string, unknown> & {
@@ -13,6 +21,7 @@ type Order = Record<string, unknown> & {
   customerName?: string | null;
   userEmail?: string | null;
   status?: string | null;
+  paymentStatus?: string | null;
   totalUsd?: string | number | null;
   totalAmount?: string | number | null;
   shippingCostUsd?: string | number | null;
@@ -61,9 +70,6 @@ type OrderNote = {
   created_at?: string | number | Date | null;
 };
 
-const MAIL_STATES = ["not_started", "packing", "packed", "assigned_to_ems", "handed_to_ems", "in_transit", "at_hub", "out_for_delivery", "delivered", "failed_attempt", "returned"] as const;
-const PICKUP_STATES = ["not_started", "packing", "packed", "moved_to_pickup_desk", "ready_for_pickup", "customer_notified", "waiting_customer", "picked_up", "delivered", "cancelled_pickup"] as const;
-
 function norm(value: unknown) {
   return String(value ?? "").toLowerCase().trim();
 }
@@ -101,7 +107,10 @@ function addressText(order: Order) {
 }
 
 function firstImage(order: Order) {
-  for (const item of order.items ?? []) {
+  const workstreamItems = (order.workstreams ?? []).flatMap((workstream) =>
+    Array.isArray(workstream.items) ? workstream.items as Array<Record<string, unknown>> : [],
+  );
+  for (const item of [...(order.items ?? []), ...workstreamItems]) {
     const image = item.imageUrl ?? item.image_url ?? item.productImage ?? item.product_image ?? item.frontImageUrl ?? item.front_image_url;
     if (typeof image === "string" && image.trim()) return image;
   }
@@ -114,21 +123,67 @@ function derivedFulfillmentStatus(order: Order) {
   const status = norm(order.status);
   if (status === "delivered" || status === "picked_up") return "delivered";
   if (status === "ready_for_pickup") return "ready_for_pickup";
-  if (status === "shipped") return "shipped";
-  if (status === "fulfilled") return isPickup(order) ? "packed" : "assigned_to_ems";
+  if (status === "shipped") return isPickup(order) ? "ready_for_pickup" : "in_transit";
   return "not_started";
 }
 
-function mainStatusForDelivery(deliveryStatus: string, pickup: boolean) {
-  if (pickup) {
-    if (deliveryStatus === "ready_for_pickup") return "ready_for_pickup";
-    if (deliveryStatus === "picked_up" || deliveryStatus === "delivered") return "delivered";
-    return undefined;
+function productionUnits(order: Order) {
+  const workstreams = Array.isArray(order.workstreams) ? order.workstreams : [];
+  const lineItems = workstreams.flatMap((workstream) => {
+    const items = Array.isArray(workstream.items) ? workstream.items : [];
+    return items
+      .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object")
+      .map((item) => String(item.status ?? workstream.status ?? order.status ?? "pending"));
+  });
+  if (lineItems.length) return lineItems;
+  if (workstreams.length) return workstreams.map((workstream) => String(workstream.status ?? order.status ?? "pending"));
+
+  const mainStatus = norm(order.status);
+  if (["shipped", "ready_for_pickup", "delivered", "picked_up"].includes(mainStatus)) return ["fulfilled"];
+  return [String(order.status ?? "pending")];
+}
+
+function productionSummary(order: Order) {
+  const statuses = productionUnits(order).map((status) => normalizeProductionStatus(status));
+  const active = statuses.filter((status) => status !== "cancelled");
+  return {
+    activeCount: active.length,
+    cancelledCount: statuses.length - active.length,
+    ready: active.length > 0 && active.every((status) => status === "fulfilled"),
+  };
+}
+
+function mainStatusForOrder(order: Order, deliveryStatus: string): CustomerOrderStatus {
+  return rollUpCustomerStatus(productionUnits(order).map((productionStatus) => customerStatusForItem({
+    productionStatus,
+    deliveryStatus,
+    fulfillmentType: isPickup(order) ? "pickup" : "mail",
+  })));
+}
+
+function fulfillmentStarted(order: Order) {
+  const explicit = norm(
+    order.deliveryStatus
+      ?? order.delivery_status
+      ?? order.shippingStatus
+      ?? order.shipping_status
+      ?? order.pickupStatus
+      ?? order.pickup_status,
+  );
+  if (explicit && explicit !== "not_started") return true;
+  return ["shipped", "ready_for_pickup", "delivered", "picked_up"].includes(norm(order.status));
+}
+
+function productionGateMessage(order: Order) {
+  const summary = productionSummary(order);
+  if (!summary.activeCount) return "All individual items are cancelled. This order cannot enter fulfillment.";
+  if (!summary.ready) {
+      return "Fulfillment is locked until every non-cancelled individual item reaches Fulfilled.";
   }
-  if (deliveryStatus === "assigned_to_ems") return "fulfilled";
-  if (["handed_to_ems", "in_transit", "at_hub", "out_for_delivery"].includes(deliveryStatus)) return "shipped";
-  if (deliveryStatus === "delivered") return "delivered";
-  return undefined;
+  if (norm(order.paymentStatus) !== "paid") {
+    return "Production is complete, but fulfillment is locked until payment is marked Paid.";
+  }
+  return "Every active individual item is fulfilled. Cancelled items are excluded from this shipment.";
 }
 
 function DetailField({ label, value }: { label: string; value: unknown }) {
@@ -142,14 +197,12 @@ function DetailField({ label, value }: { label: string; value: unknown }) {
 
 export function AdminShippingDeliveryDetailWorkspace({
   initialOrder,
-  scope,
   canEdit,
   canViewDocuments,
   canViewNotes,
   canAddDeliveryNote,
 }: {
   initialOrder: Order;
-  scope?: "catalog" | "custom";
   canEdit: boolean;
   canViewDocuments: boolean;
   canViewNotes: boolean;
@@ -158,14 +211,16 @@ export function AdminShippingDeliveryDetailWorkspace({
   const router = useRouter();
   const [order, setOrder] = useState(initialOrder);
   const pickup = isPickup(order);
-  const activeWorkstream = scope ? (order.workstreams ?? []).find((row) => row.type === scope) : null;
-  const deliveryRecord = activeWorkstream ?? order;
+  const itemSummary = productionSummary(order);
+  const fulfillmentReady = itemSummary.ready || (itemSummary.activeCount > 0 && fulfillmentStarted(order));
+  const paymentReady = norm(order.paymentStatus) === "paid";
+  const canControlFulfillment = canEdit && fulfillmentReady && paymentReady;
   const [activeSection, setActiveSection] = useState("summary");
   const [busy, setBusy] = useState(false);
   const [provider, setProvider] = useState(String(order.carrier ?? "Ethiopian Mail Service"));
   const [packageWeight, setPackageWeight] = useState("1");
-  const [fulfillmentStatus, setFulfillmentStatus] = useState(derivedFulfillmentStatus(deliveryRecord as Order));
-  const [trackingNumber, setTrackingNumber] = useState(String((deliveryRecord as Order).trackingNumber ?? (deliveryRecord as Order).tracking_number ?? (deliveryRecord as Record<string, unknown>).deliveryTrackingNumber ?? ""));
+  const [fulfillmentStatus, setFulfillmentStatus] = useState(derivedFulfillmentStatus(order));
+  const [trackingNumber, setTrackingNumber] = useState(String(order.trackingNumber ?? order.tracking_number ?? ""));
   const [deliveryNote, setDeliveryNote] = useState("");
   const [deliveryNotes, setDeliveryNotes] = useState<OrderNote[]>([]);
   const [error, setError] = useState("");
@@ -208,32 +263,19 @@ export function AdminShippingDeliveryDetailWorkspace({
   }
 
   async function updateDeliveryStatus(next: string, note?: string) {
-    if (!canEdit) return;
+    if (!canControlFulfillment) return;
     setBusy(true);
     setError("");
     try {
-      const nextMainStatus = mainStatusForDelivery(next, pickup);
-      const endpoint = scope
-        ? `/api/backend/orders/${order.id}/workstreams/${scope}`
-        : `/api/backend/orders/${order.id}/admin-state`;
-      const body = scope
-        ? {
-            deliveryStatus: next,
-            deliveryCarrier: pickup ? "pickup" : provider,
-            deliveryTrackingNumber: trackingNumber.trim() || undefined,
-            deliveryNote: note ?? (deliveryNote.trim() || undefined),
-          }
-        : {
-            status: nextMainStatus,
-            carrier: pickup ? "pickup" : provider,
-            deliveryStatus: next,
-            trackingNumber: trackingNumber.trim() || undefined,
-            deliveryNote: note ?? (deliveryNote.trim() || undefined),
-          };
-      const res = await fetch(endpoint, {
+      const res = await fetch(`/api/backend/orders/${order.id}/admin-state`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+        body: JSON.stringify({
+          carrier: pickup ? "pickup" : provider,
+          deliveryStatus: next,
+          trackingNumber: trackingNumber.trim() || undefined,
+          deliveryNote: note ?? (deliveryNote.trim() || undefined),
+        }),
       });
       if (!res.ok) {
         const payload = await res.json().catch(() => null);
@@ -242,11 +284,13 @@ export function AdminShippingDeliveryDetailWorkspace({
       const json = await res.json();
       const noteToSave = note ?? deliveryNote.trim();
       await createDeliveryNote(noteToSave || `${titleCase(next)} updated for ${pickup ? "store pickup" : "EMS delivery"}.`);
-      if (scope && json.data?.workstream) {
-        setOrder((current) => ({ ...current, workstreams: (current.workstreams ?? []).map((row) => row.type === scope ? { ...row, ...json.data.workstream } : row) }));
-      } else {
-        setOrder((current) => ({ ...current, ...(json.data ?? { deliveryStatus: next, status: nextMainStatus ?? current.status }) }));
-      }
+      setOrder((current) => ({
+        ...current,
+        ...(json.data?.order ?? json.data ?? {}),
+        deliveryStatus: next,
+        carrier: pickup ? "pickup" : provider,
+        trackingNumber: trackingNumber.trim() || current.trackingNumber,
+      }));
       setFulfillmentStatus(next);
       setDeliveryNote("");
       await dashboardSuccess("Delivery Updated", `${titleCase(next)} saved successfully.`);
@@ -261,7 +305,7 @@ export function AdminShippingDeliveryDetailWorkspace({
   }
 
   async function changeFulfillmentStatus(next: string, actionLabel = titleCase(next)) {
-    if (!canEdit) return;
+    if (!canControlFulfillment) return;
     const confirmed = await dashboardConfirm({
       title: actionLabel,
       text: `This will update fulfillment status to ${titleCase(next)} and add a delivery note to this order.`,
@@ -275,7 +319,7 @@ export function AdminShippingDeliveryDetailWorkspace({
   }
 
   async function sendToProvider() {
-    if (!canEdit) return;
+    if (!canControlFulfillment) return;
     const confirmed = await dashboardConfirm({
       title: "Request EMS",
       text: `This will assign the order to ${provider} and save an EMS delivery note.`,
@@ -355,7 +399,7 @@ export function AdminShippingDeliveryDetailWorkspace({
               <div className="mt-3 flex flex-wrap gap-2">
                 <Badge label={titleCase(fulfillmentStatus)} tone={fulfillmentStatus === "delivered" ? "green" : "blue"} />
                 <Badge label={pickup ? "Pickup Desk" : provider} tone="slate" />
-                <Badge label={titleCase(order.status ?? "pending")} tone="yellow" />
+                <Badge label={titleCase(mainStatusForOrder(order, fulfillmentStatus))} tone="yellow" />
               </div>
               <p className="mt-4 text-3xl font-black text-slate-950">{money(order.totalUsd ?? order.totalAmount)}</p>
             </div>
@@ -364,6 +408,10 @@ export function AdminShippingDeliveryDetailWorkspace({
             {!canEdit ? (
               <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm font-bold text-blue-800">
                 View-only access. Shipping updates require the <span className="font-mono">shipping.edit</span> permission.
+              </div>
+            ) : !fulfillmentReady || !paymentReady ? (
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-900">
+                {productionGateMessage(order)}
               </div>
             ) : pickup ? (
               <>
@@ -390,7 +438,11 @@ export function AdminShippingDeliveryDetailWorkspace({
           <DetailField label="Delivery Method" value={pickup ? "Store Pickup" : "Mail Delivery"} />
           <DetailField label="Provider" value={pickup ? "Pickup Desk - 3rd Floor Office" : provider} />
           <DetailField label="Fulfillment Status" value={titleCase(fulfillmentStatus)} />
-          <DetailField label="Main Order Status" value={titleCase(order.status ?? "pending")} />
+          <DetailField label="Main Order Status" value={titleCase(mainStatusForOrder(order, fulfillmentStatus))} />
+          <DetailField label="Items In Shipment" value={itemSummary.activeCount} />
+          <DetailField label="Cancelled Items Excluded" value={itemSummary.cancelledCount} />
+          <DetailField label="Production Gate" value={itemSummary.ready ? "Production complete" : "Waiting for all active items"} />
+          <DetailField label="Payment Gate" value={paymentReady ? "Paid" : "Waiting for paid status"} />
           <DetailField label="Tracking Number" value={trackingNumber || "Pending EMS tracking"} />
           <DetailField label="Changed By" value={order.deliveryStatusChangedBy ?? order.delivery_status_changed_by ?? "Not updated yet"} />
           <DetailField label="Changed Time" value={dateTime(order.deliveryStatusChangedAt ?? order.delivery_status_changed_at)} />
@@ -415,7 +467,7 @@ export function AdminShippingDeliveryDetailWorkspace({
               <h3 className="text-lg font-black text-slate-950">Store Pickup Actions</h3>
               <p className="mt-2 text-sm font-semibold text-slate-600">Move packed order to the 3rd floor pickup desk, then verify customer order ID or QR before handover.</p>
             </div>
-          ) : canEdit ? (
+          ) : canControlFulfillment ? (
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
               <label className="space-y-1.5">
                 <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Provider</span>
@@ -457,7 +509,7 @@ export function AdminShippingDeliveryDetailWorkspace({
           </label> : null}
           {error ? <p className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-bold text-rose-700">{error}</p> : null}
           <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4 text-sm font-semibold text-blue-900">
-            Mail flow: Request EMS sets main status to fulfilled. Tracking or EMS handoff sets main status to shipped. Delivered closes the order. Pickup flow is staff verified at the office.
+            {productionGateMessage(order)} Mail delivery uses the approved delivery statuses; store pickup uses the approved pickup statuses. Customers see only the mapped main order status.
           </div>
           {canViewNotes ? <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
             <p className="text-sm font-black text-slate-950">Delivery Notes</p>
@@ -475,7 +527,7 @@ export function AdminShippingDeliveryDetailWorkspace({
 
       {activeSection === "progress" ? (
         <div className="space-y-4">
-          <HorizontalSteps steps={pickup ? PICKUP_STATES : MAIL_STATES} current={fulfillmentStatus} interactive={canEdit} onSelect={(step) => void changeFulfillmentStatus(step)} />
+          <HorizontalSteps steps={pickup ? PICKUP_DELIVERY_STATUSES : MAIL_DELIVERY_STATUSES} current={fulfillmentStatus} interactive={canControlFulfillment} onSelect={(step) => void changeFulfillmentStatus(step)} />
           <div className="grid gap-3 sm:grid-cols-3">
             <DetailField label="Current Progress" value={titleCase(fulfillmentStatus)} />
             <DetailField label="Last Updated" value={dateTime(order.deliveryStatusChangedAt ?? order.delivery_status_changed_at ?? order.updatedAt)} />

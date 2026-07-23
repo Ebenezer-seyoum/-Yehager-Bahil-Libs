@@ -5,6 +5,15 @@ import { Truck } from "lucide-react";
 import { AdminWorkspace } from "@/components/admin/admin-workspace";
 import { DashboardActionButton, DashboardTableActions } from "@/components/admin/dashboard-action-button";
 import type { AdminWorkspaceData } from "@/lib/admin/types";
+import {
+  CUSTOMER_ORDER_STATUSES,
+  MAIL_DELIVERY_STATUSES,
+  PICKUP_DELIVERY_STATUSES,
+  customerStatusForItem,
+  normalizeProductionStatus,
+  rollUpCustomerStatus,
+  type CustomerOrderStatus,
+} from "@/lib/orders/order-statuses";
 import { cn } from "@/lib/utils";
 
 type OrderRow = Record<string, unknown> & {
@@ -37,8 +46,7 @@ type OrderRow = Record<string, unknown> & {
   _method?: string;
   _provider?: string;
   _fulfillmentStatus?: string;
-  _scope?: "catalog" | "custom";
-  _parentOrderId?: string;
+  _mainStatus?: CustomerOrderStatus;
   workstreams?: Array<Record<string, unknown>> | null;
 };
 
@@ -85,15 +93,64 @@ function fulfillmentStatus(order: OrderRow) {
   const status = norm(order.status);
   if (["delivered", "picked_up"].includes(status)) return "delivered";
   if (status === "ready_for_pickup") return "ready_for_pickup";
-  if (status === "shipped") return "shipped";
-  if (status === "fulfilled") return isPickup(order) ? "packed" : "assigned_to_ems";
+  if (status === "shipped") return isPickup(order) ? "ready_for_pickup" : "in_transit";
   return "not_started";
 }
 
+function productionUnits(order: OrderRow) {
+  const workstreams = Array.isArray(order.workstreams) ? order.workstreams : [];
+  const lineItems = workstreams.flatMap((workstream) => {
+    const items = Array.isArray(workstream.items) ? workstream.items : [];
+    return items
+      .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object")
+      .map((item) => ({
+        status: String(item.status ?? workstream.status ?? order.status ?? "pending"),
+      }));
+  });
+  if (lineItems.length) return lineItems;
+  if (workstreams.length) {
+    return workstreams.map((workstream) => ({
+      status: String(workstream.status ?? order.status ?? "pending"),
+    }));
+  }
+  return [{ status: String(order.status ?? "pending") }];
+}
+
+function customerMainStatus(order: OrderRow): CustomerOrderStatus {
+  const units = productionUnits(order);
+  const rawMain = norm(order.status);
+  const hasChildProduction = Array.isArray(order.workstreams) && order.workstreams.length > 0;
+  if (
+    !hasChildProduction
+    && (CUSTOMER_ORDER_STATUSES as readonly string[]).includes(rawMain)
+    && ["shipped", "ready_for_pickup", "delivered", "cancelled"].includes(rawMain)
+  ) {
+    return rawMain as CustomerOrderStatus;
+  }
+
+  return rollUpCustomerStatus(units.map((unit) => customerStatusForItem({
+    productionStatus: unit.status,
+    deliveryStatus: fulfillmentStatus(order),
+    fulfillmentType: isPickup(order) ? "pickup" : "mail",
+  })));
+}
+
 function readyForFulfillment(order: OrderRow) {
-  const status = norm(order.status);
-  const fulfillment = fulfillmentStatus(order);
-  return ["fulfilled", "ready_for_pickup", "shipped", "picked_up", "delivered"].includes(status) || fulfillment !== "not_started";
+  const units = productionUnits(order).map((unit) => normalizeProductionStatus(unit.status));
+  const active = units.filter((status) => status !== "cancelled");
+  if (!active.length) return false;
+
+  const rawDeliveryStatus = norm(
+    order.deliveryStatus
+      ?? order.delivery_status
+      ?? order.shippingStatus
+      ?? order.shipping_status
+      ?? order.pickupStatus
+      ?? order.pickup_status,
+  );
+  const fulfillmentAlreadyStarted = rawDeliveryStatus !== "" && rawDeliveryStatus !== "not_started";
+  const historicalMainStatus = ["shipped", "ready_for_pickup", "delivered", "picked_up"].includes(norm(order.status));
+  return active.every((status) => status === "fulfilled") || fulfillmentAlreadyStarted || historicalMainStatus;
 }
 
 function tone(status: string) {
@@ -127,57 +184,18 @@ export function AdminShippingDeliveryWorkspace({ data }: { data: AdminWorkspaceD
   const [statusFilter, setStatusFilter] = useState("all");
   const [viewedDeliveryIds, setViewedDeliveryIds] = useState<string[]>([]);
   const statusOptions = methodFilter === "pickup"
-    ? [
-        ["all", "All Pickup Statuses"],
-        ["not_started", "Not Started"],
-        ["packing", "Packing"],
-        ["packed", "Packed"],
-        ["moved_to_pickup_desk", "Moved To Pickup Desk"],
-        ["ready_for_pickup", "Ready For Pickup"],
-        ["customer_notified", "Customer Notified"],
-        ["waiting_customer", "Waiting Customer"],
-        ["picked_up", "Picked Up"],
-        ["delivered", "Delivered"],
-        ["cancelled_pickup", "Cancelled Pickup"],
-      ]
-    : [
-        ["all", "All Delivery Statuses"],
-        ["not_started", "Not Started"],
-        ["packing", "Packing"],
-        ["packed", "Packed"],
-        ["assigned_to_ems", "Assigned To EMS"],
-        ["handed_to_ems", "Handed To EMS"],
-        ["in_transit", "In Transit"],
-        ["at_hub", "At Hub"],
-        ["out_for_delivery", "Out For Delivery"],
-        ["delivered", "Delivered"],
-        ["failed_attempt", "Failed Attempt"],
-        ["returned", "Returned"],
-      ];
+    ? [["all", "All Pickup Statuses"], ...PICKUP_DELIVERY_STATUSES.map((status) => [status, titleCase(status)])]
+    : [["all", "All Delivery Statuses"], ...MAIL_DELIVERY_STATUSES.map((status) => [status, titleCase(status)])];
 
   const fulfillmentOrders = useMemo(() => {
     return ((data.orders ?? []) as OrderRow[])
-      .flatMap((order) => {
-        const workstreams = Array.isArray(order.workstreams) ? order.workstreams : [];
-        if (!workstreams.length) return [order];
-        return workstreams.map((workstream) => ({
-          ...order,
-          id: `${order.id}-${String(workstream.type)}`,
-          _parentOrderId: order.id,
-          _scope: workstream.type === "custom" ? "custom" as const : "catalog" as const,
-          orderNumber: `${order.orderNumber ?? order.id}-${workstream.type === "custom" ? "CUS" : "CAT"}`,
-          status: workstream.status === "ready" ? "fulfilled" : String(workstream.status ?? order.status),
-          deliveryStatus: workstream.deliveryStatus ?? order.deliveryStatus,
-          trackingNumber: workstream.deliveryTrackingNumber ?? order.trackingNumber,
-          carrier: typeof workstream.deliveryCarrier === "string" ? workstream.deliveryCarrier : order.carrier,
-        }) as OrderRow);
-      })
       .filter(readyForFulfillment)
       .map((order) => ({
         ...order,
         _method: isPickup(order) ? "pickup" : "mail",
         _provider: provider(order).toLowerCase(),
         _fulfillmentStatus: fulfillmentStatus(order),
+        _mainStatus: customerMainStatus(order),
       }));
   }, [data.orders]);
 
@@ -303,7 +321,7 @@ function ShippingDeliveryTable({
               {rows.map((order, index) => {
                 const status = order._fulfillmentStatus ?? fulfillmentStatus(order);
                 const rowId = String(order.id ?? "");
-                const orderId = String(order._parentOrderId ?? order.id ?? "");
+                const orderId = String(order.id ?? "");
                 const isNew = Boolean(rowId && !viewedDeliveryIds.includes(rowId));
                 return (
                   <tr key={orderId} className={cn("border-t border-slate-200 transition hover:bg-blue-50/70", isNew && "border-l-4 border-l-blue-500 bg-blue-50/70")}>
@@ -319,12 +337,12 @@ function ShippingDeliveryTable({
                       <p className="text-xs font-semibold text-slate-400">{text(order.userEmail, "-")}</p>
                     </td>
                     <td className="px-5 py-4 font-bold text-slate-700">{deliveryMethod(order)}</td>
-                    <td className="px-5 py-4"><Badge status={norm(order.status) || "pending"} /></td>
+                    <td className="px-5 py-4"><Badge status={order._mainStatus ?? customerMainStatus(order)} /></td>
                     <td className="px-5 py-4"><Badge status={status} /></td>
                     <td className="px-5 py-4 text-slate-600">{text(order.trackingNumber ?? order.tracking_number ?? order.pickupLocation, isPickup(order) ? "Office pickup" : "Tracking pending")}</td>
                     <td className="px-5 py-4">
                       <DashboardTableActions>
-                        <DashboardActionButton action="view" href={`/admin/orders/shipping-delivery/${orderId}${order._scope ? `?scope=${order._scope}` : ""}`} onClick={() => markDeliveryViewed(rowId)} aria-label="Open delivery details" />
+                        <DashboardActionButton action="view" href={`/admin/orders/shipping-delivery/${orderId}`} onClick={() => markDeliveryViewed(rowId)} aria-label="Open delivery details" />
                       </DashboardTableActions>
                     </td>
                   </tr>

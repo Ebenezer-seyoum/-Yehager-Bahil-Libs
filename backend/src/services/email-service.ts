@@ -1481,8 +1481,8 @@ function orderStatusEmailHtml(
     : formatShippingAddress(payload.shippingAddress);
   const deliveryDetails = detailsList([
     [payload.fulfillmentType === "pickup" ? "Pickup at" : "Ships to", destination],
+    ["Order Status", payload.status ? humanizeValue(payload.status) : null],
     ["Delivery Provider", payload.carrier],
-    ["Delivery Status", payload.deliveryStatus ? humanizeValue(payload.deliveryStatus) : null],
     ["Tracking Number", payload.trackingNumber],
   ]);
   return customerEmailFrame(`
@@ -1506,12 +1506,12 @@ function orderStatusEmailHtml(
 export async function sendOrderStatusEmail(payload: OrderStatusPayload) {
   const orderUrl = payload.orderNumber ? appLink("/my-orders") : appLink("/dashboard");
   const statusLabel = String(payload.status ?? "updated").replaceAll("_", " ");
-  const deliveryStatusLabel = payload.deliveryStatus ? payload.deliveryStatus.replaceAll("_", " ") : null;
-  const event = payload.event ?? inferOrderEmailEvent(payload);
+  const requestedEvent = payload.event ?? inferOrderEmailEvent(payload);
+  const event = requestedEvent === "order_out_for_delivery" ? "order_shipped" : requestedEvent;
   const presentation = orderEmailPresentation(
     event,
     payload.orderNumber,
-    payload.productionStage ?? (event === "order_status_updated" ? payload.deliveryStatus ?? payload.status : payload.status),
+    payload.productionStage ?? payload.status,
   );
 
   const trackingUrl =
@@ -1543,7 +1543,6 @@ export async function sendOrderStatusEmail(payload: OrderStatusPayload) {
           payload.orderNumber ? `Order: #${payload.orderNumber}` : null,
           `Order status: ${humanizeValue(statusLabel)}`,
           payload.paymentStatus ? `Payment status: ${humanizeValue(payload.paymentStatus)}` : null,
-          deliveryStatusLabel ? `Delivery status: ${humanizeValue(deliveryStatusLabel)}` : null,
           payload.trackingNumber ? `Tracking number: ${payload.trackingNumber}` : null,
           `View your orders: ${orderUrl}`,
         ]),

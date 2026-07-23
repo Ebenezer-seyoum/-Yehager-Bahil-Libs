@@ -738,6 +738,9 @@ export const orderLineItems = pgTable(
     status: varchar("status", { length: 40 }).notNull(),
     assignedUserId: uuid("assigned_user_id").references(() => users.id, { onDelete: "set null" }),
     dueAt: timestamp("due_at", { withTimezone: true }),
+    lastStatusChangedAt: timestamp("last_status_changed_at", { withTimezone: true }).defaultNow().notNull(),
+    lastStatusChangedBy: text("last_status_changed_by"),
+    version: integer("version").default(1).notNull(),
     ...timestamps,
   },
   (table) => [
@@ -747,6 +750,31 @@ export const orderLineItems = pgTable(
     uniqueIndex("order_line_items_order_cart_item_unique")
       .on(table.orderId, table.sourceCartItemId)
       .where(sql`${table.sourceCartItemId} is not null`),
+  ],
+);
+
+export const orderLineItemEvents = pgTable(
+  "order_line_item_events",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    orderId: uuid("order_id").notNull().references(() => orders.id, { onDelete: "cascade" }),
+    workstreamId: uuid("workstream_id").notNull().references(() => orderWorkstreams.id, { onDelete: "cascade" }),
+    lineItemId: uuid("line_item_id").notNull().references(() => orderLineItems.id, { onDelete: "cascade" }),
+    fromStatus: varchar("from_status", { length: 40 }),
+    toStatus: varchar("to_status", { length: 40 }).notNull(),
+    version: integer("version").notNull(),
+    eventKey: text("event_key").notNull(),
+    changedBy: text("changed_by"),
+    note: text("note"),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>(),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("order_line_item_events_event_key_unique").on(table.eventKey),
+    uniqueIndex("order_line_item_events_line_version_unique").on(table.lineItemId, table.version),
+    index("order_line_item_events_line_idx").on(table.lineItemId, table.createdAt),
+    index("order_line_item_events_workstream_idx").on(table.workstreamId, table.createdAt),
+    index("order_line_item_events_order_idx").on(table.orderId, table.createdAt),
   ],
 );
 

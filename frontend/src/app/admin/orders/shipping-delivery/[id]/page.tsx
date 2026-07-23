@@ -6,7 +6,7 @@ import { can } from "@/lib/permissions";
 import { AccessRestricted } from "@/components/admin/access-restricted";
 import { AdminShippingDeliveryDetailWorkspace } from "@/components/admin/pages/admin-shipping-delivery-detail-workspace";
 
-export default async function AdminShippingDeliveryDetailPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ scope?: string }> }) {
+export default async function AdminShippingDeliveryDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) redirect("/signin?callbackUrl=/admin/orders/shipping-delivery");
   if (session.user.role !== "admin" && session.user.role !== "employee") redirect("/");
@@ -15,11 +15,9 @@ export default async function AdminShippingDeliveryDetailPage({ params, searchPa
   }
 
   const { id } = await params;
-  const query = await searchParams;
-  const scope = query.scope === "catalog" || query.scope === "custom" ? query.scope : undefined;
   let order: Record<string, unknown> | null = null;
   try {
-    const response = await apiRequest<{ data?: Record<string, unknown> }>(`/api/v1/orders/${id}${scope ? `?scope=${scope}` : ""}`);
+    const response = await apiRequest<{ data?: Record<string, unknown> }>(`/api/v1/orders/${id}`);
     order = response?.data ?? null;
   } catch {
     order = null;
@@ -31,7 +29,6 @@ export default async function AdminShippingDeliveryDetailPage({ params, searchPa
   return (
     <AdminShippingDeliveryDetailWorkspace
       initialOrder={order}
-      scope={scope}
       canEdit={isAdmin || can(session.user.permissions, "shipping.edit")}
       canViewDocuments={isAdmin || can(session.user.permissions, "documents.view")}
       canViewNotes={isAdmin || can(session.user.permissions, "order_notes.view")}

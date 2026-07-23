@@ -1,7 +1,5 @@
 "use client";
 
-"use client";
-
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
@@ -32,20 +30,48 @@ import {
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import type { ComponentType, PropsWithChildren } from "react";
 import { can } from "@/lib/permissions";
+import {
+  CUSTOMER_ORDER_STATUSES,
+  PRODUCTION_ORDER_STATUSES,
+  customerStatusForItem,
+  isProductionComplete,
+  normalizeProductionStatus,
+  type CustomerOrderStatus,
+  type ProductionOrderStatus,
+} from "@/lib/orders/order-statuses";
 
 const TypedDialogContent = DialogContent as ComponentType<PropsWithChildren<{ className?: string }>>;
 const TypedDialogTitle = DialogTitle as ComponentType<PropsWithChildren<{ className?: string }>>;
 
 type OrderItem = {
   id?: string | null;
+  sourceCartItemId?: string | null;
+  source_cart_item_id?: string | null;
+  itemReference?: string | null;
+  item_reference?: string | null;
+  reference?: string | null;
+  position?: number | string | null;
   productId?: string | null;
+  product_id?: string | null;
   productName?: string | null;
+  product_name?: string | null;
   name?: string | null;
   imageUrl?: string | null;
   image_url?: string | null;
   quantity?: number | string | null;
   price?: number | string | null;
   priceUsd?: number | string | null;
+  price_usd?: number | string | null;
+  unitPriceUsd?: number | string | null;
+  unit_price_usd?: number | string | null;
+  itemType?: string | null;
+  item_type?: string | null;
+  uploadedDesignId?: string | null;
+  uploaded_design_id?: string | null;
+  itemMetadata?: Record<string, unknown> | null;
+  item_metadata?: Record<string, unknown> | null;
+  status?: string | null;
+  version?: number | null;
   measurements?: Record<string, string | number | null> | null;
   measurementDetails?: Record<string, string | number | null> | null;
   measurement_details?: Record<string, string | number | null> | null;
@@ -56,6 +82,8 @@ type OrderWorkstream = {
   type: "catalog" | "custom";
   trackingReference?: string | null;
   status: string;
+  deliveryStatus?: string | null;
+  delivery_status?: string | null;
   dueAt?: string | null;
   items?: OrderItem[] | null;
 };
@@ -109,24 +137,16 @@ type Order = {
   updatedAt: string | number | Date;
 };
 
-const ORDER_STATUSES = ["pending", "processing", "tailoring", "quality_check", "fulfilled", "shipped", "ready_for_pickup", "delivered", "cancelled"];
-const CATALOG_WORKSTREAM_STATUSES = ["pending", "picking", "quality_check", "ready", "cancelled"];
-const CUSTOM_WORKSTREAM_STATUSES = ["design_review", "measurements_confirmed", "tailoring", "quality_check", "ready", "cancelled"];
-const CATALOG_STATUS_TRANSITIONS: Record<string, string[]> = {
-  pending: ["picking", "cancelled"],
-  picking: ["pending", "quality_check", "cancelled"],
-  quality_check: ["picking", "ready", "cancelled"],
-  ready: ["quality_check", "cancelled"],
-  cancelled: ["pending"],
+type AdminOrderTableRow = {
+  key: string;
+  order: Order;
+  lineItem: OrderItem | null;
+  workstream: OrderWorkstream | null;
+  lineIndex: number | null;
+  isMixedLine: boolean;
 };
-const CUSTOM_STATUS_TRANSITIONS: Record<string, string[]> = {
-  design_review: ["measurements_confirmed", "cancelled"],
-  measurements_confirmed: ["design_review", "tailoring", "cancelled"],
-  tailoring: ["measurements_confirmed", "quality_check", "cancelled"],
-  quality_check: ["tailoring", "ready", "cancelled"],
-  ready: ["quality_check", "cancelled"],
-  cancelled: ["design_review"],
-};
+
+const ORDER_STATUSES = CUSTOMER_ORDER_STATUSES;
 const PAYMENT_STATUSES = ["pending", "awaiting_verification", "paid", "failed", "refunded", "unpaid"];
 const ORDER_MODES = ["individual", "group"] as const;
 
@@ -199,16 +219,22 @@ function shortOrderNumber(value?: string | null) {
 }
 
 function itemTitle(item: OrderItem, index: number) {
-  return item.productName ?? item.name ?? `Item ${index + 1}`;
+  return item.productName ?? item.product_name ?? item.name ?? `Item ${index + 1}`;
+}
+
+function isCustomLineItem(item: OrderItem) {
+  const metadata = item.itemMetadata ?? item.item_metadata;
+  const metadataType = metadata && typeof metadata === "object" ? metadata.type : null;
+  const itemType = String(item.itemType ?? item.item_type ?? metadataType ?? "").trim().toLowerCase();
+  return Boolean(
+    item.uploadedDesignId ||
+    item.uploaded_design_id ||
+    ["custom", "custom_design", "custom-design", "uploaded_design"].includes(itemType),
+  );
 }
 
 function hasUploadedDesign(order: Order) {
-  return Boolean(
-    order.items?.some((item) => {
-      const row = item as Record<string, unknown>;
-      return row.uploaded_design_id || row.uploadedDesignId || row.item_type === "custom_design" || row.itemType === "custom_design";
-    }),
-  );
+  return Boolean(order.items?.some(isCustomLineItem));
 }
 
 function workstreamFor(order: Order, type: "catalog" | "custom") {
@@ -224,6 +250,113 @@ function workstreamTypeForLockedOrderType(lockedOrderType?: "catalog_order" | "c
 function hasWorkstream(order: Order, type: "catalog" | "custom") {
   if (workstreamFor(order, type)) return true;
   return type === "custom" ? hasUploadedDesign(order) : !hasUploadedDesign(order);
+}
+
+function isGenuineMixedOrder(order: Order) {
+  if (String(order.orderType ?? "").toLowerCase() === "mixed_order") return true;
+  return Boolean(workstreamFor(order, "catalog") && workstreamFor(order, "custom"));
+}
+
+function matchingMixedLineItems(order: Order, type: "catalog" | "custom") {
+  const workstream = workstreamFor(order, type);
+  if (workstream?.items?.length) {
+    return { workstream, items: workstream.items };
+  }
+
+  const items = (order.items ?? []).filter((item) =>
+    type === "custom" ? isCustomLineItem(item) : !isCustomLineItem(item),
+  );
+  return { workstream, items };
+}
+
+function tableRowsForOrder(
+  order: Order,
+  lockedWorkstreamType: "catalog" | "custom" | null,
+): AdminOrderTableRow[] {
+  if (!lockedWorkstreamType || !isGenuineMixedOrder(order)) {
+    return [{
+      key: order.id,
+      order,
+      lineItem: null,
+      workstream: null,
+      lineIndex: null,
+      isMixedLine: false,
+    }];
+  }
+
+  const { workstream, items } = matchingMixedLineItems(order, lockedWorkstreamType);
+  return items.map((lineItem, lineIndex) => ({
+    key: `${order.id}:${lockedWorkstreamType}:${lineItem.id ?? lineItem.sourceCartItemId ?? lineItem.source_cart_item_id ?? lineIndex}`,
+    order,
+    lineItem,
+    workstream,
+    lineIndex,
+    isMixedLine: true,
+  }));
+}
+
+function lineItemReference(row: AdminOrderTableRow) {
+  if (!row.lineItem || row.lineIndex === null) return null;
+  const item = row.lineItem;
+  const explicit = item.itemReference ?? item.item_reference ?? item.reference;
+  if (explicit) return explicit;
+
+  const position = Number(item.position);
+  const suffix = Number.isFinite(position) && position > 0 ? position : row.lineIndex + 1;
+  if (row.workstream?.trackingReference) return `${row.workstream.trackingReference}-${suffix}`;
+
+  const sourceId = item.sourceCartItemId ?? item.source_cart_item_id ?? item.id;
+  return sourceId ? `ITEM-${String(sourceId).slice(0, 8).toUpperCase()}` : `ITEM-${suffix}`;
+}
+
+function lineCustomerStatus(row: AdminOrderTableRow): CustomerOrderStatus {
+  if (!row.isMixedLine || !row.lineItem) {
+    return customerStatusForItem({
+      productionStatus: row.order.status,
+      deliveryStatus: row.order.deliveryStatus ?? row.order.delivery_status,
+      fulfillmentType: row.order.fulfillmentType,
+    });
+  }
+
+  const workstreamDelivery = row.workstream?.deliveryStatus ?? row.workstream?.delivery_status;
+  return customerStatusForItem({
+    productionStatus: row.lineItem.status ?? row.workstream?.status,
+    deliveryStatus: workstreamDelivery && workstreamDelivery !== "not_started"
+      ? workstreamDelivery
+      : row.order.deliveryStatus ?? row.order.delivery_status ?? workstreamDelivery,
+    fulfillmentType: row.order.fulfillmentType,
+  });
+}
+
+function mixedChildStatuses(order: Order) {
+  if (!isGenuineMixedOrder(order)) return [];
+  return (order.workstreams ?? []).flatMap((workstream) => {
+    const items = workstream.items ?? [];
+    const workstreamDelivery = workstream.deliveryStatus ?? workstream.delivery_status;
+    const effectiveDelivery = workstreamDelivery && workstreamDelivery !== "not_started"
+      ? workstreamDelivery
+      : order.deliveryStatus ?? order.delivery_status ?? workstreamDelivery;
+    if (!items.length) {
+      return [{
+        key: workstream.id,
+        label: workstream.type === "custom" ? "Custom" : "Catalog",
+        status: customerStatusForItem({
+          productionStatus: workstream.status,
+          deliveryStatus: effectiveDelivery,
+          fulfillmentType: order.fulfillmentType,
+        }),
+      }];
+    }
+    return items.map((item, index) => ({
+      key: `${workstream.id}:${item.id ?? index}`,
+      label: `${workstream.type === "custom" ? "Custom" : "Catalog"} · ${itemTitle(item, index)}`,
+      status: customerStatusForItem({
+        productionStatus: item.status ?? workstream.status,
+        deliveryStatus: effectiveDelivery,
+        fulfillmentType: order.fulfillmentType,
+      }),
+    }));
+  });
 }
 
 function normalizedOrderType(order: Order) {
@@ -264,17 +397,28 @@ function measurementRows(item: OrderItem) {
 
 function operationalStatus(order: Order, lockedOrderType?: "catalog_order" | "custom_order" | null) {
   const type = workstreamTypeForLockedOrderType(lockedOrderType);
-  return type ? workstreamFor(order, type)?.status ?? order.status : order.status;
-}
-
-function selectableWorkstreamStatuses(type: "catalog" | "custom", currentStatus: string) {
-  const transitions = type === "custom" ? CUSTOM_STATUS_TRANSITIONS : CATALOG_STATUS_TRANSITIONS;
-  return [currentStatus, ...(transitions[currentStatus] ?? [])];
+  if (type) {
+    const workstream = workstreamFor(order, type);
+    const workstreamDelivery = workstream?.deliveryStatus ?? workstream?.delivery_status;
+    const effectiveDelivery = workstreamDelivery && workstreamDelivery !== "not_started"
+      ? workstreamDelivery
+      : order.deliveryStatus ?? order.delivery_status ?? workstreamDelivery;
+    return customerStatusForItem({
+      productionStatus: workstream?.status ?? order.status,
+      deliveryStatus: effectiveDelivery,
+      fulfillmentType: order.fulfillmentType,
+    });
+  }
+  const status = String(order.status ?? "pending").toLowerCase();
+  if (status === "picked_up") return "delivered";
+  return (CUSTOMER_ORDER_STATUSES as readonly string[]).includes(status)
+    ? status
+    : normalizeProductionStatus(status);
 }
 
 function needsAttention(order: Order, lockedOrderType?: "catalog_order" | "custom_order" | null) {
   const status = operationalStatus(order, lockedOrderType);
-  return ["pending", "design_review"].includes(status ?? "") || order.paymentStatus === "awaiting_verification";
+  return status === "pending" || order.paymentStatus === "awaiting_verification";
 }
 
 function isDeliveryStageOrder(order: Order) {
@@ -372,27 +516,40 @@ export function AdminOrdersTable({
     });
   }
 
-  const filteredOrders = useMemo(() => {
+  const tableRows = useMemo(
+    () => orders.flatMap((order) => tableRowsForOrder(order, lockedWorkstreamType)),
+    [lockedWorkstreamType, orders],
+  );
+
+  const filteredRows = useMemo(() => {
     const needle = effectiveSearch.trim().toLowerCase();
-    return orders.filter((order) => {
+    return tableRows.filter((row) => {
+      const { order, lineItem } = row;
       const matchesSearch =
         !needle ||
-        [order.orderNumber, order.customerName, order.userEmail]
+        [
+          order.orderNumber,
+          order.customerName,
+          order.userEmail,
+          lineItem ? lineItemReference(row) : null,
+          lineItem ? itemTitle(lineItem, row.lineIndex ?? 0) : null,
+        ]
           .filter(Boolean)
           .some((value) => String(value).toLowerCase().includes(needle));
       const isPickup = order.fulfillmentType === "pickup";
       const matchesFulfillment = fulfillmentFilter === "all" || (fulfillmentFilter === "pickup" ? isPickup : !isPickup);
       const matchesLockedType = !lockedWorkstreamType || hasWorkstream(order, lockedWorkstreamType);
       const matchesMode = modeFilter === "all" || normalizedOrderMode(order) === modeFilter;
-      const matchesStatus = statusFilter === "all" || operationalStatus(order, lockedOrderType) === statusFilter;
+      const displayedStatus = row.isMixedLine ? lineCustomerStatus(row) : operationalStatus(order, lockedOrderType);
+      const matchesStatus = statusFilter === "all" || displayedStatus === statusFilter;
       const matchesPayment = paymentFilter === "all" || order.paymentStatus === paymentFilter;
       return matchesSearch && matchesFulfillment && matchesLockedType && matchesMode && matchesStatus && matchesPayment;
     });
-  }, [effectiveSearch, fulfillmentFilter, lockedOrderType, lockedWorkstreamType, modeFilter, orders, paymentFilter, statusFilter]);
+  }, [effectiveSearch, fulfillmentFilter, lockedOrderType, lockedWorkstreamType, modeFilter, paymentFilter, statusFilter, tableRows]);
 
   useEffect(() => {
-    onFilteredCountChange?.(filteredOrders.length);
-  }, [filteredOrders.length, onFilteredCountChange]);
+    onFilteredCountChange?.(filteredRows.length);
+  }, [filteredRows.length, onFilteredCountChange]);
 
   async function updateOrder(orderId: string, patch: Partial<Pick<Order, "status" | "paymentStatus">>) {
     if (patch.status && !canUpdateOrderStatus) return;
@@ -424,15 +581,64 @@ export function AdminOrdersTable({
     }
   }
 
+  async function updateMixedLineStatus(row: AdminOrderTableRow, status: ProductionOrderStatus) {
+    if (!canUpdateOrderStatus || !row.lineItem || !row.workstream) return;
+    const lineItemId = row.lineItem.id;
+    if (!lineItemId) {
+      setError("This mixed-order item has no line-item reference and cannot be updated.");
+      return;
+    }
+
+    const key = `${row.order.id}-${row.workstream.type}-${lineItemId}-status`;
+    setBusyKey(key);
+    setError(null);
+    try {
+      const endpoint = `/api/backend/orders/${encodeURIComponent(row.order.id)}/workstreams/${row.workstream.type}/items/${encodeURIComponent(lineItemId)}/status`;
+      const res = await fetch(endpoint, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          status,
+          ...(typeof row.lineItem.version === "number" ? { expectedVersion: row.lineItem.version } : {}),
+        }),
+      });
+      if (!res.ok) {
+        const payload = (await res.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(payload?.error ?? "Could not update the mixed-order item");
+      }
+      const payload = (await res.json()) as { data?: Order };
+      setOrders((current) =>
+        current.map((order) => {
+          if (order.id !== row.order.id) return order;
+          if (payload.data) return { ...order, ...payload.data };
+
+          return {
+            ...order,
+            workstreams: (order.workstreams ?? []).map((workstream) =>
+              workstream.id !== row.workstream?.id
+                ? workstream
+                : {
+                    ...workstream,
+                    items: (workstream.items ?? []).map((item) =>
+                      item.id === lineItemId ? { ...item, status } : item,
+                    ),
+                  },
+            ),
+          };
+        }),
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not update the mixed-order item");
+    } finally {
+      setBusyKey(null);
+    }
+  }
+
   function detailHref(orderId: string) {
     return `/admin/orders/${orderId}${lockedWorkstreamType ? `?scope=${lockedWorkstreamType}` : ""}`;
   }
 
-  const visibleStatusOptions = lockedWorkstreamType === "catalog"
-    ? CATALOG_WORKSTREAM_STATUSES
-    : lockedWorkstreamType === "custom"
-      ? CUSTOM_WORKSTREAM_STATUSES
-      : ORDER_STATUSES;
+  const visibleStatusOptions = lockedWorkstreamType ? CUSTOMER_ORDER_STATUSES : ORDER_STATUSES;
 
   return (
     <div className="space-y-4">
@@ -485,21 +691,39 @@ export function AdminOrdersTable({
               </TableHeadRow>
             </TableHeader>
             <tbody>
-              {filteredOrders.length === 0 ? (
+              {filteredRows.length === 0 ? (
                 <tr>
                   <td className="px-4 py-12 text-center text-muted-foreground" colSpan={10}>No orders found.</td>
                 </tr>
               ) : (
-                filteredOrders.map((order, index) => {
+                filteredRows.map((tableRow, index) => {
+                  const { order, lineItem } = tableRow;
                   const isViewed = viewedOrderIdsLocal.includes(order.id);
-                  const highlightRow = needsAttention(order, lockedOrderType) && !isViewed;
                   const isSelected = selectedOrderId === order.id;
                   const deliveryStage = isDeliveryStageOrder(order);
-                  const rowStatus = operationalStatus(order, lockedOrderType) ?? "pending";
-                  const activeWorkstream = lockedWorkstreamType ? workstreamFor(order, lockedWorkstreamType) : null;
+                  const rowStatus = tableRow.isMixedLine
+                    ? lineCustomerStatus(tableRow)
+                    : operationalStatus(order, lockedOrderType) ?? "pending";
+                  const highlightRow = (
+                    tableRow.isMixedLine
+                      ? rowStatus === "pending" || order.paymentStatus === "awaiting_verification"
+                      : needsAttention(order, lockedOrderType)
+                  ) && !isViewed;
+                  const activeWorkstream = tableRow.isMixedLine
+                    ? tableRow.workstream
+                    : lockedWorkstreamType
+                      ? workstreamFor(order, lockedWorkstreamType)
+                      : null;
+                  const productionStatus = normalizeProductionStatus(lineItem?.status ?? activeWorkstream?.status);
+                  const productionComplete = Boolean(
+                    (tableRow.isMixedLine || lockedWorkstreamType) &&
+                    isProductionComplete(productionStatus),
+                  );
+                  const childStatuses = !lockedWorkstreamType ? mixedChildStatuses(order) : [];
+                  const itemReference = lineItemReference(tableRow);
                   return (
                     <tr
-                      key={order.id}
+                      key={tableRow.key}
                       className={`border-t border-border transition hover:bg-blue-50/70 ${highlightRow ? "border-l-4 border-l-blue-500 bg-blue-50/70" : ""} ${isSelected ? "bg-primary/5 ring-1 ring-inset ring-primary/25" : ""}`}
                     >
                       <td className="px-4 py-5 align-middle">
@@ -513,43 +737,71 @@ export function AdminOrdersTable({
                             {highlightRow ? <span className="rounded-full border border-blue-200 bg-blue-600 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-white">New</span> : null}
                             <p className="max-w-[120px] break-words font-mono text-xs font-black text-foreground">{shortOrderNumber(order.orderNumber ?? order.id)}</p>
                           </div>
+                          {tableRow.isMixedLine && lineItem ? (
+                            <div className="mt-1.5 max-w-[220px]">
+                              <p className="break-words font-mono text-[10px] font-black uppercase tracking-wide text-blue-700">{itemReference}</p>
+                              <p className="mt-0.5 break-words text-xs font-bold text-slate-700">{itemTitle(lineItem, tableRow.lineIndex ?? 0)}</p>
+                            </div>
+                          ) : null}
                           <p className="mt-1 text-xs text-muted-foreground">{order.createdAt ? new Date(order.createdAt).toLocaleDateString() : "-"}</p>
-                          {activeWorkstream?.trackingReference ? <p className="mt-1 font-mono text-[10px] font-bold text-slate-500">{activeWorkstream.trackingReference}</p> : null}
+                          {!tableRow.isMixedLine && activeWorkstream?.trackingReference ? <p className="mt-1 font-mono text-[10px] font-bold text-slate-500">{activeWorkstream.trackingReference}</p> : null}
                         </a>
                       </td>
                       <td className="px-4 py-5 align-middle">
                         <span className={`inline-flex rounded-full border px-3 py-1 text-[11px] font-black uppercase ${orderTypeClass(order)}`}>
                           {orderTypeLabel(order)}
                         </span>
-                        {!lockedWorkstreamType && (order.workstreams?.length ?? 0) > 1 ? (
-                          <div className="mt-2 flex flex-wrap gap-1.5">
-                            {order.workstreams?.map((workstream) => (
-                              <span key={workstream.id} className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${workstream.type === "custom" ? "border-violet-200 bg-violet-50 text-violet-700" : "border-sky-200 bg-sky-50 text-sky-700"}`}>
-                                {workstream.type === "custom" ? "Custom" : "Catalog"}: {prettyLabel(workstream.status)}
-                              </span>
-                            ))}
-                          </div>
-                        ) : null}
                       </td>
                       <td className="px-4 py-5 align-middle">
                         <p className="font-bold">{order.customerName || order.userEmail || "Guest Customer"}</p>
                         <p className="text-sm text-muted-foreground">{order.customerName ? order.userEmail : "Unregistered/Direct"}</p>
                       </td>
                       <td className="px-4 py-5 align-middle">
-                        {deliveryStage || !canUpdateOrderStatus || !lockedWorkstreamType ? (
-                          <span className={`inline-flex rounded-full border px-4 py-2 text-sm font-bold capitalize ${STATUS_STYLES[rowStatus] ?? STATUS_STYLES.pending}`}>
-                            {prettyLabel(rowStatus)}
-                          </span>
+                        {tableRow.isMixedLine ? (
+                          productionComplete || !canUpdateOrderStatus || !lineItem?.id ? (
+                            <span className={`inline-flex rounded-full border px-4 py-2 text-sm font-bold capitalize ${STATUS_STYLES[rowStatus] ?? STATUS_STYLES.pending}`}>
+                              {prettyLabel(rowStatus)}
+                            </span>
+                          ) : (
+                            <select
+                              value={productionStatus}
+                              disabled={busyKey !== null}
+                              onChange={(event) => void updateMixedLineStatus(tableRow, event.target.value as ProductionOrderStatus)}
+                              aria-label={`Update ${itemTitle(lineItem, tableRow.lineIndex ?? 0)} status`}
+                              className={`h-9 min-w-[190px] rounded-full border px-4 text-sm font-bold capitalize outline-none ${STATUS_STYLES[productionStatus] ?? STATUS_STYLES.pending}`}
+                            >
+                              {PRODUCTION_ORDER_STATUSES.map((status) => <option key={status} value={status}>{prettyLabel(status)}</option>)}
+                            </select>
+                          )
                         ) : (
-                          <select
-                            value={rowStatus}
-                            disabled={busyKey !== null}
-                            onChange={(event) => void updateOrder(order.id, { status: event.target.value })}
-                            className={`h-9 min-w-[190px] rounded-full border px-4 text-sm font-bold capitalize outline-none ${STATUS_STYLES[rowStatus] ?? STATUS_STYLES.pending}`}
-                          >
-                            {selectableWorkstreamStatuses(lockedWorkstreamType, rowStatus).map((status) => <option key={status} value={status}>{prettyLabel(status)}</option>)}
-                          </select>
+                          deliveryStage || productionComplete || !canUpdateOrderStatus || !lockedWorkstreamType ? (
+                            <span className={`inline-flex rounded-full border px-4 py-2 text-sm font-bold capitalize ${STATUS_STYLES[rowStatus] ?? STATUS_STYLES.pending}`}>
+                              {prettyLabel(rowStatus)}
+                            </span>
+                          ) : (
+                            <select
+                              value={productionStatus}
+                              disabled={busyKey !== null}
+                              onChange={(event) => void updateOrder(order.id, { status: event.target.value })}
+                              className={`h-9 min-w-[190px] rounded-full border px-4 text-sm font-bold capitalize outline-none ${STATUS_STYLES[productionStatus] ?? STATUS_STYLES.pending}`}
+                            >
+                              {PRODUCTION_ORDER_STATUSES.map((status) => <option key={status} value={status}>{prettyLabel(status)}</option>)}
+                            </select>
+                          )
                         )}
+                        {childStatuses.length ? (
+                          <div className="mt-2 flex max-w-[360px] flex-wrap gap-1.5">
+                            {childStatuses.map((child) => (
+                              <span
+                                key={child.key}
+                                className={`max-w-full truncate rounded-full border px-2 py-0.5 text-[10px] font-bold ${STATUS_STYLES[child.status] ?? STATUS_STYLES.pending}`}
+                                title={`${child.label}: ${prettyLabel(child.status)}`}
+                              >
+                                {child.label}: {prettyLabel(child.status)}
+                              </span>
+                            ))}
+                          </div>
+                        ) : null}
                       </td>
                       <td className="px-4 py-5 align-middle">
                         {deliveryStage || !canUpdatePaymentStatus ? (

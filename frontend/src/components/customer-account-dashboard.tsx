@@ -37,6 +37,12 @@ import {
   TOP_MEASUREMENT_TITLE,
   measurementDisplayGroups,
 } from "@/lib/measurement-fields";
+import {
+  CUSTOMER_ORDER_STATUSES,
+  customerStatusForItem,
+  rollUpCustomerStatus,
+  type CustomerOrderStatus,
+} from "@/lib/orders/order-statuses";
 
 type Profile = {
   id?: string | null;
@@ -56,6 +62,7 @@ type Profile = {
 };
 
 type OrderItem = {
+  id?: string | null;
   productName?: string | null;
   product_name?: string | null;
   priceUsd?: number | string | null;
@@ -64,6 +71,7 @@ type OrderItem = {
   itemType?: string | null;
   uploaded_design_id?: string | null;
   uploadedDesignId?: string | null;
+  status?: string | null;
 };
 
 type OrderWorkstream = {
@@ -71,6 +79,7 @@ type OrderWorkstream = {
   type: "catalog" | "custom";
   trackingReference?: string | null;
   status: string;
+  deliveryStatus?: string | null;
   items?: OrderItem[] | null;
 };
 
@@ -88,6 +97,8 @@ type Order = {
   orderType?: string | null;
   familyGroupId?: string | null;
   groupId?: string | null;
+  fulfillmentType?: "mail" | "pickup" | null;
+  deliveryStatus?: string | null;
   workstreams?: OrderWorkstream[] | null;
 };
 
@@ -116,21 +127,19 @@ type Measurement = {
 type ServerAction = (formData: FormData) => void | Promise<void>;
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
-  pending: { label: "Order Received", color: "bg-yellow-100 text-yellow-800" },
+  pending: { label: "Pending", color: "bg-yellow-100 text-yellow-800" },
   processing: { label: "Processing", color: "bg-sky-100 text-sky-800" },
-  picking: { label: "Picking", color: "bg-sky-100 text-sky-800" },
-  design_review: { label: "Design Review", color: "bg-violet-100 text-violet-800" },
-  measurements_confirmed: { label: "Measurements Confirmed", color: "bg-indigo-100 text-indigo-800" },
-  tailoring: { label: "In Tailoring", color: "bg-purple-100 text-purple-800" },
+  tailoring: { label: "Tailoring", color: "bg-purple-100 text-purple-800" },
   quality_check: { label: "Quality Check", color: "bg-blue-100 text-blue-700" },
   shipped: { label: "Shipped", color: "bg-green-100 text-green-800" },
   delivered: { label: "Delivered", color: "bg-green-200 text-green-900" },
   ready_for_pickup: { label: "Ready for Pickup", color: "bg-orange-100 text-orange-800" },
-  picked_up: { label: "Picked Up", color: "bg-green-200 text-green-900" },
-  ready: { label: "Ready", color: "bg-emerald-100 text-emerald-900" },
-  fulfilled: { label: "Ready for Delivery", color: "bg-emerald-100 text-emerald-900" },
+  fulfilled: { label: "Fulfilled", color: "bg-emerald-100 text-emerald-900" },
   cancelled: { label: "Cancelled", color: "bg-red-100 text-red-800" },
 };
+
+const PRODUCTION_STEPS = ["pending", "processing", "tailoring", "quality_check", "fulfilled"] as const;
+const PRODUCTION_LABELS = ["Pending", "Processing", "Tailoring", "Quality Check", "Fulfilled"] as const;
 
 function formatDate(value?: string | null) {
   if (!value) return "";
@@ -148,7 +157,8 @@ function orderItemPrice(item: OrderItem) {
 }
 
 function getOrderTypeShortName(order: Order) {
-  if ((order.workstreams?.length ?? 0) > 1) return "MIXED";
+  const types = new Set((order.workstreams ?? []).map((workstream) => workstream.type));
+  if (order.orderType === "mixed_order" || (types.has("catalog") && types.has("custom"))) return "MIXED";
   const isGroup = Boolean(order.familyGroupId || order.groupId || order.orderType === "group_order");
   const isCustom = order.workstreams?.[0]?.type === "custom" || (order.orderType === "custom_design_order") || order.items?.some(item => item.item_type === "custom_design" || item.itemType === "custom_design" || item.uploaded_design_id || item.uploadedDesignId);
   
@@ -165,8 +175,60 @@ function workstreamsForOrder(order: Order): OrderWorkstream[] {
   const catalog = items.filter((item) => !custom.includes(item));
   return [
     ...(catalog.length ? [{ id: `${order.id}-catalog`, type: "catalog" as const, trackingReference: `${order.orderNumber ?? order.id}-CAT`, status: order.status ?? "pending", items: catalog }] : []),
-    ...(custom.length ? [{ id: `${order.id}-custom`, type: "custom" as const, trackingReference: `${order.orderNumber ?? order.id}-CUS`, status: order.status ?? "design_review", items: custom }] : []),
+    ...(custom.length ? [{ id: `${order.id}-custom`, type: "custom" as const, trackingReference: `${order.orderNumber ?? order.id}-CUS`, status: order.status ?? "pending", items: custom }] : []),
   ];
+}
+
+function safeLegacyMainStatus(status?: string | null): CustomerOrderStatus | null {
+  const normalized = String(status ?? "").trim().toLowerCase();
+  if (normalized === "picked_up") return "delivered";
+  return (CUSTOMER_ORDER_STATUSES as readonly string[]).includes(normalized)
+    ? normalized as CustomerOrderStatus
+    : null;
+}
+
+function itemMainStatus(order: Order, workstream: OrderWorkstream, item?: OrderItem): CustomerOrderStatus {
+  const productionStatus = item?.status ?? workstream.status ?? order.status;
+  const legacyMainStatus = safeLegacyMainStatus(productionStatus);
+  if (legacyMainStatus && ["shipped", "ready_for_pickup", "delivered", "cancelled"].includes(legacyMainStatus)) {
+    return legacyMainStatus;
+  }
+  const workstreamDelivery = workstream.deliveryStatus;
+  return customerStatusForItem({
+    productionStatus,
+    deliveryStatus: workstreamDelivery && workstreamDelivery !== "not_started"
+      ? workstreamDelivery
+      : order.deliveryStatus ?? workstreamDelivery,
+    fulfillmentType: order.fulfillmentType,
+  });
+}
+
+function workstreamMainStatus(order: Order, workstream: OrderWorkstream): CustomerOrderStatus {
+  const items = workstream.items ?? [];
+  return items.length
+    ? rollUpCustomerStatus(items.map((item) => itemMainStatus(order, workstream, item)))
+    : itemMainStatus(order, workstream);
+}
+
+function orderMainStatus(order: Order, workstreams = workstreamsForOrder(order)): CustomerOrderStatus {
+  const statuses = workstreams.flatMap((workstream) => {
+    const items = workstream.items ?? [];
+    return items.length
+      ? items.map((item) => itemMainStatus(order, workstream, item))
+      : [itemMainStatus(order, workstream)];
+  });
+  if (statuses.length) return rollUpCustomerStatus(statuses);
+  return safeLegacyMainStatus(order.status) ?? customerStatusForItem({
+    productionStatus: order.status,
+    deliveryStatus: order.deliveryStatus,
+    fulfillmentType: order.fulfillmentType,
+  });
+}
+
+function productionStepIndex(status: CustomerOrderStatus) {
+  if (status === "cancelled") return -1;
+  if (["fulfilled", "shipped", "ready_for_pickup", "delivered"].includes(status)) return PRODUCTION_STEPS.length - 1;
+  return Math.max(0, (PRODUCTION_STEPS as readonly string[]).indexOf(status));
 }
 
 export function CustomerAccountDashboard({
@@ -471,8 +533,11 @@ function OrdersPanel({ orders }: { orders: Order[] }) {
         </Link>
       </div>
       {orders.map((order) => {
-        const cfg = STATUS_CONFIG[order.status ?? "pending"] ?? STATUS_CONFIG.pending;
+        const workstreams = workstreamsForOrder(order);
+        const mainStatus = orderMainStatus(order, workstreams);
+        const cfg = STATUS_CONFIG[mainStatus] ?? STATUS_CONFIG.pending;
         const shortType = getOrderTypeShortName(order);
+        const isMixed = shortType === "MIXED";
         return (
           <div key={order.id} className="rounded-2xl border border-border bg-card p-5">
             <div className="mb-3 flex items-start justify-between gap-3">
@@ -501,8 +566,9 @@ function OrdersPanel({ orders }: { orders: Order[] }) {
             ) : null}
 
             <div className="mb-3 space-y-2">
-              {workstreamsForOrder(order).map((workstream) => {
-                const workstreamConfig = STATUS_CONFIG[workstream.status] ?? STATUS_CONFIG.pending;
+              {workstreams.map((workstream) => {
+                const workstreamStatus = workstreamMainStatus(order, workstream);
+                const workstreamConfig = STATUS_CONFIG[workstreamStatus] ?? STATUS_CONFIG.pending;
                 return (
                   <div key={workstream.id} className={`rounded-xl border p-3 ${workstream.type === "custom" ? "border-violet-500/20 bg-violet-500/5" : "border-blue-500/20 bg-blue-500/5"}`}>
                     <div className="flex items-start justify-between gap-3">
@@ -513,12 +579,19 @@ function OrdersPanel({ orders }: { orders: Order[] }) {
                       <span className={`rounded-full px-2 py-1 text-[10px] font-black uppercase ${workstreamConfig.color}`}>{workstreamConfig.label}</span>
                     </div>
                     <div className="mt-2 space-y-1">
-                      {(workstream.items ?? []).map((item, index) => (
-                        <div key={`${workstream.id}-${index}`} className="flex justify-between gap-3 text-xs text-muted-foreground">
+                      {(workstream.items ?? []).map((item, index) => {
+                        const individualStatus = itemMainStatus(order, workstream, item);
+                        const individualConfig = STATUS_CONFIG[individualStatus] ?? STATUS_CONFIG.pending;
+                        return (
+                        <div key={item.id ?? `${workstream.id}-${index}`} className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
                           <span>{item.productName ?? item.product_name ?? "Item"}</span>
-                          <span>{orderItemPrice(item)}</span>
+                          <span className="flex items-center gap-2">
+                            <span>{orderItemPrice(item)}</span>
+                            {isMixed ? <span className={`rounded-full px-2 py-0.5 text-[9px] font-black uppercase ${individualConfig.color}`}>{individualConfig.label}</span> : null}
+                          </span>
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 );
@@ -558,8 +631,10 @@ function StatusPanel({ orders }: { orders: Order[] }) {
     <div className="overflow-hidden rounded-2xl border border-border bg-card">
       <div className="divide-y divide-border">
         {orders.map((order) => {
-          const cfg = STATUS_CONFIG[order.status ?? "pending"] ?? STATUS_CONFIG.pending;
           const workstreams = workstreamsForOrder(order);
+          const mainStatus = orderMainStatus(order, workstreams);
+          const cfg = STATUS_CONFIG[mainStatus] ?? STATUS_CONFIG.pending;
+          const isMixed = getOrderTypeShortName(order) === "MIXED";
           return (
             <div key={order.id} className="p-5">
               <div className="mb-4 flex items-start justify-between gap-3">
@@ -571,25 +646,31 @@ function StatusPanel({ orders }: { orders: Order[] }) {
               </div>
               <div className="space-y-3">
                 {workstreams.map((workstream) => {
-                  const workstreamSteps = workstream.type === "custom"
-                    ? ["design_review", "measurements_confirmed", "tailoring", "quality_check", "ready"]
-                    : ["pending", "picking", "quality_check", "ready"];
-                  const labels = workstream.type === "custom"
-                    ? ["Review", "Measure", "Tailor", "QC", "Ready"]
-                    : ["Received", "Picking", "QC", "Ready"];
-                  const stepIndex = Math.max(0, workstreamSteps.indexOf(workstream.status));
+                  const workstreamStatus = workstreamMainStatus(order, workstream);
+                  const workstreamConfig = STATUS_CONFIG[workstreamStatus] ?? STATUS_CONFIG.pending;
+                  const stepIndex = productionStepIndex(workstreamStatus);
                   return (
                     <div key={workstream.id} className="rounded-xl border border-border bg-background/60 p-3">
                       <div className="mb-2 flex items-center justify-between gap-3">
                         <p className="font-mono text-[10px] font-bold">{workstream.trackingReference}</p>
-                        <span className="text-[10px] font-black uppercase text-primary">{STATUS_CONFIG[workstream.status]?.label ?? workstream.status.replaceAll("_", " ")}</span>
+                        <span className="text-[10px] font-black uppercase text-primary">{workstreamConfig.label}</span>
                       </div>
                       <div className="mb-2 flex items-center gap-1">
-                        {workstreamSteps.map((step, index) => <div key={step} className={`h-1.5 flex-1 rounded-full ${index <= stepIndex ? "bg-primary" : "bg-border"}`} />)}
+                        {PRODUCTION_STEPS.map((step, index) => <div key={step} className={`h-1.5 flex-1 rounded-full ${index <= stepIndex ? "bg-primary" : "bg-border"}`} />)}
                       </div>
                       <div className="flex justify-between text-[9px] text-muted-foreground">
-                        {labels.map((label) => <span key={label}>{label}</span>)}
+                        {PRODUCTION_LABELS.map((label) => <span key={label}>{label}</span>)}
                       </div>
+                      {isMixed ? <div className="mt-3 space-y-1.5 border-t border-border pt-2">
+                        {(workstream.items ?? []).map((item, index) => {
+                          const individualStatus = itemMainStatus(order, workstream, item);
+                          const individualConfig = STATUS_CONFIG[individualStatus] ?? STATUS_CONFIG.pending;
+                          return <div key={item.id ?? `${workstream.id}-status-${index}`} className="flex items-center justify-between gap-3 text-[11px]">
+                            <span className="truncate text-muted-foreground">{item.productName ?? item.product_name ?? `Item ${index + 1}`}</span>
+                            <span className={`rounded-full px-2 py-0.5 text-[9px] font-black uppercase ${individualConfig.color}`}>{individualConfig.label}</span>
+                          </div>;
+                        })}
+                      </div> : null}
                     </div>
                   );
                 })}

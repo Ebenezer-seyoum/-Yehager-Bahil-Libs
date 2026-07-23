@@ -18,6 +18,7 @@ import {
   submitEtbPaymentProof,
   updateOrderNote,
   updateOrderAdminState,
+  updateMixedOrderLineItemStatus,
   updateOrderWorkstream,
 } from "../../services/orders-service.js";
 import { systemAlerts } from "../../lib/db/schema.js";
@@ -26,6 +27,7 @@ import { and, eq, sql } from "drizzle-orm";
 import type { AppBindings } from "../../types/hono.js";
 import { getUserByEmail } from "../../repositories/users-repository.js";
 import { getEffectivePermissionsForUser } from "../../services/permissions-service.js";
+import { CUSTOMER_MAIN_STATUSES, PRODUCTION_STATUSES } from "../../lib/orders/order-workstreams.js";
 
 const querySchema = z.object({
   limit: z.coerce.number().int().positive().max(200).optional(),
@@ -64,20 +66,7 @@ const etbProofSchema = z.object({
   paymentProofUrl: z.string().url(),
 });
 const adminUpdateSchema = z.object({
-  status: z
-    .enum([
-      "pending",
-      "processing",
-      "fulfilled",
-      "tailoring",
-      "quality_check",
-      "shipped",
-      "delivered",
-      "ready_for_pickup",
-      "picked_up",
-      "cancelled",
-    ])
-    .optional(),
+  status: z.enum(CUSTOMER_MAIN_STATUSES).optional(),
   paymentStatus: z.enum(["pending", "awaiting_verification", "paid", "failed", "refunded", "unpaid"]).optional(),
   fulfillmentType: z.enum(["mail", "pickup"]).optional(),
   carrier: z.string().trim().max(120).optional(),
@@ -98,6 +87,11 @@ const workstreamUpdateSchema = z.object({
   (value) => value.status !== undefined || value.deliveryStatus !== undefined || value.deliveryCarrier !== undefined || value.deliveryTrackingNumber !== undefined || value.deliveryDueAt !== undefined || value.assignedUserId !== undefined || value.dueAt !== undefined,
   { message: "At least one workstream field must be updated" },
 );
+const lineItemStatusUpdateSchema = z.object({
+  status: z.enum(PRODUCTION_STATUSES),
+  expectedVersion: z.number().int().positive().optional(),
+  note: z.string().trim().max(1000).optional(),
+});
 const noteSchema = z.object({
   noteType: z.enum(["admin", "tailor", "delivery", "customer"]),
   note: z.string().trim().min(3).max(1000),
@@ -263,6 +257,33 @@ ordersRouter.get("/:orderId", requireAuth, requireAnyPermission(ORDER_READ_PERMI
   const data = await getOrderDetailsForAdmin(orderId, scope);
   return c.json({ data });
 });
+
+ordersRouter.patch(
+  "/:orderId/workstreams/:workstreamType/items/:lineItemId/status",
+  requireAuth,
+  requireAnyPermission([PERMISSIONS.ORDERS_EDIT, PERMISSIONS.ORDERS_STATUS_UPDATE]),
+  zValidator("json", lineItemStatusUpdateSchema),
+  async (c) => {
+    const authUser = c.get("authUser");
+    const orderId = c.req.param("orderId");
+    const workstreamType = c.req.param("workstreamType");
+    if (workstreamType !== "catalog" && workstreamType !== "custom") {
+      throw new HTTPException(400, { message: "Workstream type must be catalog or custom" });
+    }
+    const lineItemId = c.req.param("lineItemId");
+    const body = c.req.valid("json");
+    const data = await updateMixedOrderLineItemStatus({
+      orderId,
+      type: workstreamType,
+      lineItemId,
+      status: body.status,
+      expectedVersion: body.expectedVersion,
+      note: body.note,
+      performedBy: authUser?.email,
+    });
+    return c.json({ data });
+  },
+);
 
 ordersRouter.patch(
   "/:orderId/workstreams/:workstreamType",

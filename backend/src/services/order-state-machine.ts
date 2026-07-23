@@ -1,12 +1,14 @@
 export type PaymentStatus = "pending" | "paid" | "failed" | "refunded" | "awaiting_verification";
 export type OrderStatus =
   | "pending"
+  | "processing"
   | "tailoring"
   | "quality_check"
+  | "fulfilled"
   | "shipped"
   | "delivered"
   | "ready_for_pickup"
-  | "picked_up";
+  | "cancelled";
 
 const allowedPaymentTransitions: Record<PaymentStatus, PaymentStatus[]> = {
   pending: ["paid", "failed", "awaiting_verification"],

@@ -1,11 +1,14 @@
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { db } from "../lib/db/drizzle.js";
-import { orderLineItems, orderWorkstreamEvents, orderWorkstreams, orders } from "../lib/db/schema.js";
+import { orderLineItemEvents, orderLineItems, orderWorkstreamEvents, orderWorkstreams, orders } from "../lib/db/schema.js";
 import { rollUpOrderStatus, type OrderWorkstreamType } from "../lib/orders/order-workstreams.js";
 
 export type OrderWorkstreamScope = "catalog" | "custom";
 
-function legacyCompatibleLineItem(row: typeof orderLineItems.$inferSelect) {
+function legacyCompatibleLineItem(
+  row: typeof orderLineItems.$inferSelect,
+  events: Array<typeof orderLineItemEvents.$inferSelect> = [],
+) {
   return {
     ...row,
     product_id: row.productId,
@@ -17,6 +20,7 @@ function legacyCompatibleLineItem(row: typeof orderLineItems.$inferSelect) {
     measurement_id: row.measurementId,
     measurement_snapshot: row.measurementSnapshot,
     item_metadata: row.itemMetadata,
+    events,
   };
 }
 
@@ -29,7 +33,7 @@ async function attachOrderWorkstreams<T extends { id: string }>(rows: T[], inclu
     orderBy: [asc(orderWorkstreams.createdAt)],
   });
   const workstreamIds = workstreamRows.map((row) => row.id);
-  const [lineRows, eventRows] = workstreamIds.length
+  const [lineRows, eventRows, lineEventRows] = workstreamIds.length
     ? await Promise.all([
         db.query.orderLineItems.findMany({
           where: inArray(orderLineItems.workstreamId, workstreamIds),
@@ -41,8 +45,14 @@ async function attachOrderWorkstreams<T extends { id: string }>(rows: T[], inclu
               orderBy: [desc(orderWorkstreamEvents.createdAt)],
             })
           : Promise.resolve([]),
+        includeEvents
+          ? db.query.orderLineItemEvents.findMany({
+              where: inArray(orderLineItemEvents.workstreamId, workstreamIds),
+              orderBy: [desc(orderLineItemEvents.createdAt)],
+            })
+          : Promise.resolve([]),
       ])
-    : [[], []];
+    : [[], [], []];
 
   const linesByWorkstream = new Map<string, typeof lineRows>();
   for (const line of lineRows) {
@@ -56,12 +66,20 @@ async function attachOrderWorkstreams<T extends { id: string }>(rows: T[], inclu
     current.push(event);
     eventsByWorkstream.set(event.workstreamId, current);
   }
+  const eventsByLine = new Map<string, typeof lineEventRows>();
+  for (const event of lineEventRows) {
+    const current = eventsByLine.get(event.lineItemId) ?? [];
+    current.push(event);
+    eventsByLine.set(event.lineItemId, current);
+  }
   const workstreamsByOrder = new Map<string, Array<Record<string, unknown>>>();
   for (const workstream of workstreamRows) {
     const current = workstreamsByOrder.get(workstream.orderId) ?? [];
     current.push({
       ...workstream,
-      items: (linesByWorkstream.get(workstream.id) ?? []).map(legacyCompatibleLineItem),
+      items: (linesByWorkstream.get(workstream.id) ?? []).map((line) =>
+        legacyCompatibleLineItem(line, eventsByLine.get(line.id) ?? []),
+      ),
       events: eventsByWorkstream.get(workstream.id) ?? [],
     });
     workstreamsByOrder.set(workstream.orderId, current);

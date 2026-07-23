@@ -1,21 +1,27 @@
 import { HTTPException } from "hono/http-exception";
 import { and, eq, inArray, isNull, or } from "drizzle-orm";
 import { db } from "../lib/db/drizzle.js";
-import { auditLogs, cartItems, eventParticipants, events, familyMembers, measurements, orderLineItems, orderNotes, orders, orderWorkstreamEvents, orderWorkstreams, products, systemAlerts, uploadedDesigns } from "../lib/db/schema.js";
+import { auditLogs, cartItems, eventParticipants, events, familyMembers, measurements, orderLineItemEvents, orderLineItems, orderNotes, orders, orderWorkstreamEvents, orderWorkstreams, products, systemAlerts, uploadedDesigns } from "../lib/db/schema.js";
 import { PERMISSIONS } from "../lib/auth/permissions.js";
 import {
+  allActiveLineItemsFulfilled,
   canTransitionWorkstreamStatus,
   canTransitionDeliveryStatus,
   classifyOrderLine,
+  CUSTOMER_MAIN_STATUSES,
+  deriveCustomerMainStatus,
   inferOrderType,
   initialWorkstreamStatus,
   isWorkstreamStatus,
   isDeliveryStatus as isWorkstreamDeliveryStatus,
+  normalizeProductionStatus,
+  PRODUCTION_STATUSES,
+  rollUpLineItemStatus,
   rollUpOrderStatus,
   workstreamLabel,
   workstreamTrackingReference,
   workstreamTypesForLines,
-  type OrderWorkstreamStatus,
+  type ProductionStatus,
   type OrderWorkstreamType,
 } from "../lib/orders/order-workstreams.js";
 import { deleteCartItemsByIdsForUser, listCartItemsByIdsForUser } from "../repositories/cart-repository.js";
@@ -43,18 +49,7 @@ import { calculateCouponDiscount, markCouponRedeemed } from "./discounts-service
 import { awardCustomerCreditForPaidOrder } from "./customer-credits-service.js";
 import { hasPermission } from "./permissions-service.js";
 
-const ORDER_STATUS_VALUES = [
-  "pending",
-  "processing",
-  "fulfilled",
-  "tailoring",
-  "quality_check",
-  "shipped",
-  "delivered",
-  "ready_for_pickup",
-  "picked_up",
-  "cancelled",
-] as const;
+const ORDER_STATUS_VALUES = CUSTOMER_MAIN_STATUSES;
 const PAYMENT_STATUS_VALUES = ["pending", "awaiting_verification", "paid", "failed", "refunded", "unpaid"] as const;
 const NOTE_TYPE_VALUES = ["customer", "admin", "tailor", "delivery"] as const;
 const NOTE_MIN_LENGTH = 3;
@@ -150,9 +145,56 @@ function enrichOrderWorkstreamItems<T extends { items?: unknown; workstreams?: u
     ...order,
     workstreams: workstreams.map((workstream) => {
       const type = workstream.type === "custom" ? "custom" : "catalog";
+      const scopedLegacyItems = items.filter((item) => classifyOrderLine(item) === type);
+      const normalizedItems = Array.isArray(workstream.items)
+        ? workstream.items.filter(
+            (item): item is Record<string, unknown> => Boolean(item) && typeof item === "object",
+          )
+        : [];
       return {
         ...workstream,
-        items: items.filter((item) => classifyOrderLine(item) === type),
+        items: normalizedItems.length
+          ? normalizedItems.map((line, scopedIndex) => {
+              const sourceCartItemId = String(line.sourceCartItemId ?? line.source_cart_item_id ?? "");
+              const position = Number(line.position ?? 0);
+              const bySource = sourceCartItemId
+                ? scopedLegacyItems.find((item) =>
+                    String(item.cart_item_id ?? item.cartItemId ?? "") === sourceCartItemId,
+                  )
+                : undefined;
+              const byPosition = position > 0 && classifyOrderLine(items[position - 1] ?? {}) === type
+                ? items[position - 1]
+                : undefined;
+              const legacyItem = bySource ?? byPosition ?? scopedLegacyItems[scopedIndex] ?? {};
+              return {
+                ...legacyItem,
+                ...line,
+                id: line.id,
+                orderId: line.orderId,
+                workstreamId: line.workstreamId,
+                sourceCartItemId: line.sourceCartItemId,
+                position: line.position,
+                status: line.status,
+                version: line.version,
+                lastStatusChangedAt: line.lastStatusChangedAt,
+                lastStatusChangedBy: line.lastStatusChangedBy,
+                assignedUserId: line.assignedUserId,
+                dueAt: line.dueAt,
+                measurementSnapshot:
+                  line.measurementSnapshot ??
+                  line.measurement_snapshot ??
+                  legacyItem.measurementSnapshot ??
+                  legacyItem.measurement_snapshot ??
+                  null,
+                measurement_snapshot:
+                  line.measurement_snapshot ??
+                  line.measurementSnapshot ??
+                  legacyItem.measurement_snapshot ??
+                  legacyItem.measurementSnapshot ??
+                  null,
+              };
+            })
+          : scopedLegacyItems,
       };
     }),
   };
@@ -190,7 +232,7 @@ function orderEmailEventForChange(
   if (requested.status && next.status !== previous.status) {
     if (status === "ready_for_pickup") return "order_ready_for_pickup";
     if (status === "fulfilled") return "order_fulfilled";
-    if (status === "delivered" || status === "picked_up") return "order_delivered";
+    if (status === "delivered") return "order_delivered";
     if (status === "shipped") return "order_shipped";
     if (["processing", "tailoring", "quality_check"].includes(status)) return "order_in_production";
     if (status === "cancelled") return "order_cancelled";
@@ -200,7 +242,7 @@ function orderEmailEventForChange(
     if (["delivered", "picked_up"].includes(delivery)) return "order_delivered";
     if (delivery === "out_for_delivery") return "order_out_for_delivery";
     if (["assigned_to_ems", "handed_to_ems", "in_transit", "at_hub"].includes(delivery)) return "order_shipped";
-    if (delivery === "cancelled_pickup") return "order_cancelled";
+    if (delivery === "cancelled_pickup" || delivery === "returned") return "order_cancelled";
   }
   return "order_status_updated";
 }
@@ -634,6 +676,16 @@ export async function updateOrderAdminState(payload: {
   if (!order) {
     throw new HTTPException(404, { message: "Order not found" });
   }
+  const isMixedOrder = order.orderType === "mixed_order";
+  if (
+    isMixedOrder &&
+    payload.status !== undefined &&
+    payload.deliveryStatus === undefined
+  ) {
+    throw new HTTPException(409, {
+      message: "Mixed-order customer status is derived from its individual line items",
+    });
+  }
   if (
     !payload.status &&
     !payload.paymentStatus &&
@@ -653,6 +705,17 @@ export async function updateOrderAdminState(payload: {
   if (payload.deliveryStatus && !isDeliveryStatus(payload.deliveryStatus)) {
     throw new HTTPException(400, { message: `Invalid delivery status: ${payload.deliveryStatus}` });
   }
+  if (
+    payload.deliveryStatus &&
+    !isWorkstreamDeliveryStatus(
+      payload.deliveryStatus,
+      (payload.fulfillmentType ?? order.fulfillmentType) === "pickup",
+    )
+  ) {
+    throw new HTTPException(400, {
+      message: `Invalid ${(payload.fulfillmentType ?? order.fulfillmentType) === "pickup" ? "pickup" : "mail"} delivery status: ${payload.deliveryStatus}`,
+    });
+  }
 
   const workstreamRows = Array.isArray(order.workstreams)
     ? order.workstreams.filter((row): row is Record<string, unknown> => Boolean(row) && typeof row === "object")
@@ -666,21 +729,66 @@ export async function updateOrderAdminState(payload: {
   const paidReadyStatus = payload.paymentStatus === "paid" && workstreamRollup === "fulfilled"
     ? "fulfilled"
     : undefined;
-  const nextStatus = payload.status ?? paidReadyStatus ?? order.status;
   const nextPayment = payload.paymentStatus ?? order.paymentStatus;
+  const nextDeliveryStatus = payload.deliveryStatus ?? order.deliveryStatus;
+  const currentProductionStatus: ProductionStatus = workstreamRollup
+    ?? normalizeProductionStatus(order.status)
+    ?? (["shipped", "ready_for_pickup", "delivered", "picked_up"].includes(String(order.status))
+      ? "fulfilled"
+      : "pending");
+  const deliveryStatusIsChanging =
+    payload.deliveryStatus !== undefined &&
+    payload.deliveryStatus !== order.deliveryStatus;
+
+  if (deliveryStatusIsChanging) {
+    if (isMixedOrder) {
+      const lineRows = await db.query.orderLineItems.findMany({
+        where: eq(orderLineItems.orderId, order.id),
+      });
+      if (!allActiveLineItemsFulfilled(lineRows)) {
+        throw new HTTPException(409, {
+          message: "Every active catalog and custom item must be fulfilled before delivery or pickup can start",
+        });
+      }
+    } else if (currentProductionStatus !== "fulfilled") {
+      throw new HTTPException(409, {
+        message: "The order must be fulfilled before delivery or pickup can start",
+      });
+    }
+    if (payload.deliveryStatus !== "not_started" && nextPayment !== "paid") {
+      throw new HTTPException(409, {
+        message: "The mixed order must be paid before delivery or pickup can start",
+      });
+    }
+  }
+
+  const paymentSafeProduction =
+    currentProductionStatus === "fulfilled" && nextPayment !== "paid"
+      ? "processing"
+      : currentProductionStatus;
+  const derivedDeliveryMainStatus = deriveCustomerMainStatus({
+    fulfillmentType: payload.fulfillmentType ?? order.fulfillmentType,
+    productionStatus: paymentSafeProduction,
+    deliveryStatus: nextDeliveryStatus,
+  });
+  const nextStatus = isMixedOrder
+    ? derivedDeliveryMainStatus
+    : payload.deliveryStatus !== undefined
+      ? derivedDeliveryMainStatus
+      : payload.status ?? paidReadyStatus ?? order.status;
   if (
-    ["fulfilled", "shipped", "delivered", "ready_for_pickup", "picked_up"].includes(nextStatus) &&
+    ["fulfilled", "shipped", "delivered", "ready_for_pickup"].includes(nextStatus) &&
     nextPayment !== "paid"
   ) {
     throw new HTTPException(400, { message: "Order must be paid before moving into fulfillment-complete states" });
   }
   if (
     payload.status &&
-    ["fulfilled", "shipped", "delivered", "ready_for_pickup", "picked_up"].includes(payload.status) &&
+    ["fulfilled", "shipped", "delivered", "ready_for_pickup"].includes(payload.status) &&
     workstreamRows.length > 0 &&
     workstreamRollup !== "fulfilled"
   ) {
-    throw new HTTPException(409, { message: "Every active catalog and custom workstream must be ready before shared fulfillment can begin" });
+    throw new HTTPException(409, { message: "Every active catalog and custom item must be fulfilled before shared fulfillment can begin" });
   }
 
   const statusChanged = Boolean(payload.deliveryStatus && payload.deliveryStatus !== order.deliveryStatus);
@@ -703,7 +811,7 @@ export async function updateOrderAdminState(payload: {
   const [updated] = await db
     .update(orders)
     .set({
-      status: payload.status ?? paidReadyStatus,
+      status: nextStatus !== order.status ? nextStatus : undefined,
       paymentStatus: payload.paymentStatus ?? undefined,
       fulfillmentType: payload.fulfillmentType ?? undefined,
       carrier: payload.carrier ?? undefined,
@@ -716,6 +824,30 @@ export async function updateOrderAdminState(payload: {
     })
     .where(eq(orders.id, payload.orderId))
     .returning();
+
+  if (
+    isMixedOrder &&
+    payload.deliveryStatus !== undefined &&
+    payload.deliveryStatus !== order.deliveryStatus
+  ) {
+    const activeWorkstreamIds = workstreamRows
+      .filter((workstream) => normalizeProductionStatus(String(workstream.status ?? "")) !== "cancelled")
+      .map((workstream) => String(workstream.id ?? ""))
+      .filter(Boolean);
+    if (activeWorkstreamIds.length) {
+      await db
+        .update(orderWorkstreams)
+        .set({
+          deliveryStatus: payload.deliveryStatus,
+          deliveryCarrier: payload.carrier ?? order.carrier ?? undefined,
+          deliveryTrackingNumber: payload.trackingNumber ?? order.trackingNumber ?? undefined,
+          deliveryStatusChangedBy: payload.performedBy ?? "admin",
+          deliveryStatusChangedAt: changedAt,
+          updatedAt: new Date(),
+        })
+        .where(inArray(orderWorkstreams.id, activeWorkstreamIds));
+    }
+  }
 
   if (nextPayment === "paid" && order.paymentStatus !== "paid" && Array.isArray(order.items)) {
     await awardCustomerCreditForPaidOrder(updated, payload.performedBy ?? "admin");
@@ -766,7 +898,7 @@ export async function updateOrderAdminState(payload: {
   });
 
   const orderChanged =
-    (payload.status && payload.status !== order.status) ||
+    updated.status !== order.status ||
     (payload.paymentStatus && payload.paymentStatus !== order.paymentStatus) ||
     (payload.fulfillmentType && payload.fulfillmentType !== order.fulfillmentType) ||
     (payload.deliveryStatus && payload.deliveryStatus !== order.deliveryStatus);
@@ -819,13 +951,6 @@ export async function updateOrderAdminState(payload: {
   return updated;
 }
 
-const SHARED_FULFILLMENT_ORDER_STATUSES = new Set([
-  "shipped",
-  "delivered",
-  "ready_for_pickup",
-  "picked_up",
-]);
-
 export async function updateOrderWorkstream(payload: {
   orderId: string;
   type: OrderWorkstreamType;
@@ -867,6 +992,16 @@ export async function updateOrderWorkstream(payload: {
     if (!order) {
       throw new HTTPException(404, { message: "Order not found" });
     }
+    if (order.orderType === "mixed_order" && payload.status !== undefined) {
+      throw new HTTPException(409, {
+        message: "Update mixed-order production through an individual line item",
+      });
+    }
+    if (order.orderType === "mixed_order" && payload.deliveryStatus !== undefined) {
+      throw new HTTPException(409, {
+        message: "Update mixed-order delivery through the parent admin-state endpoint",
+      });
+    }
 
     const [workstream] = await tx
       .select()
@@ -888,7 +1023,7 @@ export async function updateOrderWorkstream(payload: {
     const fulfillmentType = String(order.fulfillmentType ?? "mail").toLowerCase();
     const deliveryStatusChanged = payload.deliveryStatus !== undefined && payload.deliveryStatus !== workstream.deliveryStatus;
     if (deliveryStatusChanged) {
-      if (workstream.status !== "ready") {
+      if (normalizeProductionStatus(workstream.status) !== "fulfilled") {
         throw new HTTPException(409, { message: "Delivery can start only after this workstream is fulfilled" });
       }
       if (order.paymentStatus !== "paid") {
@@ -933,14 +1068,14 @@ export async function updateOrderWorkstream(payload: {
         assignedUserId: payload.assignedUserId,
         dueAt,
         startedAt: statusChanged && !workstream.startedAt ? now : undefined,
-        completedAt: statusChanged && ["ready", "cancelled"].includes(nextStatus)
+        completedAt: statusChanged && ["fulfilled", "cancelled"].includes(nextStatus)
           ? now
           : statusChanged
             ? null
             : undefined,
         lastStatusChangedAt: statusChanged ? now : undefined,
         lastStatusChangedBy: statusChanged ? payload.performedBy ?? "admin" : undefined,
-        version: statusChanged ? nextVersion : undefined,
+        version: statusChanged || deliveryStatusChanged ? nextVersion : undefined,
         updatedAt: now,
       })
       .where(eq(orderWorkstreams.id, workstream.id))
@@ -968,7 +1103,7 @@ export async function updateOrderWorkstream(payload: {
     const anyShipped = activeAfterUpdate.some((row) => ["assigned_to_ems", "handed_to_ems", "in_transit", "at_hub", "out_for_delivery"].includes(String(row.deliveryStatus)));
     const anyReadyForPickup = activeAfterUpdate.some((row) => ["ready_for_pickup", "customer_notified", "waiting_customer"].includes(String(row.deliveryStatus)));
     const nextOrderStatus = allDelivered
-      ? (activeAfterUpdate.every((row) => String(row.deliveryStatus) === "picked_up") ? "picked_up" : "delivered")
+      ? "delivered"
       : anyReadyForPickup ? "ready_for_pickup"
         : anyShipped ? "shipped"
           : paymentSafeRolledStatus;
@@ -1109,6 +1244,211 @@ export async function updateOrderWorkstream(payload: {
   return transition.statusChanged
     ? getOrderDetailsForAdmin(payload.orderId)
     : detailedOrder;
+}
+
+export async function updateMixedOrderLineItemStatus(payload: {
+  orderId: string;
+  type: OrderWorkstreamType;
+  lineItemId: string;
+  status: ProductionStatus;
+  expectedVersion?: number;
+  note?: string;
+  performedBy?: string;
+}) {
+  if (!(PRODUCTION_STATUSES as readonly string[]).includes(payload.status)) {
+    throw new HTTPException(400, { message: `Invalid production status: ${payload.status}` });
+  }
+
+  await db.transaction(async (tx) => {
+    const [order] = await tx
+      .select()
+      .from(orders)
+      .where(eq(orders.id, payload.orderId))
+      .for("update");
+    if (!order) {
+      throw new HTTPException(404, { message: "Order not found" });
+    }
+    if (order.orderType !== "mixed_order") {
+      throw new HTTPException(409, {
+        message: "Individual line-item status control is available only for mixed orders",
+      });
+    }
+
+    const [workstream] = await tx
+      .select()
+      .from(orderWorkstreams)
+      .where(and(
+        eq(orderWorkstreams.orderId, payload.orderId),
+        eq(orderWorkstreams.type, payload.type),
+      ))
+      .for("update");
+    if (!workstream) {
+      throw new HTTPException(404, {
+        message: `${workstreamLabel(payload.type)} order workstream not found`,
+      });
+    }
+
+    const [lineItem] = await tx
+      .select()
+      .from(orderLineItems)
+      .where(and(
+        eq(orderLineItems.id, payload.lineItemId),
+        eq(orderLineItems.orderId, payload.orderId),
+        eq(orderLineItems.workstreamId, workstream.id),
+      ))
+      .for("update");
+    if (!lineItem) {
+      throw new HTTPException(404, { message: "Order line item not found in this workstream" });
+    }
+    if (
+      payload.expectedVersion !== undefined &&
+      payload.expectedVersion !== lineItem.version
+    ) {
+      throw new HTTPException(409, {
+        message: "This item was updated by someone else. Refresh and try again.",
+      });
+    }
+
+    const currentStatus = normalizeProductionStatus(lineItem.status);
+    if (!currentStatus) {
+      throw new HTTPException(409, {
+        message: `The line item has an unsupported legacy status: ${lineItem.status}`,
+      });
+    }
+    if (
+      currentStatus !== payload.status &&
+      (currentStatus === "fulfilled" || currentStatus === "cancelled")
+    ) {
+      throw new HTTPException(409, {
+        message: `${currentStatus.replaceAll("_", " ")} is terminal for an individual mixed-order item`,
+      });
+    }
+    if (currentStatus === payload.status && lineItem.status === payload.status) return;
+
+    const now = new Date();
+    const nextLineVersion = lineItem.version + 1;
+    await tx
+      .update(orderLineItems)
+      .set({
+        status: payload.status,
+        lastStatusChangedAt: now,
+        lastStatusChangedBy: payload.performedBy ?? "admin",
+        version: nextLineVersion,
+        updatedAt: now,
+      })
+      .where(eq(orderLineItems.id, lineItem.id));
+
+    await tx.insert(orderLineItemEvents).values({
+      orderId: order.id,
+      workstreamId: workstream.id,
+      lineItemId: lineItem.id,
+      fromStatus: currentStatus,
+      toStatus: payload.status,
+      version: nextLineVersion,
+      eventKey: `${lineItem.id}:status:${nextLineVersion}:${payload.status}`,
+      changedBy: payload.performedBy ?? "admin",
+      note: payload.note,
+      metadata: {
+        workstream_type: payload.type,
+        tracking_reference: workstream.trackingReference,
+        status_kind: "production",
+      },
+    });
+
+    const workstreamLineItems = await tx.query.orderLineItems.findMany({
+      where: eq(orderLineItems.workstreamId, workstream.id),
+    });
+    const rolledWorkstreamStatus = rollUpLineItemStatus(workstreamLineItems);
+    let workstreamVersion = workstream.version;
+    if (rolledWorkstreamStatus !== normalizeProductionStatus(workstream.status)) {
+      workstreamVersion += 1;
+      await tx
+        .update(orderWorkstreams)
+        .set({
+          status: rolledWorkstreamStatus,
+          startedAt: workstream.startedAt ?? now,
+          completedAt: ["fulfilled", "cancelled"].includes(rolledWorkstreamStatus) ? now : null,
+          lastStatusChangedAt: now,
+          lastStatusChangedBy: payload.performedBy ?? "admin",
+          version: workstreamVersion,
+          updatedAt: now,
+        })
+        .where(eq(orderWorkstreams.id, workstream.id));
+
+      await tx.insert(orderWorkstreamEvents).values({
+        orderId: order.id,
+        workstreamId: workstream.id,
+        fromStatus: normalizeProductionStatus(workstream.status) ?? workstream.status,
+        toStatus: rolledWorkstreamStatus,
+        version: workstreamVersion,
+        eventKey: `${workstream.id}:line-rollup:${workstreamVersion}:${rolledWorkstreamStatus}`,
+        changedBy: payload.performedBy ?? "admin",
+        customerEmailStatus: "skipped",
+        metadata: {
+          workstream_type: payload.type,
+          tracking_reference: workstream.trackingReference,
+          status_kind: "production",
+          source: "line_item_rollup",
+          line_item_id: lineItem.id,
+        },
+      });
+    }
+
+    const currentWorkstreams = await tx.query.orderWorkstreams.findMany({
+      where: eq(orderWorkstreams.orderId, order.id),
+    });
+    const workstreamsForRollup = currentWorkstreams.map((row) =>
+      row.id === workstream.id
+        ? { ...row, status: rolledWorkstreamStatus }
+        : row,
+    );
+    const productionStatus = rollUpOrderStatus(workstreamsForRollup.map((row) => ({
+      type: row.type as OrderWorkstreamType,
+      status: row.status,
+    })));
+    const paymentSafeProduction =
+      productionStatus === "fulfilled" && order.paymentStatus !== "paid"
+        ? "processing"
+        : productionStatus;
+    const nextOrderStatus = deriveCustomerMainStatus({
+      fulfillmentType: order.fulfillmentType,
+      productionStatus: paymentSafeProduction,
+      deliveryStatus: order.deliveryStatus,
+    });
+    if (nextOrderStatus !== order.status) {
+      await tx
+        .update(orders)
+        .set({ status: nextOrderStatus, updatedAt: now })
+        .where(eq(orders.id, order.id));
+    }
+
+    await tx.insert(auditLogs).values({
+      action: "mixed_order_line_status_updated",
+      category: "order",
+      severity: "info",
+      entityType: "order_line_item",
+      entityId: lineItem.id,
+      performedBy: payload.performedBy ?? "admin",
+      details: `${workstreamLabel(payload.type)} item status updated for order ${order.orderNumber}`,
+      metadata: {
+        order_id: order.id,
+        order_number: order.orderNumber,
+        workstream_id: workstream.id,
+        workstream_type: payload.type,
+        tracking_reference: workstream.trackingReference,
+        previous_line_status: currentStatus,
+        current_line_status: payload.status,
+        previous_workstream_status: workstream.status,
+        current_workstream_status: rolledWorkstreamStatus,
+        previous_order_status: order.status,
+        current_order_status: nextOrderStatus,
+        line_version: nextLineVersion,
+        note: payload.note,
+      },
+    });
+  });
+
+  return getOrderDetailsForAdmin(payload.orderId);
 }
 
 export async function createCheckoutIntent(payload: {
@@ -1313,30 +1653,50 @@ export async function createCheckoutIntent(payload: {
       .returning();
     const workstreamByType = new Map(workstreamRows.map((row) => [row.type, row]));
 
-    await tx.insert(orderLineItems).values(lines.map((line, index) => {
-      const type = classifyOrderLine(line);
-      const workstream = workstreamByType.get(type);
-      if (!workstream) {
-        throw new HTTPException(500, { message: `Could not create ${type} order workstream` });
-      }
-      return {
+    const lineItemRows = await tx
+      .insert(orderLineItems)
+      .values(lines.map((line, index) => {
+        const type = classifyOrderLine(line);
+        const workstream = workstreamByType.get(type);
+        if (!workstream) {
+          throw new HTTPException(500, { message: `Could not create ${type} order workstream` });
+        }
+        return {
+          orderId: order.id,
+          workstreamId: workstream.id,
+          sourceCartItemId: line.cartItemId,
+          position: index + 1,
+          itemType: line.itemType ?? "product",
+          productId: line.productId,
+          uploadedDesignId: line.uploadedDesignId,
+          productName: line.productName,
+          quantity: line.quantity,
+          unitPriceUsd: numberToMoney(line.unitPriceUsd),
+          lineTotalUsd: numberToMoney(line.lineTotalUsd),
+          measurementId: line.measurementId,
+          measurementSnapshot: line.measurementSnapshot,
+          itemMetadata: line.itemMetadata,
+          status: workstream.status,
+          lastStatusChangedBy: "checkout",
+        };
+      }))
+      .returning();
+    if (orderType === "mixed_order") {
+      await tx.insert(orderLineItemEvents).values(lineItemRows.map((lineItem) => ({
         orderId: order.id,
-        workstreamId: workstream.id,
-        sourceCartItemId: line.cartItemId,
-        position: index + 1,
-        itemType: line.itemType ?? "product",
-        productId: line.productId,
-        uploadedDesignId: line.uploadedDesignId,
-        productName: line.productName,
-        quantity: line.quantity,
-        unitPriceUsd: numberToMoney(line.unitPriceUsd),
-        lineTotalUsd: numberToMoney(line.lineTotalUsd),
-        measurementId: line.measurementId,
-        measurementSnapshot: line.measurementSnapshot,
-        itemMetadata: line.itemMetadata,
-        status: workstream.status,
-      };
-    }));
+        workstreamId: lineItem.workstreamId,
+        lineItemId: lineItem.id,
+        fromStatus: null,
+        toStatus: lineItem.status,
+        version: lineItem.version,
+        eventKey: `${lineItem.id}:checkout:${lineItem.version}:${lineItem.status}`,
+        changedBy: "checkout",
+        metadata: {
+          status_kind: "production",
+          baseline: true,
+        },
+      })));
+    }
 
     const uploadedDesignIds = lines
       .map((line) => line.uploadedDesignId)
@@ -1394,7 +1754,13 @@ export async function createCheckoutIntent(payload: {
         ...order,
         workstreams: workstreamRows.map((workstream) => ({
           ...workstream,
-          items: lines.filter((line) => classifyOrderLine(line) === workstream.type),
+          items: lineItemRows
+            .filter((lineItem) => lineItem.workstreamId === workstream.id)
+            .map((lineItem) => ({
+              ...(lines[lineItem.position - 1] ?? {}),
+              ...lineItem,
+              events: [],
+            })),
           events: [],
         })),
       },

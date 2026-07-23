@@ -2095,15 +2095,29 @@ adminRouter.post(
       body.type === "pickup_id"
         ? { pickupIdUrl: body.url, pickupIdUploadedAt: now }
         : body.type === "pickup_signed"
-          ? { pickupSignedDocUrl: body.url, pickupSignedDocUploadedAt: now, status: "picked_up", pickupCompletedAt: now }
+          ? {
+              pickupSignedDocUrl: body.url,
+              pickupSignedDocUploadedAt: now,
+              ...(order.orderType === "mixed_order"
+                ? {}
+                : { status: "delivered", deliveryStatus: "picked_up", pickupCompletedAt: now }),
+            }
           : body.type === "pickup_proof"
-            ? { pickupProofUrl: body.url, pickupProofUploadedAt: now, status: "picked_up" }
+            ? {
+                pickupProofUrl: body.url,
+                pickupProofUploadedAt: now,
+                ...(order.orderType === "mixed_order"
+                  ? {}
+                  : { status: "delivered", deliveryStatus: "picked_up" }),
+              }
             : {
                 shippingDocuments: [
                   ...(order.shippingDocuments ?? []),
                   { url: body.url, label: body.label ?? "Document", uploadedAt: now.toISOString() },
                 ],
-                status: isPickupOrder || order.status === "delivered" ? order.status : "shipped",
+                ...(order.orderType === "mixed_order"
+                  ? {}
+                  : { status: isPickupOrder || order.status === "delivered" ? order.status : "shipped" }),
               };
 
     const [row] = await db
