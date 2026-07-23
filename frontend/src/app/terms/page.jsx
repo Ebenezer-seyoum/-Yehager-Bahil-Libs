@@ -38,8 +38,8 @@ export default function TermsPage() {
             </ul>
           </section>
 
-          <section>
-            <h3 className="mb-3 font-heading text-xl font-bold">4. Cancellation & Refund Policy</h3>
+          <section className="rounded-2xl border border-primary/20 bg-primary/5 p-6">
+            <h3 className="mb-3 font-heading text-xl font-bold">4. Refund & Return Policy</h3>
             <p className="mb-3 text-muted-foreground">Due to the custom nature of our products:</p>
             <ul className="ml-4 space-y-2 text-muted-foreground">
               <li>• Full refunds are only available within the first 3 days after placing the order.</li>
@@ -54,7 +54,17 @@ export default function TermsPage() {
           </section>
 
           <section>
-            <h3 className="mb-3 font-heading text-xl font-bold">5. Alterations & Adjustments</h3>
+            <h3 className="mb-3 font-heading text-xl font-bold">5. How to Request a Refund or Return</h3>
+            <ol className="ml-5 list-decimal space-y-2 text-muted-foreground">
+              <li>Contact our support team with your order number, request reason, and supporting photos or details.</li>
+              <li>Our team reviews the order date, payment record, production stage, and product condition.</li>
+              <li>We confirm whether the request qualifies for a refund, partial adjustment, alteration, or rejection under this policy.</li>
+              <li>Approved refunds are returned through the original payment method when available. Processing time may depend on the payment provider.</li>
+            </ol>
+          </section>
+
+          <section>
+            <h3 className="mb-3 font-heading text-xl font-bold">6. Alterations & Adjustments</h3>
             <p className="mb-3 text-muted-foreground">We are committed to customer satisfaction:</p>
             <ul className="ml-4 space-y-2 text-muted-foreground">
               <li>• If adjustments are needed after receiving the product, we will support necessary corrections</li>
@@ -64,7 +74,7 @@ export default function TermsPage() {
           </section>
 
           <section>
-            <h3 className="mb-3 font-heading text-xl font-bold">6. Shipping & Delivery</h3>
+            <h3 className="mb-3 font-heading text-xl font-bold">7. Shipping & Delivery</h3>
             <ul className="ml-4 space-y-2 text-muted-foreground">
               <li>• We deliver worldwide through reliable international shipping partners</li>
               <li>• Delivery timelines may vary depending on location and logistics</li>
@@ -80,7 +90,7 @@ export default function TermsPage() {
           </section>
 
           <section>
-            <h3 className="mb-3 font-heading text-xl font-bold">7. Quality Commitment</h3>
+            <h3 className="mb-3 font-heading text-xl font-bold">8. Quality Commitment</h3>
             <p className="mb-3 text-muted-foreground">We ensure:</p>
             <ul className="ml-4 space-y-2 text-muted-foreground">
               <li>• High-quality materials</li>
@@ -90,7 +100,7 @@ export default function TermsPage() {
           </section>
 
           <section>
-            <h3 className="mb-3 font-heading text-xl font-bold">8. Customer Responsibility</h3>
+            <h3 className="mb-3 font-heading text-xl font-bold">9. Customer Responsibility</h3>
             <p className="mb-3 text-muted-foreground">Customers agree to:</p>
             <ul className="ml-4 space-y-2 text-muted-foreground">
               <li>• Provide accurate measurements and order details</li>
@@ -100,7 +110,7 @@ export default function TermsPage() {
           </section>
 
           <section>
-            <h3 className="mb-3 font-heading text-xl font-bold">9. Intellectual Property</h3>
+            <h3 className="mb-3 font-heading text-xl font-bold">10. Intellectual Property</h3>
             <p className="text-muted-foreground">
               All designs, images, and content belong to Yehager Bahil Libs and may not be copied or reproduced without
               permission.
@@ -108,7 +118,7 @@ export default function TermsPage() {
           </section>
 
           <section>
-            <h3 className="mb-3 font-heading text-xl font-bold">10. Limitation of Liability</h3>
+            <h3 className="mb-3 font-heading text-xl font-bold">11. Limitation of Liability</h3>
             <p className="mb-3 text-muted-foreground">Yehager Bahil Libs shall not be held liable for:</p>
             <ul className="ml-4 space-y-2 text-muted-foreground">
               <li>• Measurement errors provided by the customer</li>
@@ -118,14 +128,14 @@ export default function TermsPage() {
           </section>
 
           <section>
-            <h3 className="mb-3 font-heading text-xl font-bold">11. Governing Law</h3>
+            <h3 className="mb-3 font-heading text-xl font-bold">12. Governing Law</h3>
             <p className="text-muted-foreground">
               This Agreement shall be governed by the laws of the State of Minnesota, USA, under Naomi Investments LLC.
             </p>
           </section>
 
           <section>
-            <h3 className="mb-3 font-heading text-xl font-bold">12. Contact Information</h3>
+            <h3 className="mb-3 font-heading text-xl font-bold">13. Contact Information</h3>
             <div className="space-y-2 text-muted-foreground">
               <p>
                 📧{" "}
