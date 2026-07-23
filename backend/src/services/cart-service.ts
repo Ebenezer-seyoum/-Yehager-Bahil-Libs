@@ -12,6 +12,7 @@ import { db } from "../lib/db/drizzle.js";
 import { cartItems, profitCostSettings, uploadedDesigns } from "../lib/db/schema.js";
 import { and, eq } from "drizzle-orm";
 import { getEffectiveProductPrice } from "./discounts-service.js";
+import { isOtherProduct } from "../lib/products/product-types.js";
 
 type CartProductRole = {
   label: string;
@@ -96,6 +97,7 @@ export async function addItemToCart(payload: {
   eventId?: string;
   eventName?: string;
   roleLabel?: string;
+  sizeOption?: string;
 }) {
   if (!payload.userEmail) {
     throw new HTTPException(400, { message: "Authenticated token must include email" });
@@ -111,8 +113,19 @@ export async function addItemToCart(payload: {
   }
 
   const user = await getUserByEmail(payload.userEmail);
+  const isOther = isOtherProduct(product);
+  const availableSizes = Array.isArray(product.sizeOptions) ? product.sizeOptions.map((size) => String(size).trim()).filter(Boolean) : [];
+  if (isOther && availableSizes.length && !payload.sizeOption) {
+    throw new HTTPException(400, { message: "Please select a size for this Other-section product" });
+  }
+  if (isOther && payload.sizeOption && availableSizes.length && !availableSizes.includes(payload.sizeOption)) {
+    throw new HTTPException(400, { message: "Selected size is not available for this product" });
+  }
+  if (isOther && payload.measurementId) {
+    throw new HTTPException(400, { message: "Other-section products do not use measurements" });
+  }
   const pricedProduct = await getEffectiveProductPrice(product);
-  const availableRoles = getProductRoles(product);
+  const availableRoles = isOther ? [] : getProductRoles(product);
   const selectedRole = payload.roleLabel
     ? availableRoles.find((role) => role.label === payload.roleLabel)
     : undefined;
@@ -168,7 +181,7 @@ export async function addItemToCart(payload: {
     productImage: product.images?.[0],
     priceUsd: selectedRole ? selectedRole.price.toFixed(2) : pricedProduct.effectivePriceUsd,
     quantity: payload.quantity,
-    measurementId: payload.measurementId,
+    measurementId: isOther ? undefined : payload.measurementId,
     measurementSnapshot: measurement
       ? {
           chest: measurement.chest,
@@ -188,14 +201,16 @@ export async function addItemToCart(payload: {
     eventName: payload.eventName,
     itemMetadata: {
       role_label: selectedRole?.label,
+      size_option: isOther ? payload.sizeOption : undefined,
       role_gender: selectedRole?.gender,
       customer_type: customerType,
       outfit_option: outfitOption,
-      gender: selectedRole?.gender ?? payload.measurementSnapshot?.gender,
+      gender: isOther ? "unisex" : selectedRole?.gender ?? payload.measurementSnapshot?.gender,
       child_age: customerType === "girl" || customerType === "boy" ? childAge : undefined,
       pricing_snapshot: roleCostSnapshot,
       category: product.category,
       subcategory: product.subcategory,
+      region: product.region,
       price_currency: selectedRole?.currency ?? product.baseCurrency ?? "USD",
       entered_price: selectedRole?.enteredPrice ?? Number(pricedProduct.effectivePriceUsd ?? product.priceUsd),
     },

@@ -11,8 +11,10 @@ export function isOtherCreditLine(item: Record<string, unknown>) {
   const values = [
     item.category,
     item.subcategory,
+    item.region,
     typeof metadata === "object" && metadata ? (metadata as Record<string, unknown>).category : null,
     typeof metadata === "object" && metadata ? (metadata as Record<string, unknown>).subcategory : null,
+    typeof metadata === "object" && metadata ? (metadata as Record<string, unknown>).region : null,
   ].map((value) => String(value ?? "").trim().toLowerCase());
   return values.some((value) => ["other", "others", "jewelry", "jewellery", "ring", "rings"].includes(value));
 }

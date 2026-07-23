@@ -144,6 +144,7 @@ type OrderEmailItem = {
   orderType?: string | null;
   memberName?: string | null;
   memberRole?: string | null;
+  sizeOption?: string | null;
   isGroupOrder?: boolean;
   measurements?: Record<string, unknown> | null;
   workstreamType?: "catalog" | "custom" | null;
@@ -516,6 +517,7 @@ function regularOrderItemCard(item: OrderEmailItem, index: number) {
         <td style="padding:3px 10px 3px 0;color:#a99d8a;font-size:12px;vertical-align:top">
           <strong style="color:#d6a43d">Order Type:</strong> ${escapeHtml(humanizeValue(item.orderType || "Standard Order"))}<br />
           ${escapeHtml(itemNumber)} · Qty: ${escapeHtml(item.quantity ?? 1)}
+          ${item.sizeOption ? `<br /><strong style="color:#d6a43d">Standard Size:</strong> ${escapeHtml(item.sizeOption)}` : ""}
         </td>
         <td style="padding:3px 0;color:#d6a43d;font-size:18px;font-weight:900;text-align:right;vertical-align:top;white-space:nowrap">${escapeHtml(formatUsd(item.priceUsd))}</td>
       </tr>

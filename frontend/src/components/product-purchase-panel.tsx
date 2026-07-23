@@ -38,6 +38,7 @@ type ProductPurchasePanelProps = {
     description?: string | null;
     region?: string | null;
     subcategory?: string | null;
+    sizeOptions?: string[] | null;
     gender?: string | null;
     uniqueId?: string | null;
     fabricType?: string | null;
@@ -48,6 +49,8 @@ type ProductPurchasePanelProps = {
     originalPriceUsd?: number | string | null;
     discount?: { label?: string | null } | null;
   };
+  sizeOptions?: string[];
+  isOtherProduct?: boolean;
   roles: Role[];
   price: number;
   etbRate: number | null;
@@ -301,6 +304,8 @@ export function ProductPurchasePanel({
   createMeasurementAction,
   createEventAction,
   createGroupAction,
+  sizeOptions = [],
+  isOtherProduct = false,
 }: ProductPurchasePanelProps) {
   const { status: sessionStatus } = useSession();
   const [selectedRoleIndex, setSelectedRoleIndex] = useState(0);
@@ -312,8 +317,9 @@ export function ProductPurchasePanel({
   const [pressingStyle, setPressingStyle] = useState(String((latestMeasurement as any)?.pressingStyle || (latestMeasurement as any)?.pressing_style || "Creased"));
   const [tailorNote, setTailorNote] = useState("");
   const [isPantsOpen, setIsPantsOpen] = useState(false);
+  const [selectedSize, setSelectedSize] = useState(sizeOptions[0] ?? "");
 
-  const roleOptions = roles.length > 0
+  const roleOptions = isOtherProduct ? [] : roles.length > 0
     ? roles
     : [{ label: "Women's Traditional Outfit", price, gender: "female" as const, customerType: "woman" as const, outfitOption: "standard" as const, description: "Traditional outfit for women" }];
   const selectedRole = roleOptions[selectedRoleIndex] ?? roleOptions[0] ?? null;
@@ -338,6 +344,7 @@ export function ProductPurchasePanel({
   const measurementSummary = useMemo(() => measurementDisplayGroups(savedMeasurement ?? {}).filter((group) => group.title !== "Profile"), [savedMeasurement]);
 
   function captureMeasurementDraft(event: FormEvent<HTMLFormElement>) {
+    if (isOtherProduct) return;
     const cartForm = event.currentTarget;
     const snapshotInput = cartForm.elements.namedItem("measurementSnapshotJson") as HTMLInputElement | null;
     if (snapshotInput) snapshotInput.value = "";
@@ -383,10 +390,10 @@ export function ProductPurchasePanel({
       [
         product.fabricType ? ["Fabric", product.fabricType] : null,
         product.embroideryStyle ? ["Design name", product.embroideryStyle] : null,
-        ["Fit Type", "Traditional Cut"],
-        ["Gender", formatGender(product.gender)],
+        isOtherProduct ? ["Product Type", "Standard Size"] : ["Fit Type", "Traditional Cut"],
+        isOtherProduct ? null : ["Gender", formatGender(product.gender)],
       ].filter(Boolean) as Array<[string, string]>,
-    [product.embroideryStyle, product.fabricType, product.gender],
+    [isOtherProduct, product.embroideryStyle, product.fabricType, product.gender],
   );
 
   return (
@@ -407,7 +414,18 @@ export function ProductPurchasePanel({
         {etb && displayCurrency === "USD" ? <p className="mt-1 text-sm text-muted-foreground">≈ {etb} ETB</p> : null}
       </div>
 
-      {roleOptions.length > 0 ? (
+      {isOtherProduct ? (
+        sizeOptions.length > 0 ? (
+          <div className="rounded-xl border border-primary/30 bg-primary/5 p-4">
+            <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Choose size</h3>
+            <div className="grid grid-cols-3 gap-2">
+              {sizeOptions.map((size) => (
+                <button key={size} type="button" onClick={() => setSelectedSize(size)} className={`rounded-lg border px-3 py-3 text-sm font-bold ${selectedSize === size ? "border-primary bg-primary/15 text-primary" : "border-border bg-secondary text-muted-foreground"}`}>{size}</button>
+              ))}
+            </div>
+          </div>
+        ) : null
+      ) : roleOptions.length > 0 ? (
         <div>
           <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Choose outfit</h3>
           <div className={`grid gap-3 ${availableAudienceGroups.length > 1 ? "sm:grid-cols-2" : ""}`}>
@@ -471,7 +489,7 @@ export function ProductPurchasePanel({
       {product.description ? <p className="text-sm leading-relaxed text-muted-foreground">{product.description}</p> : null}
 
       <div>
-        <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Garment Details</h3>
+        <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">{isOtherProduct ? "Product Details" : "Garment Details"}</h3>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {detailItems.map(([label, value]) => (
             <div key={label} className="rounded-xl bg-secondary p-5">
@@ -482,7 +500,7 @@ export function ProductPurchasePanel({
         </div>
       </div>
 
-      <div className="flex items-start gap-4 rounded-xl border border-amber-100 bg-amber-50 p-5 text-amber-900">
+      {!isOtherProduct ? <div className="flex items-start gap-4 rounded-xl border border-amber-100 bg-amber-50 p-5 text-amber-900">
         <Clock className="mt-0.5 h-5 w-5 shrink-0" />
         <div>
           <p className="text-sm font-semibold">Production to Delivery Time</p>
@@ -493,10 +511,10 @@ export function ProductPurchasePanel({
             </Link>
           </p>
         </div>
-      </div>
+      </div> : null}
 
       {/* Unified Measurement Block */}
-      {(hasMeasurement || isMeasurementEditorOpen) ? (
+      {!isOtherProduct && (hasMeasurement || isMeasurementEditorOpen) ? (
         <section className="rounded-3xl border border-white/5 bg-card p-6 md:p-8 space-y-8 shadow-2xl">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-3">
@@ -724,6 +742,7 @@ export function ProductPurchasePanel({
             <input type="hidden" name="productId" value={product.id} />
             <input type="hidden" name="eventId" value={eventId} />
             <input type="hidden" name="roleLabel" value={selectedRole?.label ?? ""} />
+            <input type="hidden" name="sizeOption" value={selectedSize} />
             <input type="hidden" name="measurementId" value={savedMeasurement?.id ?? ""} />
             <input type="hidden" name="measurementSnapshotJson" defaultValue="" />
             <button type="submit" className="inline-flex h-14 w-full items-center justify-center gap-3 rounded-xl bg-[#f5a623] px-5 text-lg font-bold text-black transition-transform hover:scale-[1.01] active:scale-95">

@@ -47,6 +47,10 @@ export function CartItemCard({ item, removeItem }: CartItemCardProps) {
   const isCustomDesign = item.itemType === "custom_design" || productName.toLowerCase().includes("custom design");
   const isLockedDirectCustomDesign = item.itemType === "custom_design";
   const metadata = item.itemMetadata ?? {};
+  const category = String(metadata.category ?? "").trim().toLowerCase();
+  const region = String(metadata.region ?? "").trim().toLowerCase();
+  const isOtherProduct = category === "other" || category === "others" || region === "other" || region === "others";
+  const selectedSize = String(metadata.size_option ?? metadata.sizeOption ?? "").trim();
   const pricingSnapshot = (metadata.pricing_snapshot && typeof metadata.pricing_snapshot === "object"
     ? metadata.pricing_snapshot
     : metadata.pricingSnapshot && typeof metadata.pricingSnapshot === "object"
@@ -137,7 +141,12 @@ export function CartItemCard({ item, removeItem }: CartItemCardProps) {
           </div>
         ) : null}
 
-        {measurements.length > 0 ? (
+        {isOtherProduct && selectedSize ? (
+          <p className="mt-2 text-xs text-muted-foreground">
+            Standard size: <strong className="text-foreground">{selectedSize}</strong>
+          </p>
+        ) : null}
+        {!isOtherProduct && measurements.length > 0 ? (
           <p className="mt-1 text-xs text-muted-foreground">
             Measurements locked:{" "}
             {measurements.map(([label, value], index) => (

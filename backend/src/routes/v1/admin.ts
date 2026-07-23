@@ -14,6 +14,7 @@ import {
 } from "../../lib/auth/password-policy.js";
 import { USER_ROLES } from "../../lib/auth/roles.js";
 import { PERMISSIONS } from "../../lib/auth/permissions.js";
+import { DEFAULT_OTHER_SIZE_OPTIONS, isOtherProduct } from "../../lib/products/product-types.js";
 import {
   assignEmployeeAccessForAdmin,
   createEmployeeForAdmin,
@@ -97,6 +98,7 @@ const productPatchSchema = z.object({
   region: z.string().trim().min(1).optional(),
   subcategory: z.string().trim().optional(),
   category: z.string().trim().optional(),
+  sizeOptions: z.array(z.string().trim().min(1).max(40)).max(20).optional(),
   priceUsd: z.coerce.number().positive().optional(),
   baseCurrency: z.enum(["USD", "ETB"]).optional(),
   groomPriceUsd: z.coerce.number().positive().nullable().optional(),
@@ -157,6 +159,7 @@ const createProductSchema = z.object({
   region: z.string().trim().min(1),
   subcategory: z.string().trim().optional(),
   category: z.string().trim().optional(),
+  sizeOptions: z.array(z.string().trim().min(1).max(40)).max(20).optional(),
   priceUsd: z.coerce.number().positive(),
   baseCurrency: z.enum(["USD", "ETB"]).default("USD"),
   groomPriceUsd: z.coerce.number().positive().nullable().optional(),
@@ -1691,9 +1694,10 @@ adminRouter.post(
   async (c) => {
     const authUser = c.get("authUser");
     const body = c.req.valid("json");
+    const isOther = isOtherProduct({ category: body.category, region: body.region });
     const baseCurrency = body.baseCurrency ?? "USD";
     const normalizedBase = await normalizeProductPrice(body.priceUsd, baseCurrency);
-    const normalizedRoles = await normalizeFamilyRoles(body.familyRoles);
+    const normalizedRoles = isOther ? null : await normalizeFamilyRoles(body.familyRoles);
     const [row] = await db
       .insert(products)
       .values({
@@ -1702,18 +1706,19 @@ adminRouter.post(
         region: body.region,
         subcategory: body.subcategory,
         category: body.category,
+        sizeOptions: isOther ? (body.sizeOptions?.length ? body.sizeOptions : [...DEFAULT_OTHER_SIZE_OPTIONS]) : [],
         priceUsd: normalizedBase.priceUsd.toFixed(2),
         baseCurrency,
         basePriceAmount: body.priceUsd.toFixed(2),
         baseExchangeRate: normalizedBase.exchangeRate.toFixed(4),
-        groomPriceUsd: body.groomPriceUsd == null ? null : body.groomPriceUsd.toFixed(2),
+        groomPriceUsd: isOther ? null : body.groomPriceUsd == null ? null : body.groomPriceUsd.toFixed(2),
         familyRoles: normalizedRoles ?? undefined,
         uniqueId: body.uniqueId,
         images: body.images,
         fabricType: body.fabricType,
         embroideryStyle: body.embroideryStyle,
-        gender: body.gender,
-        tailoringDays: body.tailoringDays ?? 30,
+        gender: isOther ? "unisex" : body.gender,
+        tailoringDays: isOther ? 0 : body.tailoringDays ?? 30,
         isActive: body.isActive ?? true,
         isFeatured: body.isFeatured ?? false,
         sendToTelegram: body.sendToTelegram ?? false,
@@ -1770,6 +1775,7 @@ adminRouter.patch(
     const authUser = c.get("authUser");
     const { productId } = c.req.valid("param");
     const body = c.req.valid("json");
+    const isOther = isOtherProduct({ category: body.category, region: body.region });
     if (Object.keys(body).length === 0) {
       throw new HTTPException(400, { message: "At least one product field must be updated" });
     }
@@ -1777,7 +1783,7 @@ adminRouter.patch(
     const normalizedBase = body.priceUsd === undefined
       ? undefined
       : await normalizeProductPrice(body.priceUsd, body.baseCurrency ?? "USD");
-    const normalizedRoles = body.familyRoles === undefined ? undefined : await normalizeFamilyRoles(body.familyRoles);
+    const normalizedRoles = isOther ? null : body.familyRoles === undefined ? undefined : await normalizeFamilyRoles(body.familyRoles);
     const [row] = await db
       .update(products)
       .set({
@@ -1786,22 +1792,24 @@ adminRouter.patch(
         region: body.region,
         subcategory: body.subcategory,
         category: body.category,
+        sizeOptions: isOther ? (body.sizeOptions?.length ? body.sizeOptions : [...DEFAULT_OTHER_SIZE_OPTIONS]) : body.sizeOptions,
         priceUsd: normalizedBase ? normalizedBase.priceUsd.toFixed(2) : undefined,
         baseCurrency: body.baseCurrency,
         basePriceAmount: body.priceUsd !== undefined ? body.priceUsd.toFixed(2) : undefined,
         baseExchangeRate: normalizedBase ? normalizedBase.exchangeRate.toFixed(4) : undefined,
-        groomPriceUsd:
-          body.groomPriceUsd === undefined
+        groomPriceUsd: isOther
+          ? null
+          : body.groomPriceUsd === undefined
             ? undefined
             : body.groomPriceUsd == null
               ? null
               : body.groomPriceUsd.toFixed(2),
         familyRoles: normalizedRoles,
         uniqueId: body.uniqueId,
-        gender: body.gender,
+        gender: isOther ? "unisex" : body.gender,
         fabricType: body.fabricType,
         embroideryStyle: body.embroideryStyle,
-        tailoringDays: body.tailoringDays,
+        tailoringDays: isOther ? 0 : body.tailoringDays,
         images: body.images,
         isActive: body.isActive,
         isFeatured: body.isFeatured,

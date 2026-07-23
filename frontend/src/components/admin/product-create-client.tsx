@@ -354,6 +354,8 @@ export function ProductCreateClient() {
   );
   const [middleText, setMiddleText] = useState("Traditional Family Outfit");
   const [description, setDescription] = useState("");
+  const [otherMainPrice, setOtherMainPrice] = useState("120");
+  const [otherSizeOptions, setOtherSizeOptions] = useState<string[]>(["Small", "Medium", "Large"]);
   const [outfitOptions, setOutfitOptions] = useState<OutfitOptionDraft[]>(() => initialOptionPricing());
   const [gender, setGender] = useState("female");
   const [fabricType, setFabricType] = useState("");
@@ -489,6 +491,7 @@ export function ProductCreateClient() {
   );
 
   const subsections = getSubsectionsForSection(region);
+  const isOtherProduct = ["other", "others"].includes(region.trim().toLowerCase());
 
   useEffect(() => {
     const firstSection = sectionOptions[0]?.name;
@@ -593,7 +596,7 @@ export function ProductCreateClient() {
     const womanPricing = outfitOptions.find(
       (option) => option.customerType === "woman" && option.outfitOption === "standard",
     );
-    if (!womanPricing || Number(womanPricing.price) <= 0) {
+    if (!isOtherProduct && (!womanPricing || Number(womanPricing.price) <= 0)) {
       setFormNotice({
         tone: "error",
         title: "Missing Women Price",
@@ -628,7 +631,8 @@ export function ProductCreateClient() {
       const nextNum = getNextIncrementNumber(region, subcategory);
       const uniqueId = buildProductUniqueId(region, subcategory, nextNum);
       const generatedName = buildProductName(region, subcategory, middleText, uniqueId);
-      const internalPrice = Number(womanPricing.price);
+      const internalPrice = isOtherProduct ? Number(otherMainPrice) : Number(womanPricing?.price ?? 0);
+      if (!Number.isFinite(internalPrice) || internalPrice <= 0) throw new Error("Enter a valid main price");
 
       // 4. Create Product
       const payload = {
@@ -637,23 +641,24 @@ export function ProductCreateClient() {
         region,
         subcategory: subcategory || undefined,
         priceUsd: internalPrice,
-        baseCurrency: womanPricing.currency,
+        baseCurrency: isOtherProduct ? "USD" : womanPricing?.currency,
         groomPriceUsd: null,
-        familyRoles: buildFamilyRoles({
+        familyRoles: isOtherProduct ? null : buildFamilyRoles({
           price: String(internalPrice),
-          currency: womanPricing.currency,
-          designerCostUsd: womanPricing.designerCostUsd,
-          taxPercent: womanPricing.taxPercent,
-          otherCostUsd: womanPricing.otherCostUsd,
+          currency: womanPricing?.currency ?? "USD",
+          designerCostUsd: womanPricing?.designerCostUsd ?? "0",
+          taxPercent: womanPricing?.taxPercent ?? "0",
+          otherCostUsd: womanPricing?.otherCostUsd ?? "0",
           options: outfitOptions,
         }),
-        designerCostUsd: optionalNumber(womanPricing.designerCostUsd),
-        taxPercent: optionalNumber(womanPricing.taxPercent),
-        otherCostUsd: optionalNumber(womanPricing.otherCostUsd),
-        gender,
-        fabricType: fabricType || undefined,
-        embroideryStyle: embroideryStyle || undefined,
-        tailoringDays: Number(tailoringDays) || 30,
+        sizeOptions: isOtherProduct ? otherSizeOptions : [],
+        designerCostUsd: isOtherProduct ? 0 : optionalNumber(womanPricing?.designerCostUsd),
+        taxPercent: isOtherProduct ? 0 : optionalNumber(womanPricing?.taxPercent),
+        otherCostUsd: isOtherProduct ? 0 : optionalNumber(womanPricing?.otherCostUsd),
+        gender: isOtherProduct ? "unisex" : gender,
+        fabricType: isOtherProduct ? undefined : fabricType || undefined,
+        embroideryStyle: isOtherProduct ? undefined : embroideryStyle || undefined,
+        tailoringDays: isOtherProduct ? 0 : Number(tailoringDays) || 30,
         isActive,
         isFeatured,
         sendToTelegram,
@@ -1345,7 +1350,7 @@ export function ProductCreateClient() {
             </section>
 
             {/* Section 3: Garment Specifications */}
-            <section className="rounded-[2.5rem] border border-slate-200 bg-white shadow-sm overflow-hidden">
+            <section className={cn("rounded-[2.5rem] border border-slate-200 bg-white shadow-sm overflow-hidden", isOtherProduct && "hidden")}>
               <div className="bg-slate-50 px-8 py-4 border-b border-slate-100">
                 <h3 className="flex items-center gap-2 text-sm font-black uppercase tracking-widest text-slate-400">
                   <Shirt className="h-4 w-4" /> Craftsmanship Details
@@ -1471,8 +1476,18 @@ export function ProductCreateClient() {
               </div>
             </section>
           </aside>
-          <section className="lg:col-span-12 rounded-[2.5rem] border border-slate-200 bg-white p-8 shadow-sm">
-            <div className="mb-6 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+          {isOtherProduct ? (
+            <section className="lg:col-span-12 rounded-[2.5rem] border border-emerald-200 bg-emerald-50/40 p-8 shadow-sm">
+              <h3 className="flex items-center gap-2 text-sm font-black uppercase tracking-widest text-emerald-800"><DollarSign className="h-4 w-4" /> Other Product Pricing & Sizes</h3>
+              <p className="mt-2 text-xs font-bold text-emerald-700">Other-section products use one main price, unisex compatibility, and standard sizes. No gender pricing or measurements are used.</p>
+              <div className="mt-5 grid gap-4 md:grid-cols-2">
+                <label className="text-xs font-black uppercase tracking-widest text-slate-500">Main Price (USD)<input type="number" min="0.01" step="0.01" value={otherMainPrice} onChange={(event) => setOtherMainPrice(event.target.value)} className="mt-2 h-12 w-full rounded-xl border border-emerald-200 bg-white px-4 text-base font-black outline-none" /></label>
+                <div><p className="text-xs font-black uppercase tracking-widest text-slate-500">Available Sizes</p><div className="mt-2 flex flex-wrap gap-2">{["Small", "Medium", "Large"].map((size) => <button type="button" key={size} onClick={() => setOtherSizeOptions((current) => current.includes(size) ? current.filter((item) => item !== size) : [...current, size])} className={cn("rounded-xl border px-4 py-3 text-sm font-black", otherSizeOptions.includes(size) ? "border-emerald-600 bg-emerald-600 text-white" : "border-slate-200 bg-white text-slate-500")}>{size}</button>)}</div></div>
+              </div>
+            </section>
+          ) : null}
+          <section className={cn("lg:col-span-12 rounded-[2.5rem] border border-slate-200 bg-white p-8 shadow-sm", isOtherProduct && "hidden")}>
+            <div className={cn("mb-6 flex flex-col gap-2 md:flex-row md:items-center md:justify-between", isOtherProduct && "hidden")}>
               <div>
                 <h3 className="flex items-center gap-2 text-sm font-black uppercase tracking-widest text-slate-500">
                   <DollarSign className="h-4 w-4" /> Customer Option Pricing

@@ -16,6 +16,7 @@ type Product = {
   description?: string | null;
   region?: string | null;
   category?: string | null;
+  sizeOptions?: string[] | null;
   subcategory?: string | null;
   gender?: string | null;
   uniqueId?: string | null;
@@ -67,6 +68,7 @@ type Event = {
 };
 
 function buildStorefrontRoles(product: Product, price: number) {
+  if ([product.category, product.region].some((value) => ["other", "others"].includes(String(value ?? "").trim().toLowerCase()))) return [];
   if (product.familyRoles && product.familyRoles.length > 0) return product.familyRoles;
 
   const name = `${product.name} ${product.category ?? ""}`.toLowerCase();
@@ -140,12 +142,14 @@ export default async function ProductDetailPage({
     const eventId = eventIdRaw.length > 0 ? eventIdRaw : undefined;
     const roleLabelRaw = String(formData.get("roleLabel") ?? "");
     const roleLabel = roleLabelRaw.length > 0 ? roleLabelRaw : undefined;
+    const sizeOptionRaw = String(formData.get("sizeOption") ?? "").trim();
+    const sizeOption = sizeOptionRaw.length > 0 ? sizeOptionRaw : undefined;
 
     try {
       await ensureBackendUserSynced();
       await apiRequest("/api/v1/cart", {
         method: "POST",
-        body: { productId, quantity: 1, measurementId, measurementSnapshot, eventId, roleLabel },
+        body: { productId, quantity: 1, measurementId, measurementSnapshot, eventId, roleLabel, sizeOption },
       });
     } catch (error) {
       if (isAuthApiError(error)) signinRedirect(`${callbackPath}?auth=required`);
@@ -308,6 +312,7 @@ export default async function ProductDetailPage({
 
   const images = Array.isArray(product.images) && product.images.length > 0 ? product.images : [];
   const price = Number(product.effectivePriceUsd ?? product.finalPriceUsd ?? product.priceUsd ?? 0);
+  const isOtherProduct = [product.category, product.region].some((value) => ["other", "others"].includes(String(value ?? "").trim().toLowerCase()));
   const roles = buildStorefrontRoles(product, price);
   const latestMeasurement = measurements[0] ?? null;
 
@@ -370,6 +375,8 @@ export default async function ProductDetailPage({
 
         <ProductPurchasePanel
           product={product}
+          sizeOptions={product.sizeOptions ?? []}
+          isOtherProduct={isOtherProduct}
           roles={roles}
           price={price}
           etbRate={etbRate}

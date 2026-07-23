@@ -18,6 +18,7 @@ const addItemSchema = z.object({
   eventId: z.string().uuid().optional(),
   eventName: z.string().optional(),
   roleLabel: z.string().optional(),
+  sizeOption: z.string().trim().max(40).optional(),
 });
 
 const patchQuantitySchema = z.object({
@@ -44,6 +45,7 @@ cartRouter.post("/", requireAuth, zValidator("json", addItemSchema), async (c) =
     eventId: body.eventId,
     eventName: body.eventName,
     roleLabel: body.roleLabel,
+    sizeOption: body.sizeOption,
   });
   return c.json({ data: item }, 201);
 });

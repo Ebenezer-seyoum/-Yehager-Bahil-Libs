@@ -322,6 +322,7 @@ async function orderDesignEmailDetails(
       orderType: itemType,
       memberName,
       memberRole: emailString(itemMetadata.role_label, itemMetadata.member_gender, itemMetadata.memberGender),
+      sizeOption: emailString(itemMetadata.size_option, itemMetadata.sizeOption),
       isGroupOrder: itemType === "group_order" || Boolean(memberName),
       measurements: measurementSnapshot,
       workstreamType: classifyOrderLine(item),
@@ -1529,6 +1530,7 @@ export async function createCheckoutIntent(payload: {
           ...(row.itemMetadata ?? {}),
           category: product?.category ?? (row.itemMetadata as Record<string, unknown> | null | undefined)?.category,
           subcategory: product?.subcategory ?? (row.itemMetadata as Record<string, unknown> | null | undefined)?.subcategory,
+          region: product?.region ?? (row.itemMetadata as Record<string, unknown> | null | undefined)?.region,
         },
       };
     });

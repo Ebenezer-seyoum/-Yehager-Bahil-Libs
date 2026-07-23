@@ -216,6 +216,7 @@ export const products = pgTable(
     region: text("region").notNull(),
     subcategory: text("subcategory"),
     category: text("category"),
+    sizeOptions: jsonb("size_options").$type<string[]>().default([]).notNull(),
     priceUsd: numeric("price_usd", { precision: 12, scale: 2 }).notNull(),
     designerPriceEtb: numeric("designer_price_etb", { precision: 12, scale: 2 }),
     markupAmountEtb: numeric("markup_amount_etb", { precision: 12, scale: 2 }),
