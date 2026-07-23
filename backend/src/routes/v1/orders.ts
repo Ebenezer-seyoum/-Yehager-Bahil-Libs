@@ -21,6 +21,7 @@ import {
   updateMixedOrderLineItemStatus,
   updateOrderWorkstream,
 } from "../../services/orders-service.js";
+import { completeManualEtbRefund, refundStripeOrder } from "../../services/payments-service.js";
 import { systemAlerts } from "../../lib/db/schema.js";
 import { db } from "../../lib/db/drizzle.js";
 import { and, eq, sql } from "drizzle-orm";
@@ -65,6 +66,13 @@ const couponPreviewSchema = z.object({
 });
 const etbProofSchema = z.object({
   paymentProofUrl: z.string().url(),
+});
+const refundSchema = z.object({
+  amountUsd: z.coerce.number().positive().optional(),
+});
+const manualEtbRefundSchema = z.object({
+  amountEtb: z.coerce.number().positive(),
+  proofUrl: z.string().url(),
 });
 const adminUpdateSchema = z.object({
   status: z.enum(CUSTOMER_MAIN_STATUSES).optional(),
@@ -259,6 +267,35 @@ ordersRouter.get("/:orderId", requireAuth, requireAnyPermission(ORDER_READ_PERMI
   const data = await getOrderDetailsForAdmin(orderId, scope);
   return c.json({ data });
 });
+
+ordersRouter.post(
+  "/:orderId/refund",
+  requireAuth,
+  requireAnyPermission([PERMISSIONS.PAYMENTS_REFUND, PERMISSIONS.RETURNS_EDIT]),
+  zValidator("json", refundSchema),
+  async (c) => {
+    const authUser = c.get("authUser");
+    const result = await refundStripeOrder({
+      orderId: c.req.param("orderId"),
+      amountUsd: c.req.valid("json").amountUsd,
+      performedBy: authUser?.email,
+    });
+    return c.json({ data: result });
+  },
+);
+
+ordersRouter.post(
+  "/:orderId/manual-refund",
+  requireAuth,
+  requireAnyPermission([PERMISSIONS.PAYMENTS_REFUND, PERMISSIONS.RETURNS_EDIT]),
+  zValidator("json", manualEtbRefundSchema),
+  async (c) => {
+    const authUser = c.get("authUser");
+    const body = c.req.valid("json");
+    const data = await completeManualEtbRefund({ orderId: c.req.param("orderId"), amountEtb: body.amountEtb, proofUrl: body.proofUrl, performedBy: authUser?.email });
+    return c.json({ data });
+  },
+);
 
 ordersRouter.patch(
   "/:orderId/workstreams/:workstreamType/items/:lineItemId/status",

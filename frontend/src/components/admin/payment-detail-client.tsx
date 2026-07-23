@@ -20,6 +20,7 @@ import {
   ShoppingBag
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { uploadFileToS3 } from "@/lib/uploads";
 import { dashboardConfirm, dashboardError, dashboardSuccess } from "@/lib/dashboard-swal";
 import { AdminDetailLayout, AdminDetailHeader } from "@/components/admin/admin-detail-layout";
 
@@ -39,9 +40,11 @@ function formatUsd(value?: number | string | null) {
 export function PaymentDetailClient({
   order: initialOrder,
   canVerify: hasVerifyPermission = false,
+  canRefund: hasRefundPermission = false,
 }: {
   order: Order;
   canVerify?: boolean;
+  canRefund?: boolean;
 }) {
   const router = useRouter();
   const [order, setOrder] = useState<Order>(initialOrder);
@@ -49,6 +52,7 @@ export function PaymentDetailClient({
   const [receiptBusy, setReceiptBusy] = useState(false);
   const [showFullProof, setShowFullProof] = useState(false);
   const [activeSection, setActiveSection] = useState<"summary" | "breakdown" | "proof" | "audit">("summary");
+  const [manualRefundAmount, setManualRefundAmount] = useState("");
 
   const paymentStatus = String(order.paymentStatus ?? order.payment_status ?? "pending");
   const paymentCurrency = String(order.paymentCurrency ?? order.payment_currency ?? "USD");
@@ -84,9 +88,13 @@ export function PaymentDetailClient({
   const stripeFailureReason = order.stripeFailureReason ?? order.stripe_failure_reason;
   const stripeRefundStatus = stringValue(order.stripeRefundStatus ?? order.stripe_refund_status);
   const stripeRefundAmount = order.stripeRefundAmount ?? order.stripe_refund_amount;
+  const refundStatus = stringValue(order.refundStatus ?? order.refund_status);
+  const refundProofUrl = stringValue(order.refundProofUrl ?? order.refund_proof_url);
+  const refundAmountEtb = order.refundAmountEtb ?? order.refund_amount_etb;
   const paymentProofUploadedAt = order.paymentProofUploadedAt ?? order.payment_proof_uploaded_at;
   const stripePaymentStatus = String(order.stripePaymentStatus ?? order.stripe_payment_status ?? paymentStatus).toLowerCase();
   const stripePaymentCompleted = ["paid", "succeeded", "complete", "completed"].includes(paymentStatus.toLowerCase()) || ["paid", "succeeded", "complete", "completed"].includes(stripePaymentStatus);
+  const canRefund = hasRefundPermission && paymentStatus === "paid" && !stripeRefundStatus && order.refundStatus !== "completed";
 
   useEffect(() => {
     if (!order.id) return;
@@ -151,6 +159,37 @@ export function PaymentDetailClient({
     }
   }
 
+  async function refundPayment() {
+    if (isEtb) return;
+    const ok = await dashboardConfirm({ title: "Issue full refund?", text: `Refund ${formatUsd(totalUsd)} to the original Stripe payment method.`, confirmButtonText: "Refund payment", tone: "danger" });
+    if (!ok) return;
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/backend/orders/${order.id}/refund`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+      const json = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(json?.message ?? json?.error ?? "Refund failed");
+      await dashboardSuccess("Refund completed", `${formatUsd(json?.data?.amountUsd ?? totalUsd)} was returned to the original payment method.`);
+      await refresh();
+      router.refresh();
+    } catch (error) { await dashboardError("Refund failed", error instanceof Error ? error.message : "Refund failed"); }
+    finally { setBusy(false); }
+  }
+
+  async function manualEtbRefund(file: File) {
+    if (!manualRefundAmount || Number(manualRefundAmount) <= 0) { await dashboardError("Amount required", "Enter the ETB amount sent to the customer first."); return; }
+    setBusy(true);
+    try {
+      const proofUrl = await uploadFileToS3(file, `orders/${order.id}/refunds`);
+      const res = await fetch(`/api/backend/orders/${order.id}/manual-refund`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ amountEtb: Number(manualRefundAmount), proofUrl }) });
+      const json = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(json?.message ?? json?.error ?? "Could not complete manual refund");
+      await dashboardSuccess("ETB refund completed", "The refund proof was saved and the customer was notified.");
+      await refresh();
+      router.refresh();
+    } catch (error) { await dashboardError("Manual refund failed", error instanceof Error ? error.message : "Manual refund failed"); }
+    finally { setBusy(false); }
+  }
+
   return (
     <>
     <AdminDetailLayout
@@ -203,6 +242,18 @@ export function PaymentDetailClient({
                         {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />} Reject Payment
                      </button>
                   </>
+               )}
+               {canRefund && (
+                 isEtb ? (
+                   <div className="flex flex-wrap items-center justify-end gap-2 rounded-xl border border-amber-200 bg-amber-50 p-2">
+                     <input type="number" min="0.01" step="0.01" value={manualRefundAmount} onChange={(event) => setManualRefundAmount(event.target.value)} placeholder="ETB amount" className="h-10 w-28 rounded-lg border border-amber-200 bg-white px-2 text-sm font-bold" />
+                     <label className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-lg border border-amber-300 bg-white px-3 text-xs font-bold text-amber-800">Upload bank proof<input type="file" accept="image/*,application/pdf" className="hidden" disabled={busy} onChange={(event) => { const file = event.target.files?.[0]; if (file) void manualEtbRefund(file); event.currentTarget.value = ""; }} /></label>
+                   </div>
+                 ) : (
+                   <button onClick={() => void refundPayment()} disabled={busy} className="inline-flex h-11 items-center gap-2 rounded-xl bg-rose-600 px-5 text-sm font-bold text-white shadow-lg hover:bg-rose-700 transition-all active:scale-95 disabled:opacity-50">
+                     {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />} Refund to Customer
+                   </button>
+                 )
                )}
             </div>
           </div>
@@ -289,6 +340,8 @@ export function PaymentDetailClient({
                 <ReceiptField label="Transfer Amount" value={totalEtb ? `${Number(totalEtb).toLocaleString()} ETB` : "Not available"} />
                 <ReceiptField label="Payment Status" value={paymentStatus.replaceAll("_", " ")} />
                 <ReceiptField label="Proof Uploaded" value={paymentProofUploadedAt ? new Date(String(paymentProofUploadedAt)).toLocaleString() : "Not uploaded"} />
+                <ReceiptField label="Refund Status" value={refundStatus || "Not completed"} />
+                <ReceiptField label="Refund Amount" value={refundAmountEtb ? `${Number(refundAmountEtb).toLocaleString()} ETB` : "Not recorded"} />
               </div>
               <div className="relative aspect-video w-full overflow-hidden rounded-[2rem] border border-slate-100 bg-slate-50 group cursor-zoom-in" onClick={() => setShowFullProof(true)}>
                  {proofUrl ? (
@@ -301,6 +354,7 @@ export function PaymentDetailClient({
                  )}
                  <div className="absolute inset-0 bg-slate-900/0 group-hover:bg-slate-900/5 transition-all" />
               </div>
+              {refundProofUrl ? <a href={refundProofUrl} target="_blank" rel="noreferrer" className="mt-5 inline-flex rounded-xl bg-amber-600 px-4 py-2 text-sm font-black text-white hover:bg-amber-700">View Refund Bank Proof</a> : null}
            </section>
         ) : (
            <section className="rounded-[2.5rem] border border-slate-200 bg-white p-8 shadow-sm">

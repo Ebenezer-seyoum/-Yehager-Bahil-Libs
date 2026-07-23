@@ -37,6 +37,7 @@ export default async function PaymentVerificationPage({
     <PaymentDetailClient
       order={orderData}
       canVerify={session.user.role === "admin" || can(session.user.permissions, "payments.verify")}
+      canRefund={session.user.role === "admin" || can(session.user.permissions, "payments.refund") || can(session.user.permissions, "returns.edit")}
     />
   );
 }

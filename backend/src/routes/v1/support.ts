@@ -12,7 +12,8 @@ import {
   supportAttachments,
   adminNotifications,
   auditLogs,
-  users
+  users,
+  orders,
 } from "../../lib/db/schema.js";
 import { PERMISSIONS } from "../../lib/auth/permissions.js";
 import type { AppBindings } from "../../types/hono.js";
@@ -151,7 +152,7 @@ supportRouter.post("/sync-email", requirePermission(PERMISSIONS.SUPPORT_VIEW), a
 });
 
 // 4. List Support Tickets (with filtering & search)
-supportRouter.get("/tickets", requirePermission(PERMISSIONS.SUPPORT_VIEW), zValidator("query", listQuerySchema), async (c) => {
+supportRouter.get("/tickets", requireAnyPermission([PERMISSIONS.SUPPORT_VIEW, PERMISSIONS.RETURNS_VIEW]), zValidator("query", listQuerySchema), async (c) => {
   const { status, priority, category, search, readState, unreadOnly, limit, offset } = c.req.valid("query");
   
   const conditions = [];
@@ -451,6 +452,13 @@ supportRouter.post(
 supportRouter.post("/tickets", zValidator("json", createTicketSchema), async (c) => {
   const authUser = c.get("authUser");
   const body = c.req.valid("json");
+
+  if (body.orderId && authUser?.role === "customer") {
+    const customerEmail = authUser.email;
+    if (!customerEmail) throw new HTTPException(403, { message: "A verified customer email is required" });
+    const ownedOrder = await db.query.orders.findFirst({ where: and(eq(orders.id, body.orderId), eq(orders.userEmail, customerEmail)) });
+    if (!ownedOrder) throw new HTTPException(403, { message: "You can only submit a request for your own order" });
+  }
 
   // Create ticket number
   const ticketNum = "TK-" + Math.floor(100000 + Math.random() * 900000);

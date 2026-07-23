@@ -15,12 +15,18 @@ export default async function AdminReturnsRefundsPage() {
   }
 
   let orders: Record<string, unknown>[] = [];
+  let support: Record<string, unknown>[] = [];
   try {
-    const response = await apiRequest<{ data?: Record<string, unknown>[] }>("/api/v1/orders?limit=200");
-    orders = Array.isArray(response?.data) ? response.data : [];
+    const [ordersResponse, supportResponse] = await Promise.all([
+      apiRequest<{ data?: Record<string, unknown>[] }>("/api/v1/orders?limit=200"),
+      apiRequest<{ data?: Record<string, unknown>[] }>("/api/v1/admin/support/tickets?category=return_refund&limit=200").catch(() => ({ data: [] })),
+    ]);
+    orders = Array.isArray(ordersResponse?.data) ? ordersResponse.data : [];
+    support = Array.isArray(supportResponse?.data) ? supportResponse.data : [];
   } catch {
     orders = [];
+    support = [];
   }
 
-  return <AdminOperationsWorkspace mode="returns" data={{ orders }} />;
+  return <AdminOperationsWorkspace mode="returns" data={{ orders, support }} />;
 }

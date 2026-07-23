@@ -1,7 +1,10 @@
 import Link from "next/link";
+import { getServerSession } from "next-auth/next";
 import { ExternalLink, FileCheck, FileText, MapPin, Package, Truck, Users } from "lucide-react";
 import { apiRequest } from "@/lib/api-client";
 import { ensureBackendUserSynced } from "@/lib/backend-user-sync";
+import { authOptions } from "@/auth-options";
+import { RefundRequestButton } from "@/components/refund-request-button";
 import {
   CUSTOMER_ORDER_STATUSES,
   customerStatusForItem,
@@ -168,6 +171,7 @@ export default async function MyOrdersPage({
 }) {
   const query = await searchParams;
   const tab = query?.tab === "events" ? "events" : "orders";
+  const session = await getServerSession(authOptions);
 
   let orders: Order[] = [];
   let myEvents: Event[] = [];
@@ -369,6 +373,14 @@ export default async function MyOrdersPage({
                         ) : null}
                       </div>
                     )}
+                  </div>
+                  <div className="mt-4 flex justify-end border-t border-border pt-3">
+                    <RefundRequestButton
+                      orderId={order.id}
+                      orderNumber={order.orderNumber ?? order.id}
+                      customerName={session?.user?.name ?? "Customer"}
+                      customerEmail={session?.user?.email ?? ""}
+                    />
                   </div>
                 </div>
               );

@@ -7,7 +7,6 @@ import {
   FileCheck,
   Package,
   ShieldAlert,
-  ShieldCheck,
   Truck,
   XCircle,
 } from "lucide-react";
@@ -129,7 +128,7 @@ function buildRows(mode: Mode, data: AdminWorkspaceData): OperationRow[] {
   const products = data.products ?? [];
 
   if (mode === "returns") {
-    return orders
+    const orderRows = orders
       .filter((order) => {
         const status = norm(order.status);
         const payment = norm(order.paymentStatus);
@@ -149,6 +148,20 @@ function buildRows(mode: Mode, data: AdminWorkspaceData): OperationRow[] {
           badgeTone: toneFor(status),
         };
       });
+    const requestRows = (data.support ?? []).map((ticket) => {
+      const status = norm(ticket.status) === "resolved" ? "approved" : "pending";
+      return {
+        id: String(ticket.id ?? ticket.ticketNumber ?? "refund-request"),
+        primary: text(ticket.ticketNumber ?? ticket.subject, "Refund request"),
+        secondary: text(ticket.customerName ?? ticket.customerEmail, "Customer not recorded"),
+        status,
+        reference: text(ticket.subject, "Refund or return request"),
+        date: dateLabel(ticket.createdAt ?? ticket.lastMessageAt),
+        href: ticket.orderId ? `/admin/orders/${ticket.orderId}?from=returns` : "/admin/support-inbox",
+        badgeTone: toneFor(status),
+      } satisfies OperationRow;
+    });
+    return [...requestRows, ...orderRows];
   }
 
   if (mode === "shipping") {
@@ -307,7 +320,6 @@ function OperationsContent({
 
   return (
     <div className="space-y-4">
-      {mode === "returns" ? <ReturnsPolicyPanel /> : null}
       <div className="grid gap-3 md:grid-cols-4">
         <OperationMetric label="Records" value={String(rows.length)} icon={FileCheck} />
         <OperationMetric label="Completed" value={String(completed)} icon={CheckCircle2} />
@@ -372,28 +384,5 @@ function OperationsContent({
       )}
 
     </div>
-  );
-}
-
-function ReturnsPolicyPanel() {
-  return (
-    <section className="overflow-hidden rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 via-white to-orange-50 shadow-sm">
-      <div className="border-b border-amber-200 px-5 py-5 sm:px-6">
-        <div className="flex items-start gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-700"><ShieldCheck className="h-5 w-5" /></div>
-          <div>
-            <p className="text-xs font-black uppercase tracking-[0.18em] text-amber-700">Yehager Bahil Libs Policy</p>
-            <h2 className="mt-1 text-xl font-black text-slate-950">Refund and return decision flow</h2>
-            <p className="mt-1 max-w-3xl text-sm font-medium leading-6 text-slate-600">Use the order date, production stage, payment record, and customer evidence before making a decision. Every outcome should include a clear internal note and a customer notification.</p>
-          </div>
-        </div>
-      </div>
-      <div className="grid gap-3 p-5 sm:grid-cols-2 sm:p-6 lg:grid-cols-4">
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50/80 p-4"><p className="text-[10px] font-black uppercase tracking-wide text-emerald-700">Within 3 days</p><p className="mt-1 text-sm font-black text-emerald-950">Full refund may be approved</p><p className="mt-1 text-xs font-medium leading-5 text-emerald-800">Confirm payment and ensure production has not started.</p></div>
-        <div className="rounded-xl border border-rose-200 bg-rose-50/80 p-4"><p className="text-[10px] font-black uppercase tracking-wide text-rose-700">After production starts</p><p className="mt-1 text-sm font-black text-rose-950">No automatic full refund</p><p className="mt-1 text-xs font-medium leading-5 text-rose-800">Review only a company-approved partial adjustment or alteration.</p></div>
-        <div className="rounded-xl border border-blue-200 bg-blue-50/80 p-4"><p className="text-[10px] font-black uppercase tracking-wide text-blue-700">Alteration request</p><p className="mt-1 text-sm font-black text-blue-950">Inspect and document the issue</p><p className="mt-1 text-xs font-medium leading-5 text-blue-800">Customer is responsible for shipping related to adjustments or returns.</p></div>
-        <div className="rounded-xl border border-slate-200 bg-white p-4"><p className="text-[10px] font-black uppercase tracking-wide text-slate-500">Final step</p><p className="mt-1 text-sm font-black text-slate-950">Record and notify</p><p className="mt-1 text-xs font-medium leading-5 text-slate-600">Record the amount, reason, decision, and customer communication.</p></div>
-      </div>
-    </section>
   );
 }

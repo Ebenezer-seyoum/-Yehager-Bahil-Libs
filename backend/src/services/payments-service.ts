@@ -2,7 +2,7 @@ import Stripe from "stripe";
 import { HTTPException } from "hono/http-exception";
 import { db } from "../lib/db/drizzle.js";
 import { and, eq, inArray } from "drizzle-orm";
-import { auditLogs, eventParticipants, systemAlerts, uploadedDesigns } from "../lib/db/schema.js";
+import { auditLogs, eventParticipants, orders, systemAlerts, uploadedDesigns } from "../lib/db/schema.js";
 import { env } from "../config/env.js";
 import { getOrderById, getOrderByIdForUser, updateOrderPaymentState } from "../repositories/orders-repository.js";
 import {
@@ -155,6 +155,95 @@ export async function refreshStripeReceiptForOrder(payload: { orderId: string })
     }),
   });
 
+  return updated;
+}
+
+export async function refundStripeOrder(payload: { orderId: string; amountUsd?: number; performedBy?: string }) {
+  const order = await getOrderById(payload.orderId);
+  if (!order) throw new HTTPException(404, { message: "Order not found" });
+  if (order.paymentMethod !== "stripe_usd" || !order.stripePaymentIntentId) {
+    throw new HTTPException(400, { message: "Only completed Stripe payments can be refunded automatically" });
+  }
+  if (order.paymentStatus !== "paid") {
+    throw new HTTPException(400, { message: "Order payment is not eligible for refund" });
+  }
+
+  const paymentIntent = await stripe.paymentIntents.retrieve(order.stripePaymentIntentId);
+  const paidCents = paymentIntent.amount_received || paymentIntent.amount;
+  const alreadyRefundedCents = Math.round(toNumber(order.stripeRefundAmount, 0) * 100);
+  const remainingCents = Math.max(paidCents - alreadyRefundedCents, 0);
+  const requestedCents = payload.amountUsd === undefined ? remainingCents : Math.round(payload.amountUsd * 100);
+  if (requestedCents <= 0 || requestedCents > remainingCents) {
+    throw new HTTPException(400, { message: "Refund amount must be greater than zero and no more than the remaining paid amount" });
+  }
+
+  const refund = await stripe.refunds.create(
+    { payment_intent: order.stripePaymentIntentId, amount: requestedCents, metadata: { order_id: order.id, order_number: order.orderNumber ?? "" } },
+    { idempotencyKey: `order-refund-${order.id}-${requestedCents}` },
+  );
+  const refundedCents = alreadyRefundedCents + (refund.amount ?? requestedCents);
+  const isFullRefund = refundedCents >= paidCents;
+  const updated = isFullRefund
+    ? await updateOrderPaymentState({ orderId: order.id, paymentStatus: "refunded", orderStatus: "cancelled" })
+    : await getOrderById(order.id);
+  await updateStripeReceiptOnOrder({
+    orderId: order.id,
+    stripeRefundStatus: isFullRefund ? "refunded" : "partially_refunded",
+    stripeRefundAmount: centsToAmount(refundedCents),
+    stripeReceiptMetadata: { ...(order.stripeReceiptMetadata ?? {}), latest_refund_id: refund.id },
+  });
+  await db.insert(auditLogs).values({
+    action: isFullRefund ? "payment_refunded" : "payment_partially_refunded",
+    category: "payment",
+    severity: "info",
+    entityType: "order",
+    entityId: order.id,
+    performedBy: payload.performedBy ?? "admin",
+    details: `${isFullRefund ? "Full" : "Partial"} Stripe refund of ${(refund.amount / 100).toFixed(2)} USD for order ${order.orderNumber}`,
+    metadata: { stripe_refund_id: refund.id, amount_usd: refund.amount / 100, order_id: order.id },
+  });
+  await sendOrderStatusEmail({
+    event: "payment_refunded",
+    to: order.userEmail,
+    customerName: order.customerName,
+    orderNumber: order.orderNumber,
+    orderDate: order.createdAt,
+    orderType: order.orderType,
+    status: updated?.status ?? order.status,
+    paymentStatus: isFullRefund ? "refunded" : "partially_refunded",
+    paymentMethod: order.paymentMethod,
+    paymentCurrency: order.paymentCurrency,
+    totalUsd: refund.amount / 100,
+    paymentReference: refund.id,
+  });
+  return { order: updated ?? order, refundId: refund.id, amountUsd: refund.amount / 100, status: isFullRefund ? "refunded" : "partially_refunded" };
+}
+
+export async function completeManualEtbRefund(payload: { orderId: string; amountEtb: number; proofUrl: string; performedBy?: string }) {
+  const order = await getOrderById(payload.orderId);
+  if (!order) throw new HTTPException(404, { message: "Order not found" });
+  if (order.paymentMethod !== "etb_bank_transfer" && order.paymentCurrency !== "ETB") {
+    throw new HTTPException(400, { message: "This order is not an ETB bank-transfer order" });
+  }
+  if (order.paymentStatus !== "paid") throw new HTTPException(400, { message: "Order payment is not eligible for refund" });
+  if (payload.amountEtb <= 0 || payload.amountEtb > toNumber(order.totalEtb)) {
+    throw new HTTPException(400, { message: "Refund amount must be greater than zero and no more than the paid ETB amount" });
+  }
+  if (order.refundStatus === "completed") throw new HTTPException(409, { message: "This order has already been refunded" });
+  const now = new Date();
+  const [updated] = await db.update(orders).set({
+    paymentStatus: "refunded",
+    status: "cancelled",
+    refundStatus: "completed",
+    refundAmountEtb: payload.amountEtb.toFixed(2),
+    refundProofUrl: payload.proofUrl,
+    refundProofUploadedAt: now,
+    refundCompletedAt: now,
+    refundCompletedBy: payload.performedBy ?? "admin",
+    updatedAt: now,
+  }).where(eq(orders.id, order.id)).returning();
+  await db.insert(auditLogs).values({ action: "manual_etb_refund_completed", category: "payment", severity: "info", entityType: "order", entityId: order.id, performedBy: payload.performedBy ?? "admin", details: `Manual ETB refund of ${payload.amountEtb.toFixed(2)} ETB for order ${order.orderNumber}`, metadata: { amount_etb: payload.amountEtb, proof_url: payload.proofUrl } });
+  await sendOrderStatusEmail({ event: "payment_refunded", to: order.userEmail, customerName: order.customerName, orderNumber: order.orderNumber, orderDate: order.createdAt, status: updated?.status ?? "cancelled", paymentStatus: "refunded", paymentMethod: order.paymentMethod, paymentCurrency: "ETB", totalEtb: payload.amountEtb, paymentReference: "Manual bank transfer refund" });
   return updated;
 }
 
